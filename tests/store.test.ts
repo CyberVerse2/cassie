@@ -1,8 +1,5 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
-import { FileCassieStore } from "../src/store.js";
+import { InMemoryCassieStore } from "../src/store.js";
 import type { UserSettings } from "../src/schemas.js";
 
 const settings: UserSettings = {
@@ -17,10 +14,9 @@ const settings: UserSettings = {
   autoTradeEnabled: false,
 };
 
-describe("FileCassieStore", () => {
-  it("persists user settings, mentions, runs, and audit events", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "cassie-store-"));
-    const store = new FileCassieStore(join(dir, "store.json"));
+describe("InMemoryCassieStore", () => {
+  it("stores user settings, mentions, runs, and audit events", async () => {
+    const store = new InMemoryCassieStore();
 
     await store.upsertUserSettings(settings);
     const mention = await store.addMention({

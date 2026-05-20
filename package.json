@@ -7,13 +7,19 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "dev": "tsx src/server.ts",
-    "cli": "tsx src/cli.ts"
+    "cli": "tsx src/cli.ts",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",
     "@types/node": "^25.9.1",
+    "@types/pg": "^8.20.0",
     "ai": "^6.0.185",
     "dotenv": "^17.4.2",
+    "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.21.0",
     "tsx": "^4.22.3",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7",

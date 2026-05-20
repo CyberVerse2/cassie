@@ -1,10 +1,6 @@
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../src/ai.js";
 import { CassieProduct } from "../src/product.js";
-import { FileCassieStore } from "../src/store.js";
 import type {
   IntentResult,
   MarketSelection,
@@ -15,6 +11,7 @@ import type {
   UserSettings,
 } from "../src/schemas.js";
 import type { ExecutionClient } from "../src/execution.js";
+import { InMemoryCassieStore } from "../src/store.js";
 
 const sourcePost: SourcePost = {
   platform: "x",
@@ -120,8 +117,7 @@ class FakeExecutionClient implements ExecutionClient {
 
 describe("CassieProduct", () => {
   it("processes a mention, stores a ticket, and executes after approval", async () => {
-    const dir = await mkdtemp(join(tmpdir(), "cassie-product-"));
-    const store = new FileCassieStore(join(dir, "store.json"));
+    const store = new InMemoryCassieStore();
     const product = new CassieProduct(
       store,
       {

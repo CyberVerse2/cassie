@@ -17,7 +17,8 @@ import {
   type SourcePost,
   type UserSettings,
 } from "./schemas.js";
-import { FileCassieStore } from "./store.js";
+import { DrizzleCassieStore } from "./db/store.js";
+import type { CassieStore } from "./store.js";
 import { runCassie, type CassieDependencies, type CassieRun } from "./supervisor.js";
 
 export const MentionRequestSchema = z.object({
@@ -30,7 +31,7 @@ export const SettingsRequestSchema = UserSettingsSchema;
 
 export class CassieProduct {
   constructor(
-    private readonly store = new FileCassieStore(),
+    private readonly store: CassieStore = new DrizzleCassieStore(),
     private readonly deps: CassieDependencies = {
       ai: new OpenAiStructuredClient(),
       marketData: new CompositeMarketDataProvider(),
@@ -48,7 +49,7 @@ export class CassieProduct {
     userId: string;
     userCommand: string;
     sourcePost: SourcePost;
-  }): Promise<{ run: CassieRun; state: Awaited<ReturnType<FileCassieStore["load"]>> }> {
+  }): Promise<{ run: CassieRun; state: Awaited<ReturnType<CassieStore["load"]>> }> {
     const userSettings = await this.store.getUserSettings(input.userId);
 
     if (!userSettings) {
@@ -122,7 +123,7 @@ export class CassieProduct {
     return this.store.load();
   }
 
-  private async executeTicket(ticket: Awaited<ReturnType<FileCassieStore["getTradeTicket"]>>) {
+  private async executeTicket(ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {
     if (!ticket) {
       throw new Error("Cannot execute a missing ticket.");
     }

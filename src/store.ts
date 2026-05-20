@@ -1,5 +1,3 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
@@ -36,6 +34,24 @@ export interface CassieStoreSnapshot {
   userSettings: UserSettings[];
 }
 
+export interface CassieStore {
+  load(): Promise<CassieStoreSnapshot>;
+  upsertUserSettings(settings: UserSettings): Promise<void>;
+  getUserSettings(userId: string): Promise<UserSettings | undefined>;
+  addMention(input: Omit<MentionRecord, "mentionId" | "createdAt">): Promise<MentionRecord>;
+  addRun(run: Omit<StoredRun, "runId" | "createdAt">): Promise<StoredRun>;
+  addResearchReport(input: {
+    runId: string;
+    report: ResearchReport;
+  }): Promise<ResearchReportRecord>;
+  addTradeTicket(ticket: TradeTicket): Promise<TradeTicket>;
+  updateTradeTicket(ticket: TradeTicket): Promise<TradeTicket>;
+  getTradeTicket(ticketId: string): Promise<TradeTicket | undefined>;
+  addExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
+  updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
+  audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent>;
+}
+
 const emptySnapshot = (): CassieStoreSnapshot => ({
   mentions: [],
   runs: [],
@@ -46,39 +62,22 @@ const emptySnapshot = (): CassieStoreSnapshot => ({
   userSettings: [],
 });
 
-export class FileCassieStore {
-  constructor(private readonly filePath = ".cassie-data/store.json") {}
+export class InMemoryCassieStore implements CassieStore {
+  private snapshot = emptySnapshot();
 
   async load(): Promise<CassieStoreSnapshot> {
-    try {
-      const raw = await readFile(this.filePath, "utf8");
-      return { ...emptySnapshot(), ...JSON.parse(raw) };
-    } catch (error) {
-      if (error instanceof Error && "code" in error && error.code === "ENOENT") {
-        return emptySnapshot();
-      }
-
-      throw error;
-    }
-  }
-
-  async save(snapshot: CassieStoreSnapshot): Promise<void> {
-    await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, `${JSON.stringify(snapshot, null, 2)}\n`);
+    return structuredClone(this.snapshot);
   }
 
   async upsertUserSettings(settings: UserSettings): Promise<void> {
-    await this.mutate((snapshot) => {
-      snapshot.userSettings = snapshot.userSettings.filter(
-        (candidate) => candidate.userId !== settings.userId,
-      );
-      snapshot.userSettings.push(settings);
-    });
+    this.snapshot.userSettings = this.snapshot.userSettings.filter(
+      (candidate) => candidate.userId !== settings.userId,
+    );
+    this.snapshot.userSettings.push(settings);
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
-    const snapshot = await this.load();
-    return snapshot.userSettings.find((settings) => settings.userId === userId);
+    return this.snapshot.userSettings.find((settings) => settings.userId === userId);
   }
 
   async addMention(input: Omit<MentionRecord, "mentionId" | "createdAt">): Promise<MentionRecord> {
@@ -87,11 +86,7 @@ export class FileCassieStore {
       mentionId: randomUUID(),
       createdAt: new Date().toISOString(),
     };
-
-    await this.mutate((snapshot) => {
-      snapshot.mentions.push(mention);
-    });
-
+    this.snapshot.mentions.push(mention);
     await this.audit({
       entityId: mention.mentionId,
       entityType: "mention",
@@ -99,7 +94,6 @@ export class FileCassieStore {
       message: "Cassie mention received.",
       data: mention,
     });
-
     return mention;
   }
 
@@ -109,11 +103,7 @@ export class FileCassieStore {
       runId: randomUUID(),
       createdAt: new Date().toISOString(),
     };
-
-    await this.mutate((snapshot) => {
-      snapshot.runs.push(storedRun);
-    });
-
+    this.snapshot.runs.push(storedRun);
     await this.audit({
       entityId: storedRun.runId,
       entityType: "run",
@@ -121,7 +111,6 @@ export class FileCassieStore {
       message: "Cassie run completed.",
       data: { responseType: storedRun.responseType, mentionId: storedRun.mentionId },
     });
-
     return storedRun;
   }
 
@@ -135,11 +124,7 @@ export class FileCassieStore {
       report: input.report,
       createdAt: new Date().toISOString(),
     };
-
-    await this.mutate((snapshot) => {
-      snapshot.researchReports.push(record);
-    });
-
+    this.snapshot.researchReports.push(record);
     await this.audit({
       entityId: record.reportId,
       entityType: "research_report",
@@ -147,15 +132,11 @@ export class FileCassieStore {
       message: "Research report saved.",
       data: { runId: input.runId, stance: input.report.stance },
     });
-
     return record;
   }
 
   async addTradeTicket(ticket: TradeTicket): Promise<TradeTicket> {
-    await this.mutate((snapshot) => {
-      snapshot.tradeTickets.push(ticket);
-    });
-
+    this.snapshot.tradeTickets.push(ticket);
     await this.audit({
       entityId: ticket.ticketId,
       entityType: "trade_ticket",
@@ -163,30 +144,22 @@ export class FileCassieStore {
       message: "Trade ticket created.",
       data: ticket,
     });
-
     return ticket;
   }
 
   async updateTradeTicket(ticket: TradeTicket): Promise<TradeTicket> {
-    await this.mutate((snapshot) => {
-      snapshot.tradeTickets = snapshot.tradeTickets.map((candidate) =>
-        candidate.ticketId === ticket.ticketId ? ticket : candidate,
-      );
-    });
-
+    this.snapshot.tradeTickets = this.snapshot.tradeTickets.map((candidate) =>
+      candidate.ticketId === ticket.ticketId ? ticket : candidate,
+    );
     return ticket;
   }
 
   async getTradeTicket(ticketId: string): Promise<TradeTicket | undefined> {
-    const snapshot = await this.load();
-    return snapshot.tradeTickets.find((ticket) => ticket.ticketId === ticketId);
+    return this.snapshot.tradeTickets.find((ticket) => ticket.ticketId === ticketId);
   }
 
   async addExecutionJob(job: ExecutionJob): Promise<ExecutionJob> {
-    await this.mutate((snapshot) => {
-      snapshot.executionJobs.push(job);
-    });
-
+    this.snapshot.executionJobs.push(job);
     await this.audit({
       entityId: job.jobId,
       entityType: "execution_job",
@@ -194,17 +167,13 @@ export class FileCassieStore {
       message: "Execution job created.",
       data: job,
     });
-
     return job;
   }
 
   async updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob> {
-    await this.mutate((snapshot) => {
-      snapshot.executionJobs = snapshot.executionJobs.map((candidate) =>
-        candidate.jobId === job.jobId ? job : candidate,
-      );
-    });
-
+    this.snapshot.executionJobs = this.snapshot.executionJobs.map((candidate) =>
+      candidate.jobId === job.jobId ? job : candidate,
+    );
     return job;
   }
 
@@ -214,17 +183,7 @@ export class FileCassieStore {
       eventId: randomUUID(),
       createdAt: new Date().toISOString(),
     };
-
-    await this.mutate((snapshot) => {
-      snapshot.auditEvents.push(event);
-    });
-
+    this.snapshot.auditEvents.push(event);
     return event;
-  }
-
-  private async mutate(mutator: (snapshot: CassieStoreSnapshot) => void): Promise<void> {
-    const snapshot = await this.load();
-    mutator(snapshot);
-    await this.save(snapshot);
   }
 }

@@ -22,12 +22,19 @@ http://localhost:3000/dashboard
 Copy `.env.example` to `.env` and set:
 
 ```text
+DATABASE_URL
 OPENAI_API_KEY
 XAI_API_KEY
 EXECUTION_WEBHOOK_URL
 ```
 
-Missing AI/search/execution credentials fail clearly. Cassie does not downgrade semantic routing, research, or execution into local keyword behavior or fake fills.
+Missing database, AI/search, or execution credentials fail clearly. Cassie does not downgrade semantic routing, research, persistence, or execution into local keyword behavior or fake fills.
+
+Run migrations:
+
+```bash
+npm run db:migrate
+```
 
 ## API
 
@@ -95,7 +102,7 @@ Implemented:
 - Trade-ticket creation
 - Approval endpoint
 - Execution webhook workflow
-- Persistent mentions, runs, research reports, tickets, execution jobs, and audit events
+- Drizzle/Postgres persistence for mentions, runs, research reports, tickets, execution jobs, and audit events
 - Dashboard for pending tickets, runs, and audit trail
 
 Not included:

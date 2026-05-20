@@ -14,3 +14,6 @@ export * from "./connectors/research-lanes.js";
 export * from "./execution.js";
 export * from "./product.js";
 export * from "./store.js";
+export * from "./db/client.js";
+export * from "./db/schema.js";
+export * from "./db/store.js";
