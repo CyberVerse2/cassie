@@ -25,6 +25,7 @@ import {
 import { DrizzleCassieStore } from "./db/store.js";
 import type { CassieStore } from "./store.js";
 import { runCassie, type CassieDependencies, type CassieRun } from "./supervisor.js";
+import { pollXMentions } from "./x-polling.js";
 
 export const MentionRequestSchema = z.object({
   userId: z.string(),
@@ -149,6 +150,14 @@ export class CassieProduct {
 
     const job = await this.executeQueuedJob(queuedJob, ticket);
     return { processed: true, job };
+  }
+
+  async pollXMentions(userId: string) {
+    return pollXMentions({
+      product: this,
+      store: this.store,
+      userId,
+    });
   }
 
   private async enqueueExecution(ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {

@@ -187,6 +187,16 @@ export const MarketCandidateSchema = z.object({
   reason: z.string(),
 });
 
+export const TradeVenueDataSchema = z.object({
+  symbol: z.string().nullable().optional(),
+  conditionId: z.string().nullable().optional(),
+  outcomeTokenId: z.string().nullable().optional(),
+  markPrice: z.number().positive().nullable().optional(),
+  spreadBps: z.number().nonnegative().optional(),
+  estimatedSlippageBps: z.number().nonnegative().optional(),
+  minOrderSizeUsd: z.number().nonnegative().optional(),
+});
+
 export const MarketSelectionSchema = z.object({
   selectedMarket: MarketCandidateSchema.nullable(),
   rejectedCandidates: z.array(
@@ -235,6 +245,7 @@ export const TradeTicketSchema = z.object({
   side: z.string(),
   sizeUsd: z.number().positive(),
   orderType: z.enum(["limit", "marketable_limit"]),
+  venueData: TradeVenueDataSchema.optional(),
   riskDecision: RiskDecisionSchema,
   approvalState: z.enum(["not_required", "pending", "approved", "rejected"]),
 });
@@ -284,6 +295,7 @@ export type IntentResult = z.infer<typeof IntentResultSchema>;
 export type Thesis = z.infer<typeof ThesisSchema>;
 export type InverseThesis = z.infer<typeof InverseThesisSchema>;
 export type ResearchReport = z.infer<typeof ResearchReportSchema>;
+export type ResearchEvidence = z.infer<typeof ResearchEvidenceSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;

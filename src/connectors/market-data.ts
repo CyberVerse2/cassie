@@ -6,6 +6,7 @@ type HyperliquidMetaAndCtxs = [
   {
     universe: Array<{
       name: string;
+      szDecimals?: number;
     }>;
   },
   Array<{
@@ -15,6 +16,13 @@ type HyperliquidMetaAndCtxs = [
     funding?: string;
   }>,
 ];
+
+type HyperliquidL2Book = {
+  levels?: [
+    Array<{ px: string; sz: string }>,
+    Array<{ px: string; sz: string }>,
+  ];
+};
 
 type PolymarketMarket = {
   id?: string;
@@ -29,6 +37,11 @@ type PolymarketMarket = {
   clobTokenIds?: string | string[];
   conditionId?: string;
   endDate?: string;
+};
+
+type PolymarketBook = {
+  bids?: Array<{ price: string; size: string }>;
+  asks?: Array<{ price: string; size: string }>;
 };
 
 export class CompositeMarketDataProvider implements MarketDataProvider {
@@ -62,35 +75,54 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     });
     const [meta, ctxs] = await readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
 
-    return meta.universe.flatMap((asset, index) => {
-      if (!input.thesis.mentionedAssets.includes(asset.name)) {
-        return [];
-      }
+    const matches = meta.universe
+      .map((asset, index) => ({ asset, index }))
+      .filter(({ asset }) => input.thesis.mentionedAssets.includes(asset.name));
 
-      const ctx = ctxs[index];
-      const volume = Number(ctx?.dayNtlVlm ?? 0);
+    return Promise.all(
+      matches.map(async ({ asset, index }) => {
+        const ctx = ctxs[index];
+        const volume = Number(ctx?.dayNtlVlm ?? 0);
+        const book = await this.getL2Book(asset.name);
+        const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
 
-      return [
-        {
+        if (!bookMetrics) {
+          throw new Error(`Hyperliquid l2 book is empty for ${asset.name}.`);
+        }
+
+        return {
           venue: "hyperliquid",
           instrument: "perp",
           side: input.thesis.direction === "bearish" ? "short" : "long",
           symbol: asset.name,
-          markPrice: Number(ctx?.markPx ?? ctx?.midPx ?? 0) || null,
+          markPrice: Number(ctx?.markPx ?? ctx?.midPx ?? bookMetrics?.mid ?? 0) || null,
           liquidityScore: Math.min(1, volume / 50_000_000),
-          spreadBps: 10,
-          estimatedSlippageBps: Math.max(5, Math.round(1000 / Math.max(1, volume / 1_000_000))),
+          spreadBps: bookMetrics.spreadBps,
+          estimatedSlippageBps: bookMetrics.estimatedSlippageBps,
           minOrderSizeUsd: 10,
           thesisFit: input.thesis.confidence,
           reason: `${asset.name} perp directly maps to the thesis asset.`,
-        } satisfies MarketCandidate,
-      ];
+        } satisfies MarketCandidate;
+      }),
+    );
+  }
+
+  private async getL2Book(coin: string): Promise<HyperliquidL2Book> {
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "l2Book", coin }),
     });
+
+    return readJsonResponse<HyperliquidL2Book>("Hyperliquid l2 book", response);
   }
 }
 
 export class PolymarketMarketDataProvider implements MarketDataProvider {
-  constructor(private readonly endpoint = "https://gamma-api.polymarket.com/markets") {}
+  constructor(
+    private readonly endpoint = "https://gamma-api.polymarket.com/markets",
+    private readonly clobEndpoint = "https://clob.polymarket.com",
+  ) {}
 
   async findCandidates(input: { thesis: Thesis }): Promise<MarketCandidate[]> {
     const url = new URL(this.endpoint);
@@ -102,32 +134,95 @@ export class PolymarketMarketDataProvider implements MarketDataProvider {
     const response = await fetch(url);
     const markets = await readJsonResponse<PolymarketMarket[]>("Polymarket market data", response);
 
-    return markets
+    const candidates = await Promise.all(markets
       .filter((market) => market.active !== false && market.closed !== true)
-      .map((market) => {
+      .map(async (market) => {
         const buyNo = input.thesis.direction === "bearish";
         const tokenIds = parseStringArray(market.clobTokenIds);
         const prices = parseNumberArray(market.outcomePrices);
         const yesPrice = prices[0] ?? null;
+        const outcomeTokenId = tokenIds[buyNo ? 1 : 0] ?? null;
         const heldPrice = yesPrice == null ? null : buyNo ? 1 - yesPrice : yesPrice;
+        const book = outcomeTokenId ? await this.getBook(outcomeTokenId) : null;
+        const metrics = book ? orderBookMetrics(book.bids ?? [], book.asks ?? []) : null;
 
         return {
           venue: "polymarket",
-          instrument: tokenIds[buyNo ? 1 : 0] ?? market.slug ?? market.id ?? market.question ?? "unknown",
-          side: buyNo ? "buy_no" : "buy_yes",
+          instrument: market.slug ?? market.id ?? market.question ?? "polymarket",
+          side: buyNo ? "buy_no" as const : "buy_yes" as const,
           symbol: market.slug ?? market.id ?? market.question ?? "unknown",
           conditionId: market.conditionId ?? null,
-          outcomeTokenId: tokenIds[buyNo ? 1 : 0] ?? null,
-          markPrice: heldPrice && heldPrice > 0 ? heldPrice : null,
+          outcomeTokenId,
+          markPrice: metrics?.mid ?? (heldPrice && heldPrice > 0 ? heldPrice : null),
           liquidityScore: Math.min(1, Number(market.liquidityNum ?? market.volumeNum ?? 0) / 500_000),
-          spreadBps: 25,
-          estimatedSlippageBps: 25,
+          spreadBps: metrics?.spreadBps ?? 0,
+          estimatedSlippageBps: metrics?.estimatedSlippageBps ?? 0,
           minOrderSizeUsd: 1,
           thesisFit: input.thesis.confidence,
           reason: market.question ?? "Prediction market related to the thesis.",
         };
-      });
+      }));
+
+    return candidates.filter((candidate) => candidate.outcomeTokenId && candidate.spreadBps > 0);
   }
+
+  private async getBook(tokenId: string): Promise<PolymarketBook | null> {
+    const url = new URL(`/book`, this.clobEndpoint);
+    url.searchParams.set("token_id", tokenId);
+    const response = await fetch(url);
+
+    if (!response.ok) {
+      return null;
+    }
+
+    return readJsonResponse<PolymarketBook>("Polymarket order book", response);
+  }
+}
+
+function orderBookMetrics(
+  bids: Array<{ px?: string; price?: string; sz?: string; size?: string }>,
+  asks: Array<{ px?: string; price?: string; sz?: string; size?: string }>,
+) {
+  const bid = bids.map((level) => Number(level.px ?? level.price)).filter(Number.isFinite).sort((a, b) => b - a)[0];
+  const ask = asks.map((level) => Number(level.px ?? level.price)).filter(Number.isFinite).sort((a, b) => a - b)[0];
+
+  if (!bid || !ask || bid <= 0 || ask <= 0) {
+    return null;
+  }
+
+  const mid = (bid + ask) / 2;
+  const spreadBps = Math.round(((ask - bid) / mid) * 10_000);
+  const estimatedSlippageBps = estimateBuySlippageBps(asks, 50, ask);
+  return { mid, spreadBps, estimatedSlippageBps };
+}
+
+function estimateBuySlippageBps(
+  asks: Array<{ px?: string; price?: string; sz?: string; size?: string }>,
+  notionalUsd: number,
+  bestAsk: number,
+): number {
+  let remaining = notionalUsd;
+  let spent = 0;
+  let acquired = 0;
+
+  for (const level of asks) {
+    const price = Number(level.px ?? level.price);
+    const size = Number(level.sz ?? level.size);
+    if (!Number.isFinite(price) || !Number.isFinite(size) || price <= 0 || size <= 0) continue;
+    const levelNotional = price * size;
+    const spend = Math.min(remaining, levelNotional);
+    spent += spend;
+    acquired += spend / price;
+    remaining -= spend;
+    if (remaining <= 0) break;
+  }
+
+  if (spent <= 0 || acquired <= 0) {
+    return 0;
+  }
+
+  const averagePrice = spent / acquired;
+  return Math.max(0, Math.round(((averagePrice - bestAsk) / bestAsk) * 10_000));
 }
 
 function parseStringArray(value: string | string[] | undefined): string[] {

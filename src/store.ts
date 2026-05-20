@@ -50,6 +50,8 @@ export interface CassieStore {
   addExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined>;
+  getRuntimeState<T = unknown>(key: string): Promise<T | undefined>;
+  setRuntimeState(key: string, value: unknown): Promise<void>;
   audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent>;
 }
 
@@ -65,6 +67,7 @@ const emptySnapshot = (): CassieStoreSnapshot => ({
 
 export class InMemoryCassieStore implements CassieStore {
   private snapshot = emptySnapshot();
+  private runtimeState = new Map<string, unknown>();
 
   async load(): Promise<CassieStoreSnapshot> {
     return structuredClone(this.snapshot);
@@ -180,6 +183,14 @@ export class InMemoryCassieStore implements CassieStore {
 
   async getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined> {
     return this.snapshot.executionJobs.find((job) => job.status === "queued");
+  }
+
+  async getRuntimeState<T = unknown>(key: string): Promise<T | undefined> {
+    return this.runtimeState.get(key) as T | undefined;
+  }
+
+  async setRuntimeState(key: string, value: unknown): Promise<void> {
+    this.runtimeState.set(key, value);
   }
 
   async audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent> {

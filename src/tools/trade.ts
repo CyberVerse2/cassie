@@ -41,6 +41,15 @@ export function createTradeTicket(input: {
     side: market.side,
     sizeUsd,
     orderType: "marketable_limit",
+    venueData: {
+      symbol: market.symbol,
+      conditionId: market.conditionId ?? null,
+      outcomeTokenId: market.outcomeTokenId ?? null,
+      markPrice: market.markPrice ?? null,
+      spreadBps: market.spreadBps,
+      estimatedSlippageBps: market.estimatedSlippageBps,
+      minOrderSizeUsd: market.minOrderSizeUsd,
+    },
     riskDecision: input.riskDecision,
     approvalState:
       input.riskDecision.decision === "approve" ? "not_required" : "pending",

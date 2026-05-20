@@ -14,6 +14,7 @@ import {
   executionJobs,
   mentions,
   researchReports,
+  runtimeState,
   runs,
   tradeTickets,
   userSettings,
@@ -238,6 +239,33 @@ export class DrizzleCassieStore implements CassieStore {
       .limit(1);
 
     return rows[0]?.job;
+  }
+
+  async getRuntimeState<T = unknown>(key: string): Promise<T | undefined> {
+    const rows = await this.db
+      .select()
+      .from(runtimeState)
+      .where(eq(runtimeState.key, key))
+      .limit(1);
+
+    return rows[0]?.value as T | undefined;
+  }
+
+  async setRuntimeState(key: string, value: unknown): Promise<void> {
+    await this.db
+      .insert(runtimeState)
+      .values({
+        key,
+        value,
+        updatedAt: new Date().toISOString(),
+      })
+      .onConflictDoUpdate({
+        target: runtimeState.key,
+        set: {
+          value,
+          updatedAt: new Date().toISOString(),
+        },
+      });
   }
 
   async audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent> {

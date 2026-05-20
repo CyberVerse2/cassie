@@ -83,3 +83,9 @@ export const auditEvents = pgTable("audit_events", {
   index("audit_events_entity_idx").on(table.entityType, table.entityId),
   index("audit_events_created_idx").on(table.createdAt),
 ]);
+
+export const runtimeState = pgTable("runtime_state", {
+  key: text("key").primaryKey(),
+  value: jsonb("value").$type<unknown>().notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

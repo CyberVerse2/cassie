@@ -110,6 +110,18 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/x/poll") {
+    requireApiToken(request);
+    const userId = url.searchParams.get("userId");
+    if (!userId) {
+      sendJson(response, 400, { error: "Missing userId" });
+      return;
+    }
+
+    sendJson(response, 200, await product.pollXMentions(userId));
+    return;
+  }
+
   const approveMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/approve$/);
   if (request.method === "POST" && approveMatch) {
     requireApiToken(request);

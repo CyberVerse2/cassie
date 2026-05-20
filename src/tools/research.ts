@@ -1,6 +1,7 @@
 import type { StructuredAiClient } from "../ai.js";
 import {
   ResearchReportSchema,
+  type ResearchEvidence,
   type ResearchReport,
   type SourcePost,
   type Thesis,
@@ -11,7 +12,7 @@ export type ResearchAngle = "balanced" | "critic" | "counter";
 
 export interface SearchLaneResult {
   lane: "openai_search" | "x_search";
-  evidence: unknown[];
+  evidence: ResearchEvidence[];
   warnings: string[];
 }
 

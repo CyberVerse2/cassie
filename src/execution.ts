@@ -61,7 +61,7 @@ export class VenueExecutionClient implements ExecutionClient {
 export class HyperliquidExecutionClient implements ExecutionClient {
   constructor(
     private readonly privateKey = process.env.HYPERLIQUID_PRIVATE_KEY,
-    private readonly assetIdMap = process.env.HYPERLIQUID_ASSET_IDS ?? "",
+    private readonly slippageBps = Number(process.env.HYPERLIQUID_EXECUTION_SLIPPAGE_BPS ?? 100),
   ) {}
 
   async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
@@ -69,29 +69,30 @@ export class HyperliquidExecutionClient implements ExecutionClient {
       throw new MissingConnectorConfigError("Hyperliquid execution", "HYPERLIQUID_PRIVATE_KEY");
     }
 
-    const assetId = this.resolveAssetId(ticket);
     const wallet = new EthersWallet(this.privateKey);
     const transport = new HttpTransport();
     const info = new InfoClient({ transport });
     const exchange = new ExchangeClient({ transport, wallet });
+    const asset = await this.resolveAsset(info, ticket);
     const mids = await info.allMids();
-    const mid = Number(mids[ticket.instrument] ?? mids[ticket.instrument.replace("-PERP", "")]);
+    const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
+    const mid = Number(mids[symbol]);
 
     if (!Number.isFinite(mid) || mid <= 0) {
-      throw new Error(`No Hyperliquid mid price for ${ticket.instrument}.`);
+      throw new Error(`No Hyperliquid mid price for ${symbol}.`);
     }
 
     const isBuy = ticket.side === "long" || ticket.side === "buy";
-    const slippage = 0.01;
+    const slippage = this.slippageBps / 10_000;
     const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
     const size = ticket.sizeUsd / mid;
     const response = await exchange.order({
       orders: [
         {
-          a: assetId,
+          a: asset.id,
           b: isBuy,
-          p: price.toFixed(6),
-          s: size.toFixed(6),
+          p: formatDecimal(price, Number(process.env.HYPERLIQUID_PRICE_DECIMALS ?? 5)),
+          s: formatDecimal(size, asset.sizeDecimals),
           r: false,
           t: { limit: { tif: "Ioc" } },
         },
@@ -107,19 +108,19 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     };
   }
 
-  private resolveAssetId(ticket: TradeTicket): number {
-    const symbol = ticket.instrument.replace("-PERP", "");
-    for (const pair of this.assetIdMap.split(",")) {
-      const [key, value] = pair.split(":").map((part) => part?.trim());
-      if (key === symbol && value && Number.isInteger(Number(value))) {
-        return Number(value);
-      }
+  private async resolveAsset(info: InfoClient, ticket: TradeTicket): Promise<{ id: number; sizeDecimals: number }> {
+    const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
+    const [meta] = await info.metaAndAssetCtxs();
+    const index = meta.universe.findIndex((asset) => asset.name === symbol);
+
+    if (index < 0) {
+      throw new Error(`Hyperliquid asset ${symbol} was not found in live exchange metadata.`);
     }
 
-    throw new MissingConnectorConfigError(
-      `Hyperliquid asset id for ${symbol}`,
-      "HYPERLIQUID_ASSET_IDS",
-    );
+    return {
+      id: index,
+      sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
+    };
   }
 }
 
@@ -134,9 +135,9 @@ export class PolymarketExecutionClient implements ExecutionClient {
       throw new MissingConnectorConfigError("Polymarket execution", "POLYMARKET_PRIVATE_KEY");
     }
 
-    const tokenId = ticket.instrument;
-    if (!/^\d+$/.test(tokenId)) {
-      throw new Error("Polymarket execution requires instrument to be the outcome token ID.");
+    const tokenId = ticket.venueData?.outcomeTokenId;
+    if (!tokenId || !/^\d+$/.test(tokenId)) {
+      throw new Error("Polymarket execution requires venueData.outcomeTokenId.");
     }
 
     const wallet = new EthersWallet(this.privateKey);
@@ -165,6 +166,12 @@ export class PolymarketExecutionClient implements ExecutionClient {
       raw: response,
     };
   }
+}
+
+function formatDecimal(value: number, decimals: number): string {
+  const factor = 10 ** decimals;
+  const truncated = Math.floor(value * factor) / factor;
+  return truncated.toFixed(decimals).replace(/\.?0+$/, "");
 }
 
 export function createQueuedExecutionJob(ticketId: string): ExecutionJob {
