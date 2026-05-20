@@ -1,0 +1,145 @@
+import { createXai } from "@ai-sdk/xai";
+import { generateText } from "ai";
+import { z } from "zod";
+import { MissingConnectorConfigError } from "./errors.ts";
+import { SourcePostSchema, type SourcePost } from "../schemas.ts";
+
+const XPostResolutionSchema = z.object({
+  found: z.boolean(),
+  reason: z.string().nullable(),
+  sourcePost: SourcePostSchema.nullable(),
+});
+
+export type XPostLocator = {
+  handle: string | null;
+  postId: string;
+  canonicalUrl: string;
+};
+
+export class XPostResolutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "XPostResolutionError";
+  }
+}
+
+export class GrokXPostResolver {
+  constructor(
+    private readonly apiKey = process.env.XAI_API_KEY,
+    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
+  ) {}
+
+  async resolve(tweetUrl: string): Promise<SourcePost> {
+    if (!this.apiKey) {
+      throw new MissingConnectorConfigError("Grok X post resolver", "XAI_API_KEY");
+    }
+
+    const locator = parseXPostUrl(tweetUrl);
+    const xai = createXai({ apiKey: this.apiKey });
+    const result = await generateText({
+      model: xai.responses(this.model),
+      tools: {
+        x_search: xai.tools.xSearch({
+          allowedXHandles: locator.handle ? [locator.handle] : undefined,
+          enableImageUnderstanding: true,
+          enableVideoUnderstanding: true,
+        }),
+      },
+      toolChoice: "required",
+      prompt: buildXPostResolutionPrompt(locator),
+    });
+
+    const resolution = XPostResolutionSchema.parse(parseJsonObject(result.text));
+    if (!resolution.found || !resolution.sourcePost) {
+      throw new XPostResolutionError(
+        resolution.reason ?? `Grok could not resolve X post ${locator.canonicalUrl}.`,
+      );
+    }
+
+    return {
+      ...resolution.sourcePost,
+      postId: resolution.sourcePost.postId ?? locator.postId,
+      url: resolution.sourcePost.url ?? locator.canonicalUrl,
+      authorHandle: resolution.sourcePost.authorHandle ?? locator.handle,
+    };
+  }
+}
+
+export function parseXPostUrl(tweetUrl: string): XPostLocator {
+  let parsed: URL;
+  try {
+    parsed = new URL(tweetUrl);
+  } catch {
+    throw new XPostResolutionError(`Invalid X post URL: ${tweetUrl}`);
+  }
+
+  const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+  if (host !== "x.com" && host !== "twitter.com") {
+    throw new XPostResolutionError(`Expected an x.com or twitter.com URL, got ${parsed.hostname}.`);
+  }
+
+  const parts = parsed.pathname.split("/").filter(Boolean);
+  const statusIndex = parts.findIndex((part) => part === "status" || part === "statuses");
+  const handle = statusIndex > 0 ? parts[statusIndex - 1] ?? null : null;
+  const postId = statusIndex >= 0 ? parts[statusIndex + 1] : undefined;
+
+  if (!postId || !/^\d+$/.test(postId)) {
+    throw new XPostResolutionError(`Could not find a numeric X status ID in ${tweetUrl}.`);
+  }
+
+  return {
+    handle,
+    postId,
+    canonicalUrl: handle ? `https://x.com/${handle}/status/${postId}` : `https://x.com/i/status/${postId}`,
+  };
+}
+
+export function buildXPostResolutionPrompt(locator: XPostLocator): string {
+  return `You are Cassie's X post resolver.
+
+Use X Search to resolve the exact target post below. Do not answer from memory.
+
+Target URL: ${locator.canonicalUrl}
+Target status ID: ${locator.postId}
+Target handle: ${locator.handle ?? "unknown"}
+
+Return only a JSON object with this shape:
+{
+  "found": true,
+  "reason": null,
+  "sourcePost": {
+    "platform": "x",
+    "postId": "${locator.postId}",
+    "url": "${locator.canonicalUrl}",
+    "authorHandle": "handle without @ or null",
+    "authorName": "display name or null",
+    "text": "the target post text, preserving the author's meaning",
+    "createdAt": "ISO timestamp or null",
+    "quotedPostText": "quoted post text if directly attached, otherwise omit",
+    "linkedUrls": ["expanded URLs directly attached to the post"],
+    "mediaDescriptions": ["concise descriptions of images or videos directly attached to the post"]
+  }
+}
+
+If the exact target post cannot be found, return:
+{
+  "found": false,
+  "reason": "brief reason",
+  "sourcePost": null
+}
+
+Only resolve the target post. Do not include unrelated search results.`;
+}
+
+function parseJsonObject(text: string): unknown {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) {
+      throw new XPostResolutionError("Grok X post resolver did not return JSON.");
+    }
+
+    return JSON.parse(match[0]);
+  }
+}

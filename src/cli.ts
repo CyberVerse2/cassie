@@ -2,6 +2,7 @@ import "dotenv/config";
 import { inspect } from "node:util";
 import { OpenAiStructuredClient } from "./ai.ts";
 import { CompositeMarketDataProvider } from "./connectors/market-data.ts";
+import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
 import type { ExecutionJob, SourcePost, UserSettings } from "./schemas.ts";
 import { DrizzleCassieStore } from "./db/store.ts";
 import type { CassieStoreSnapshot } from "./store.ts";
@@ -92,6 +93,7 @@ Smoke checks:
 Useful examples:
   npm run cli -- settings:set --user local-user --wallet 0xabc... --assets SOL,BTC --size 50
   npm run cli -- state
+  npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
   npm run cli -- tickets --json
   npm run cli -- approve <ticketId>
@@ -135,7 +137,7 @@ async function mention(args: ParsedArgs) {
   return product().processMention({
     userId: flag(args, "user", "local-user"),
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
-    sourcePost: sourcePostFromFlags(args),
+    sourcePost: await sourcePostFromFlags(args),
   });
 }
 
@@ -196,7 +198,7 @@ async function executeNext(args: ParsedArgs) {
 async function smokeAi(args: ParsedArgs) {
   const ai = new OpenAiStructuredClient();
   const userCommand = flag(args, "command", "@Cassie should we trade this?");
-  const sourcePost = sourcePostFromFlags(args);
+  const sourcePost = await sourcePostFromFlags(args);
   const intent = await routeIntent({ ai, sourcePost, userCommand });
   const thesis = await extractThesis({ ai, sourcePost, userCommand });
 
@@ -253,7 +255,16 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
   };
 }
 
-function sourcePostFromFlags(args: ParsedArgs): SourcePost {
+async function sourcePostFromFlags(args: ParsedArgs): Promise<SourcePost> {
+  const tweetUrl = nullableFlag(args, "tweet-url");
+  if (tweetUrl) {
+    if (typeof args.flags.post === "string") {
+      throw new CliError("Use either --tweet-url or --post, not both.");
+    }
+
+    return new GrokXPostResolver().resolve(tweetUrl);
+  }
+
   return {
     platform: "x",
     postId: nullableFlag(args, "post-id"),
