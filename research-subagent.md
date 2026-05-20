@@ -71,7 +71,7 @@ Recommended implementation:
 ```text
 Cassie Main Agent = ToolLoopAgent
 Research Subagent = deterministic workflow + LLM synthesis
-Search Lanes = parallel services/tools
+Search Lanes = OpenAI/Web Search + Grok X API
 Final Output = structured ResearchReport
 ```
 
@@ -130,7 +130,7 @@ The workflow always runs deep research:
 1. Receive ResearchInput
 2. Normalize the claim
 3. Build a query plan
-4. Run OpenAI Search and X Search in parallel
+4. Run OpenAI/Web Search and Grok X Search in parallel
 5. Normalize evidence
 6. Score source reliability
 7. Detect contradictions and uncertainty
@@ -144,11 +144,11 @@ Search lanes:
 
 ```text
 Research Subagent
-├── OpenAI Search Lane
-└── X Search Lane
+├── OpenAI/Web Search Lane
+└── Grok X Search Lane
 ```
 
-### OpenAI Search Lane
+### OpenAI/Web Search Lane
 
 Purpose: external verification.
 
@@ -156,13 +156,15 @@ Answers whether reliable evidence, official sources, reputable news, stale infor
 
 Prioritize official sources, regulatory sources, company announcements, exchange announcements, reliable news, and primary documents.
 
-### X Search Lane
+### Grok X Search Lane
 
 Purpose: social context and narrative investigation.
 
 Answers whether the narrative is spreading, who started it, whether credible accounts are discussing it, whether people are refuting it, whether it looks like a pump or rumor, and whether the same screenshot/link is being recycled.
 
-X Search is social signal, not truth. A popular claim may be crowded or market-moving without being true.
+Use Grok X API for semantic X search, keyword X search, thread fetches, user/account context, rumor-origin discovery, refutation discovery, and social clustering.
+
+Grok X Search is social signal, not truth. A popular claim may be crowded or market-moving without being true.
 
 Run both lanes concurrently with `Promise.allSettled` so partial reports can still return:
 
@@ -172,7 +174,7 @@ async function runResearchWorkflow(input: ResearchInput) {
 
   const [openAiResult, xResult] = await Promise.allSettled([
     runOpenAIWebSearchLane(queryPlan.openAiQueries),
-    runXSearchLane(queryPlan.xQueries),
+    runGrokXSearchLane(queryPlan.xQueries),
   ]);
 
   const evidence = normalizeEvidence({ openAiResult, xResult });
@@ -192,13 +194,13 @@ async function runResearchWorkflow(input: ResearchInput) {
 Failure behavior:
 
 ```text
-If X Search fails:
-- Continue with OpenAI Search.
+If Grok X Search fails:
+- Continue with OpenAI/Web Search.
 - Add warning: X_SEARCH_FAILED.
 - Reduce social confidence.
 
-If OpenAI Search fails:
-- Continue with X Search only.
+If OpenAI/Web Search fails:
+- Continue with Grok X Search only.
 - Add warning: OPENAI_SEARCH_FAILED.
 - Do not recommend high-confidence conclusions.
 
@@ -399,8 +401,8 @@ For v1, include:
 ```text
 - Deep claim normalization
 - Query planning
-- OpenAI Search lane
-- X Search lane
+- OpenAI/Web Search lane
+- Grok X Search lane
 - Parallel execution with Promise.allSettled
 - Evidence normalization
 - Reliability scoring
@@ -452,6 +454,6 @@ Example input: `Post: "Solana ETF approval is basically inevitable now. Market i
   "researchConclusion": "claim_plausible_but_unconfirmed",
   "recommendedResearchAction": "proceed_with_caution",
   "publicSummary": "Plausible but unconfirmed. No primary source found yet, and X momentum is high, so treat this as rumor-driven.",
-  "fullResearchBrief": "The claim is directionally plausible because Solana ETF discussion is active, but research did not find primary confirmation of approval. X Search shows high momentum, but much of it appears to reference the same rumor source. Proceed with caution if routing to markets."
+  "fullResearchBrief": "The claim is directionally plausible because Solana ETF discussion is active, but research did not find primary confirmation of approval. Grok X Search shows high momentum, but much of it appears to reference the same rumor source. Proceed with caution if routing to markets."
 }
 ```
