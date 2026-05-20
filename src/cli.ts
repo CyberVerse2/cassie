@@ -6,6 +6,7 @@ const command = process.argv.slice(2).join(" ") || "@Cassie what do you think?";
 const product = new CassieProduct();
 await product.upsertSettings({
   userId: "local-user",
+  walletAddress: null,
   allowedVenues: ["hyperliquid", "polymarket"],
   allowedAssets: ["SOL"],
   defaultTradeSizeUsd: 50,
@@ -13,6 +14,8 @@ await product.upsertSettings({
   maxDailyLossUsd: 100,
   minConfidence: 0.75,
   maxSpreadBps: 50,
+  maxSlippageBps: 100,
+  maxPositionUsd: 1_000,
   autoTradeEnabled: false,
 });
 

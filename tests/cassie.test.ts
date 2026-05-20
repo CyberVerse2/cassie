@@ -24,6 +24,7 @@ const sourcePost: SourcePost = {
 
 const userSettings: UserSettings = {
   userId: "user_1",
+  walletAddress: "0x0000000000000000000000000000000000000000",
   allowedVenues: ["hyperliquid", "polymarket"],
   allowedAssets: ["SOL"],
   defaultTradeSizeUsd: 50,
@@ -31,6 +32,8 @@ const userSettings: UserSettings = {
   maxDailyLossUsd: 100,
   minConfidence: 0.75,
   maxSpreadBps: 50,
+  maxSlippageBps: 100,
+  maxPositionUsd: 1_000,
   autoTradeEnabled: false,
 };
 
@@ -76,6 +79,8 @@ const marketSelection: MarketSelection = {
     symbol: "SOL",
     liquidityScore: 0.9,
     spreadBps: 10,
+    estimatedSlippageBps: 10,
+    minOrderSizeUsd: 10,
     thesisFit: 0.82,
     reason: "Direct liquid SOL expression.",
   },
@@ -145,6 +150,13 @@ describe("Cassie supervisor", () => {
       deps: deps("trade"),
       sourcePost,
       userSettings,
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
       userCommand: "@Cassie get me in",
     });
 
@@ -161,6 +173,13 @@ describe("Cassie supervisor", () => {
       deps: deps("critic"),
       sourcePost,
       userSettings,
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
       userCommand: "@Cassie tear this apart",
     });
 
@@ -183,6 +202,13 @@ describe("risk engine", () => {
         },
       },
       userSettings,
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
     });
 
     expect(decision).toEqual({

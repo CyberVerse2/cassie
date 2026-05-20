@@ -9,6 +9,7 @@ import type {
   Thesis,
   TradeTicket,
   UserSettings,
+  AccountState,
 } from "./schemas.js";
 import type { MarketDataProvider } from "./tools/market.js";
 import type { ResearchSearchLanes } from "./tools/research.js";
@@ -55,6 +56,7 @@ export async function runCassie(input: {
   deps: CassieDependencies;
   sourcePost: SourcePost;
   userSettings: UserSettings;
+  accountState: AccountState;
   userCommand: string;
 }): Promise<CassieRun> {
   const intent = await routeIntent({
@@ -127,6 +129,7 @@ export async function runCassie(input: {
     const riskDecision = evaluateRisk({
       marketSelection,
       userSettings: input.userSettings,
+      accountState: input.accountState,
       sizeUsd: intent.userSizeOverrideUsd,
     });
     const tradeTicket = createTradeTicket({
@@ -169,6 +172,7 @@ export async function runCassie(input: {
   const riskDecision = evaluateRisk({
     marketSelection,
     userSettings: input.userSettings,
+    accountState: input.accountState,
     sizeUsd: intent.userSizeOverrideUsd,
   });
 

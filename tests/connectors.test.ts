@@ -52,6 +52,7 @@ describe("market data connectors", () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.venue).toBe("hyperliquid");
     expect(candidates[0]?.symbol).toBe("SOL");
+    expect(candidates[0]?.estimatedSlippageBps).toBeGreaterThan(0);
     fetchMock.mockRestore();
   });
 
@@ -66,6 +67,9 @@ describe("market data connectors", () => {
             active: true,
             closed: false,
             liquidityNum: 600000,
+            clobTokenIds: JSON.stringify(["123", "456"]),
+            outcomePrices: JSON.stringify(["0.62", "0.38"]),
+            conditionId: "condition_1",
           },
         ]),
       ),
@@ -78,6 +82,8 @@ describe("market data connectors", () => {
     expect(candidates).toHaveLength(1);
     expect(candidates[0]?.venue).toBe("polymarket");
     expect(candidates[0]?.side).toBe("buy_yes");
+    expect(candidates[0]?.instrument).toBe("123");
+    expect(candidates[0]?.conditionId).toBe("condition_1");
     fetchMock.mockRestore();
   });
 });

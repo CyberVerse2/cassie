@@ -4,6 +4,7 @@ import type { UserSettings } from "../src/schemas.js";
 
 const settings: UserSettings = {
   userId: "user_1",
+  walletAddress: "0x0000000000000000000000000000000000000000",
   allowedVenues: ["hyperliquid"],
   allowedAssets: ["SOL"],
   defaultTradeSizeUsd: 50,
@@ -11,6 +12,8 @@ const settings: UserSettings = {
   maxDailyLossUsd: 100,
   minConfidence: 0.75,
   maxSpreadBps: 50,
+  maxSlippageBps: 100,
+  maxPositionUsd: 1_000,
   autoTradeEnabled: false,
 };
 

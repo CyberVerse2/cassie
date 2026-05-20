@@ -45,6 +45,7 @@ curl -X POST http://localhost:3000/api/settings \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user_1",
+    "walletAddress": "0x0000000000000000000000000000000000000000",
     "allowedVenues": ["hyperliquid", "polymarket"],
     "allowedAssets": ["SOL"],
     "defaultTradeSizeUsd": 50,
@@ -52,6 +53,8 @@ curl -X POST http://localhost:3000/api/settings \
     "maxDailyLossUsd": 100,
     "minConfidence": 0.75,
     "maxSpreadBps": 50,
+    "maxSlippageBps": 100,
+    "maxPositionUsd": 1000,
     "autoTradeEnabled": false
   }'
 ```

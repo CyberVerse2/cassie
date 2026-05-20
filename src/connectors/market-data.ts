@@ -25,6 +25,10 @@ type PolymarketMarket = {
   liquidityNum?: number;
   volumeNum?: number;
   outcomes?: string | string[];
+  outcomePrices?: string | string[];
+  clobTokenIds?: string | string[];
+  conditionId?: string;
+  endDate?: string;
 };
 
 export class CompositeMarketDataProvider implements MarketDataProvider {
@@ -72,8 +76,11 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
           instrument: "perp",
           side: input.thesis.direction === "bearish" ? "short" : "long",
           symbol: asset.name,
+          markPrice: Number(ctx?.markPx ?? ctx?.midPx ?? 0) || null,
           liquidityScore: Math.min(1, volume / 50_000_000),
           spreadBps: 10,
+          estimatedSlippageBps: Math.max(5, Math.round(1000 / Math.max(1, volume / 1_000_000))),
+          minOrderSizeUsd: 10,
           thesisFit: input.thesis.confidence,
           reason: `${asset.name} perp directly maps to the thesis asset.`,
         } satisfies MarketCandidate,
@@ -97,15 +104,43 @@ export class PolymarketMarketDataProvider implements MarketDataProvider {
 
     return markets
       .filter((market) => market.active !== false && market.closed !== true)
-      .map((market) => ({
-        venue: "polymarket",
-        instrument: "prediction_market",
-        side: input.thesis.direction === "bearish" ? "buy_no" : "buy_yes",
-        symbol: market.slug ?? market.id ?? market.question ?? "unknown",
-        liquidityScore: Math.min(1, Number(market.liquidityNum ?? market.volumeNum ?? 0) / 500_000),
-        spreadBps: 25,
-        thesisFit: input.thesis.confidence,
-        reason: market.question ?? "Prediction market related to the thesis.",
-      }));
+      .map((market) => {
+        const buyNo = input.thesis.direction === "bearish";
+        const tokenIds = parseStringArray(market.clobTokenIds);
+        const prices = parseNumberArray(market.outcomePrices);
+        const yesPrice = prices[0] ?? null;
+        const heldPrice = yesPrice == null ? null : buyNo ? 1 - yesPrice : yesPrice;
+
+        return {
+          venue: "polymarket",
+          instrument: tokenIds[buyNo ? 1 : 0] ?? market.slug ?? market.id ?? market.question ?? "unknown",
+          side: buyNo ? "buy_no" : "buy_yes",
+          symbol: market.slug ?? market.id ?? market.question ?? "unknown",
+          conditionId: market.conditionId ?? null,
+          outcomeTokenId: tokenIds[buyNo ? 1 : 0] ?? null,
+          markPrice: heldPrice && heldPrice > 0 ? heldPrice : null,
+          liquidityScore: Math.min(1, Number(market.liquidityNum ?? market.volumeNum ?? 0) / 500_000),
+          spreadBps: 25,
+          estimatedSlippageBps: 25,
+          minOrderSizeUsd: 1,
+          thesisFit: input.thesis.confidence,
+          reason: market.question ?? "Prediction market related to the thesis.",
+        };
+      });
   }
+}
+
+function parseStringArray(value: string | string[] | undefined): string[] {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseNumberArray(value: string | string[] | undefined): number[] {
+  return parseStringArray(value).map(Number).filter(Number.isFinite);
 }

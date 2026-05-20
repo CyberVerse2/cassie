@@ -12,6 +12,7 @@ import type {
 } from "../src/schemas.js";
 import type { ExecutionClient } from "../src/execution.js";
 import { InMemoryCassieStore } from "../src/store.js";
+import { StaticAccountStateProvider } from "../src/account-state.js";
 
 const sourcePost: SourcePost = {
   platform: "x",
@@ -25,6 +26,7 @@ const sourcePost: SourcePost = {
 
 const settings: UserSettings = {
   userId: "user_1",
+  walletAddress: "0x0000000000000000000000000000000000000000",
   allowedVenues: ["hyperliquid"],
   allowedAssets: ["SOL"],
   defaultTradeSizeUsd: 50,
@@ -32,6 +34,8 @@ const settings: UserSettings = {
   maxDailyLossUsd: 100,
   minConfidence: 0.75,
   maxSpreadBps: 50,
+  maxSlippageBps: 100,
+  maxPositionUsd: 1_000,
   autoTradeEnabled: false,
 };
 
@@ -54,6 +58,8 @@ const marketSelection: MarketSelection = {
     symbol: "SOL",
     liquidityScore: 1,
     spreadBps: 10,
+    estimatedSlippageBps: 10,
+    minOrderSizeUsd: 10,
     thesisFit: 0.9,
     reason: "Direct SOL expression.",
   },
@@ -129,6 +135,13 @@ describe("CassieProduct", () => {
         },
       },
       new FakeExecutionClient(),
+      new StaticAccountStateProvider({
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      }),
     );
 
     await product.upsertSettings(settings);

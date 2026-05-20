@@ -3,6 +3,10 @@ import { OpenAiStructuredClient } from "./ai.js";
 import { CompositeMarketDataProvider } from "./connectors/market-data.js";
 import { LiveResearchSearchLanes } from "./connectors/research-lanes.js";
 import {
+  HyperliquidAccountStateProvider,
+  type AccountStateProvider,
+} from "./account-state.js";
+import {
   WebhookExecutionClient,
   VenueExecutionClient,
   createQueuedExecutionJob,
@@ -41,6 +45,7 @@ export class CassieProduct {
     private readonly executionClient: ExecutionClient = process.env.EXECUTION_WEBHOOK_URL
       ? new WebhookExecutionClient()
       : new VenueExecutionClient(),
+    private readonly accountStateProvider: AccountStateProvider = new HyperliquidAccountStateProvider(),
   ) {}
 
   async upsertSettings(settings: UserSettings): Promise<UserSettings> {
@@ -60,10 +65,12 @@ export class CassieProduct {
     }
 
     const mention = await this.store.addMention(input);
+    const accountState = await this.accountStateProvider.getAccountState(userSettings);
     const run = await runCassie({
       deps: this.deps,
       sourcePost: input.sourcePost,
       userSettings,
+      accountState,
       userCommand: input.userCommand,
     });
 

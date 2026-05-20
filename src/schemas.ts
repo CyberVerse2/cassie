@@ -38,6 +38,7 @@ export const SourcePostSchema = z.object({
 
 export const UserSettingsSchema = z.object({
   userId: z.string(),
+  walletAddress: z.string().nullable().default(null),
   allowedVenues: z.array(z.string()),
   allowedAssets: z.array(z.string()),
   defaultTradeSizeUsd: z.number().positive(),
@@ -45,6 +46,8 @@ export const UserSettingsSchema = z.object({
   maxDailyLossUsd: z.number().nonnegative(),
   minConfidence: z.number().min(0).max(1),
   maxSpreadBps: z.number().nonnegative(),
+  maxSlippageBps: z.number().nonnegative().default(100),
+  maxPositionUsd: z.number().positive().default(1_000),
   autoTradeEnabled: z.boolean(),
 });
 
@@ -173,8 +176,13 @@ export const MarketCandidateSchema = z.object({
   instrument: z.string(),
   side: z.enum(["long", "short", "buy_yes", "buy_no", "buy", "sell"]),
   symbol: z.string(),
+  conditionId: z.string().nullable().optional(),
+  outcomeTokenId: z.string().nullable().optional(),
+  markPrice: z.number().positive().nullable().optional(),
   liquidityScore: z.number().min(0).max(1),
   spreadBps: z.number().nonnegative(),
+  estimatedSlippageBps: z.number().nonnegative().default(0),
+  minOrderSizeUsd: z.number().nonnegative().default(0),
   thesisFit: z.number().min(0).max(1),
   reason: z.string(),
 });
@@ -209,6 +217,14 @@ export const RiskDecisionSchema = z.discriminatedUnion("decision", [
     reason: z.string(),
   }),
 ]);
+
+export const AccountStateSchema = z.object({
+  userId: z.string(),
+  availableBalanceUsd: z.number().nonnegative(),
+  openExposureUsd: z.number().nonnegative(),
+  dailyLossUsd: z.number().nonnegative(),
+  openOrdersUsd: z.number().nonnegative(),
+});
 
 export const TradeTicketSchema = z.object({
   ticketId: z.string(),
@@ -272,6 +288,7 @@ export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
 export type RiskDecision = z.infer<typeof RiskDecisionSchema>;
+export type AccountState = z.infer<typeof AccountStateSchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;
 export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
