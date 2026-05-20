@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc --noEmit",
     "test": "vitest run",
-    "dev": "tsx src/cli.ts"
+    "dev": "tsx src/server.ts",
+    "cli": "tsx src/cli.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.64",

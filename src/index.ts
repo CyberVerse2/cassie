@@ -11,3 +11,6 @@ export * from "./tools/trade.js";
 export * from "./connectors/errors.js";
 export * from "./connectors/market-data.js";
 export * from "./connectors/research-lanes.js";
+export * from "./execution.js";
+export * from "./product.js";
+export * from "./store.js";
