@@ -8,3 +8,6 @@ export * from "./tools/research.js";
 export * from "./tools/risk.js";
 export * from "./tools/thesis.js";
 export * from "./tools/trade.js";
+export * from "./connectors/errors.js";
+export * from "./connectors/market-data.js";
+export * from "./connectors/research-lanes.js";
