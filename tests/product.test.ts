@@ -143,6 +143,7 @@ describe("CassieProduct", () => {
     expect(ticket?.approvalState).toBe("pending");
 
     await product.approveTicket(ticket!.ticketId);
+    await product.processNextExecutionJob();
     const state = await product.state();
     expect(state.tradeTickets[0]?.approvalState).toBe("approved");
     expect(state.executionJobs[0]?.status).toBe("succeeded");

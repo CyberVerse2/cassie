@@ -49,6 +49,7 @@ export interface CassieStore {
   getTradeTicket(ticketId: string): Promise<TradeTicket | undefined>;
   addExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
+  getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined>;
   audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent>;
 }
 
@@ -175,6 +176,10 @@ export class InMemoryCassieStore implements CassieStore {
       candidate.jobId === job.jobId ? job : candidate,
     );
     return job;
+  }
+
+  async getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined> {
+    return this.snapshot.executionJobs.find((job) => job.status === "queued");
   }
 
   async audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent> {

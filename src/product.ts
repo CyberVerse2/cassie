@@ -4,6 +4,7 @@ import { CompositeMarketDataProvider } from "./connectors/market-data.js";
 import { LiveResearchSearchLanes } from "./connectors/research-lanes.js";
 import {
   WebhookExecutionClient,
+  VenueExecutionClient,
   createQueuedExecutionJob,
   markExecutionFailed,
   markExecutionRunning,
@@ -37,7 +38,9 @@ export class CassieProduct {
       marketData: new CompositeMarketDataProvider(),
       researchLanes: new LiveResearchSearchLanes(),
     },
-    private readonly executionClient: ExecutionClient = new WebhookExecutionClient(),
+    private readonly executionClient: ExecutionClient = process.env.EXECUTION_WEBHOOK_URL
+      ? new WebhookExecutionClient()
+      : new VenueExecutionClient(),
   ) {}
 
   async upsertSettings(settings: UserSettings): Promise<UserSettings> {
@@ -84,7 +87,7 @@ export class CassieProduct {
     if (run.responseType === "trade_ticket") {
       await this.store.addTradeTicket(run.tradeTicket);
       if (run.tradeTicket.approvalState === "not_required") {
-        await this.executeTicket(run.tradeTicket);
+        await this.enqueueExecution(run.tradeTicket);
       }
     }
 
@@ -115,7 +118,7 @@ export class CassieProduct {
       data: { ticketId },
     });
 
-    const job = await this.executeTicket(approvedTicket);
+    const job = await this.enqueueExecution(approvedTicket);
     return { ticketId, executionJobId: job.jobId };
   }
 
@@ -123,12 +126,46 @@ export class CassieProduct {
     return this.store.load();
   }
 
-  private async executeTicket(ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {
+  async processNextExecutionJob() {
+    const queuedJob = await this.store.getNextQueuedExecutionJob();
+    if (!queuedJob) {
+      return { processed: false, reason: "No queued execution jobs." };
+    }
+
+    const ticket = await this.store.getTradeTicket(queuedJob.ticketId);
+    if (!ticket) {
+      const failed = await this.store.updateExecutionJob(
+        markExecutionFailed(queuedJob, "Execution ticket was not found."),
+      );
+      return { processed: true, job: failed };
+    }
+
+    const job = await this.executeQueuedJob(queuedJob, ticket);
+    return { processed: true, job };
+  }
+
+  private async enqueueExecution(ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {
     if (!ticket) {
       throw new Error("Cannot execute a missing ticket.");
     }
 
-    let job = await this.store.addExecutionJob(createQueuedExecutionJob(ticket.ticketId));
+    const job = await this.store.addExecutionJob(createQueuedExecutionJob(ticket.ticketId));
+    await this.store.audit({
+      entityId: job.jobId,
+      entityType: "execution_job",
+      eventType: "execution_job.queued",
+      message: "Execution job queued.",
+      data: { ticketId: ticket.ticketId },
+    });
+    return job;
+  }
+
+  private async executeQueuedJob(jobToRun: Awaited<ReturnType<CassieStore["getNextQueuedExecutionJob"]>>, ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {
+    if (!jobToRun || !ticket) {
+      throw new Error("Cannot execute missing job or ticket.");
+    }
+
+    let job = jobToRun;
     job = await this.store.updateExecutionJob(markExecutionRunning(job));
 
     try {

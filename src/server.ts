@@ -2,15 +2,33 @@ import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "./product.js";
 import { renderDashboard } from "./dashboard.js";
+import {
+  MemoryRateLimiter,
+  RequestTooLargeError,
+  UnauthorizedError,
+  applySecurityHeaders,
+  requestKey,
+  requireApiToken,
+} from "./security.js";
 
 const product = new CassieProduct();
 const port = Number(process.env.PORT ?? 3000);
+const rateLimiter = new MemoryRateLimiter();
 
 const server = createServer(async (request, response) => {
   try {
+    applySecurityHeaders(response);
+    rateLimiter.check(requestKey(request));
     await route(request, response);
   } catch (error) {
-    sendJson(response, 500, {
+    const status = error instanceof UnauthorizedError
+      ? 401
+      : error instanceof RequestTooLargeError
+        ? 413
+        : error instanceof Error && error.name === "RateLimitError"
+          ? 429
+          : 500;
+    sendJson(response, status, {
       error: error instanceof Error ? error.message : String(error),
     });
   }
@@ -35,6 +53,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (request.method === "GET" && url.pathname === "/dashboard") {
+    requireApiToken(request);
     const state = await product.state();
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     response.end(renderDashboard(state));
@@ -42,17 +61,20 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (request.method === "GET" && url.pathname === "/api/state") {
+    requireApiToken(request);
     sendJson(response, 200, await product.state());
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/settings") {
+    requireApiToken(request);
     const body = SettingsRequestSchema.parse(await readJson(request));
     sendJson(response, 200, await product.upsertSettings(body));
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/mentions") {
+    requireApiToken(request);
     const body = MentionRequestSchema.parse(await readJson(request));
     sendJson(response, 200, await product.processMention(body));
     return;
@@ -60,6 +82,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   const approveMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/approve$/);
   if (request.method === "POST" && approveMatch) {
+    requireApiToken(request);
     const result = await product.approveTicket(approveMatch[1] as string);
 
     if (request.headers["content-type"]?.includes("application/json")) {
@@ -72,13 +95,26 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (request.method === "POST" && url.pathname === "/api/execution/process") {
+    requireApiToken(request);
+    sendJson(response, 200, await product.processNextExecutionJob());
+    return;
+  }
+
   sendJson(response, 404, { error: "Not found" });
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
+  let total = 0;
+  const maxBytes = Number(process.env.CASSIE_MAX_BODY_BYTES ?? 256_000);
   for await (const chunk of request) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+    total += buffer.byteLength;
+    if (total > maxBytes) {
+      throw new RequestTooLargeError();
+    }
+    chunks.push(buffer);
   }
 
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));

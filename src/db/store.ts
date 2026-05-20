@@ -230,6 +230,16 @@ export class DrizzleCassieStore implements CassieStore {
     return job;
   }
 
+  async getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined> {
+    const rows = await this.db
+      .select()
+      .from(executionJobs)
+      .where(eq(executionJobs.status, "queued"))
+      .limit(1);
+
+    return rows[0]?.job;
+  }
+
   async audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent> {
     const event: AuditEvent = {
       ...input,
