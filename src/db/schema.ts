@@ -1,4 +1,4 @@
-import { jsonb, pgTable, text } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text } from "drizzle-orm/pg-core";
 import type {
   AuditEvent,
   ExecutionJob,
@@ -21,7 +21,9 @@ export const mentions = pgTable("mentions", {
   userCommand: text("user_command").notNull(),
   sourcePost: jsonb("source_post").$type<SourcePost>().notNull(),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  index("mentions_user_created_idx").on(table.userId, table.createdAt),
+]);
 
 export const runs = pgTable("runs", {
   runId: text("run_id").primaryKey(),
@@ -32,14 +34,19 @@ export const runs = pgTable("runs", {
   responseType: text("response_type").$type<StoredRun["responseType"]>().notNull(),
   result: jsonb("result").notNull(),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  index("runs_mention_idx").on(table.mentionId),
+  index("runs_user_created_idx").on(table.userId, table.createdAt),
+]);
 
 export const researchReports = pgTable("research_reports", {
   reportId: text("report_id").primaryKey(),
   runId: text("run_id").notNull(),
   report: jsonb("report").$type<ResearchReport>().notNull(),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  index("research_reports_run_idx").on(table.runId),
+]);
 
 export const tradeTickets = pgTable("trade_tickets", {
   ticketId: text("ticket_id").primaryKey(),
@@ -48,7 +55,9 @@ export const tradeTickets = pgTable("trade_tickets", {
   approvalState: text("approval_state").$type<TradeTicket["approvalState"]>().notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-});
+}, (table) => [
+  index("trade_tickets_user_state_idx").on(table.userId, table.approvalState),
+]);
 
 export const executionJobs = pgTable("execution_jobs", {
   jobId: text("job_id").primaryKey(),
@@ -57,7 +66,10 @@ export const executionJobs = pgTable("execution_jobs", {
   status: text("status").$type<ExecutionJob["status"]>().notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
-});
+}, (table) => [
+  index("execution_jobs_status_updated_idx").on(table.status, table.updatedAt),
+  index("execution_jobs_ticket_idx").on(table.ticketId),
+]);
 
 export const auditEvents = pgTable("audit_events", {
   eventId: text("event_id").primaryKey(),
@@ -67,4 +79,7 @@ export const auditEvents = pgTable("audit_events", {
   message: text("message").notNull(),
   data: jsonb("data"),
   createdAt: text("created_at").notNull(),
-});
+}, (table) => [
+  index("audit_events_entity_idx").on(table.entityType, table.entityId),
+  index("audit_events_created_idx").on(table.createdAt),
+]);

@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "./product.js";
 import { renderDashboard } from "./dashboard.js";
+import { assertRuntimeConfig } from "./config.js";
 import {
   MemoryRateLimiter,
   RequestTooLargeError,
@@ -10,7 +11,9 @@ import {
   requestKey,
   requireApiToken,
 } from "./security.js";
+import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "./x-webhook.js";
 
+assertRuntimeConfig();
 const product = new CassieProduct();
 const port = Number(process.env.PORT ?? 3000);
 const rateLimiter = new MemoryRateLimiter();
@@ -52,6 +55,16 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
+  if (request.method === "GET" && url.pathname === "/api/x/webhook") {
+    const crcToken = url.searchParams.get("crc_token");
+    if (!crcToken) {
+      sendJson(response, 400, { error: "Missing crc_token" });
+      return;
+    }
+    sendJson(response, 200, crcResponse(crcToken));
+    return;
+  }
+
   if (request.method === "GET" && url.pathname === "/dashboard") {
     requireApiToken(request);
     const state = await product.state();
@@ -77,6 +90,23 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     requireApiToken(request);
     const body = MentionRequestSchema.parse(await readJson(request));
     sendJson(response, 200, await product.processMention(body));
+    return;
+  }
+
+  if (request.method === "POST" && url.pathname === "/api/x/webhook") {
+    requireApiToken(request);
+    const userId = url.searchParams.get("userId");
+    if (!userId) {
+      sendJson(response, 400, { error: "Missing userId" });
+      return;
+    }
+
+    const body = XWebhookPayloadSchema.parse(await readJson(request));
+    const results = [];
+    for (const event of body.tweet_create_events) {
+      results.push(await product.processMention(xEventToMention(event, userId)));
+    }
+    sendJson(response, 200, { processed: results.length, results });
     return;
   }
 

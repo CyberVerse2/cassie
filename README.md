@@ -23,6 +23,7 @@ Copy `.env.example` to `.env` and set:
 
 ```text
 DATABASE_URL
+CASSIE_API_TOKEN
 OPENAI_API_KEY
 XAI_API_KEY
 EXECUTION_WEBHOOK_URL
@@ -63,6 +64,7 @@ Process a mention:
 
 ```bash
 curl -X POST http://localhost:3000/api/mentions \
+  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user_1",
@@ -83,6 +85,15 @@ Approve a ticket:
 
 ```bash
 curl -X POST http://localhost:3000/api/tickets/TICKET_ID/approve \
+  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+Process one queued execution job:
+
+```bash
+curl -X POST http://localhost:3000/api/execution/process \
+  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
   -H "Content-Type: application/json"
 ```
 
@@ -110,7 +121,4 @@ Implemented:
 
 Not included:
 
-- Native X webhook ingestion
-- Native venue order signing
-- Multi-user auth
 - Hosted database migrations
