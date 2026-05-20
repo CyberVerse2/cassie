@@ -3,6 +3,7 @@ import type { StructuredAiClient } from "../src/ai.js";
 import { CassieProduct } from "../src/product.js";
 import type {
   IntentResult,
+  ExecutionJob,
   MarketSelection,
   ResearchReport,
   SourcePost,
@@ -13,6 +14,7 @@ import type {
 import type { ExecutionClient } from "../src/execution.js";
 import { InMemoryCassieStore } from "../src/store.js";
 import { StaticAccountStateProvider } from "../src/account-state.js";
+import type { ExecutionJobQueue } from "../src/jobs/execution-jobs.js";
 
 const sourcePost: SourcePost = {
   platform: "x",
@@ -121,6 +123,12 @@ class FakeExecutionClient implements ExecutionClient {
   }
 }
 
+class FakeExecutionJobQueue implements ExecutionJobQueue {
+  async enqueue(job: ExecutionJob) {
+    return { executionJobId: job.jobId, graphileJobId: "graphile_job_1" };
+  }
+}
+
 describe("CassieProduct", () => {
   it("processes a mention, stores a ticket, and executes after approval", async () => {
     const store = new InMemoryCassieStore();
@@ -142,6 +150,7 @@ describe("CassieProduct", () => {
         dailyLossUsd: 0,
         openOrdersUsd: 0,
       }),
+      new FakeExecutionJobQueue(),
     );
 
     await product.upsertSettings(settings);

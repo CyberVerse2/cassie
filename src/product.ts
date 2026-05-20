@@ -7,12 +7,7 @@ import {
   type AccountStateProvider,
 } from "./account-state.js";
 import {
-  WebhookExecutionClient,
-  VenueExecutionClient,
   createQueuedExecutionJob,
-  markExecutionFailed,
-  markExecutionRunning,
-  markExecutionSucceeded,
   type ExecutionClient,
 } from "./execution.js";
 import {
@@ -26,6 +21,11 @@ import { DrizzleCassieStore } from "./db/store.js";
 import type { CassieStore } from "./store.js";
 import { runCassie, type CassieDependencies, type CassieRun } from "./supervisor.js";
 import { pollXMentions } from "./x-polling.js";
+import {
+  GraphileExecutionJobQueue,
+  executeExecutionJob,
+  type ExecutionJobQueue,
+} from "./jobs/execution-jobs.js";
 
 export const MentionRequestSchema = z.object({
   userId: z.string(),
@@ -43,10 +43,9 @@ export class CassieProduct {
       marketData: new CompositeMarketDataProvider(),
       researchLanes: new LiveResearchSearchLanes(),
     },
-    private readonly executionClient: ExecutionClient = process.env.EXECUTION_WEBHOOK_URL
-      ? new WebhookExecutionClient()
-      : new VenueExecutionClient(),
+    private readonly executionClient: ExecutionClient | null = null,
     private readonly accountStateProvider: AccountStateProvider = new HyperliquidAccountStateProvider(),
+    private readonly executionJobQueue: ExecutionJobQueue = new GraphileExecutionJobQueue(),
   ) {}
 
   async upsertSettings(settings: UserSettings): Promise<UserSettings> {
@@ -140,15 +139,11 @@ export class CassieProduct {
       return { processed: false, reason: "No queued execution jobs." };
     }
 
-    const ticket = await this.store.getTradeTicket(queuedJob.ticketId);
-    if (!ticket) {
-      const failed = await this.store.updateExecutionJob(
-        markExecutionFailed(queuedJob, "Execution ticket was not found."),
-      );
-      return { processed: true, job: failed };
-    }
-
-    const job = await this.executeQueuedJob(queuedJob, ticket);
+    const job = await executeExecutionJob({
+      jobId: queuedJob.jobId,
+      store: this.store,
+      executionClient: this.executionClient ?? undefined,
+    });
     return { processed: true, job };
   }
 
@@ -166,47 +161,14 @@ export class CassieProduct {
     }
 
     const job = await this.store.addExecutionJob(createQueuedExecutionJob(ticket.ticketId));
+    const queued = await this.executionJobQueue.enqueue(job);
     await this.store.audit({
       entityId: job.jobId,
       entityType: "execution_job",
       eventType: "execution_job.queued",
       message: "Execution job queued.",
-      data: { ticketId: ticket.ticketId },
+      data: { ticketId: ticket.ticketId, graphileJobId: queued.graphileJobId },
     });
-    return job;
-  }
-
-  private async executeQueuedJob(jobToRun: Awaited<ReturnType<CassieStore["getNextQueuedExecutionJob"]>>, ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {
-    if (!jobToRun || !ticket) {
-      throw new Error("Cannot execute missing job or ticket.");
-    }
-
-    let job = jobToRun;
-    job = await this.store.updateExecutionJob(markExecutionRunning(job));
-
-    try {
-      const executionResult = await this.executionClient.execute(ticket);
-      job = await this.store.updateExecutionJob(markExecutionSucceeded(job, executionResult));
-      await this.store.audit({
-        entityId: job.jobId,
-        entityType: "execution_job",
-        eventType: "execution_job.succeeded",
-        message: "Execution job succeeded.",
-        data: executionResult,
-      });
-    } catch (error) {
-      job = await this.store.updateExecutionJob(
-        markExecutionFailed(job, error instanceof Error ? error.message : String(error)),
-      );
-      await this.store.audit({
-        entityId: job.jobId,
-        entityType: "execution_job",
-        eventType: "execution_job.failed",
-        message: "Execution job failed.",
-        data: { failureReason: job.failureReason },
-      });
-    }
-
     return job;
   }
 }
