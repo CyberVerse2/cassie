@@ -5,7 +5,7 @@ import type {
   Thesis,
   TradeTicket,
   UserSettings,
-} from "../schemas.js";
+} from "../schemas.ts";
 
 export function createTradeTicket(input: {
   userSettings: UserSettings;

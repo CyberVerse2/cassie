@@ -1,7 +1,7 @@
 import { makeWorkerUtils, run, type TaskList, type WorkerUtils } from "graphile-worker";
 import { z } from "zod";
-import { createPostgresPool, MissingDatabaseConfigError } from "../db/client.js";
-import { DrizzleCassieStore } from "../db/store.js";
+import { createPostgresPool, MissingDatabaseConfigError } from "../db/client.ts";
+import { DrizzleCassieStore } from "../db/store.ts";
 import {
   VenueExecutionClient,
   WebhookExecutionClient,
@@ -9,9 +9,9 @@ import {
   markExecutionRunning,
   markExecutionSucceeded,
   type ExecutionClient,
-} from "../execution.js";
-import type { ExecutionJob } from "../schemas.js";
-import type { CassieStore } from "../store.js";
+} from "../execution.ts";
+import type { ExecutionJob } from "../schemas.ts";
+import type { CassieStore } from "../store.ts";
 
 export const EXECUTE_TRADE_TICKET_TASK = "execute_trade_ticket";
 

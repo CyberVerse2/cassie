@@ -1,12 +1,12 @@
-import type { StructuredAiClient } from "../ai.js";
+import type { StructuredAiClient } from "../ai.ts";
 import {
   InverseThesisSchema,
   ThesisSchema,
   type InverseThesis,
   type SourcePost,
   type Thesis,
-} from "../schemas.js";
-import { inverseThesisPrompt, thesisPrompt } from "../prompts.js";
+} from "../schemas.ts";
+import { inverseThesisPrompt, thesisPrompt } from "../prompts.ts";
 
 export async function extractThesis(input: {
   ai: StructuredAiClient;

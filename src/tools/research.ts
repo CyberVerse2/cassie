@@ -1,12 +1,12 @@
-import type { StructuredAiClient } from "../ai.js";
+import type { StructuredAiClient } from "../ai.ts";
 import {
   ResearchReportSchema,
   type ResearchEvidence,
   type ResearchReport,
   type SourcePost,
   type Thesis,
-} from "../schemas.js";
-import { researchSynthesisPrompt } from "../prompts.js";
+} from "../schemas.ts";
+import { researchSynthesisPrompt } from "../prompts.ts";
 
 export type ResearchAngle = "balanced" | "critic" | "counter";
 

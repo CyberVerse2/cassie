@@ -1,4 +1,4 @@
-import type { SourcePost, Thesis } from "./schemas.js";
+import type { SourcePost, Thesis } from "./schemas.ts";
 
 function postContext(sourcePost: SourcePost, userCommand: string): string {
   return JSON.stringify(

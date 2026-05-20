@@ -1,6 +1,6 @@
-import type { StructuredAiClient } from "../ai.js";
-import { IntentResultSchema, type IntentResult, type SourcePost } from "../schemas.js";
-import { intentRouterPrompt } from "../prompts.js";
+import type { StructuredAiClient } from "../ai.ts";
+import { IntentResultSchema, type IntentResult, type SourcePost } from "../schemas.ts";
+import { intentRouterPrompt } from "../prompts.ts";
 
 export async function routeIntent(input: {
   ai: StructuredAiClient;

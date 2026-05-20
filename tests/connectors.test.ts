@@ -4,10 +4,10 @@ import {
   HyperliquidMarketDataProvider,
   OpenAiWebSearchLane,
   PolymarketMarketDataProvider,
-} from "../src/index.js";
-import { MissingConnectorConfigError } from "../src/connectors/errors.js";
-import type { Thesis } from "../src/schemas.js";
-import { buildResearchQueryPlan } from "../src/tools/research.js";
+} from "../src/index.ts";
+import { MissingConnectorConfigError } from "../src/connectors/errors.ts";
+import type { Thesis } from "../src/schemas.ts";
+import { buildResearchQueryPlan } from "../src/tools/research.ts";
 
 const thesis: Thesis = {
   claim: "SOL may rally because Solana ETF approval odds are increasing.",

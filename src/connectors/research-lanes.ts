@@ -2,8 +2,8 @@ import type {
   ResearchQueryPlan,
   ResearchSearchLanes,
   SearchLaneResult,
-} from "../tools/research.js";
-import { MissingConnectorConfigError } from "./errors.js";
+} from "../tools/research.ts";
+import { MissingConnectorConfigError } from "./errors.ts";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createXai } from "@ai-sdk/xai";

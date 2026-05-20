@@ -1,31 +1,31 @@
 import { z } from "zod";
-import { OpenAiStructuredClient } from "./ai.js";
-import { CompositeMarketDataProvider } from "./connectors/market-data.js";
-import { LiveResearchSearchLanes } from "./connectors/research-lanes.js";
+import { OpenAiStructuredClient } from "./ai.ts";
+import { CompositeMarketDataProvider } from "./connectors/market-data.ts";
+import { LiveResearchSearchLanes } from "./connectors/research-lanes.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
-} from "./account-state.js";
+} from "./account-state.ts";
 import {
   createQueuedExecutionJob,
   type ExecutionClient,
-} from "./execution.js";
+} from "./execution.ts";
 import {
   SourcePostSchema,
   UserSettingsSchema,
   type ResearchReport,
   type SourcePost,
   type UserSettings,
-} from "./schemas.js";
-import { DrizzleCassieStore } from "./db/store.js";
-import type { CassieStore } from "./store.js";
-import { runCassie, type CassieDependencies, type CassieRun } from "./supervisor.js";
-import { pollXMentions } from "./x-polling.js";
+} from "./schemas.ts";
+import { DrizzleCassieStore } from "./db/store.ts";
+import type { CassieStore } from "./store.ts";
+import { runCassie, type CassieDependencies, type CassieRun } from "./supervisor.ts";
+import { pollXMentions } from "./x-polling.ts";
 import {
   GraphileExecutionJobQueue,
   executeExecutionJob,
   type ExecutionJobQueue,
-} from "./jobs/execution-jobs.js";
+} from "./jobs/execution-jobs.ts";
 
 export const MentionRequestSchema = z.object({
   userId: z.string(),

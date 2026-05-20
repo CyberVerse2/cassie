@@ -7,7 +7,7 @@ import type {
   StoredRun,
   TradeTicket,
   UserSettings,
-} from "../schemas.js";
+} from "../schemas.ts";
 
 export const userSettings = pgTable("user_settings", {
   userId: text("user_id").primaryKey(),

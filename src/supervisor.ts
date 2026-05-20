@@ -1,4 +1,4 @@
-import type { StructuredAiClient } from "./ai.js";
+import type { StructuredAiClient } from "./ai.ts";
 import type {
   Critique,
   IntentResult,
@@ -10,16 +10,16 @@ import type {
   TradeTicket,
   UserSettings,
   AccountState,
-} from "./schemas.js";
-import type { MarketDataProvider } from "./tools/market.js";
-import type { ResearchSearchLanes } from "./tools/research.js";
-import { critiqueThesis } from "./tools/critique.js";
-import { routeIntent } from "./tools/intent-router.js";
-import { selectMarket } from "./tools/market.js";
-import { researchThesis } from "./tools/research.js";
-import { evaluateRisk } from "./tools/risk.js";
-import { extractInverseThesis, extractThesis } from "./tools/thesis.js";
-import { createTradeTicket } from "./tools/trade.js";
+} from "./schemas.ts";
+import type { MarketDataProvider } from "./tools/market.ts";
+import type { ResearchSearchLanes } from "./tools/research.ts";
+import { critiqueThesis } from "./tools/critique.ts";
+import { routeIntent } from "./tools/intent-router.ts";
+import { selectMarket } from "./tools/market.ts";
+import { researchThesis } from "./tools/research.ts";
+import { evaluateRisk } from "./tools/risk.ts";
+import { extractInverseThesis, extractThesis } from "./tools/thesis.ts";
+import { createTradeTicket } from "./tools/trade.ts";
 
 export type CassieRun =
   | {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryCassieStore } from "../src/store.js";
-import type { UserSettings } from "../src/schemas.js";
+import { InMemoryCassieStore } from "../src/store.ts";
+import type { UserSettings } from "../src/schemas.ts";
 
 const settings: UserSettings = {
   userId: "user_1",

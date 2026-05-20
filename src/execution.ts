@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import type { ExecutionJob, TradeTicket } from "./schemas.js";
-import { MissingConnectorConfigError, readJsonResponse } from "./connectors/errors.js";
+import type { ExecutionJob, TradeTicket } from "./schemas.ts";
+import { MissingConnectorConfigError, readJsonResponse } from "./connectors/errors.ts";
 import { ClobClient, Chain, OrderType, Side, type ClobSigner } from "@polymarket/clob-client";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";

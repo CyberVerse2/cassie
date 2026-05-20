@@ -7,7 +7,7 @@ import type {
   StoredRun,
   TradeTicket,
   UserSettings,
-} from "./schemas.js";
+} from "./schemas.ts";
 
 export interface MentionRecord {
   mentionId: string;

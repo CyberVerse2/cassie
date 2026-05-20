@@ -8,7 +8,7 @@ import type {
   StoredRun,
   TradeTicket,
   UserSettings,
-} from "../schemas.js";
+} from "../schemas.ts";
 import {
   auditEvents,
   executionJobs,
@@ -18,14 +18,14 @@ import {
   runs,
   tradeTickets,
   userSettings,
-} from "./schema.js";
-import { createCassieDb, type CassieDb } from "./client.js";
+} from "./schema.ts";
+import { createCassieDb, type CassieDb } from "./client.ts";
 import type {
   CassieStore,
   CassieStoreSnapshot,
   MentionRecord,
   ResearchReportRecord,
-} from "../store.js";
+} from "../store.ts";
 
 export class DrizzleCassieStore implements CassieStore {
   constructor(private readonly db: CassieDb = createCassieDb()) {}

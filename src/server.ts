@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "./product.js";
-import { renderDashboard } from "./dashboard.js";
-import { assertRuntimeConfig } from "./config.js";
+import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "./product.ts";
+import { renderDashboard } from "./dashboard.ts";
+import { assertRuntimeConfig } from "./config.ts";
 import {
   MemoryRateLimiter,
   RequestTooLargeError,
@@ -10,8 +10,8 @@ import {
   applySecurityHeaders,
   requestKey,
   requireApiToken,
-} from "./security.js";
-import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "./x-webhook.js";
+} from "./security.ts";
+import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "./x-webhook.ts";
 
 assertRuntimeConfig();
 const product = new CassieProduct();

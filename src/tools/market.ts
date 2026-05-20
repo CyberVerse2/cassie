@@ -1,12 +1,12 @@
-import type { StructuredAiClient } from "../ai.js";
+import type { StructuredAiClient } from "../ai.ts";
 import {
   MarketSelectionSchema,
   type MarketCandidate,
   type MarketSelection,
   type ResearchReport,
   type Thesis,
-} from "../schemas.js";
-import { marketSelectionPrompt } from "../prompts.js";
+} from "../schemas.ts";
+import { marketSelectionPrompt } from "../prompts.ts";
 
 export interface MarketDataProvider {
   findCandidates(input: {

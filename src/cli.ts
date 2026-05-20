@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { CassieProduct } from "./product.js";
+import { CassieProduct } from "./product.ts";
 
 const command = process.argv.slice(2).join(" ") || "@Cassie what do you think?";
 

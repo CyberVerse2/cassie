@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { CassieProduct } from "./product.js";
+import { CassieProduct } from "./product.ts";
 
 const userId = process.env.X_POLL_USER_ID;
 if (!userId) {

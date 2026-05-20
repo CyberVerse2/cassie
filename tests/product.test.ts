@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { StructuredAiClient } from "../src/ai.js";
-import { CassieProduct } from "../src/product.js";
+import type { StructuredAiClient } from "../src/ai.ts";
+import { CassieProduct } from "../src/product.ts";
 import type {
   IntentResult,
   ExecutionJob,
@@ -10,11 +10,11 @@ import type {
   Thesis,
   TradeTicket,
   UserSettings,
-} from "../src/schemas.js";
-import type { ExecutionClient } from "../src/execution.js";
-import { InMemoryCassieStore } from "../src/store.js";
-import { StaticAccountStateProvider } from "../src/account-state.js";
-import type { ExecutionJobQueue } from "../src/jobs/execution-jobs.js";
+} from "../src/schemas.ts";
+import type { ExecutionClient } from "../src/execution.ts";
+import { InMemoryCassieStore } from "../src/store.ts";
+import { StaticAccountStateProvider } from "../src/account-state.ts";
+import type { ExecutionJobQueue } from "../src/jobs/execution-jobs.ts";
 
 const sourcePost: SourcePost = {
   platform: "x",

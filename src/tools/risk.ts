@@ -3,7 +3,7 @@ import type {
   MarketSelection,
   RiskDecision,
   UserSettings,
-} from "../schemas.js";
+} from "../schemas.ts";
 
 export function evaluateRisk(input: {
   marketSelection: MarketSelection;

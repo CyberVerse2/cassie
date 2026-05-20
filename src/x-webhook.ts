@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { z } from "zod";
-import type { SourcePost } from "./schemas.js";
+import type { SourcePost } from "./schemas.ts";
 
 export const XWebhookPayloadSchema = z.object({
   tweet_create_events: z

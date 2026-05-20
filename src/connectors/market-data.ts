@@ -1,6 +1,6 @@
-import type { MarketCandidate, ResearchReport, Thesis } from "../schemas.js";
-import type { MarketDataProvider } from "../tools/market.js";
-import { readJsonResponse } from "./errors.js";
+import type { MarketCandidate, ResearchReport, Thesis } from "../schemas.ts";
+import type { MarketDataProvider } from "../tools/market.ts";
+import { readJsonResponse } from "./errors.ts";
 
 type HyperliquidMetaAndCtxs = [
   {

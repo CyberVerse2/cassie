@@ -1,11 +1,11 @@
-import type { StructuredAiClient } from "../ai.js";
+import type { StructuredAiClient } from "../ai.ts";
 import {
   CritiqueSchema,
   type Critique,
   type ResearchReport,
   type Thesis,
-} from "../schemas.js";
-import { critiquePrompt } from "../prompts.js";
+} from "../schemas.ts";
+import { critiquePrompt } from "../prompts.ts";
 
 export async function critiqueThesis(input: {
   ai: StructuredAiClient;

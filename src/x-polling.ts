@@ -1,8 +1,8 @@
 import { z } from "zod";
-import type { SourcePost } from "./schemas.js";
-import type { CassieStore } from "./store.js";
-import { readJsonResponse } from "./connectors/errors.js";
-import type { CassieProduct } from "./product.js";
+import type { SourcePost } from "./schemas.ts";
+import type { CassieStore } from "./store.ts";
+import { readJsonResponse } from "./connectors/errors.ts";
+import type { CassieProduct } from "./product.ts";
 
 const XRecentSearchSchema = z.object({
   data: z.array(z.object({

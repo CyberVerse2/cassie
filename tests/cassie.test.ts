@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StructuredAiClient } from "../src/ai.js";
+import type { StructuredAiClient } from "../src/ai.ts";
 import type {
   IntentResult,
   MarketSelection,
@@ -7,10 +7,10 @@ import type {
   SourcePost,
   Thesis,
   UserSettings,
-} from "../src/schemas.js";
-import { runCassie } from "../src/supervisor.js";
-import { MissingAiDependencyError, OpenAiStructuredClient } from "../src/ai.js";
-import { evaluateRisk } from "../src/tools/risk.js";
+} from "../src/schemas.ts";
+import { runCassie } from "../src/supervisor.ts";
+import { MissingAiDependencyError, OpenAiStructuredClient } from "../src/ai.ts";
+import { evaluateRisk } from "../src/tools/risk.ts";
 
 const sourcePost: SourcePost = {
   platform: "x",

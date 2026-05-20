@@ -1,4 +1,4 @@
-import type { CassieStoreSnapshot } from "./store.js";
+import type { CassieStoreSnapshot } from "./store.ts";
 
 export function renderDashboard(state: CassieStoreSnapshot): string {
   const pendingTickets = state.tradeTickets.filter(
