@@ -1,0 +1,21 @@
+{
+  "name": "cassie",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run",
+    "dev": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^3.0.64",
+    "@types/node": "^25.9.1",
+    "ai": "^6.0.185",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7",
+    "zod": "^4.4.3"
+  }
+}
