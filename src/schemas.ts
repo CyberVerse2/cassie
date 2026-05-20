@@ -220,7 +220,45 @@ export const TradeTicketSchema = z.object({
   sizeUsd: z.number().positive(),
   orderType: z.enum(["limit", "marketable_limit"]),
   riskDecision: RiskDecisionSchema,
-  approvalState: z.enum(["not_required", "pending", "rejected"]),
+  approvalState: z.enum(["not_required", "pending", "approved", "rejected"]),
+});
+
+export const ExecutionJobSchema = z.object({
+  jobId: z.string(),
+  ticketId: z.string(),
+  status: z.enum(["queued", "running", "succeeded", "failed"]),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  failureReason: z.string().nullable(),
+  executionResult: z
+    .object({
+      venueOrderId: z.string().nullable(),
+      filledSizeUsd: z.number().nonnegative(),
+      averagePrice: z.number().nonnegative().nullable(),
+      raw: z.unknown().optional(),
+    })
+    .nullable(),
+});
+
+export const AuditEventSchema = z.object({
+  eventId: z.string(),
+  entityId: z.string(),
+  entityType: z.enum(["mention", "run", "research_report", "trade_ticket", "execution_job"]),
+  eventType: z.string(),
+  message: z.string(),
+  data: z.unknown().optional(),
+  createdAt: z.string(),
+});
+
+export const StoredRunSchema = z.object({
+  runId: z.string(),
+  mentionId: z.string(),
+  userId: z.string(),
+  userCommand: z.string(),
+  sourcePost: SourcePostSchema,
+  responseType: z.enum(["analysis", "critique", "trade_ticket"]),
+  result: z.unknown(),
+  createdAt: z.string(),
 });
 
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
@@ -235,3 +273,6 @@ export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
 export type RiskDecision = z.infer<typeof RiskDecisionSchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;
+export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
+export type AuditEvent = z.infer<typeof AuditEventSchema>;
+export type StoredRun = z.infer<typeof StoredRunSchema>;
