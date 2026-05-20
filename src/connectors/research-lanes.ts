@@ -3,20 +3,14 @@ import type {
   ResearchSearchLanes,
   SearchLaneResult,
 } from "../tools/research.js";
-import { MissingConnectorConfigError, readJsonResponse } from "./errors.js";
+import { MissingConnectorConfigError } from "./errors.js";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { createXai } from "@ai-sdk/xai";
 
 type SearchSource = {
   title?: string;
   url?: string;
-};
-
-type ResponsesApiOutput = {
-  output_text?: string;
-  output?: unknown[];
-  citations?: unknown[];
-  sources?: unknown[];
 };
 
 export class OpenAiWebSearchLane {
@@ -50,7 +44,7 @@ export class OpenAiWebSearchLane {
 export class GrokXSearchLane {
   constructor(
     private readonly apiKey = process.env.XAI_API_KEY,
-    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
+    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4",
   ) {}
 
   async run(queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
@@ -58,51 +52,22 @@ export class GrokXSearchLane {
       throw new MissingConnectorConfigError("Grok X Search lane", "XAI_API_KEY");
     }
 
-    const response = await fetch("https://api.x.ai/v1/responses", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
+    const xai = createXai({ apiKey: this.apiKey });
+    const result = await generateText({
+      model: xai.responses(this.model),
+      tools: {
+        x_search: xai.tools.xSearch({
+          enableImageUnderstanding: true,
+          enableVideoUnderstanding: false,
+        }),
       },
-      body: JSON.stringify({
-        model: this.model,
-        tools: [
-          {
-            type: "x_search",
-            enable_image_understanding: true,
-            enable_video_understanding: false,
-          },
-        ],
-        input: [
-          {
-            role: "user",
-            content: buildXSearchPrompt(queryPlan),
-          },
-        ],
-      }),
+      toolChoice: "auto",
+      prompt: buildXSearchPrompt(queryPlan),
     });
-
-    const payload = await readJsonResponse<ResponsesApiOutput>("Grok X Search lane", response);
 
     return {
       lane: "x_search",
-      evidence: [
-        {
-          sourceLane: "x_search",
-          sourceType: "social",
-          summary: payload.output_text ?? JSON.stringify(payload.output ?? []),
-          stance: "unclear",
-          reliability: "medium",
-          relevance: 0.7,
-          notes: [
-            JSON.stringify({
-              rawOutput: payload.output,
-              sources: payload.sources,
-              citations: payload.citations,
-            }),
-          ],
-        },
-      ],
+      evidence: evidenceFromXSearch(result.text, result.toolResults),
       warnings: [],
     };
   }
@@ -186,4 +151,53 @@ function evidenceFromSources(
     reliability: "medium" as const,
     relevance: 0.8,
   }));
+}
+
+function evidenceFromXSearch(summary: string, toolResults: unknown[]) {
+  const posts = toolResults.flatMap((result) => extractXPosts(result));
+  if (posts.length === 0) {
+    return [
+      {
+        sourceLane: "x_search" as const,
+        sourceType: "social" as const,
+        summary,
+        stance: "unclear" as const,
+        reliability: "medium" as const,
+        relevance: 0.7,
+      },
+    ];
+  }
+
+  return posts.map((post) => ({
+    sourceLane: "x_search" as const,
+    sourceType: "social" as const,
+    title: post.author ? `X post by ${post.author}` : "X post",
+    url: post.url,
+    author: post.author,
+    summary: post.text ? `${summary}\n\nPost: ${post.text}` : summary,
+    stance: "unclear" as const,
+    reliability: "medium" as const,
+    relevance: 0.75,
+    notes: Number.isFinite(post.likes) ? [`likes: ${post.likes}`] : undefined,
+  }));
+}
+
+function extractXPosts(result: unknown): Array<{
+  author?: string;
+  text?: string;
+  url?: string;
+  likes?: number;
+}> {
+  if (!result || typeof result !== "object") return [];
+  const maybeOutput = "output" in result ? result.output : result;
+  if (!maybeOutput || typeof maybeOutput !== "object" || !("posts" in maybeOutput)) return [];
+  const posts = maybeOutput.posts;
+  if (!Array.isArray(posts)) return [];
+
+  return posts.filter((post): post is {
+    author?: string;
+    text?: string;
+    url?: string;
+    likes?: number;
+  } => Boolean(post) && typeof post === "object");
 }
