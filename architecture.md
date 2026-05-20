@@ -195,15 +195,20 @@ It should return:
 
 ## Research
 
-The research tool gathers supporting and opposing context for critique flows.
+The research tool is backed by the Research Subagent described in [research-subagent.md](research-subagent.md).
+
+It gathers supporting and opposing context for analysis, critique, trade, and countertrade flows. It verifies whether a claim is real, current, credible, contradicted, socially crowded, manipulated, or too uncertain to continue.
 
 This is used for:
 
 ```text
+@Cassie what do you think?
 @Cassie critic this
 @Cassie tear this apart
 @Cassie is this real?
+@Cassie get me in
 @Cassie fade this
+@Cassie find me a market
 ```
 
 It should search for:
@@ -220,12 +225,16 @@ Are there relevant links, screenshots, filings, prices, or market moves?
 
 It should return:
 
+- structured ResearchReport
 - source credibility
 - confirming evidence
 - contradicting evidence
+- bull case
+- bear case
 - missing context
 - manipulation risk
 - stale-news risk
+- recommended research action
 
 ## Critique
 
