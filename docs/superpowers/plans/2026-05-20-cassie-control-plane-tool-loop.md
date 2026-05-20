@@ -12,6 +12,124 @@
 
 ## File Structure
 
+### Target Package Architecture
+
+The implementation should move Cassie toward a small monorepo-style layout. Do not let `packages/ai` become the catch-all package; shared business language belongs in `packages/core`, orchestration belongs in `packages/workflows`, and AI owns only model-facing behavior.
+
+```text
+apps/
+  web/
+    app/
+      api/
+        cassie/
+          mention/route.ts
+          runs/[runId]/route.ts
+          runs/[runId]/steps/route.ts
+          tickets/[ticketId]/approve/route.ts
+          tickets/[ticketId]/reject/route.ts
+
+  workers/
+    x-ingest-worker/
+    cassie-run-worker/
+    execution-worker/
+    reconciliation-worker/
+
+packages/
+  core/
+    schemas/
+      source-signal.ts
+      cassie-run.ts
+      run-step.ts
+      thesis.ts
+      research-report.ts
+      market-candidate.ts
+      recommendation.ts
+      trade-ticket.ts
+      execution-job.ts
+    errors.ts
+    ids.ts
+
+  ai/
+    agents/
+      cassie-supervisor.ts
+      intent-router.ts
+      thesis-agent.ts
+      critic-agent.ts
+      market-router.ts
+    tools/
+      get-source-post.ts
+      get-user-settings.ts
+      research-thesis.ts
+      find-markets.ts
+      create-ticket.ts
+      request-approval.ts
+    prompts/
+      intent-router.ts
+      thesis.ts
+      research-synthesis.ts
+      market-router.ts
+
+  workflows/
+    cassie-run-workflow.ts
+    research-workflow.ts
+    execution-workflow.ts
+
+  research/
+    openai-web-search.ts
+    grok-x-search.ts
+    normalize-evidence.ts
+    score-reliability.ts
+
+  market-data/
+    hyperliquid.ts
+    polymarket.ts
+    candidate-normalizer.ts
+
+  risk/
+    evaluate-risk.ts
+    rules.ts
+
+  execution/
+    hyperliquid/
+    polymarket/
+    order-router.ts
+    preflight.ts
+
+  db/
+    schema.ts
+    queries.ts
+    migrations/
+
+  audit/
+    write-agent-event.ts
+    write-execution-event.ts
+```
+
+Boundary rules:
+
+- `apps/*` are entrypoints only. They parse requests, call package APIs, and return responses.
+- `apps/workers/*` are runtimes only. They should import workflows and package functions, not contain domain logic.
+- `packages/core` owns shared Zod schemas, domain types, IDs, and domain errors.
+- `packages/ai` owns prompts, AI SDK agents, AI SDK tools, and structured-output wrappers.
+- `packages/workflows` owns durable orchestration and run-step sequencing.
+- `packages/research` owns search lanes and evidence normalization.
+- `packages/market-data` owns read-only venue data and candidate normalization.
+- `packages/risk` owns deterministic policy checks.
+- `packages/execution` owns preflight, order routing, venue mutation, and receipts.
+- `packages/db` owns schema, migrations, and query functions.
+- `packages/audit` owns agent/execution event writing.
+
+### Current Repo Bridge
+
+The repo currently has a flat `src/` service. The first implementation pass can either:
+
+- build the control-plane behavior in `src/` first, then move modules into `apps/` and `packages/`; or
+- create the monorepo folders first and migrate each touched module into its target package.
+
+Use the second path unless it creates a blocking build issue. The goal is for every new or materially changed module to land in its final architectural home.
+
+## Current Files To Migrate
+
 - Modify `src/schemas.ts`: add run status, run step, supervisor result, and approval/recommendation schemas.
 - Modify `src/store.ts`: extend `CassieStore` with run and step persistence methods.
 - Modify `src/db/schema.ts`: add tables or columns needed for durable runs and steps.
@@ -26,6 +144,114 @@
 - Add tests in `tests/control-plane.test.ts`: run creation, step recording, queued supervisor execution, no direct execution.
 - Add tests in `tests/supervisor-agent.test.ts`: tool-loop path, bounded tool calls, final structured result.
 - Update `README.md`: describe API-first control-plane behavior.
+
+## Task 0: Establish Package Boundaries
+
+**Files:**
+- Create: `packages/core/schemas/index.ts`
+- Create: `packages/core/errors.ts`
+- Create: `packages/core/ids.ts`
+- Create: `packages/ai/prompts/index.ts`
+- Create: `packages/ai/agents/index.ts`
+- Create: `packages/ai/tools/index.ts`
+- Create: `packages/workflows/index.ts`
+- Create: `packages/research/index.ts`
+- Create: `packages/market-data/index.ts`
+- Create: `packages/risk/index.ts`
+- Create: `packages/execution/index.ts`
+- Create: `packages/db/index.ts`
+- Create: `packages/audit/index.ts`
+- Modify: `tsconfig.json`
+- Modify: `package.json`
+
+- [ ] **Step 1: Add empty package entrypoints**
+
+Create the package folders and entrypoint files with explicit comments that define ownership. Example for `packages/core/schemas/index.ts`:
+
+```ts
+export {};
+```
+
+Example for `packages/core/errors.ts`:
+
+```ts
+export class CassieDomainError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CassieDomainError";
+  }
+}
+```
+
+Example for `packages/core/ids.ts`:
+
+```ts
+import { randomUUID } from "node:crypto";
+
+export function createCassieId(prefix: string): string {
+  return `${prefix}_${randomUUID()}`;
+}
+```
+
+Every other new `index.ts` should start as:
+
+```ts
+export {};
+```
+
+- [ ] **Step 2: Add TypeScript path aliases**
+
+In `tsconfig.json`, add `baseUrl` and `paths`:
+
+```json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@cassie/core/*": ["packages/core/*"],
+      "@cassie/ai/*": ["packages/ai/*"],
+      "@cassie/workflows/*": ["packages/workflows/*"],
+      "@cassie/research/*": ["packages/research/*"],
+      "@cassie/market-data/*": ["packages/market-data/*"],
+      "@cassie/risk/*": ["packages/risk/*"],
+      "@cassie/execution/*": ["packages/execution/*"],
+      "@cassie/db/*": ["packages/db/*"],
+      "@cassie/audit/*": ["packages/audit/*"]
+    }
+  }
+}
+```
+
+Preserve existing compiler options while adding these fields.
+
+- [ ] **Step 3: Add workspace scripts**
+
+Keep existing scripts in `package.json`. Add one verification script:
+
+```json
+{
+  "scripts": {
+    "verify": "npm run build && npm test"
+  }
+}
+```
+
+- [ ] **Step 4: Run verification**
+
+Run: `npm run build`
+
+Expected: PASS.
+
+Run: `npm test`
+
+Expected: PASS.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add package.json tsconfig.json packages
+git commit -m "chore: establish cassie package boundaries"
+```
 
 ## Task 1: Durable Run And Step Model
 
