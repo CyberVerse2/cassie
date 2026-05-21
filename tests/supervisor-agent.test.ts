@@ -11,6 +11,7 @@ import type {
   ResearchReport,
   SignalInterpretation,
   SourcePost,
+  SourceProfile,
   Thesis,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
@@ -48,6 +49,35 @@ const thesis: Thesis = {
   evidenceQuality: "medium",
   manipulationRisk: "medium",
   confidence: 0.82,
+};
+
+const sourceProfile: SourceProfile = {
+  handle: "example",
+  displayName: "Example",
+  profileUrl: "https://x.com/example",
+  bio: null,
+  bioLinks: [],
+  accountType: "analyst",
+  verificationStatus: null,
+  followerCount: null,
+  followingCount: null,
+  accountAge: null,
+  locationSignals: [],
+  pinnedPost: null,
+  credibility: "medium",
+  expertise: ["markets"],
+  selfClaims: [],
+  provenOutput: [],
+  trackRecord: "Test source profile.",
+  networkContext: "Test network context.",
+  engagementQuality: "unknown",
+  recentRelevantActivity: [],
+  redFlags: [],
+  unresolvedQuestions: [],
+  lowDataReasons: [],
+  confidenceImpact: "none",
+  confidenceImpactReason: "No additional confidence impact in the fixture.",
+  confidence: 0.5,
 };
 
 const signal: SignalInterpretation = {
@@ -229,6 +259,7 @@ class FakeAi implements StructuredAiClient {
       } satisfies IntentResult,
       cassie_signal: signal,
       cassie_thesis: thesis,
+      cassie_source_profile: sourceProfile,
       cassie_research_query_plan: queryPlan,
       cassie_goal_resolution: [goalResolution],
       cassie_research_report: researchReport,
@@ -427,14 +458,13 @@ describe("AI SDK supervisor agent", () => {
     });
 
     expect(importantAi.calls).toEqual([
-      "cassie_source_profile",
       "cassie_research_query_plan",
       "cassie_goal_resolution",
       "cassie_goal_resolution",
       "cassie_research_report",
       "cassie_critique",
     ]);
-    expect(cheapAi.calls).toEqual(["cassie_market_selection"]);
+    expect(cheapAi.calls).toEqual(["cassie_source_profile", "cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
       { type: "research", model: "gemini-3.5-flash" },

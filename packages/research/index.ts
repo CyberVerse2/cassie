@@ -51,6 +51,7 @@ export interface ResearchPersistence {
 
 export async function researchThesis(input: {
   ai: StructuredAiClient;
+  sourceProfileAi?: StructuredAiClient;
   lanes: ResearchSearchLanes;
   sourcePost: SourcePost;
   userCommand: string;
@@ -133,6 +134,7 @@ export async function researchThesis(input: {
 
 async function resolveSourceProfile(input: {
   ai: StructuredAiClient;
+  sourceProfileAi?: StructuredAiClient;
   lanes: ResearchSearchLanes;
   sourcePost: SourcePost;
   thesis: Thesis;
@@ -145,7 +147,7 @@ async function resolveSourceProfile(input: {
   const queryPlan = sourceProfileQueryPlan(input.sourcePost, input.thesis);
   const job = sourceProfileQueryJob(queryPlan, input.sourcePost);
   const result = await input.lanes.runGrokXQueryJob(job, queryPlan);
-  return input.ai.generateObject({
+  return (input.sourceProfileAi ?? input.ai).generateObject({
     schema: SourceProfileSchema,
     name: "cassie_source_profile",
     prompt: sourceProfilePrompt({
