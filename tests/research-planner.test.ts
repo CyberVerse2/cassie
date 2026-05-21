@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../src/ai.ts";
-import type { ResearchQueryPlan, ResearchReport, SignalInterpretation, SourcePost, Thesis } from "../src/schemas.ts";
+import type {
+  GoalResolution,
+  ResearchQueryPlan,
+  ResearchReport,
+  SignalInterpretation,
+  SourcePost,
+  Thesis,
+} from "../src/schemas.ts";
 import { normalizeResearchQueryPlan, researchThesis } from "../src/tools/research.ts";
 
 const vagueSignal: SignalInterpretation = {
@@ -93,6 +100,18 @@ const researchReport: ResearchReport = {
   recommendedResearchAction: "critic_only",
   publicSummary: "Insufficient research.",
   fullResearchBrief: "Insufficient research.",
+};
+
+const goalResolution: GoalResolution = {
+  goalId: "g_verify",
+  status: "resolved_supported",
+  confidence: 0.82,
+  supportingEvidenceIds: [],
+  contradictingEvidenceIds: [],
+  contextualEvidenceIds: [],
+  unresolvedQuestions: [],
+  summary: "The goal was resolved by wave evidence.",
+  synthesisImplication: "The synthesis may treat this goal as supported.",
 };
 
 describe("research query planner policy", () => {
@@ -376,7 +395,7 @@ describe("research query planner policy", () => {
     expect(xCalls).toBe(1);
   });
 
-  it("executes research wave by wave instead of handing every batch to each lane at once", async () => {
+  it("executes research wave by wave and resolves goals after each wave", async () => {
     const twoWavePlan: ResearchQueryPlan = {
       version: "research-query-plan/v1",
       normalizedClaim: "SOL ETF approval is underpriced.",
@@ -499,9 +518,22 @@ describe("research query planner policy", () => {
       },
     };
     const calls: string[] = [];
+    const resolverInputs: unknown[] = [];
     const ai: StructuredAiClient = {
-      async generateObject<T>(input: { name: string }) {
-        return (input.name === "cassie_research_query_plan" ? twoWavePlan : researchReport) as T;
+      async generateObject<T>(input: { name: string; prompt?: string }) {
+        if (input.name === "cassie_research_query_plan") {
+          return twoWavePlan as T;
+        }
+        if (input.name === "cassie_goal_resolution") {
+          resolverInputs.push(input.prompt ?? "");
+          return [goalResolution] as T;
+        }
+        if (input.name === "cassie_research_report") {
+          expect(input.prompt).toContain("goalResolutions");
+          expect(input.prompt).toContain("resolved_supported");
+          return researchReport as T;
+        }
+        throw new Error(`Unexpected AI call ${input.name}`);
       },
     };
 
@@ -525,5 +557,6 @@ describe("research query planner policy", () => {
     });
 
     expect(calls).toEqual(["web:0", "x:0", "web:1", "x:1"]);
+    expect(resolverInputs).toHaveLength(2);
   });
 });

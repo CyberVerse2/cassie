@@ -195,6 +195,24 @@ Required social-intelligence checks:
 
 Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
+Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in research/critic/watchlist territory.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
+export function goalResolutionPrompt(input: unknown): string {
+  return `You are Cassie's goal-resolution step.
+
+Resolve each research goal against the wave evidence gathered so far.
+Do not synthesize a final trading view. Only decide whether each goal is supported, contradicted, partially resolved, unresolved, or not applicable.
+
+Rules:
+- Use the goal's evidenceNeeds and resolutionCriteria.
+- Treat X/social momentum as context unless it directly resolves a social/source goal.
+- A must-resolve goal can remain unresolved. Do not force support.
+- Contradictions should be explicit because they can stop deeper research or block market routing.
+- Include synthesisImplication: what the final research synthesis is allowed or not allowed to conclude from this goal status.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;

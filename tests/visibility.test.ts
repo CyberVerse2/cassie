@@ -83,6 +83,29 @@ const trace: TraceEvent[] = [
   },
   {
     stepId: 2,
+    name: "cassie_goal_resolution",
+    kind: "ai",
+    status: "succeeded",
+    startedAt: "2026-05-21T00:00:01Z",
+    completedAt: "2026-05-21T00:00:02Z",
+    durationMs: 1000,
+    model: "gpt-5.5",
+    thinkingTrace: "Resolving research goals against wave evidence.",
+    input: null,
+    output: [
+      {
+        goalId: "g_verify",
+        status: "resolved_supported",
+        confidence: 0.86,
+        summary: "The funding event is supported.",
+        synthesisImplication: "The agent may treat the event as verified.",
+      },
+    ],
+    usage,
+    error: null,
+  },
+  {
+    stepId: 3,
     name: "cassie_trade_expression",
     kind: "ai",
     status: "succeeded",
@@ -122,6 +145,11 @@ describe("visibility report", () => {
       kind: "event_validation",
       mustResolve: true,
     });
+    expect(report.goalResolutions[0]).toMatchObject({
+      goalId: "g_verify",
+      status: "resolved_supported",
+      confidence: 0.86,
+    });
     expect(report.tradeExpression?.candidates[0]).toMatchObject({
       instrument: "Exa private equity",
       expectedEdge: 0.66,
@@ -130,6 +158,7 @@ describe("visibility report", () => {
     expect(report.evidenceSummary.count).toBe(1);
     expect(report.toolCalls.map((call) => call.name)).toEqual([
       "cassie_research_query_plan",
+      "cassie_goal_resolution",
       "cassie_trade_expression",
     ]);
     expect(report.tokenUsage.totalTokens).toBe(150);

@@ -254,6 +254,24 @@ export const ResearchQueryPlanSchema = z.object({
   }),
 });
 
+export const GoalResolutionSchema = z.object({
+  goalId: z.string(),
+  status: z.enum([
+    "resolved_supported",
+    "resolved_contradicted",
+    "partially_resolved",
+    "unresolved",
+    "not_applicable",
+  ]),
+  confidence: z.number().min(0).max(1),
+  supportingEvidenceIds: z.array(z.string()),
+  contradictingEvidenceIds: z.array(z.string()),
+  contextualEvidenceIds: z.array(z.string()),
+  unresolvedQuestions: z.array(z.string()),
+  summary: z.string(),
+  synthesisImplication: z.string(),
+});
+
 export const ResearchReportSchema = z.object({
   claim: z.string(),
   normalizedThesis: z.string(),
@@ -484,6 +502,7 @@ export type ResearchReport = z.infer<typeof ResearchReportSchema>;
 export type ResearchEvidence = z.infer<typeof ResearchEvidenceSchema>;
 export type ResearchGoal = z.infer<typeof ResearchGoalSchema>;
 export type ResearchQueryPlan = z.infer<typeof ResearchQueryPlanSchema>;
+export type GoalResolution = z.infer<typeof GoalResolutionSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;

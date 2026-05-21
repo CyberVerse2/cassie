@@ -1,8 +1,10 @@
 import type { StructuredAiClient } from "../ai.ts";
 import {
+  GoalResolutionSchema,
   ResearchQueryPlanSchema,
   ResearchReportSchema,
   type ResearchEvidence,
+  type GoalResolution,
   type ResearchGoal,
   type ResearchQueryPlan,
   type ResearchReport,
@@ -10,7 +12,7 @@ import {
   type SourcePost,
   type Thesis,
 } from "../schemas.ts";
-import { researchQueryPlanPrompt, researchSynthesisPrompt } from "../prompts.ts";
+import { goalResolutionPrompt, researchQueryPlanPrompt, researchSynthesisPrompt } from "../prompts.ts";
 
 export type ResearchAngle = "balanced" | "critic" | "counter";
 
@@ -36,9 +38,11 @@ export async function researchThesis(input: {
 }): Promise<ResearchReport> {
   const queryPlan = normalizeResearchQueryPlan(await generateResearchQueryPlan(input), input.signal);
   const waveResults = await executeResearchWaves({
+    ai: input.ai,
     queryPlan,
     lanes: input.lanes,
   });
+  const goalResolutions = waveResults.flatMap((wave) => wave.goalResolutions);
 
   return input.ai.generateObject({
     schema: ResearchReportSchema,
@@ -57,23 +61,27 @@ export async function researchThesis(input: {
           xResult: settledPayload(wave.xResult),
         })),
       },
+      goalResolutions,
     }),
   });
 }
 
 async function executeResearchWaves(input: {
+  ai: StructuredAiClient;
   queryPlan: ResearchQueryPlan;
   lanes: ResearchSearchLanes;
 }): Promise<Array<{
   wave: number;
   openAiResult: PromiseSettledResult<SearchLaneResult>;
   xResult: PromiseSettledResult<SearchLaneResult>;
+  goalResolutions: GoalResolution[];
 }>> {
   const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
   const results: Array<{
     wave: number;
     openAiResult: PromiseSettledResult<SearchLaneResult>;
     xResult: PromiseSettledResult<SearchLaneResult>;
+    goalResolutions: GoalResolution[];
   }> = [];
 
   for (const wave of waves) {
@@ -86,11 +94,40 @@ async function executeResearchWaves(input: {
         ? input.lanes.runGrokXSearch(wavePlan)
         : Promise.resolve(skippedLane("x_search", `No policy-approved X queries for wave ${wave}.`)),
     ]);
+    const goalResolutions = await resolveResearchGoals({
+      ai: input.ai,
+      queryPlan: input.queryPlan,
+      wave,
+      openAiResult,
+      xResult,
+    });
 
-    results.push({ wave, openAiResult, xResult });
+    results.push({ wave, openAiResult, xResult, goalResolutions });
   }
 
   return results;
+}
+
+async function resolveResearchGoals(input: {
+  ai: StructuredAiClient;
+  queryPlan: ResearchQueryPlan;
+  wave: number;
+  openAiResult: PromiseSettledResult<SearchLaneResult>;
+  xResult: PromiseSettledResult<SearchLaneResult>;
+}): Promise<GoalResolution[]> {
+  return input.ai.generateObject({
+    schema: GoalResolutionSchema.array(),
+    name: "cassie_goal_resolution",
+    prompt: goalResolutionPrompt({
+      wave: input.wave,
+      goals: input.queryPlan.goals.filter((goal) => goal.budget.wave <= input.wave),
+      synthesisContract: input.queryPlan.synthesisContract,
+      laneResults: {
+        openAiResult: settledPayload(input.openAiResult),
+        xResult: settledPayload(input.xResult),
+      },
+    }),
+  });
 }
 
 function planForWave(queryPlan: ResearchQueryPlan, wave: number): ResearchQueryPlan {

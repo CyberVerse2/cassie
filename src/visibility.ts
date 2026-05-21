@@ -25,6 +25,7 @@ export function buildVisibilityReport(input: VisibilityInput) {
       ticketCreated: Boolean(hasField(run, "tradeTicket")),
     },
     researchGoals: extractResearchGoals(researchPlan),
+    goalResolutions: extractGoalResolutions(run, input.trace),
     synthesisContract: objectField(researchPlan, "synthesisContract"),
     evidenceSummary: summarizeEvidence(researchReport),
     tradeExpression: tradeExpression
@@ -79,6 +80,9 @@ export function formatVisibilityReport(report: ReturnType<typeof buildVisibility
     "",
     "Research goals",
     ...formatResearchGoals(report.researchGoals),
+    "",
+    "Goal resolutions",
+    ...formatGoalResolutions(report.goalResolutions),
     "",
     "Evidence",
     `  count: ${report.evidenceSummary.count}`,
@@ -142,6 +146,25 @@ function extractResearchGoals(plan: RecordValue | null) {
   });
 }
 
+function extractGoalResolutions(run: RecordValue | null, trace: TraceEvent[]) {
+  const fromRun = arrayField(run, "goalResolutions");
+  const fromTrace = trace
+    .filter((event) => event.name === "cassie_goal_resolution")
+    .flatMap((event) => Array.isArray(event.output) ? event.output : []);
+
+  return [...fromRun, ...fromTrace].map((resolution) => {
+    const record = objectOrNull(resolution);
+    return {
+      goalId: stringField(record, "goalId"),
+      status: stringField(record, "status"),
+      confidence: numberField(record, "confidence"),
+      summary: stringField(record, "summary"),
+      synthesisImplication: stringField(record, "synthesisImplication"),
+      unresolvedQuestions: arrayField(record, "unresolvedQuestions").map((question) => String(question)),
+    };
+  });
+}
+
 function summarizeEvidence(report: RecordValue | null) {
   const evidence = arrayField(report, "evidence");
   return {
@@ -164,6 +187,16 @@ function formatResearchGoals(goals: ReturnType<typeof extractResearchGoals>) {
 
   return goals.map((goal) =>
     `  - ${goal.id ?? "unknown"} ${goal.kind ?? "unknown"} p=${goal.priority ?? "?"} must=${goal.mustResolve}: ${goal.question ?? ""}`,
+  );
+}
+
+function formatGoalResolutions(resolutions: ReturnType<typeof extractGoalResolutions>) {
+  if (resolutions.length === 0) {
+    return ["  none"];
+  }
+
+  return resolutions.map((resolution) =>
+    `  - ${resolution.goalId ?? "unknown"} ${resolution.status ?? "unknown"} c=${resolution.confidence ?? "?"}: ${resolution.summary ?? ""}`,
   );
 }
 
