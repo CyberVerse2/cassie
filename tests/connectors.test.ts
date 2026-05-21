@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
+import { GrokXSearchLane, OpenAiWebSearchLane } from "../packages/research/lanes.ts";
 import {
-  GrokXSearchLane,
   HyperliquidMarketDataProvider,
-  OpenAiWebSearchLane,
   PolymarketMarketDataProvider,
-} from "../src/index.ts";
-import { MissingConnectorConfigError } from "../src/connectors/errors.ts";
-import type { ResearchQueryPlan, Thesis } from "../src/schemas.ts";
+} from "../packages/market-data/index.ts";
+import { MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
+import type { ResearchQueryPlan, Thesis } from "../packages/core/schemas/index.ts";
 
 const thesis: Thesis = {
   claim: "SOL may rally because Solana ETF approval odds are increasing.",

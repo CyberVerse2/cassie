@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { StructuredAiClient } from "../src/ai.ts";
+import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type {
   GoalResolution,
   QueryJob,
@@ -9,8 +9,8 @@ import type {
   SignalInterpretation,
   SourcePost,
   Thesis,
-} from "../src/schemas.ts";
-import { normalizeResearchQueryPlan, researchThesis } from "../src/tools/research.ts";
+} from "../packages/core/schemas/index.ts";
+import { normalizeResearchQueryPlan, researchThesis } from "../packages/research/index.ts";
 
 const vagueSignal: SignalInterpretation = {
   signalType: "endorsement",

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { TradeExpressionPlan } from "../src/schemas.ts";
-import type { TraceEvent, TraceUsage } from "../src/trace.ts";
+import type { TradeExpressionPlan } from "../packages/core/schemas/index.ts";
+import type { TraceEvent, TraceUsage } from "../packages/core/trace.ts";
 import { buildVisibilityReport } from "../src/visibility.ts";
 
 const usage: TraceUsage = {

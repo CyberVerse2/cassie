@@ -4,7 +4,7 @@ import {
   createResearchToolLoopAgent,
   extractDoneAnswer,
   prepareResearchToolLoopStep,
-} from "../src/agents/research-tool-loop-agent.ts";
+} from "../packages/ai/agents/research-tool-loop-agent.ts";
 
 describe("research ToolLoopAgent configuration", () => {
   it("creates a forced-tool agent with the expected research tools", () => {

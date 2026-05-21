@@ -3,14 +3,10 @@ import {
   MissingAiDependencyError,
   OpenAiStructuredClient,
   routeStructuredModel,
-} from "../src/ai.ts";
+} from "../packages/ai/client.ts";
 import {
   GrokXSearchLane,
   OpenAiWebSearchLane,
-} from "../src/connectors/research-lanes.ts";
-import {
-  GrokXSearchLane as PackageGrokXSearchLane,
-  OpenAiWebSearchLane as PackageOpenAiWebSearchLane,
 } from "../packages/research/lanes.ts";
 
 describe("structured AI model routing", () => {
@@ -76,17 +72,13 @@ describe("structured AI model routing", () => {
 
   it("defaults OpenAI web search to the mini search operator model", () => {
     const lane = new OpenAiWebSearchLane("test-key");
-    const packageLane = new PackageOpenAiWebSearchLane("test-key");
 
     expect(lane).toHaveProperty("model", "gpt-5.4-mini");
-    expect(packageLane).toHaveProperty("model", "gpt-5.4-mini");
   });
 
-  it("defaults Grok X search to 4.3 in both runtime paths", () => {
+  it("defaults Grok X search to 4.3", () => {
     const lane = new GrokXSearchLane("test-key");
-    const packageLane = new PackageGrokXSearchLane("test-key");
 
     expect(lane).toHaveProperty("model", "grok-4.3");
-    expect(packageLane).toHaveProperty("model", "grok-4.3");
   });
 });

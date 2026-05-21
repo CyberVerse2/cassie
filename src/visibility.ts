@@ -1,4 +1,4 @@
-import type { TraceEvent, TraceUsage } from "./trace.ts";
+import type { TraceEvent, TraceUsage } from "../packages/core/trace.ts";
 
 type VisibilityInput = {
   result: unknown;

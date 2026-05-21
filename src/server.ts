@@ -11,7 +11,7 @@ import {
   requestKey,
   requireApiToken,
 } from "./security.ts";
-import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "./x-webhook.ts";
+import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "../packages/workflows/x-webhook.ts";
 
 assertRuntimeConfig();
 const product = new CassieProduct();

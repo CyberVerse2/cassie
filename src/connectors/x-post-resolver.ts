@@ -1,9 +1,9 @@
 import { createXai } from "@ai-sdk/xai";
 import { generateText } from "ai";
 import { z } from "zod";
-import { MissingConnectorConfigError } from "./errors.ts";
-import { SourcePostSchema, type SourcePost } from "../schemas.ts";
-import type { TraceRecorder } from "../trace.ts";
+import { MissingConnectorConfigError } from "../../packages/core/connector-errors.ts";
+import { SourcePostSchema, type SourcePost } from "../../packages/core/schemas/index.ts";
+import type { TraceRecorder } from "../../packages/core/trace.ts";
 
 const XPostResolutionSchema = z.object({
   found: z.boolean(),

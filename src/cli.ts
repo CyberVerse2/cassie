@@ -1,19 +1,19 @@
 import "dotenv/config";
 import { inspect } from "node:util";
-import { OpenAiStructuredClient } from "./ai.ts";
-import { CompositeMarketDataProvider } from "./connectors/market-data.ts";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
-import type { SourcePost, UserSettings } from "./schemas.ts";
+import { OpenAiStructuredClient } from "../packages/ai/client.ts";
+import { CompositeMarketDataProvider } from "../packages/market-data/index.ts";
+import type { SourcePost, UserSettings } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
 import type { ControlRun, ExecutionJob as ControlExecutionJob } from "../packages/core/schemas/index.ts";
 import { CassieProduct } from "../packages/workflows/product.ts";
 import type { CassieJobQueue } from "../packages/workflows/execution-jobs.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/db/drizzle-store.ts";
 import type { CassieStoreSnapshot } from "../packages/db/store.ts";
-import { routeIntent } from "./tools/intent-router.ts";
-import { interpretSignal } from "./tools/signal.ts";
-import { extractThesis } from "./tools/thesis.ts";
-import { TraceRecorder, type TraceEvent } from "./trace.ts";
+import { routeIntent } from "../packages/ai/tools/intent-router.ts";
+import { interpretSignal } from "../packages/ai/tools/signal.ts";
+import { extractThesis } from "../packages/ai/tools/thesis.ts";
+import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 
 type CliFlags = Record<string, string | boolean>;
