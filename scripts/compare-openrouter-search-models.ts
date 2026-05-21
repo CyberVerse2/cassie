@@ -41,6 +41,7 @@ const timeoutMs = Number(flag("timeout-ms") ?? 90_000);
 const json = hasFlag("json");
 const forceWebPlugin = !hasFlag("no-web-plugin");
 const maxResults = Number(flag("max-results") ?? 5);
+const searchEngine = flag("search-engine") ?? process.env.OPENROUTER_WEB_SEARCH_ENGINE ?? "native";
 const rawSources = hasFlag("raw-sources");
 
 if (!process.env.OPENROUTER_API_KEY) {
@@ -62,7 +63,7 @@ const openrouter = createOpenRouter({
           {
             id: "web",
             max_results: maxResults,
-            engine: "exa",
+            engine: searchEngine,
           },
         ],
       }
@@ -79,6 +80,7 @@ const runs = await Promise.all(selectedModels.map((model, index) => runModel(mod
 const result = {
   query,
   elapsedMs: Date.now() - startedAt,
+  searchEngine: forceWebPlugin ? searchEngine : null,
   runs,
 };
 

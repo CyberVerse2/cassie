@@ -45,6 +45,7 @@ type RunOutput = {
 
 const timeoutMs = Number(flag("timeout-ms") ?? 120_000);
 const maxResults = Number(flag("max-results") ?? 5);
+const searchEngine = flag("search-engine") ?? process.env.OPENROUTER_WEB_SEARCH_ENGINE ?? "native";
 const outputPath = resolve(flag("output") ?? `artifacts/openrouter-search-eval-${new Date().toISOString().replace(/[:.]/g, "-")}.json`);
 
 if (!process.env.OPENROUTER_API_KEY) {
@@ -64,7 +65,7 @@ const openrouter = createOpenRouter({
       {
         id: "web",
         max_results: maxResults,
-        engine: "exa",
+        engine: searchEngine,
       },
     ],
     reasoning: {
@@ -83,6 +84,7 @@ for (let questionIndex = 0; questionIndex < QUESTIONS.length; questionIndex += 1
 
 const report = {
   createdAt: new Date().toISOString(),
+  searchEngine,
   elapsedMs: Date.now() - startedAt,
   maxResults,
   questions: QUESTIONS,

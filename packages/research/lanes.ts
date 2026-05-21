@@ -23,6 +23,7 @@ type SearchSource = {
 };
 
 const DEFAULT_WEB_SEARCH_MODEL = "google/gemini-3.1-flash-lite";
+const DEFAULT_WEB_SEARCH_ENGINE = "native";
 
 export class OpenAiWebSearchLane {
   constructor(
@@ -31,6 +32,7 @@ export class OpenAiWebSearchLane {
     private readonly trace?: TraceRecorder,
     private readonly timeoutMs = Number(process.env.CASSIE_WEB_QUERY_TIMEOUT_MS ?? 60_000),
     private readonly maxResults = Number(process.env.CASSIE_WEB_SEARCH_MAX_RESULTS ?? 5),
+    private readonly searchEngine = process.env.CASSIE_WEB_SEARCH_ENGINE ?? DEFAULT_WEB_SEARCH_ENGINE,
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
@@ -50,7 +52,7 @@ export class OpenAiWebSearchLane {
           {
             id: "web",
             max_results: this.maxResults,
-            engine: "exa",
+            engine: this.searchEngine,
           },
         ],
         reasoning: {
@@ -63,7 +65,7 @@ export class OpenAiWebSearchLane {
       name: "openrouter_web_query_job",
       kind: "connector",
       model: this.model,
-      thinkingTrace: "Executing one auditable OpenRouter web query job with forced Exa search and classifying returned sources into evidence claims.",
+      thinkingTrace: `Executing one auditable OpenRouter web query job with ${this.searchEngine} search and classifying returned sources into evidence claims.`,
       input: {
         queryJobId: job.id,
         queryId: job.querySpecId,
