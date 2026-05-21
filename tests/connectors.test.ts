@@ -94,7 +94,7 @@ const queryPlan: ResearchQueryPlan = {
 };
 
 describe("research connectors", () => {
-  it("requires OpenAI configuration for web search", async () => {
+  it("requires OpenRouter configuration for web search", async () => {
     await expect(new OpenAiWebSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );

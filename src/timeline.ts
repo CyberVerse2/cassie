@@ -181,7 +181,7 @@ function formatQueryJob(
   const laneBadge = job.lane === "x" ? theme.x("[x]") : theme.web("[web]");
   const lines = [
     `|   |   |-- ${laneBadge} ${job.querySpecId} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${duration} ${job.mustExecuteAtomically ? "atomic" : "bundled"} p=${job.priority}`,
-    `|   |   |   |-- ${theme.label("tool")} ${job.lane === "web" ? "OpenAI web query job" : "Grok X query job"}`,
+    `|   |   |   |-- ${theme.label("tool")} ${job.lane === "web" ? "OpenRouter web query job" : "Grok X query job"}`,
     ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |   |-- ", theme }),
     ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |   |-- ", theme }),
   ];

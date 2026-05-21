@@ -19,13 +19,6 @@ export function openAiCostControlOptions(input: CostControlInput) {
   };
 }
 
-export function openAiSearchContextSize() {
-  return process.env.CASSIE_OPENAI_SEARCH_CONTEXT_SIZE === "medium" ||
-      process.env.CASSIE_OPENAI_SEARCH_CONTEXT_SIZE === "high"
-    ? process.env.CASSIE_OPENAI_SEARCH_CONTEXT_SIZE
-    : "low";
-}
-
 function openAiServiceTier(): OpenAILanguageModelResponsesOptions["serviceTier"] {
   const value = process.env.CASSIE_OPENAI_SERVICE_TIER;
   return value === "auto" || value === "default" || value === "priority" ? value : "flex";

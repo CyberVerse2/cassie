@@ -8,7 +8,9 @@ import {
 } from "../client.ts";
 import { openAiCostControlOptions } from "../openai-options.ts";
 
-const WEB_SEARCH_MODEL = process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5.4-mini";
+const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
+  process.env.OPENROUTER_WEB_SEARCH_MODEL ??
+  "google/gemini-3.1-flash-lite";
 
 type ResearchToolName =
   | "create_query_jobs"
@@ -34,8 +36,7 @@ type PrepareInput = {
 export function createResearchToolLoopAgent() {
   return new ToolLoopAgent({
     id: "cassie-research-tool-loop",
-    model: openai.responses(WEB_SEARCH_MODEL),
-    providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-research-tool-loop" }),
+    model: openRouterModel(WEB_SEARCH_MODEL),
     instructions: researchToolLoopInstructions(),
     tools: researchTools(),
     toolChoice: "required",
@@ -106,7 +107,7 @@ function researchTools() {
       execute: async (input) => ({ status: "planned", ...input }),
     }),
     run_web_query: tool({
-      description: "Run one auditable OpenAI web-search query job and return raw search result metadata.",
+      description: "Run one auditable OpenRouter web-search query job and return raw search result metadata.",
       inputSchema: z.object({
         queryJobId: z.string(),
         query: z.string(),
@@ -192,11 +193,10 @@ function chooseActiveTools(steps: StepLike[]): ResearchToolName[] {
 
 function modelForTools(activeTools: ResearchToolName[]) {
   if (activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")) {
-    return openai.responses(WEB_SEARCH_MODEL);
+    return openRouterModel(WEB_SEARCH_MODEL);
   }
   if (activeTools.includes("classify_evidence")) {
-    const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
-    return openrouter(process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL);
+    return openRouterModel(process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL);
   }
   return openai(
     process.env.CASSIE_IMPORTANT_MODEL ??
@@ -213,13 +213,28 @@ function toolChoiceForTools(activeTools: ResearchToolName[]) {
 }
 
 function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
-  if (activeTools.includes("classify_evidence")) {
+  if (
+    activeTools.includes("classify_evidence") ||
+    activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")
+  ) {
     return undefined;
   }
 
   return openAiCostControlOptions({
     promptCacheKey: `cassie-research-tool-loop-${activeTools.join("-")}`,
   });
+}
+
+function openRouterModel(model: string) {
+  const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    compatibility: "strict",
+    extraBody: {
+      provider: { allow_fallbacks: true, require_parameters: true },
+      reasoning: { max_tokens: 512 },
+    },
+  });
+  return openrouter(model);
 }
 
 function lastToolName(steps: StepLike[]): string | null {

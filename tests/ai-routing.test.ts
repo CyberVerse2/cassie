@@ -70,10 +70,10 @@ describe("structured AI model routing", () => {
     }
   });
 
-  it("defaults OpenAI web search to the mini search operator model", () => {
+  it("defaults web search to Gemini Flash Lite through OpenRouter", () => {
     const lane = new OpenAiWebSearchLane("test-key");
 
-    expect(lane).toHaveProperty("model", "gpt-5.4-mini");
+    expect(lane).toHaveProperty("model", "google/gemini-3.1-flash-lite");
   });
 
   it("defaults Grok X search to 4.3", () => {

@@ -26,7 +26,7 @@ describe("research ToolLoopAgent configuration", () => {
     await expect(prepareResearchToolLoopStep({ stepNumber: 0, steps: [], messages: [] })).resolves.toMatchObject({
       activeTools: ["create_query_jobs"],
       toolChoice: { type: "tool", toolName: "create_query_jobs" },
-      model: expect.objectContaining({ modelId: "gpt-5.4-mini" }),
+      model: expect.objectContaining({ modelId: "google/gemini-3.1-flash-lite" }),
     });
 
     await expect(prepareResearchToolLoopStep({
@@ -36,7 +36,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["run_web_query", "run_x_query"],
       toolChoice: "required",
-      model: expect.objectContaining({ modelId: "gpt-5.4-mini" }),
+      model: expect.objectContaining({ modelId: "google/gemini-3.1-flash-lite" }),
     });
 
     await expect(prepareResearchToolLoopStep({
@@ -88,7 +88,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["run_web_query", "run_x_query"],
       toolChoice: "required",
-      model: expect.objectContaining({ modelId: "gpt-5.4-mini" }),
+      model: expect.objectContaining({ modelId: "google/gemini-3.1-flash-lite" }),
     });
   });
 

@@ -143,7 +143,7 @@ async function env() {
     xAiApiKey: maskSecret(process.env.XAI_API_KEY),
     hyperliquidPrivateKey: maskSecret(process.env.HYPERLIQUID_PRIVATE_KEY),
     cassieModel: process.env.CASSIE_MODEL ?? "gpt-5.5",
-    webSearchModel: process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5.4-mini",
+    webSearchModel: process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.OPENROUTER_WEB_SEARCH_MODEL ?? "google/gemini-3.1-flash-lite",
     grokSearchModel: process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
   };
 }

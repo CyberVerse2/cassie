@@ -11,38 +11,59 @@ import {
 } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError } from "../core/connector-errors.ts";
 import { Output, generateText } from "ai";
-import { openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
-import { openAiCostControlOptions, openAiSearchContextSize } from "../ai/openai-options.ts";
 
 type SearchSource = {
   title?: string;
   url?: string;
 };
 
+const DEFAULT_WEB_SEARCH_MODEL = "google/gemini-3.1-flash-lite";
+
 export class OpenAiWebSearchLane {
   constructor(
-    private readonly apiKey = process.env.OPENAI_API_KEY,
-    private readonly model = process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5.4-mini",
+    private readonly apiKey = process.env.OPENROUTER_API_KEY,
+    private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.OPENROUTER_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
     private readonly trace?: TraceRecorder,
     private readonly timeoutMs = Number(process.env.CASSIE_WEB_QUERY_TIMEOUT_MS ?? 60_000),
+    private readonly maxResults = Number(process.env.CASSIE_WEB_SEARCH_MAX_RESULTS ?? 5),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
     if (!this.apiKey) {
-      throw new MissingConnectorConfigError("OpenAI/Web Search lane", "OPENAI_API_KEY");
+      throw new MissingConnectorConfigError("OpenRouter/Web Search lane", "OPENROUTER_API_KEY");
     }
 
+    const openrouter = createOpenRouter({
+      apiKey: this.apiKey,
+      compatibility: "strict",
+      extraBody: {
+        provider: {
+          allow_fallbacks: true,
+          require_parameters: true,
+        },
+        plugins: [
+          {
+            id: "web",
+            max_results: this.maxResults,
+            engine: "exa",
+          },
+        ],
+        reasoning: {
+          max_tokens: 512,
+        },
+      },
+    });
     const prompt = buildWebQueryJobPrompt(job, queryPlan);
     const finishTrace = this.trace?.start({
-      name: "openai_web_query_job",
+      name: "openrouter_web_query_job",
       kind: "connector",
       model: this.model,
-      thinkingTrace: "Executing one auditable web query job and classifying returned sources into evidence claims.",
+      thinkingTrace: "Executing one auditable OpenRouter web query job with forced Exa search and classifying returned sources into evidence claims.",
       input: {
         queryJobId: job.id,
         queryId: job.querySpecId,
@@ -53,20 +74,12 @@ export class OpenAiWebSearchLane {
 
     try {
       const result = await generateText({
-        model: openai.responses(this.model),
-        tools: {
-          web_search: openai.tools.webSearch({
-            searchContextSize: openAiSearchContextSize(),
-            filters: allowedDomainFilters(job.query),
-          }),
-        },
-        toolChoice: "auto",
+        model: openrouter(this.model),
         prompt,
-        providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-web-query-job" }),
         abortSignal: AbortSignal.timeout(this.timeoutMs),
       });
       const ledger = await classifyEvidenceLedger({
-        provider: "openai_web_search",
+        provider: "openrouter_web_search",
         job,
         queryPlan,
         summary: result.text,
@@ -200,13 +213,6 @@ ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
 Return concise findings with citations. Do not synthesize a final trade view.`;
-}
-
-function allowedDomainFilters(query: string) {
-  const allowedDomains = [...query.matchAll(/\bsite:([a-z0-9.-]+\.[a-z]{2,})/gi)]
-    .map((match) => match[1].replace(/^www\./i, "").toLowerCase());
-
-  return allowedDomains.length > 0 ? { allowedDomains: [...new Set(allowedDomains)] } : undefined;
 }
 
 function buildXQueryJobPrompt(job: QueryJob, queryPlan: ResearchQueryPlan): string {
