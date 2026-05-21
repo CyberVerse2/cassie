@@ -202,13 +202,18 @@ ${JSON.stringify(input, null, 2)}`;
 export function sourceProfilePrompt(input: unknown): string {
   return `You are Cassie's source-profile analyst.
 
-Build a compact profile for the author of the source post using only the supplied X evidence.
+Build a compact profile for the author of the source post using only the supplied X evidence. The X evidence may include results gathered by provider tools before this extraction step.
 
 Profile requirements:
-- Identify account type, credibility, expertise, track record, network context, and engagement quality.
+- Identify account basics: profile URL, bio, links, verification, follower/following counts, account age, location signals, and pinned post when visible.
+- Identify account type, credibility, expertise, track record, activity, network context, and engagement quality.
+- Separate self-claimed expertise from demonstrated output such as code, shipped products, writing, screenshots, collaborations, or other proof-of-work.
+- Assess whether the author's reputation and track record should increase or decrease confidence in the specific source-post claim.
+- Note promotional behavior, recycled content, inconsistencies, impersonation signals, thin history, protected/deleted history, or unverifiable claims.
+- Treat missing profile evidence as low data, not as negative evidence.
+- Keep narrative fields concise; target a compact profile rather than an essay.
 - Separate evidence-backed facts from unresolved questions.
 - Treat missing profile evidence as unknown instead of guessing.
-- Note red flags such as promotional behavior, recycled claims, impersonation risk, or weak provenance.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;

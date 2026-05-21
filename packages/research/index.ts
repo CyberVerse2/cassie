@@ -186,7 +186,9 @@ function sourceProfileQueryPlan(sourcePost: SourcePost, thesis: Thesis): Researc
         mustResolve: true,
         lanes: ["x"],
         evidenceNeeds: [
-          "Author identity, bio/profile context, recent relevant posts, reputation signals, network context, engagement quality, and red flags.",
+          "Current profile basics including bio, location signals, links, verification, follower/following counts, join/account-age signals, and pinned post if visible.",
+          "The author's 12 to 15 most recent original posts and replies when available, including posting frequency, topics, tone, and engagement quality.",
+          "Linked projects, websites, GitHub, mentioned project handles, collaborations, notable wins, hackathon results, controversies, impersonation signals, and red flags.",
         ],
         disconfirmingQuestions: [
           "Is the author promotional, impersonating another account, recycling claims, or lacking relevant domain context?",
@@ -226,13 +228,17 @@ function sourceProfileQueryJob(queryPlan: ResearchQueryPlan, sourcePost: SourceP
     goalIds: ["g_source_profile"],
     lane: "x",
     provider: "grok_x_search",
-    query: `from:${handle}${statusLocator} OR @${handle}`,
+    query: `from:${handle}${statusLocator} OR @${handle} OR "${handle}"`,
     queryKind: "social_provenance",
     priority: 1,
     maxResults: 10,
     mustExecuteAtomically: true,
-    expectedEvidence: "Author profile context, recent relevant posts, source credibility signals, engagement quality, and red flags.",
-    rationale: `Resolve @${handle}'s profile before planning research for: ${queryPlan.normalizedClaim}`,
+    expectedEvidence: [
+      "Full current X profile basics: bio, links, verification, follower/following count, account-age or join-date signals, location signals, and pinned post if visible.",
+      "Recent author activity: 12 to 15 recent original posts and replies when available, main topics, tone, posting consistency, engagement quality, and audience interaction.",
+      "External proof and network context: linked projects, websites, GitHub, mentioned handles, collaborations, notable wins, hackathon results, controversies, promotional behavior, recycled content, impersonation risk, and low-data gaps.",
+    ].join(" "),
+    rationale: `Resolve @${handle}'s profile and decide whether the author's reputation should increase or decrease confidence in: ${queryPlan.normalizedClaim}`,
   };
 }
 
