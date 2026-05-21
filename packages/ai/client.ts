@@ -3,6 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
+import { openAiCostControlOptions } from "./openai-options.ts";
 
 export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
@@ -137,6 +138,9 @@ export class OpenAiStructuredClient implements StructuredAiClient {
           name: input.name,
         }),
         prompt: input.prompt,
+        providerOptions: route.provider === "openai"
+          ? openAiCostControlOptions({ promptCacheKey: input.name })
+          : undefined,
       });
 
       finishTrace?.({
@@ -217,6 +221,7 @@ export class OpenAiImportantStructuredClient implements StructuredAiClient {
         name: input.name,
       }),
       prompt: input.prompt,
+      providerOptions: openAiCostControlOptions({ promptCacheKey: input.name }),
     });
 
     return result.output;

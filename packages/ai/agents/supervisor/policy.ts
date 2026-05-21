@@ -19,7 +19,7 @@ export function createCassieStopConditions(maxSteps: number): StopCondition<Cass
   ];
 }
 
-export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTools> = ({ steps }) => {
+export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTools> = ({ steps, messages }) => {
   const toolError = latestToolError(steps);
   if (toolError) {
     throw new Error(`Supervisor tool ${toolError.toolName} failed: ${toolError.error}`);
@@ -28,6 +28,7 @@ export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTo
   const activeTools = selectActiveTools(steps);
   return {
     activeTools,
+    messages: compressSupervisorMessages(messages) as never,
     toolChoice: activeTools.length === 0
       ? "none"
       : activeTools.length === 1
@@ -132,4 +133,61 @@ function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?
     }
   }
   return null;
+}
+
+function compressSupervisorMessages(messages: unknown[]) {
+  return messages.map((message) => {
+    if (!isRecord(message) || message.role !== "tool") {
+      return message;
+    }
+
+    const serialized = JSON.stringify(message);
+    if (serialized.length <= 1200) {
+      return message;
+    }
+
+    return {
+      ...message,
+      content: summarizeToolMessage(message, serialized.length),
+    };
+  });
+}
+
+function summarizeToolMessage(message: Record<string, unknown>, originalChars: number) {
+  const content = Array.isArray(message.content) ? message.content : [];
+  return content.map((part) => summarizeToolPart(part, originalChars)).filter(Boolean).slice(0, 8);
+}
+
+function summarizeToolPart(part: unknown, originalChars: number) {
+  if (!isRecord(part)) {
+    return null;
+  }
+
+  const output = isRecord(part.output) ? part.output : isRecord(part.result) ? part.result : null;
+  return {
+    type: part.type,
+    toolCallId: part.toolCallId,
+    toolName: part.toolName,
+    output: {
+      type: "json",
+      value: {
+        compressed: true,
+        originalChars,
+        status: output?.status,
+        intent: output?.intent,
+        signalType: output?.signalType,
+        stance: output?.stance,
+        publicSummary: truncate(typeof output?.publicSummary === "string" ? output.publicSummary : null, 220),
+        claim: truncate(typeof output?.claim === "string" ? output.claim : null, 220),
+      },
+    },
+  };
+}
+
+function truncate(value: string | null, length: number) {
+  return value && value.length > length ? `${value.slice(0, length)}...` : value;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

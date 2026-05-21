@@ -20,6 +20,7 @@ import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
+import { openAiCostControlOptions } from "../../openai-options.ts";
 
 export async function runCassieSupervisorForRun(input: {
   runId: string;
@@ -53,6 +54,7 @@ export async function runCassieSupervisorForRun(input: {
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
       model: openai(process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5"),
+      providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-supervisor" }),
       stopWhen: createCassieStopConditions(Number(process.env.CASSIE_SUPERVISOR_MAX_STEPS ?? 12)),
       tools,
       output: Output.object({

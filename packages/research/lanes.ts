@@ -17,6 +17,7 @@ import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
+import { openAiCostControlOptions, openAiSearchContextSize } from "../ai/openai-options.ts";
 
 type SearchSource = {
   title?: string;
@@ -54,10 +55,14 @@ export class OpenAiWebSearchLane {
       const result = await generateText({
         model: openai.responses(this.model),
         tools: {
-          web_search: openai.tools.webSearch({ searchContextSize: "medium" }),
+          web_search: openai.tools.webSearch({
+            searchContextSize: openAiSearchContextSize(),
+            filters: allowedDomainFilters(job.query),
+          }),
         },
         toolChoice: "auto",
         prompt,
+        providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-web-query-job" }),
         abortSignal: AbortSignal.timeout(this.timeoutMs),
       });
       const ledger = await classifyEvidenceLedger({
@@ -195,6 +200,13 @@ ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
 Return concise findings with citations. Do not synthesize a final trade view.`;
+}
+
+function allowedDomainFilters(query: string) {
+  const allowedDomains = [...query.matchAll(/\bsite:([a-z0-9.-]+\.[a-z]{2,})/gi)]
+    .map((match) => match[1].replace(/^www\./i, "").toLowerCase());
+
+  return allowedDomains.length > 0 ? { allowedDomains: [...new Set(allowedDomains)] } : undefined;
 }
 
 function buildXQueryJobPrompt(job: QueryJob, queryPlan: ResearchQueryPlan): string {

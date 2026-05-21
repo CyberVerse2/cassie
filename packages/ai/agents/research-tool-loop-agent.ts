@@ -6,6 +6,7 @@ import {
   DEFAULT_CHEAP_MODEL,
   DEFAULT_EXPENSIVE_MODEL,
 } from "../client.ts";
+import { openAiCostControlOptions } from "../openai-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5.4-mini";
 
@@ -34,6 +35,7 @@ export function createResearchToolLoopAgent() {
   return new ToolLoopAgent({
     id: "cassie-research-tool-loop",
     model: openai.responses(WEB_SEARCH_MODEL),
+    providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-research-tool-loop" }),
     instructions: researchToolLoopInstructions(),
     tools: researchTools(),
     toolChoice: "required",
@@ -51,6 +53,7 @@ export async function prepareResearchToolLoopStep(input: PrepareInput) {
     activeTools,
     toolChoice: toolChoiceForTools(activeTools),
     messages: compressResearchToolMessages(input.messages),
+    providerOptions: openAiProviderOptionsForTools(activeTools),
   };
 }
 
@@ -207,6 +210,16 @@ function toolChoiceForTools(activeTools: ResearchToolName[]) {
   return activeTools.length === 1
     ? { type: "tool" as const, toolName: activeTools[0] }
     : "required" as const;
+}
+
+function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
+  if (activeTools.includes("classify_evidence")) {
+    return undefined;
+  }
+
+  return openAiCostControlOptions({
+    promptCacheKey: `cassie-research-tool-loop-${activeTools.join("-")}`,
+  });
 }
 
 function lastToolName(steps: StepLike[]): string | null {
