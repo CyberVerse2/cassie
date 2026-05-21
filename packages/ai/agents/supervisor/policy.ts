@@ -42,6 +42,10 @@ export function selectActiveTools(
     return ["classify_intent"];
   }
 
+  if (!hasCalled(steps, "interpret_signal")) {
+    return ["interpret_signal"];
+  }
+
   if (!hasCalled(steps, "extract_thesis")) {
     return ["extract_thesis"];
   }

@@ -6,6 +6,7 @@ import {
   CritiqueSchema,
   MarketSelectionSchema,
   ResearchReportSchema,
+  SignalInterpretationSchema,
   ThesisSchema,
   TradeTicketSchema,
   type AccountState,
@@ -13,6 +14,7 @@ import {
   type UserSettings,
 } from "../../../core/schemas/index.ts";
 import { routeIntent } from "../../tools/intent-router.ts";
+import { interpretSignal } from "../../tools/signal.ts";
 import { critiqueThesis } from "../../tools/critique.ts";
 import { selectMarket } from "../../tools/market.ts";
 import { researchThesis } from "../../../research/index.ts";
@@ -103,16 +105,37 @@ export function createCassieSupervisorTools(input: {
     }),
     extract_thesis: tool({
       description: "Extract the market thesis from the source post and command.",
-      inputSchema: z.object({}),
-      execute: async () => recordRunStep({
+      inputSchema: z.object({
+        signal: SignalInterpretationSchema,
+      }),
+      execute: async ({ signal }) => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "thesis",
         promptName: "cassie_thesis",
         promptVersion,
         model: cheapModel,
-        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost },
+        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost, signal },
         execute: () => extractThesis({
+          ai: cheapAi,
+          userCommand: input.run.userCommand,
+          sourcePost: input.run.sourcePost,
+          signal,
+        }),
+      }),
+    }),
+    interpret_signal: tool({
+      description: "Classify the source post into signal type, lead quality, tradability, and research angles.",
+      inputSchema: z.object({}),
+      execute: async () => recordRunStep({
+        store: input.store,
+        runId: input.run.runId,
+        stepType: "signal",
+        promptName: "cassie_signal",
+        promptVersion,
+        model: cheapModel,
+        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost },
+        execute: () => interpretSignal({
           ai: cheapAi,
           userCommand: input.run.userCommand,
           sourcePost: input.run.sourcePost,
@@ -136,23 +159,25 @@ export function createCassieSupervisorTools(input: {
     research_thesis: tool({
       description: "Run Cassie's research subagent. It verifies evidence but never chooses markets or executes orders.",
       inputSchema: z.object({
+        signal: SignalInterpretationSchema,
         thesis: ThesisSchema,
         researchAngle: z.enum(["balanced", "critic", "counter"]),
       }),
-      execute: async ({ thesis, researchAngle }) => recordRunStep({
+      execute: async ({ signal, thesis, researchAngle }) => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "research",
         promptName: "cassie_research_report",
         promptVersion,
         model: importantModel,
-        stepInput: { thesis, researchAngle },
+        stepInput: { signal, thesis, researchAngle },
         execute: async () => {
           const report = await researchThesis({
             ai: importantAi,
             lanes: input.deps.researchLanes,
             sourcePost: input.run.sourcePost,
             userCommand: input.run.userCommand,
+            signal,
             thesis,
             researchAngle,
           });

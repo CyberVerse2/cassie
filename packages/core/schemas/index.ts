@@ -599,6 +599,7 @@ export const AccountStateSchema = z.object({
 
 export const TradeTicketSchema = z.object({
   ticketId: z.string(),
+  runId: z.string().nullable().optional(),
   userId: z.string(),
   thesis: z.string(),
   venue: z.string(),
@@ -649,6 +650,73 @@ export const StoredRunSchema = z.object({
   createdAt: z.string(),
 });
 
+export const ControlRunStatusSchema = z.enum([
+  "queued",
+  "running",
+  "awaiting_approval",
+  "succeeded",
+  "failed",
+  "cancelled",
+]);
+
+export const SupervisorFinalResultSchema = z.object({
+  responseType: z.enum(["analysis", "critique", "trade_decision", "trade_ticket"]),
+  publicSummary: z.string(),
+  runStatus: ControlRunStatusSchema.exclude(["queued", "running"]),
+  ticketId: z.string().nullable(),
+  warnings: z.array(z.string()),
+});
+
+export const RunStepStatusSchema = z.enum([
+  "pending",
+  "running",
+  "succeeded",
+  "failed",
+  "skipped",
+]);
+
+export const RunStepTypeSchema = z.enum([
+  "intake",
+  "intent",
+  "signal",
+  "thesis",
+  "inverse_thesis",
+  "research",
+  "critique",
+  "market_candidates",
+  "market_selection",
+  "risk",
+  "ticket",
+  "final",
+]);
+
+export const ControlRunSchema = z.object({
+  runId: z.string(),
+  userId: z.string(),
+  userCommand: z.string(),
+  sourcePost: SourcePostSchema,
+  status: ControlRunStatusSchema,
+  result: z.unknown().nullable(),
+  error: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const RunStepSchema = z.object({
+  stepId: z.string(),
+  runId: z.string(),
+  stepType: RunStepTypeSchema,
+  status: RunStepStatusSchema,
+  input: z.unknown().nullable(),
+  output: z.unknown().nullable(),
+  error: z.string().nullable(),
+  model: z.string().nullable(),
+  promptName: z.string().nullable(),
+  promptVersion: z.string().nullable(),
+  startedAt: z.string(),
+  completedAt: z.string().nullable(),
+});
+
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
@@ -679,3 +747,9 @@ export type TradeTicket = z.infer<typeof TradeTicketSchema>;
 export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 export type StoredRun = z.infer<typeof StoredRunSchema>;
+export type ControlRunStatus = z.infer<typeof ControlRunStatusSchema>;
+export type SupervisorFinalResult = z.infer<typeof SupervisorFinalResultSchema>;
+export type RunStepStatus = z.infer<typeof RunStepStatusSchema>;
+export type RunStepType = z.infer<typeof RunStepTypeSchema>;
+export type ControlRun = z.infer<typeof ControlRunSchema>;
+export type RunStep = z.infer<typeof RunStepSchema>;

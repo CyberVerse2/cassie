@@ -149,7 +149,7 @@ function buildSupervisorInstructions(): string {
 Use the available tools to process this run. Do not execute orders. Create a trade ticket only when the user asks for trading or countertrading and risk does not reject the proposal.
 
 Required behavior:
-- Start with classify_intent and extract_thesis.
+- Start with classify_intent, interpret_signal, and extract_thesis.
 - For critic requests, call research_thesis, critique_thesis, then finalize_run.
 - For trade requests, call research_thesis, select_market, risk_check, create_trade_ticket when allowed, then finalize_run.
 - For countertrade requests, call extract_inverse_thesis before research and market selection.

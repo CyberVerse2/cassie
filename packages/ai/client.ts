@@ -3,6 +3,9 @@ import { openai } from "@ai-sdk/openai";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 
+export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
+export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
+
 export interface StructuredAiClient {
   generateObject<T>(input: {
     schema: z.ZodType<T>;
@@ -28,7 +31,7 @@ export class MissingImportantAiDependencyError extends Error {
 export class OpenRouterStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = process.env.CASSIE_CHEAP_MODEL ?? "deepseek/deepseek-v4-flash") {
+  constructor(modelName = process.env.CASSIE_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL) {
     this.modelName = modelName;
   }
 
@@ -68,7 +71,7 @@ export class OpenRouterStructuredClient implements StructuredAiClient {
 export class OpenAiImportantStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5") {
+  constructor(modelName = process.env.CASSIE_IMPORTANT_MODEL ?? DEFAULT_IMPORTANT_MODEL) {
     this.modelName = modelName;
   }
 
