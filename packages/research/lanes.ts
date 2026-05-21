@@ -13,6 +13,7 @@ import { MissingConnectorConfigError } from "../core/connector-errors.ts";
 import { Output, generateText } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createXai } from "@ai-sdk/xai";
+import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
@@ -28,6 +29,30 @@ type SearchSource = {
   title?: string;
   url?: string;
 };
+
+export const SearchQueryOutputSchema = z.object({
+  query: z.string(),
+  queryKind: z.string(),
+  expectedEvidence: z.string(),
+  noFinalTradeView: z.boolean(),
+  findings: z.array(z.object({
+    claim: z.string(),
+    sourceUrls: z.array(z.string()),
+    relevance: z.number().min(0).max(1),
+    supportsExpectedEvidence: z.boolean(),
+    caveat: z.string().nullable(),
+  })),
+  sources: z.array(z.object({
+    title: z.string().nullable(),
+    url: z.string().nullable(),
+    sourceName: z.string().nullable(),
+    publishedAt: z.string().nullable(),
+    snippet: z.string().nullable(),
+  })),
+  unresolved: z.array(z.string()),
+});
+
+type SearchQueryOutput = z.infer<typeof SearchQueryOutputSchema>;
 
 const DEFAULT_WEB_SEARCH_MODEL = "google/gemini-3.1-flash-lite";
 const DEFAULT_WEB_SEARCH_ENGINE = "native";
@@ -81,6 +106,10 @@ export class OpenAiWebSearchLane {
       const result = await wrapConnectorStage("OpenRouter web search generation", () =>
         generateText({
           model: openrouter(this.model),
+          output: Output.object({
+            schema: SearchQueryOutputSchema,
+            name: "cassie_web_search_result",
+          }),
           messages: openRouterCacheablePrompt(prompt),
           providerOptions: openRouterProviderOptions(),
           maxOutputTokens: OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
@@ -92,8 +121,8 @@ export class OpenAiWebSearchLane {
           provider: "openrouter_web_search",
           job,
           queryPlan,
-          summary: result.text,
-          sources: result.sources,
+          searchResult: result.output,
+          sources: [...searchSourcesFromStructuredOutput(result.output), ...(result.sources ?? [])],
         })
       );
       const output = {
@@ -150,6 +179,10 @@ export class GrokXSearchLane {
       const result = await wrapConnectorStage("Grok X search generation", () =>
         generateText({
           model: xai.responses(this.model),
+          output: Output.object({
+            schema: SearchQueryOutputSchema,
+            name: "cassie_x_search_result",
+          }),
           tools: {
             x_search: xai.tools.xSearch({
               enableImageUnderstanding: true,
@@ -166,7 +199,7 @@ export class GrokXSearchLane {
           provider: "grok_x_search",
           job,
           queryPlan,
-          summary: result.text,
+          searchResult: result.output,
           toolResults: result.toolResults,
         })
       );
@@ -226,7 +259,7 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
-Return concise findings with citations. Every source-backed finding should include a markdown link to the cited source.
+Return structured findings only. Each source-backed finding must include its source URL in sourceUrls and the source entry in sources.
 Do not synthesize a final trade view.`;
 }
 
@@ -247,7 +280,7 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Look for origin posts, author/source reputation, smart engagement, direct refutations, recycled claims, coordinated language, image/video evidence, and whether claims are stated or inferred.
-X social momentum is not proof of factual truth. Do not synthesize a final trade view.`;
+X social momentum is not proof of factual truth. Return structured findings only. Do not synthesize a final trade view.`;
 }
 
 function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): string {
@@ -270,7 +303,7 @@ async function classifyEvidenceLedger(input: {
   provider: string;
   job: QueryJob;
   queryPlan: ResearchQueryPlan;
-  summary: string;
+  searchResult: SearchQueryOutput;
   sources?: SearchSource[];
   toolResults?: unknown[];
 }): Promise<EvidenceLedger> {
@@ -291,7 +324,7 @@ async function classifyEvidenceLedger(input: {
     normalizedClaim: input.queryPlan.normalizedClaim,
     goals: input.queryPlan.goals.filter((goal) => input.job.goalIds.includes(goal.id)),
     searchOutput: {
-      summary: input.summary,
+      structuredResult: input.searchResult,
       sources: input.sources ?? [],
       toolResults: input.toolResults ?? [],
     },
@@ -310,6 +343,15 @@ async function classifyEvidenceLedger(input: {
   });
 
   return result.output;
+}
+
+function searchSourcesFromStructuredOutput(output: SearchQueryOutput): SearchSource[] {
+  return output.sources
+    .filter((source) => source.url || source.title)
+    .map((source) => ({
+      title: source.title ?? undefined,
+      url: source.url ?? undefined,
+    }));
 }
 
 function connectorCallTimeoutMs() {

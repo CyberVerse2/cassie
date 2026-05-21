@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import { formatResearchConnectorError, GrokXSearchLane, OpenAiWebSearchLane } from "../packages/research/lanes.ts";
+import {
+  formatResearchConnectorError,
+  GrokXSearchLane,
+  OpenAiWebSearchLane,
+  SearchQueryOutputSchema,
+} from "../packages/research/lanes.ts";
 import {
   HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
@@ -124,6 +129,37 @@ describe("research connectors", () => {
     expect(formatResearchConnectorError(error)).toContain("schema compiler failed");
     expect(formatResearchConnectorError(error)).toContain("raw upstream failure");
     expect(formatResearchConnectorError(error)).toContain("No output generated.");
+  });
+
+  it("uses a structured output contract for each search query", () => {
+    expect(SearchQueryOutputSchema.parse({
+      query: "Solana ETF approval odds official source",
+      queryKind: "primary_source",
+      expectedEvidence: "Official or reputable evidence.",
+      noFinalTradeView: true,
+      findings: [
+        {
+          claim: "A regulator filing mentions the relevant ETF.",
+          sourceUrls: ["https://example.com/source"],
+          relevance: 0.9,
+          supportsExpectedEvidence: true,
+          caveat: null,
+        },
+      ],
+      sources: [
+        {
+          title: "Example source",
+          url: "https://example.com/source",
+          sourceName: "Example",
+          publishedAt: null,
+          snippet: "A source-backed snippet.",
+        },
+      ],
+      unresolved: ["Whether the approval odds changed today."],
+    })).toMatchObject({
+      noFinalTradeView: true,
+      findings: [{ supportsExpectedEvidence: true }],
+    });
   });
 });
 
