@@ -4,6 +4,9 @@ import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { openAiCostControlOptions } from "./openai-options.ts";
+import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
+
+configureAiSdkWarningLogging();
 
 export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
 export const DEFAULT_CHEAP_MODEL = "deepseek-v4-flash";

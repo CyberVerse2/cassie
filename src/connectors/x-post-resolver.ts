@@ -4,6 +4,9 @@ import { z } from "zod";
 import { MissingConnectorConfigError } from "../../packages/core/connector-errors.ts";
 import { SourcePostSchema, type SourcePost } from "../../packages/core/schemas/index.ts";
 import type { TraceRecorder } from "../../packages/core/trace.ts";
+import { configureAiSdkWarningLogging } from "../../packages/ai/sdk-warnings.ts";
+
+configureAiSdkWarningLogging();
 
 const XPostResolutionSchema = z.object({
   found: z.boolean(),

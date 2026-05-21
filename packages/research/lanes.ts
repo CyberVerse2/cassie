@@ -3,20 +3,48 @@ import type {
   SearchLaneResult,
 } from "./index.ts";
 import {
-  EvidenceLedgerSchema,
   type EvidenceLedger,
   type QueryJob,
   type ResearchEvidence,
   type ResearchQueryPlan,
+  SearchSourceTypeSchema,
 } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError } from "../core/connector-errors.ts";
 import { Output, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createXai } from "@ai-sdk/xai";
+import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
+import { configureAiSdkWarningLogging } from "../ai/sdk-warnings.ts";
+
+configureAiSdkWarningLogging();
 
 const DEFAULT_WEB_SEARCH_MODEL = "gemini-3.1-flash-lite";
 export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
+
+export const SearchQueryOutputSchema = z.object({
+  findings: z.array(z.object({
+    claim: z.string(),
+    sourceUrls: z.array(z.string()),
+    relevance: z.number().min(0).max(1),
+    stance: z.enum(["supports", "contradicts", "qualifies", "context", "irrelevant"]),
+    sourceType: SearchSourceTypeSchema,
+    reliability: z.enum(["high", "medium", "low", "unknown"]),
+    directness: z.enum(["primary", "direct_secondary", "indirect", "rumor", "context"]),
+    quote: z.string().nullable(),
+  })).max(4),
+  sources: z.array(z.object({
+    title: z.string().nullable(),
+    url: z.string().nullable(),
+    sourceName: z.string().nullable(),
+    sourceType: SearchSourceTypeSchema,
+    publishedAt: z.string().nullable(),
+    snippet: z.string().nullable(),
+  })).max(6),
+  unresolved: z.array(z.string()).max(4),
+});
+
+type SearchQueryOutput = z.infer<typeof SearchQueryOutputSchema>;
 
 export class GeminiWebSearchLane {
   constructor(
@@ -39,7 +67,7 @@ export class GeminiWebSearchLane {
       name: "gemini_web_query_job",
       kind: "connector",
       model: this.model,
-      thinkingTrace: "Executing one auditable Gemini web query job with Google Search grounding and classifying returned sources into evidence claims.",
+      thinkingTrace: "Executing one auditable Gemini web query job with Google Search grounding and compact structured search output.",
       input: {
         queryJobId: job.id,
         queryId: job.querySpecId,
@@ -53,8 +81,8 @@ export class GeminiWebSearchLane {
         generateText({
           model: google(this.model),
           output: Output.object({
-            schema: EvidenceLedgerSchema,
-            name: "cassie_web_evidence_ledger",
+            schema: SearchQueryOutputSchema,
+            name: "cassie_web_search_result",
           }),
           tools: {
             google_search: google.tools.googleSearch({
@@ -73,7 +101,11 @@ export class GeminiWebSearchLane {
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
       );
-      const ledger = result.output;
+      const ledger = ledgerFromSearchOutput({
+        job,
+        provider: "gemini_google_search",
+        output: result.output,
+      });
       const output = {
         lane: "openai_search" as const,
         evidence: evidenceFromLedger("openai_search", ledger),
@@ -115,7 +147,7 @@ export class GrokXSearchLane {
       name: "grok_x_query_job",
       kind: "connector",
       model: this.model,
-      thinkingTrace: "Executing one auditable X query job with image/video understanding and classifying posts into evidence claims.",
+      thinkingTrace: "Executing one auditable X query job with image/video understanding and compact structured search output.",
       input: {
         queryJobId: job.id,
         queryId: job.querySpecId,
@@ -129,8 +161,8 @@ export class GrokXSearchLane {
         generateText({
           model: xai.responses(this.model),
           output: Output.object({
-            schema: EvidenceLedgerSchema,
-            name: "cassie_x_evidence_ledger",
+            schema: SearchQueryOutputSchema,
+            name: "cassie_x_search_result",
           }),
           tools: {
             x_search: xai.tools.xSearch({
@@ -143,7 +175,11 @@ export class GrokXSearchLane {
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
       );
-      const ledger = result.output;
+      const ledger = ledgerFromSearchOutput({
+        job,
+        provider: "grok_x_search",
+        output: result.output,
+      });
       const output = {
         lane: "x_search" as const,
         evidence: evidenceFromLedger("x_search", ledger),
@@ -200,15 +236,11 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
-Return an EvidenceLedger JSON object only:
-- searchResults are the retrieved sources for this exact query job.
-- evidenceClaims are atomic claims extracted from those sources.
-- goalEvidenceLinks classify each evidence claim against the relevant goals.
-- Preserve runId, queryJobId, queryId, goalIds, wave, lane, and provider exactly.
-- Use provider "gemini_google_search".
-- Use stable ids like result_${job.id}_1, claim_${job.id}_1, link_${job.id}_<goalId>_1.
-- Set retrievedAt to the current timestamp if available, otherwise an ISO timestamp for this run.
-- Set metadata to [] unless a specific string key/value matters.
+Return compact structured search output only:
+- sources are the retrieved sources for this exact query job.
+- findings are atomic source-backed claims extracted from those sources.
+- Keep findings to the most decision-useful claims; max 4 findings and max 6 sources.
+- Every finding sourceUrls entry must match one of the returned source urls.
 Do not synthesize a final trade view.`;
 }
 
@@ -230,15 +262,11 @@ ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Look for origin posts, author/source reputation, smart engagement, direct refutations, recycled claims, coordinated language, image/video evidence, and whether claims are stated or inferred.
 X social momentum is not proof of factual truth.
-Return an EvidenceLedger JSON object only:
-- searchResults are the retrieved posts/results for this exact query job.
-- evidenceClaims are atomic claims extracted from those posts/results.
-- goalEvidenceLinks classify each evidence claim against the relevant goals.
-- Preserve runId, queryJobId, queryId, goalIds, wave, lane, and provider exactly.
-- Use provider "grok_x_search".
-- Use stable ids like result_${job.id}_1, claim_${job.id}_1, link_${job.id}_<goalId>_1.
-- Set retrievedAt to the current timestamp if available, otherwise an ISO timestamp for this run.
-- Set metadata to [] unless a specific string key/value matters.
+Return compact structured search output only:
+- sources are the retrieved posts/results for this exact query job.
+- findings are atomic source-backed claims extracted from those posts/results.
+- Keep findings to the most decision-useful claims; max 4 findings and max 6 sources.
+- Every finding sourceUrls entry must match one of the returned source urls.
 Do not synthesize a final trade view.`;
 }
 
@@ -261,6 +289,87 @@ function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): stri
 function connectorCallTimeoutMs() {
   const value = Number(process.env.CASSIE_CONNECTOR_CALL_TIMEOUT_MS ?? 180_000);
   return Number.isFinite(value) && value > 0 ? value : 180_000;
+}
+
+function ledgerFromSearchOutput(input: {
+  job: QueryJob;
+  provider: string;
+  output: SearchQueryOutput;
+}): EvidenceLedger {
+  const retrievedAt = new Date().toISOString();
+  const sources = input.output.sources.slice(0, input.job.maxResults);
+  const searchResults = sources.map((source, index) => ({
+    id: `result_${input.job.id}_${index + 1}`,
+    runId: input.job.runId,
+    queryJobId: input.job.id,
+    queryId: input.job.querySpecId,
+    goalIds: input.job.goalIds,
+    wave: input.job.wave,
+    lane: input.job.lane,
+    provider: input.provider,
+    title: source.title,
+    url: source.url,
+    canonicalUrl: source.url,
+    author: null,
+    sourceName: source.sourceName,
+    sourceType: source.sourceType,
+    publishedAt: source.publishedAt,
+    retrievedAt,
+    rawText: null,
+    snippet: source.snippet,
+    rank: index + 1,
+    duplicateOf: null,
+    metadata: [],
+  }));
+  const fallbackResult = searchResults[0] ?? null;
+  const evidenceClaims = input.output.findings.map((finding, index) => {
+    const result = searchResults.find((candidate) => candidate.url && finding.sourceUrls.includes(candidate.url)) ??
+      fallbackResult;
+    return {
+      id: `claim_${input.job.id}_${index + 1}`,
+      resultId: result?.id ?? `result_${input.job.id}_missing`,
+      queryJobId: input.job.id,
+      queryId: input.job.querySpecId,
+      goalIds: input.job.goalIds,
+      wave: input.job.wave,
+      claimText: finding.claim,
+      normalizedClaim: null,
+      entities: [],
+      assets: [],
+      topics: [],
+      eventTime: null,
+      claimTimeRelation: "unclear" as const,
+      sourceType: finding.sourceType,
+      directness: finding.directness,
+      reliability: finding.reliability,
+      extractionConfidence: finding.relevance,
+      quote: finding.quote,
+      quoteStartChar: null,
+      quoteEndChar: null,
+    };
+  }).filter((claim) => searchResults.some((result) => result.id === claim.resultId));
+  const goalEvidenceLinks = evidenceClaims.flatMap((claim, claimIndex) =>
+    input.job.goalIds.map((goalId) => {
+      const finding = input.output.findings[claimIndex];
+      return {
+        id: `link_${input.job.id}_${goalId}_${claimIndex + 1}`,
+        goalId,
+        evidenceClaimId: claim.id,
+        stance: finding?.stance ?? "context" as const,
+        relevance: finding?.relevance ?? claim.extractionConfidence,
+        strength: finding?.relevance ?? claim.extractionConfidence,
+        reason: `Structured finding from ${input.provider} for query ${input.job.querySpecId}.`,
+        satisfiesEvidenceNeeds: finding?.stance === "supports" ? [input.job.expectedEvidence] : [],
+        redFlags: [],
+      };
+    })
+  );
+
+  return {
+    searchResults,
+    evidenceClaims,
+    goalEvidenceLinks,
+  };
 }
 
 async function wrapConnectorStage<T>(stage: string, run: () => Promise<T>): Promise<T> {

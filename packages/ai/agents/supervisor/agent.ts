@@ -21,6 +21,9 @@ import {
   prepareCassieSupervisorStep,
 } from "./policy.ts";
 import { openAiCostControlOptions } from "../../openai-options.ts";
+import { configureAiSdkWarningLogging } from "../../sdk-warnings.ts";
+
+configureAiSdkWarningLogging();
 
 export async function runCassieSupervisorForRun(input: {
   runId: string;
