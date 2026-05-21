@@ -60,6 +60,26 @@ export async function runCassieSupervisorForRun(input: {
       }),
       prepareStep: prepareCassieSupervisorStep,
       onStepFinish: async (step) => {
+        const usage = usageRecord(step.usage);
+        await store.addModelCallUsage({
+          controlRunId: running.runId,
+          researchRunId: null,
+          runStepId: null,
+          purpose: "supervisor_step",
+          provider: providerFromModel(step.model),
+          model: modelName(step.model),
+          promptName: "cassie_supervisor",
+          promptVersion: "2026-05-20",
+          inputTokens: usage.inputTokens,
+          outputTokens: usage.outputTokens,
+          reasoningTokens: usage.reasoningTokens,
+          cachedTokens: usage.cachedTokens,
+          totalTokens: usage.totalTokens,
+          estimatedCostUsd: null,
+          latencyMs: null,
+          status: "succeeded",
+          error: null,
+        });
         await store.audit({
           entityId: running.runId,
           entityType: "run",
@@ -199,4 +219,38 @@ function createAuditTelemetryIntegration(
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function usageRecord(usage: unknown) {
+  const record = objectRecord(usage);
+  const outputDetails = objectRecord(record.outputTokenDetails);
+  const inputDetails = objectRecord(record.inputTokenDetails);
+  return {
+    inputTokens: numberOrNull(record.inputTokens),
+    outputTokens: numberOrNull(record.outputTokens),
+    reasoningTokens: numberOrNull(outputDetails.reasoningTokens),
+    cachedTokens: numberOrNull(inputDetails.cacheReadTokens),
+    totalTokens: numberOrNull(record.totalTokens),
+  };
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function modelName(model: unknown): string {
+  if (typeof model === "string") return model;
+  const record = objectRecord(model);
+  if (typeof record.modelId === "string") return record.modelId;
+  if (typeof record.id === "string") return record.id;
+  return String(model ?? "unknown");
+}
+
+function providerFromModel(model: unknown): string {
+  const name = modelName(model);
+  return name.includes("/") ? name.split("/")[0] ?? "unknown" : "openai";
 }
