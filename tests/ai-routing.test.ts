@@ -4,6 +4,7 @@ import {
   OpenAiStructuredClient,
   routeStructuredModel,
 } from "../src/ai.ts";
+import { OpenAiWebSearchLane } from "../src/connectors/research-lanes.ts";
 
 describe("structured AI model routing", () => {
   it("routes bookkeeping steps to DeepSeek through OpenRouter", () => {
@@ -64,5 +65,11 @@ describe("structured AI model routing", () => {
     if (originalOpenRouterKey) {
       process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
     }
+  });
+
+  it("defaults OpenAI web search to the mini search operator model", () => {
+    const lane = new OpenAiWebSearchLane("test-key");
+
+    expect(lane).toHaveProperty("model", "gpt-5.4-mini");
   });
 });

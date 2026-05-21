@@ -26,7 +26,7 @@ type SearchSource = {
 export class OpenAiWebSearchLane {
   constructor(
     private readonly apiKey = process.env.OPENAI_API_KEY,
-    private readonly model = process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5",
+    private readonly model = process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5.4-mini",
     private readonly trace?: TraceRecorder,
   ) {}
 
