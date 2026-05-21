@@ -15,6 +15,7 @@ import { interpretSignal } from "../packages/ai/tools/signal.ts";
 import { extractThesis } from "../packages/ai/tools/thesis.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
+import { formatRunTimeline } from "./timeline.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -108,7 +109,7 @@ Setup:
 App flow:
   mention                   Create a durable control-plane run for a Cassie mention.
   run-supervisor <runId>    Run the ToolLoopAgent supervisor for a queued control-plane run.
-  control-run <runId>       Show a durable control-plane run and its recorded steps.
+  control-run <runId>       Show a durable control-plane run, recorded steps, and timeline.
   state                     Show the persisted app state summary.
   runs                      List durable control-plane runs.
   tickets                   List trade tickets.
@@ -176,11 +177,22 @@ async function runSupervisor(args: ParsedArgs) {
   const runId = requiredPositional(args, 0, "runId");
   const store = new ControlPlaneStore();
   const result = await runCassieSupervisorForRun({ runId, store });
-  return { runId, result };
+  const timeline = formatRunTimeline(await store.load(), runId);
+  if (!args.flags.json && !args.flags["quiet-timeline"]) {
+    console.error(timeline);
+  }
+  return args.flags.json ? { runId, result, timeline } : { runId, result };
 }
 
 async function controlRun(args: ParsedArgs) {
-  return product().getRun(requiredPositional(args, 0, "runId"));
+  const runId = requiredPositional(args, 0, "runId");
+  const cassie = product();
+  const run = await cassie.getRun(runId);
+  const timeline = formatRunTimeline(await cassie.state(), runId);
+  if (!args.flags.json && !args.flags["quiet-timeline"]) {
+    console.error(timeline);
+  }
+  return args.flags.json ? { ...run, timeline } : run;
 }
 
 async function state(args: ParsedArgs) {

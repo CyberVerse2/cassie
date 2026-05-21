@@ -1,0 +1,310 @@
+import type {
+  CassieStoreSnapshot,
+  ModelCallUsageRecord,
+  ResearchContinuationDecisionRecord,
+  ResearchEvidenceClaimRecord,
+  ResearchGoalEvidenceLinkRecord,
+  ResearchGoalResolutionRecord,
+  ResearchQueryJobRecord,
+  ResearchRunRecord,
+  ResearchSearchResultRecord,
+} from "../packages/db/store.ts";
+import type { RunStep } from "../packages/core/schemas/index.ts";
+
+type RecordValue = Record<string, unknown>;
+
+export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string): string {
+  const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
+  if (!run) {
+    return `Cassie Timeline ${runId}\n  run not found`;
+  }
+
+  const lines = [
+    `Cassie Timeline ${run.runId}`,
+    `  status=${run.status} user=${run.userId}`,
+    `  command=${run.userCommand}`,
+    `  source=${run.sourcePost.authorHandle ?? "unknown"} ${run.sourcePost.url ?? run.sourcePost.postId ?? "local-post"}`,
+    "",
+    "Supervisor steps",
+  ];
+
+  const steps = snapshot.runSteps
+    .filter((step) => step.runId === runId)
+    .sort(compareStarted);
+  if (steps.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const step of steps) {
+      lines.push(...formatRunStep(step));
+    }
+  }
+
+  const researchRuns = snapshot.researchRuns
+    .filter((researchRun) => researchRun.controlRunId === runId)
+    .sort(compareResearchStarted);
+  lines.push("", "Research timeline");
+  if (researchRuns.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const researchRun of researchRuns) {
+      lines.push(...formatResearchRun(snapshot, researchRun));
+    }
+  }
+
+  const usage = snapshot.modelCallUsage
+    .filter((record) => record.controlRunId === runId)
+    .sort(compareCreated);
+  lines.push("", "Model usage");
+  if (usage.length === 0) {
+    lines.push("  none");
+  } else {
+    for (const record of usage) {
+      lines.push(formatModelUsage(record));
+    }
+    const totals = usage.reduce(
+      (sum, record) => ({
+        input: sum.input + (record.inputTokens ?? 0),
+        output: sum.output + (record.outputTokens ?? 0),
+        reasoning: sum.reasoning + (record.reasoningTokens ?? 0),
+        cacheRead: sum.cacheRead + (record.cachedTokens ?? 0),
+        total: sum.total + (record.totalTokens ?? 0),
+      }),
+      { input: 0, output: 0, reasoning: 0, cacheRead: 0, total: 0 },
+    );
+    lines.push(`  tokens total=${totals.total} input=${totals.input} output=${totals.output} reasoning=${totals.reasoning} cacheRead=${totals.cacheRead}`);
+  }
+
+  return lines.join("\n");
+}
+
+function formatRunStep(step: RunStep): string[] {
+  const lines = [
+    `  tool=${step.stepType} status=${step.status}${step.model ? ` model=${step.model}` : ""}${step.promptName ? ` prompt=${step.promptName}@${step.promptVersion ?? "unknown"}` : ""} duration=${durationMs(step.startedAt, step.completedAt)}`,
+    `    visible thinking: ${visibleThinkingForStep(step)}`,
+  ];
+  const summary = summarizeStepOutput(step.output);
+  if (summary) {
+    lines.push(`    output: ${summary}`);
+  }
+  if (step.error) {
+    lines.push(`    error: ${step.error}`);
+  }
+  return lines;
+}
+
+function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchRunRecord): string[] {
+  const plan = objectOrNull(researchRun.queryPlan);
+  const lines = [
+    `  research ${researchRun.researchRunId} angle=${researchRun.angle} status=${researchRun.status} mode=${stringField(plan, "mode") ?? "unknown"} duration=${durationMs(researchRun.startedAt, researchRun.completedAt)}`,
+    `    visible thinking: Plan goals, execute auditable query jobs, classify evidence, resolve goals, and decide whether to stop or continue.`,
+  ];
+  const normalizedClaim = stringField(plan, "normalizedClaim");
+  if (normalizedClaim) {
+    lines.push(`    claim: ${normalizedClaim}`);
+  }
+
+  const goals = arrayField(plan, "goals");
+  if (goals.length > 0) {
+    lines.push("    goals");
+    for (const goal of goals.slice(0, 12)) {
+      const record = objectOrNull(goal);
+      lines.push(`      - ${stringField(record, "id") ?? "unknown"} ${stringField(record, "kind") ?? "unknown"}: ${stringField(record, "question") ?? ""}`);
+    }
+  }
+
+  const jobs = snapshot.researchQueryJobs
+    .filter((job) => job.researchRunId === researchRun.researchRunId)
+    .sort(compareQueryJobs);
+  const waves = uniqueNumbers(jobs.map((job) => job.wave));
+  if (waves.length === 0) {
+    lines.push("    waves: none");
+    return lines;
+  }
+
+  for (const wave of waves) {
+    lines.push(`    wave ${wave}`);
+    const waveJobs = jobs.filter((job) => job.wave === wave);
+    for (const job of waveJobs) {
+      lines.push(...formatQueryJob(snapshot, researchRun.researchRunId, job));
+    }
+    for (const resolution of snapshot.researchGoalResolutions
+      .filter((item) => item.researchRunId === researchRun.researchRunId && item.wave === wave)
+      .sort(compareGoalResolution)) {
+      lines.push(formatGoalResolution(resolution));
+    }
+    for (const decision of snapshot.researchContinuationDecisions
+      .filter((item) => item.researchRunId === researchRun.researchRunId && item.wave === wave)
+      .sort(compareCreated)) {
+      lines.push(formatContinuationDecision(decision));
+    }
+  }
+
+  if (researchRun.error) {
+    lines.push(`    error: ${researchRun.error}`);
+  }
+  return lines;
+}
+
+function formatQueryJob(
+  snapshot: CassieStoreSnapshot,
+  researchRunId: string,
+  job: ResearchQueryJobRecord,
+): string[] {
+  const lines = [
+    `      query ${job.querySpecId} ${job.lane}/${job.provider} status=${job.status} atomic=${job.mustExecuteAtomically} priority=${job.priority} duration=${durationMs(job.startedAt, job.completedAt)}`,
+    `        tool used: ${job.lane === "web" ? "OpenAI web query job" : "Grok X query job"}`,
+    `        visible thinking: ${job.rationale}`,
+    `        query: ${job.query}`,
+  ];
+  if (job.error) {
+    lines.push(`        error: ${job.error}`);
+  }
+
+  const results = snapshot.researchSearchResults
+    .filter((result) => result.researchRunId === researchRunId && result.queryJobId === job.id)
+    .sort(compareSearchResults);
+  for (const result of results.slice(0, 6)) {
+    lines.push(formatSearchResult(result));
+  }
+
+  const claims = snapshot.researchEvidenceClaims
+    .filter((claim) => claim.researchRunId === researchRunId && claim.queryJobId === job.id)
+    .sort(compareEvidenceClaims);
+  for (const claim of claims.slice(0, 8)) {
+    lines.push(formatEvidenceClaim(claim));
+    for (const link of snapshot.researchGoalEvidenceLinks
+      .filter((item) => item.researchRunId === researchRunId && item.evidenceClaimId === claim.id)
+      .sort(compareGoalLinks)) {
+      lines.push(formatGoalEvidenceLink(link));
+    }
+  }
+
+  return lines;
+}
+
+function formatSearchResult(result: ResearchSearchResultRecord): string {
+  const title = result.title ?? result.url ?? result.id;
+  const url = result.url ? ` ${result.url}` : "";
+  return `        result ${result.id} [${result.sourceType}] ${title}${url}`;
+}
+
+function formatEvidenceClaim(claim: ResearchEvidenceClaimRecord): string {
+  return `        claim ${claim.id} [${claim.reliability}, ${claim.directness}] ${claim.claimText}`;
+}
+
+function formatGoalEvidenceLink(link: ResearchGoalEvidenceLinkRecord): string {
+  return `          link ${link.goalId} <- ${link.evidenceClaimId} ${link.stance} strength=${link.strength}: ${link.reason}`;
+}
+
+function formatGoalResolution(resolution: ResearchGoalResolutionRecord): string {
+  return `      goal ${resolution.goalId} ${resolution.status} c=${resolution.confidence}: ${resolution.summary}`;
+}
+
+function formatContinuationDecision(decision: ResearchContinuationDecisionRecord): string {
+  const blocked = decision.blockedActions.length > 0 ? ` blocked=${decision.blockedActions.join(",")}` : "";
+  return `      controller ${decision.action}: ${decision.reason}${blocked}`;
+}
+
+function formatModelUsage(record: ModelCallUsageRecord): string {
+  return `  ${record.purpose} ${record.model} status=${record.status} tokens=${record.totalTokens ?? "unknown"} input=${record.inputTokens ?? "unknown"} output=${record.outputTokens ?? "unknown"} reasoning=${record.reasoningTokens ?? "unknown"} cacheRead=${record.cachedTokens ?? "unknown"}`;
+}
+
+function visibleThinkingForStep(step: RunStep): string {
+  switch (step.stepType) {
+    case "intake":
+      return "Persist the incoming mention as a durable control-plane run before doing agent work.";
+    case "intent":
+      return "Classify command and source into a bounded Cassie intent.";
+    case "signal":
+      return "Classify the post signal, tradability, lead quality, and research angles.";
+    case "thesis":
+      return "Extract the explicit or implied thesis that research should test.";
+    case "inverse_thesis":
+      return "Build the strongest opposing thesis for countertrade or fade analysis.";
+    case "research":
+      return "Run goal-first research with query jobs, evidence classification, and goal resolution.";
+    case "critique":
+      return "Use the research report to identify the strongest objections and weaknesses.";
+    case "market_candidates":
+      return "Fetch real market candidates from configured venues.";
+    case "market_selection":
+      return "Select the best real market expression without inventing instruments.";
+    case "risk":
+      return "Evaluate deterministic risk limits against settings and account state.";
+    case "ticket":
+      return "Create a ticket only after research, market selection, and risk checks allow it.";
+    case "final":
+      return "Persist the user-facing final result and run status.";
+  }
+}
+
+function summarizeStepOutput(output: unknown): string | null {
+  const record = objectOrNull(output);
+  if (!record) return null;
+  const fields = ["intent", "signalType", "claim", "stance", "decision", "approvalState", "responseType", "publicSummary"];
+  const parts = fields
+    .map((field) => {
+      const value = record[field];
+      return typeof value === "string" ? `${field}=${value}` : null;
+    })
+    .filter((part): part is string => Boolean(part));
+  return parts.length > 0 ? parts.join(" ") : null;
+}
+
+function durationMs(startedAt: string | null, completedAt: string | null): string {
+  if (!startedAt || !completedAt) return "unknown";
+  const start = Date.parse(startedAt);
+  const end = Date.parse(completedAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return "unknown";
+  return `${Math.max(0, end - start)}ms`;
+}
+
+function compareStarted(left: { startedAt: string }, right: { startedAt: string }): number {
+  return left.startedAt.localeCompare(right.startedAt);
+}
+
+function compareResearchStarted(left: ResearchRunRecord, right: ResearchRunRecord): number {
+  return left.startedAt.localeCompare(right.startedAt);
+}
+
+function compareCreated(left: { createdAt: string }, right: { createdAt: string }): number {
+  return left.createdAt.localeCompare(right.createdAt);
+}
+
+function compareQueryJobs(left: ResearchQueryJobRecord, right: ResearchQueryJobRecord): number {
+  return left.wave - right.wave || left.startedAt?.localeCompare(right.startedAt ?? "") || left.querySpecId.localeCompare(right.querySpecId);
+}
+
+function compareSearchResults(left: ResearchSearchResultRecord, right: ResearchSearchResultRecord): number {
+  return (left.rank ?? 9999) - (right.rank ?? 9999) || left.id.localeCompare(right.id);
+}
+
+function compareEvidenceClaims(left: ResearchEvidenceClaimRecord, right: ResearchEvidenceClaimRecord): number {
+  return left.id.localeCompare(right.id);
+}
+
+function compareGoalLinks(left: ResearchGoalEvidenceLinkRecord, right: ResearchGoalEvidenceLinkRecord): number {
+  return left.id.localeCompare(right.id);
+}
+
+function compareGoalResolution(left: ResearchGoalResolutionRecord, right: ResearchGoalResolutionRecord): number {
+  return left.goalId.localeCompare(right.goalId);
+}
+
+function uniqueNumbers(values: number[]): number[] {
+  return Array.from(new Set(values)).sort((left, right) => left - right);
+}
+
+function objectOrNull(value: unknown): RecordValue | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as RecordValue : null;
+}
+
+function stringField(record: RecordValue | null, field: string): string | null {
+  const value = record?.[field];
+  return typeof value === "string" ? value : null;
+}
+
+function arrayField(record: RecordValue | null, field: string): unknown[] {
+  const value = record?.[field];
+  return Array.isArray(value) ? value : [];
+}
