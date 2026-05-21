@@ -1,13 +1,24 @@
 import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "./trace.ts";
+
+export type ModelTier = "cheap" | "expensive";
+export type ModelProvider = "openai" | "openrouter";
+
+export type ModelRoute = {
+  tier: ModelTier;
+  provider: ModelProvider;
+  model: string;
+};
 
 export interface StructuredAiClient {
   generateObject<T>(input: {
     schema: z.ZodType<T>;
     prompt: string;
     name: string;
+    tier?: ModelTier;
   }): Promise<T>;
 }
 
@@ -18,39 +29,83 @@ export class MissingAiDependencyError extends Error {
   }
 }
 
+const cheapStructuredSteps = new Set([
+  "cassie_intent",
+  "cassie_signal",
+  "cassie_evidence_ledger",
+]);
+
+export function routeStructuredModel(input: {
+  name: string;
+  tier?: ModelTier;
+  cheapModel?: string;
+  expensiveModel?: string;
+}): ModelRoute {
+  const cheapModel = input.cheapModel ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ??
+    "deepseek/deepseek-chat";
+  const expensiveModel = input.expensiveModel ?? process.env.CASSIE_EXPENSIVE_MODEL ?? process.env.CASSIE_MODEL ??
+    "gpt-5.5";
+  const tier = input.tier ?? (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
+
+  return tier === "cheap"
+    ? { tier, provider: "openrouter", model: cheapModel }
+    : { tier, provider: "openai", model: expensiveModel };
+}
+
 export class OpenAiStructuredClient implements StructuredAiClient {
-  private readonly modelName: string;
+  private readonly expensiveModelName: string;
+  private readonly cheapModelName: string;
 
   constructor(
-    modelName = process.env.CASSIE_MODEL ?? "gpt-5.5",
+    modelName = process.env.CASSIE_EXPENSIVE_MODEL ?? process.env.CASSIE_MODEL ?? "gpt-5.5",
     private readonly trace?: TraceRecorder,
+    cheapModelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? "deepseek/deepseek-chat",
   ) {
-    this.modelName = modelName;
+    this.expensiveModelName = modelName;
+    this.cheapModelName = cheapModelName;
   }
 
   async generateObject<T>(input: {
     schema: z.ZodType<T>;
     prompt: string;
     name: string;
+    tier?: ModelTier;
   }): Promise<T> {
-    if (!process.env.OPENAI_API_KEY) {
-      throw new MissingAiDependencyError();
+    const route = routeStructuredModel({
+      name: input.name,
+      tier: input.tier,
+      cheapModel: this.cheapModelName,
+      expensiveModel: this.expensiveModelName,
+    });
+
+    if (route.provider === "openai" && !process.env.OPENAI_API_KEY) {
+      throw new MissingAiDependencyError("AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's expensive judgment tools.");
+    }
+    if (route.provider === "openrouter" && !process.env.OPENROUTER_API_KEY) {
+      throw new MissingAiDependencyError("AI dependency unavailable. Set OPENROUTER_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
     }
 
     const finishTrace = this.trace?.start({
       name: input.name,
       kind: "ai",
-      model: this.modelName,
-      thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
+      model: route.model,
+      thinkingTrace: route.tier === "cheap"
+        ? "Requesting cheap structured extraction/classification and validating it against the expected schema."
+        : "Requesting an expensive structured judgment and validating it against the expected schema.",
       input: {
         schemaName: input.name,
         promptChars: input.prompt.length,
+        modelTier: route.tier,
+        provider: route.provider,
       },
     });
 
     try {
+      const openrouter = route.provider === "openrouter"
+        ? createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY })
+        : null;
       const result = await generateText({
-        model: openai(this.modelName),
+        model: route.provider === "openrouter" ? openrouter!(route.model) : openai(route.model),
         output: Output.object({
           schema: input.schema,
           name: input.name,

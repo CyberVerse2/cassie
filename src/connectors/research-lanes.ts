@@ -13,6 +13,7 @@ import {
 import { MissingConnectorConfigError } from "./errors.ts";
 import { Output, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../trace.ts";
 import { evidenceLedgerPrompt } from "../prompts.ts";
@@ -105,7 +106,6 @@ export class OpenAiWebSearchLane {
         prompt,
       });
       const ledger = await classifyEvidenceLedger({
-        providerModel: this.model,
         provider: "openai_web_search",
         job,
         queryPlan,
@@ -226,7 +226,6 @@ export class GrokXSearchLane {
         prompt,
       });
       const ledger = await classifyEvidenceLedger({
-        providerModel: this.model,
         provider: "grok_x_search",
         job,
         queryPlan,
@@ -450,7 +449,6 @@ function evidenceFromSources(
 }
 
 async function classifyEvidenceLedger(input: {
-  providerModel: string;
   provider: string;
   job: QueryJob;
   queryPlan: ResearchQueryPlan;
@@ -458,8 +456,14 @@ async function classifyEvidenceLedger(input: {
   sources?: SearchSource[];
   toolResults?: unknown[];
 }): Promise<EvidenceLedger> {
+  if (!process.env.OPENROUTER_API_KEY) {
+    throw new MissingConnectorConfigError("Evidence ledger classifier", "OPENROUTER_API_KEY");
+  }
+
+  const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+  const model = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? "deepseek/deepseek-chat";
   const result = await generateText({
-    model: openai(input.providerModel),
+    model: openrouter(model),
     output: Output.object({
       schema: EvidenceLedgerSchema,
       name: "cassie_evidence_ledger",
