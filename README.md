@@ -4,6 +4,55 @@ Cassie is an X-native trading research and ticketing agent. A mention creates a 
 
 Cassie can reason with AI, but she does not directly place orders.
 
+## Agent Architecture
+
+```mermaid
+flowchart TD
+  User["User on X, API, or CLI"] --> Intake["Mention intake<br/>CassieProduct.createMentionRun"]
+  Intake --> DBRun["Postgres<br/>control_runs + intake run_step"]
+  DBRun --> Queue["Graphile Worker<br/>run_cassie_supervisor job"]
+
+  Queue --> Supervisor["Cassie Supervisor<br/>ToolLoopAgent control loop"]
+
+  Supervisor --> ToolPolicy["Bounded supervisor tools<br/>research, tickets, approvals, account state"]
+  ToolPolicy --> Steps["Run-step visibility<br/>inputs, outputs, model, token usage"]
+  Steps --> DBRun
+
+  Supervisor --> Models["Dynamic model routing"]
+  Models --> Mini["GPT-5.4 mini<br/>web-search operator"]
+  Models --> DeepSeek["DeepSeek v4 Flash<br/>cheap extraction, tagging, bookkeeping"]
+  Models --> GPT55["GPT-5.5<br/>planning, judgment, goal resolution, synthesis, trade decisions"]
+  Models --> Grok["Grok 4.3<br/>X post, image, video, and social context"]
+
+  ToolPolicy --> Research["Research workflow"]
+  Research --> Planner["Goal-first planner<br/>claims, entities, goals, query jobs"]
+  Planner --> WebX["Mandatory web + X query jobs"]
+  WebX --> Ledger["Evidence ledger<br/>SearchResult, EvidenceClaim, GoalEvidenceLink"]
+  Ledger --> Resolve["Goal resolution<br/>supported, contradicted, partial, unresolved"]
+  Resolve --> Continue["Continuation controller<br/>stop, adapt, continue, escalate"]
+  Continue -->|adaptive gap remains| Planner
+  Continue -->|ready| Report["Research report<br/>synthesis contract + blocked conclusions"]
+
+  Report --> TradeGate["Tradeability + risk gates"]
+  TradeGate -->|blocked| NoTrade["No trade, watchlist, or critique output"]
+  TradeGate -->|allowed| Ticket["Trade ticket"]
+
+  Ticket --> Approval["User approval or auto-approval policy"]
+  Approval --> ExecQueue["Graphile Worker<br/>execute_trade_ticket job"]
+  ExecQueue --> Preflight["Execution preflight<br/>fresh settings + deterministic risk"]
+  Preflight --> Venues["Venue adapters<br/>Hyperliquid, Polymarket, webhook"]
+  Venues --> Audit["Audit events + execution events"]
+  Audit --> DBRun
+```
+
+Runtime shape:
+
+- Intake is durable first: every mention becomes a `control_run` before the supervisor starts.
+- The supervisor is the control plane: it calls bounded tools and writes visible `run_steps`.
+- Research is query-job driven: web and X searches produce an evidence ledger before synthesis.
+- Cheap models handle extraction and bookkeeping; GPT-5.5 handles analyst judgment and trade decisions.
+- Ticket creation is downstream of research, tradeability checks, approval policy, and deterministic risk.
+
 ## Run
 
 ```bash
