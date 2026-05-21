@@ -16,23 +16,24 @@ type RecordValue = Record<string, unknown>;
 export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string): string {
   const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
   if (!run) {
-    return `Cassie Timeline ${runId}\n  run not found`;
+    return `CASSIE RUN TIMELINE\n[missing] ${runId}`;
   }
 
   const lines = [
-    `Cassie Timeline ${run.runId}`,
-    `  status=${run.status} user=${run.userId}`,
-    `  command=${run.userCommand}`,
-    `  source=${run.sourcePost.authorHandle ?? "unknown"} ${run.sourcePost.url ?? run.sourcePost.postId ?? "local-post"}`,
+    "CASSIE RUN TIMELINE",
+    `${statusBadge(run.status)} ${run.runId} ${run.status}`,
+    `|-- user ${run.userId}`,
+    `|-- command ${run.userCommand}`,
+    `|-- source ${run.sourcePost.authorHandle ?? "unknown"} ${run.sourcePost.url ?? run.sourcePost.postId ?? "local-post"}`,
     "",
-    "Supervisor steps",
+    "TOOLS",
   ];
 
   const steps = snapshot.runSteps
     .filter((step) => step.runId === runId)
     .sort(compareStarted);
   if (steps.length === 0) {
-    lines.push("  none");
+    lines.push("|-- none");
   } else {
     for (const step of steps) {
       lines.push(...formatRunStep(step));
@@ -42,9 +43,9 @@ export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string):
   const researchRuns = snapshot.researchRuns
     .filter((researchRun) => researchRun.controlRunId === runId)
     .sort(compareResearchStarted);
-  lines.push("", "Research timeline");
+  lines.push("", "RESEARCH");
   if (researchRuns.length === 0) {
-    lines.push("  none");
+    lines.push("|-- none");
   } else {
     for (const researchRun of researchRuns) {
       lines.push(...formatResearchRun(snapshot, researchRun));
@@ -54,9 +55,9 @@ export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string):
   const usage = snapshot.modelCallUsage
     .filter((record) => record.controlRunId === runId)
     .sort(compareCreated);
-  lines.push("", "Model usage");
+  lines.push("", "USAGE");
   if (usage.length === 0) {
-    lines.push("  none");
+    lines.push("|-- none");
   } else {
     for (const record of usage) {
       lines.push(formatModelUsage(record));
@@ -71,44 +72,50 @@ export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string):
       }),
       { input: 0, output: 0, reasoning: 0, cacheRead: 0, total: 0 },
     );
-    lines.push(`  tokens total=${totals.total} input=${totals.input} output=${totals.output} reasoning=${totals.reasoning} cacheRead=${totals.cacheRead}`);
+    lines.push(`|-- [tokens] total=${totals.total} input=${totals.input} output=${totals.output} reasoning=${totals.reasoning} cache=${totals.cacheRead}`);
   }
 
   return lines.join("\n");
 }
 
 function formatRunStep(step: RunStep): string[] {
+  const duration = durationText(step.startedAt, step.completedAt);
   const lines = [
-    `  tool=${step.stepType} status=${step.status}${step.model ? ` model=${step.model}` : ""}${step.promptName ? ` prompt=${step.promptName}@${step.promptVersion ?? "unknown"}` : ""} duration=${durationMs(step.startedAt, step.completedAt)}`,
-    `    visible thinking: ${visibleThinkingForStep(step)}`,
+    `|-- ${toolBadge(step)} ${step.stepType} ${statusWord(step.status)} ${duration}`,
+    `|   |-- model ${step.model ?? "none"}`,
   ];
+  if (step.promptName) {
+    lines.push(`|   |-- prompt ${step.promptName}@${step.promptVersion ?? "unknown"}`);
+  }
+  lines.push(`|   |-- thinking ${visibleThinkingForStep(step)}`);
   const summary = summarizeStepOutput(step.output);
   if (summary) {
-    lines.push(`    output: ${summary}`);
+    lines.push(`|   |-- output ${summary}`);
   }
   if (step.error) {
-    lines.push(`    error: ${step.error}`);
+    lines.push(`|   |-- error ${step.error}`);
   }
   return lines;
 }
 
 function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchRunRecord): string[] {
   const plan = objectOrNull(researchRun.queryPlan);
+  const mode = stringField(plan, "mode") ?? "unknown";
   const lines = [
-    `  research ${researchRun.researchRunId} angle=${researchRun.angle} status=${researchRun.status} mode=${stringField(plan, "mode") ?? "unknown"} duration=${durationMs(researchRun.startedAt, researchRun.completedAt)}`,
-    `    visible thinking: Plan goals, execute auditable query jobs, classify evidence, resolve goals, and decide whether to stop or continue.`,
+    `|-- [research] ${researchRun.researchRunId} ${statusWord(researchRun.status)} ${researchRun.angle} ${mode} ${durationText(researchRun.startedAt, researchRun.completedAt)}`,
+    `|   |-- thinking Plan goals, execute auditable query jobs, classify evidence, resolve goals, and decide whether to stop or continue.`,
   ];
   const normalizedClaim = stringField(plan, "normalizedClaim");
   if (normalizedClaim) {
-    lines.push(`    claim: ${normalizedClaim}`);
+    lines.push(`|   |-- claim ${normalizedClaim}`);
   }
 
   const goals = arrayField(plan, "goals");
   if (goals.length > 0) {
-    lines.push("    goals");
+    lines.push("|   |-- goals");
     for (const goal of goals.slice(0, 12)) {
       const record = objectOrNull(goal);
-      lines.push(`      - ${stringField(record, "id") ?? "unknown"} ${stringField(record, "kind") ?? "unknown"}: ${stringField(record, "question") ?? ""}`);
+      lines.push(`|   |   |-- ${stringField(record, "id") ?? "unknown"} ${stringField(record, "kind") ?? "unknown"} ${stringField(record, "question") ?? ""}`);
     }
   }
 
@@ -117,12 +124,12 @@ function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchR
     .sort(compareQueryJobs);
   const waves = uniqueNumbers(jobs.map((job) => job.wave));
   if (waves.length === 0) {
-    lines.push("    waves: none");
+    lines.push("|   |-- waves none");
     return lines;
   }
 
   for (const wave of waves) {
-    lines.push(`    wave ${wave}`);
+    lines.push(`|   |-- [wave ${wave}]`);
     const waveJobs = jobs.filter((job) => job.wave === wave);
     for (const job of waveJobs) {
       lines.push(...formatQueryJob(snapshot, researchRun.researchRunId, job));
@@ -140,7 +147,7 @@ function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchR
   }
 
   if (researchRun.error) {
-    lines.push(`    error: ${researchRun.error}`);
+    lines.push(`|   |-- error ${researchRun.error}`);
   }
   return lines;
 }
@@ -150,14 +157,15 @@ function formatQueryJob(
   researchRunId: string,
   job: ResearchQueryJobRecord,
 ): string[] {
+  const duration = durationText(job.startedAt, job.completedAt);
   const lines = [
-    `      query ${job.querySpecId} ${job.lane}/${job.provider} status=${job.status} atomic=${job.mustExecuteAtomically} priority=${job.priority} duration=${durationMs(job.startedAt, job.completedAt)}`,
-    `        tool used: ${job.lane === "web" ? "OpenAI web query job" : "Grok X query job"}`,
-    `        visible thinking: ${job.rationale}`,
-    `        query: ${job.query}`,
+    `|   |   |-- [search] ${job.querySpecId} ${job.lane}/${job.provider} ${statusWord(job.status)} ${duration} ${job.mustExecuteAtomically ? "atomic" : "bundled"} p=${job.priority}`,
+    `|   |   |   |-- tool ${job.lane === "web" ? "OpenAI web query job" : "Grok X query job"}`,
+    `|   |   |   |-- thinking ${job.rationale}`,
+    `|   |   |   |-- query ${job.query}`,
   ];
   if (job.error) {
-    lines.push(`        error: ${job.error}`);
+    lines.push(`|   |   |   |-- error ${job.error}`);
   }
 
   const results = snapshot.researchSearchResults
@@ -185,28 +193,28 @@ function formatQueryJob(
 function formatSearchResult(result: ResearchSearchResultRecord): string {
   const title = result.title ?? result.url ?? result.id;
   const url = result.url ? ` ${result.url}` : "";
-  return `        result ${result.id} [${result.sourceType}] ${title}${url}`;
+  return `|   |   |   |-- result ${result.id} ${result.sourceType} ${title}${url}`;
 }
 
 function formatEvidenceClaim(claim: ResearchEvidenceClaimRecord): string {
-  return `        claim ${claim.id} [${claim.reliability}, ${claim.directness}] ${claim.claimText}`;
+  return `|   |   |   |-- claim ${claim.id} ${claim.reliability}/${claim.directness} ${claim.claimText}`;
 }
 
 function formatGoalEvidenceLink(link: ResearchGoalEvidenceLinkRecord): string {
-  return `          link ${link.goalId} <- ${link.evidenceClaimId} ${link.stance} strength=${link.strength}: ${link.reason}`;
+  return `|   |   |   |   |-- link ${link.goalId} ${link.stance} strength=${link.strength}: ${link.reason}`;
 }
 
 function formatGoalResolution(resolution: ResearchGoalResolutionRecord): string {
-  return `      goal ${resolution.goalId} ${resolution.status} c=${resolution.confidence}: ${resolution.summary}`;
+  return `|   |   |-- [goal] ${resolution.goalId} ${resolution.status} c=${resolution.confidence}: ${resolution.summary}`;
 }
 
 function formatContinuationDecision(decision: ResearchContinuationDecisionRecord): string {
   const blocked = decision.blockedActions.length > 0 ? ` blocked=${decision.blockedActions.join(",")}` : "";
-  return `      controller ${decision.action}: ${decision.reason}${blocked}`;
+  return `|   |   |-- [controller] ${decision.action}: ${decision.reason}${blocked}`;
 }
 
 function formatModelUsage(record: ModelCallUsageRecord): string {
-  return `  ${record.purpose} ${record.model} status=${record.status} tokens=${record.totalTokens ?? "unknown"} input=${record.inputTokens ?? "unknown"} output=${record.outputTokens ?? "unknown"} reasoning=${record.reasoningTokens ?? "unknown"} cacheRead=${record.cachedTokens ?? "unknown"}`;
+  return `|-- [model] ${record.purpose} ${record.model} ${statusWord(record.status)} tokens=${record.totalTokens ?? "unknown"} input=${record.inputTokens ?? "unknown"} output=${record.outputTokens ?? "unknown"} reasoning=${record.reasoningTokens ?? "unknown"} cache=${record.cachedTokens ?? "unknown"}`;
 }
 
 function visibleThinkingForStep(step: RunStep): string {
@@ -257,6 +265,40 @@ function durationMs(startedAt: string | null, completedAt: string | null): strin
   const end = Date.parse(completedAt);
   if (!Number.isFinite(start) || !Number.isFinite(end)) return "unknown";
   return `${Math.max(0, end - start)}ms`;
+}
+
+function durationText(startedAt: string | null, completedAt: string | null): string {
+  const raw = durationMs(startedAt, completedAt);
+  if (raw === "unknown") return raw;
+  const ms = Number(raw.replace("ms", ""));
+  if (!Number.isFinite(ms)) return raw;
+  if (ms < 1_000) return `${ms}ms`;
+  return `${(ms / 1_000).toFixed(1)}s`;
+}
+
+function statusWord(status: string): string {
+  if (status === "succeeded") return "ok";
+  if (status === "running") return "running";
+  if (status === "failed") return "failed";
+  if (status === "queued" || status === "pending") return "pending";
+  if (status === "skipped") return "skipped";
+  return status;
+}
+
+function statusBadge(status: string): string {
+  const word = statusWord(status);
+  if (word === "ok") return "[ok]";
+  if (word === "running") return "[run]";
+  if (word === "failed") return "[fail]";
+  if (word === "pending") return "[wait]";
+  return `[${word}]`;
+}
+
+function toolBadge(step: RunStep): string {
+  if (step.model) return "[ai]";
+  if (step.stepType === "risk") return "[risk]";
+  if (step.stepType === "ticket") return "[ticket]";
+  return "[tool]";
 }
 
 function compareStarted(left: { startedAt: string }, right: { startedAt: string }): number {
