@@ -8,6 +8,10 @@ import {
   GrokXSearchLane,
   OpenAiWebSearchLane,
 } from "../packages/research/lanes.ts";
+import {
+  OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
+  OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
+} from "../packages/ai/openrouter-options.ts";
 
 describe("structured AI model routing", () => {
   it("routes bookkeeping steps to DeepSeek through OpenRouter", () => {
@@ -74,6 +78,11 @@ describe("structured AI model routing", () => {
     const lane = new OpenAiWebSearchLane("test-key");
 
     expect(lane).toHaveProperty("model", "google/gemini-3.1-flash-lite");
+  });
+
+  it("keeps OpenRouter generation ceilings below huge provider defaults", () => {
+    expect(OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(2_048);
+    expect(OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(8_192);
   });
 
   it("defaults Grok X search to 4.3", () => {

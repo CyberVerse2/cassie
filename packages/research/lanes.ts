@@ -16,7 +16,13 @@ import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
-import { openRouterCacheablePrompt, openRouterProviderOptions, openRouterProviderPreferences } from "../ai/openrouter-options.ts";
+import {
+  OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
+  OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
+  openRouterCacheablePrompt,
+  openRouterProviderOptions,
+  openRouterProviderPreferences,
+} from "../ai/openrouter-options.ts";
 
 type SearchSource = {
   title?: string;
@@ -77,6 +83,7 @@ export class OpenAiWebSearchLane {
           model: openrouter(this.model),
           messages: openRouterCacheablePrompt(prompt),
           providerOptions: openRouterProviderOptions(),
+          maxOutputTokens: OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
       );
@@ -298,6 +305,7 @@ async function classifyEvidenceLedger(input: {
     }),
     messages: openRouterCacheablePrompt(prompt),
     providerOptions: openRouterProviderOptions(),
+    maxOutputTokens: OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
     abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
   });
 

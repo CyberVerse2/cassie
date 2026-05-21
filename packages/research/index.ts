@@ -198,9 +198,24 @@ async function executeResearchWaves(input: {
       decision: continuationDecision,
     });
     const adaptiveDecisions: ResearchContinuationDecision[] = [];
+    const attemptedAdaptiveGoalSets = new Set<string>();
     let adaptiveRound = 0;
 
     while (continuationDecision.action === "continue_with_adaptive_queries") {
+      const adaptiveGoalSet = continuationDecision.unresolvedBlockingGoalIds.slice().sort().join("|");
+      if (adaptiveGoalSet && attemptedAdaptiveGoalSets.has(adaptiveGoalSet)) {
+        continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
+          continuationDecision,
+          "Adaptive follow-up already ran for the same unresolved required goal set without resolving it.",
+        );
+        await input.persistence?.store.addResearchContinuationDecision({
+          researchRunId: input.researchRunId,
+          wave,
+          decision: continuationDecision,
+        });
+        break;
+      }
+      attemptedAdaptiveGoalSets.add(adaptiveGoalSet);
       adaptiveRound += 1;
       adaptiveDecisions.push(continuationDecision);
       const adaptiveRequest = await generateAdaptiveQueryRequest({
@@ -221,13 +236,15 @@ async function executeResearchWaves(input: {
       });
       await input.persistence?.store.addResearchQueryJobs(input.researchRunId, adaptiveJobs);
       if (adaptiveJobs.length === 0) {
-        continuationDecision = {
-          ...continuationDecision,
-          action: "continue_planned",
-          reason: "No useful adaptive query was generated for the unresolved evidence gap.",
-          maxAdditionalQueries: 0,
-          adaptiveQueryInstructions: [],
-        };
+        continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
+          continuationDecision,
+          "No useful adaptive query was generated for the unresolved evidence gap.",
+        );
+        await input.persistence?.store.addResearchContinuationDecision({
+          researchRunId: input.researchRunId,
+          wave,
+          decision: continuationDecision,
+        });
         break;
       }
 
@@ -253,18 +270,30 @@ async function executeResearchWaves(input: {
       ]);
       openAiResult = mergeSettledLaneResults("openai_search", openAiResult, adaptiveOpenAiResult);
       xResult = mergeSettledLaneResults("x_search", xResult, adaptiveXResult);
-      evidenceLedger = mergeLedgers([
-        evidenceLedger,
+      const adaptiveLedger = mergeLedgers([
         ledgerFromSettledResult(adaptiveOpenAiResult),
         ledgerFromSettledResult(adaptiveXResult),
       ]);
+      evidenceLedger = mergeLedgers([
+        evidenceLedger,
+        adaptiveLedger,
+      ]);
       await input.persistence?.store.addResearchEvidenceLedger(
         input.researchRunId,
-        mergeLedgers([
-          ledgerFromSettledResult(adaptiveOpenAiResult),
-          ledgerFromSettledResult(adaptiveXResult),
-        ]),
+        adaptiveLedger,
       );
+      if (adaptiveLedger.searchResults.length === 0 && adaptiveLedger.evidenceClaims.length === 0) {
+        continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
+          continuationDecision,
+          "Adaptive follow-up returned no new evidence, so the required research goal remains unresolved.",
+        );
+        await input.persistence?.store.addResearchContinuationDecision({
+          researchRunId: input.researchRunId,
+          wave,
+          decision: continuationDecision,
+        });
+        break;
+      }
       goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
         ai: input.ai,
         queryPlan: input.queryPlan,
@@ -539,6 +568,26 @@ function decideContinuation(input: {
     maxAdditionalQueries: 0,
     adaptiveQueryInstructions: [],
     blockedActions: unresolvedBlockingGoalIds.length > 0 ? ["ticket_creation"] : [],
+  };
+}
+
+function stopWatchlistForUnresolvedAdaptiveGoals(
+  decision: ResearchContinuationDecision,
+  reason: string,
+): ResearchContinuationDecision {
+  return {
+    ...decision,
+    action: "stop_watchlist",
+    reason,
+    allowedNextGoalIds: [],
+    maxAdditionalQueries: 0,
+    adaptiveQueryInstructions: [],
+    blockedActions: Array.from(new Set([
+      ...decision.blockedActions,
+      "trade_expression",
+      "market_router",
+      "ticket_creation",
+    ])),
   };
 }
 

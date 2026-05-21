@@ -1,5 +1,8 @@
 import type { ModelMessage, SystemModelMessage } from "ai";
 
+export const OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
+export const OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
+
 export function openRouterProviderPreferences() {
   return {
     allow_fallbacks: true,
