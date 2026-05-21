@@ -56,7 +56,7 @@ export class OpenAiWebSearchLane {
           },
         ],
         reasoning: {
-          max_tokens: 512,
+          effort: "minimal",
         },
       },
     });

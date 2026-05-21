@@ -226,12 +226,13 @@ function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
 }
 
 function openRouterModel(model: string) {
+  const reasoning = model.includes("gemini-3.1-flash-lite") ? { effort: "minimal" } : undefined;
   const openrouter = createOpenRouter({
     apiKey: process.env.OPENROUTER_API_KEY,
     compatibility: "strict",
     extraBody: {
       provider: { allow_fallbacks: true, require_parameters: true },
-      reasoning: { max_tokens: 512 },
+      ...(reasoning ? { reasoning } : {}),
     },
   });
   return openrouter(model);

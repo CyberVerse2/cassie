@@ -123,7 +123,7 @@ async function runOpenRouterGeminiSearch(): Promise<ModelRunResult> {
           require_parameters: true,
         },
         reasoning: {
-          max_tokens: 512,
+          effort: "minimal",
         },
       },
     });

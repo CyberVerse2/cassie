@@ -1,5 +1,5 @@
 import { createXai } from "@ai-sdk/xai";
-import { generateText } from "ai";
+import { Output, generateText } from "ai";
 import { z } from "zod";
 import { MissingConnectorConfigError } from "../../packages/core/connector-errors.ts";
 import { SourcePostSchema, type SourcePost } from "../../packages/core/schemas/index.ts";
@@ -49,6 +49,10 @@ export class GrokXPostResolver {
     try {
       const result = await generateText({
         model: xai.responses(this.model),
+        output: Output.object({
+          schema: XPostResolutionSchema,
+          name: "cassie_x_post_resolution",
+        }),
         tools: {
           x_search: xai.tools.xSearch({
             allowedXHandles: locator.handle ? [locator.handle] : undefined,
@@ -60,7 +64,7 @@ export class GrokXPostResolver {
         prompt: buildXPostResolutionPrompt(locator),
       });
 
-      const resolution = XPostResolutionSchema.parse(parseJsonObject(result.text));
+      const resolution = result.output;
       if (!resolution.found || !resolution.sourcePost) {
         throw new XPostResolutionError(
           resolution.reason ?? `Grok could not resolve X post ${locator.canonicalUrl}.`,
@@ -156,17 +160,4 @@ If the exact target post cannot be found, return:
 }
 
 Only resolve the target post. Do not include unrelated search results.`;
-}
-
-function parseJsonObject(text: string): unknown {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) {
-      throw new XPostResolutionError("Grok X post resolver did not return JSON.");
-    }
-
-    return JSON.parse(match[0]);
-  }
 }

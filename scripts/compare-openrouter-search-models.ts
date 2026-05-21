@@ -69,7 +69,7 @@ const openrouter = createOpenRouter({
       }
       : {}),
     reasoning: {
-      max_tokens: 512,
+      effort: "minimal",
     },
   },
 });
