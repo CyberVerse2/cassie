@@ -124,7 +124,7 @@ export class OpenAiStructuredClient implements StructuredAiClient {
           compatibility: "strict",
           extraBody: {
             provider: {
-              allow_fallbacks: false,
+              allow_fallbacks: true,
               require_parameters: true,
             },
           },
@@ -174,7 +174,7 @@ export class OpenRouterStructuredClient implements StructuredAiClient {
       compatibility: "strict",
       extraBody: {
         provider: {
-          allow_fallbacks: false,
+          allow_fallbacks: true,
           require_parameters: true,
         },
       },

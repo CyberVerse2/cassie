@@ -36,7 +36,7 @@ const openrouter = createOpenRouter({
   compatibility: "strict",
   extraBody: {
     provider: {
-      allow_fallbacks: false,
+      allow_fallbacks: true,
       require_parameters: true,
     },
   },
