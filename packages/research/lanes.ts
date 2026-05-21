@@ -103,13 +103,6 @@ export class GeminiWebSearchLane {
           },
           system: "Return concise source-backed research notes in plain text. Do not return JSON.",
           prompt,
-          providerOptions: {
-            google: {
-              thinkingConfig: {
-                thinkingLevel: "minimal",
-              },
-            },
-          },
           maxOutputTokens: SEARCH_TEXT_MAX_OUTPUT_TOKENS,
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
