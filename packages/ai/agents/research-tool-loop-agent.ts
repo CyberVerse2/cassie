@@ -7,6 +7,7 @@ import {
   DEFAULT_EXPENSIVE_MODEL,
 } from "../client.ts";
 import { openAiCostControlOptions } from "../openai-options.ts";
+import { openRouterCacheableSystemMessage } from "../openrouter-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
   process.env.OPENROUTER_WEB_SEARCH_MODEL ??
@@ -37,7 +38,7 @@ export function createResearchToolLoopAgent() {
   return new ToolLoopAgent({
     id: "cassie-research-tool-loop",
     model: openRouterModel(WEB_SEARCH_MODEL),
-    instructions: researchToolLoopInstructions(),
+    instructions: openRouterCacheableSystemMessage(researchToolLoopInstructions()),
     tools: researchTools(),
     toolChoice: "required",
     stopWhen: [hasToolCall("done")],

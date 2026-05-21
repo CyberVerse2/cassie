@@ -16,6 +16,7 @@ import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
+import { openRouterCacheablePrompt } from "../ai/openrouter-options.ts";
 
 type SearchSource = {
   title?: string;
@@ -76,7 +77,7 @@ export class OpenAiWebSearchLane {
     try {
       const result = await generateText({
         model: openrouter(this.model),
-        prompt,
+        messages: openRouterCacheablePrompt(prompt),
       });
       const ledger = await classifyEvidenceLedger({
         provider: "openrouter_web_search",
@@ -264,23 +265,24 @@ async function classifyEvidenceLedger(input: {
 
   const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
   const model = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL;
+  const prompt = evidenceLedgerPrompt({
+    queryJob: input.job,
+    normalizedClaim: input.queryPlan.normalizedClaim,
+    goals: input.queryPlan.goals.filter((goal) => input.job.goalIds.includes(goal.id)),
+    searchOutput: {
+      summary: input.summary,
+      sources: input.sources ?? [],
+      toolResults: input.toolResults ?? [],
+    },
+    retrievedAt: new Date().toISOString(),
+  });
   const result = await generateText({
     model: openrouter(model),
     output: Output.object({
       schema: EvidenceLedgerSchema,
       name: "cassie_evidence_ledger",
     }),
-    prompt: evidenceLedgerPrompt({
-      queryJob: input.job,
-      normalizedClaim: input.queryPlan.normalizedClaim,
-      goals: input.queryPlan.goals.filter((goal) => input.job.goalIds.includes(goal.id)),
-      searchOutput: {
-        summary: input.summary,
-        sources: input.sources ?? [],
-        toolResults: input.toolResults ?? [],
-      },
-      retrievedAt: new Date().toISOString(),
-    }),
+    messages: openRouterCacheablePrompt(prompt),
   });
 
   return result.output;
