@@ -5,6 +5,12 @@ import { z } from "zod";
 
 const DEFAULT_MODEL_A = "google/gemini-3.1-flash-lite";
 const DEFAULT_MODEL_B = "google/gemini-2.5-flash";
+const DEFAULT_MODELS = [
+  "deepseek/deepseek-v4-flash",
+  "google/gemini-2.5-flash",
+  "google/gemini-3.1-flash-lite",
+  "google/gemini-3-flash-preview",
+];
 
 const ComparisonSchema = z.object({
   directAnswer: z.string(),
@@ -30,10 +36,12 @@ const query = flag("query") ??
   "Search and critique the claim that Exa raised $250M at a $2.2B valuation led by a16z. What is verified, what matters, and what remains unresolved?";
 const modelA = flag("model-a") ?? DEFAULT_MODEL_A;
 const modelB = flag("model-b") ?? DEFAULT_MODEL_B;
+const models = (flag("models")?.split(",").map((model) => model.trim()).filter(Boolean)) ?? [modelA, modelB];
 const timeoutMs = Number(flag("timeout-ms") ?? 90_000);
 const json = hasFlag("json");
 const forceWebPlugin = !hasFlag("no-web-plugin");
 const maxResults = Number(flag("max-results") ?? 5);
+const rawSources = hasFlag("raw-sources");
 
 if (!process.env.OPENROUTER_API_KEY) {
   throw new Error("Missing OPENROUTER_API_KEY. Add it to .env or export it before running this comparison.");
@@ -65,15 +73,13 @@ const openrouter = createOpenRouter({
   },
 });
 
-const [a, b] = await Promise.all([
-  runModel(modelA, "model_a"),
-  runModel(modelB, "model_b"),
-]);
+const selectedModels = hasFlag("default-four") ? DEFAULT_MODELS : models;
+const runs = await Promise.all(selectedModels.map((model, index) => runModel(model, `model_${index + 1}`)));
 
 const result = {
   query,
   elapsedMs: Date.now() - startedAt,
-  runs: [a, b],
+  runs,
 };
 
 if (json) {
@@ -169,9 +175,12 @@ function printHuman(result: { query: string; elapsedMs: number; runs: RunResult[
     printList("source quality notes", run.output?.sourceQualityNotes ?? []);
     printList("unresolved questions", run.output?.unresolvedQuestions ?? []);
     console.log("");
-    if (run.sources.length > 0) {
+    if (rawSources && run.sources.length > 0) {
       console.log("raw sources:");
       console.log(JSON.stringify(run.sources, null, 2));
+      console.log("");
+    } else if (run.sources.length > 0) {
+      printSources(run.sources);
       console.log("");
     }
   }
@@ -185,6 +194,19 @@ function printList(label: string, values: string[]) {
   }
   for (const value of values) {
     console.log(`- ${value}`);
+  }
+}
+
+function printSources(sources: unknown[]) {
+  console.log("sources:");
+  for (const source of sources) {
+    if (!isRecord(source)) {
+      console.log("- unknown source");
+      continue;
+    }
+    const title = typeof source.title === "string" ? source.title : "Untitled";
+    const url = typeof source.url === "string" ? source.url : typeof source.id === "string" ? source.id : "";
+    console.log(`- ${title}${url ? ` (${url})` : ""}`);
   }
 }
 
@@ -209,4 +231,8 @@ function hasFlag(name: string): boolean {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
