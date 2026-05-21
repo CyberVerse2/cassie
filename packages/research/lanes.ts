@@ -313,12 +313,65 @@ async function wrapConnectorStage<T>(stage: string, run: () => Promise<T>): Prom
   try {
     return await run();
   } catch (error) {
-    throw new Error(`${stage} failed: ${errorMessage(error)}`, { cause: error });
+    throw new Error(`${stage} failed: ${formatResearchConnectorError(error)}`, { cause: error });
   }
 }
 
-function errorMessage(error: unknown) {
+export function formatResearchConnectorError(error: unknown): string {
+  return detailedErrorMessage(error, new Set());
+}
+
+function detailedErrorMessage(error: unknown, seen: Set<unknown>): string {
+  if (!error || seen.has(error)) {
+    return String(error);
+  }
+  seen.add(error);
+
+  if (typeof error !== "object") {
+    return String(error);
+  }
+
+  const record = error as Record<string, unknown>;
+  const parts: string[] = [];
+  if (typeof record.message === "string") {
+    parts.push(record.message);
+  }
+  if (typeof record.statusCode === "number") {
+    parts.push(`status=${record.statusCode}`);
+  }
+  const data = compactJson(record.data);
+  if (data) {
+    parts.push(`data=${data}`);
+  }
+  const responseBody = compactText(record.responseBody);
+  if (responseBody) {
+    parts.push(`response=${responseBody}`);
+  }
+  const cause = record.cause;
+  if (cause) {
+    parts.push(`cause=${detailedErrorMessage(cause, seen)}`);
+  }
+
+  if (parts.length > 0) {
+    return parts.join(" | ");
+  }
   return error instanceof Error ? error.message : String(error);
+}
+
+function compactJson(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  try {
+    return compactText(JSON.stringify(value));
+  } catch {
+    return compactText(String(value));
+  }
+}
+
+function compactText(value: unknown): string | null {
+  if (typeof value !== "string" || value.length === 0) return null;
+  const normalized = value.replace(/\s+/g, " ").trim();
+  if (normalized.length === 0) return null;
+  return normalized.length > 500 ? `${normalized.slice(0, 497)}...` : normalized;
 }
 
 function evidenceFromLedger(sourceLane: "openai_search" | "x_search", ledger: EvidenceLedger): ResearchEvidence[] {

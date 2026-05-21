@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { GrokXSearchLane, OpenAiWebSearchLane } from "../packages/research/lanes.ts";
+import { formatResearchConnectorError, GrokXSearchLane, OpenAiWebSearchLane } from "../packages/research/lanes.ts";
 import {
   HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
@@ -104,6 +104,26 @@ describe("research connectors", () => {
     await expect(new GrokXSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );
+  });
+
+  it("preserves upstream provider error details for live timelines", () => {
+    const error = Object.assign(new Error("Provider returned error"), {
+      statusCode: 500,
+      data: {
+        error: {
+          message: "schema compiler failed",
+          provider_name: "ExampleProvider",
+        },
+      },
+      responseBody: "{\"error\":{\"message\":\"raw upstream failure\"}}",
+      cause: new Error("No output generated."),
+    });
+
+    expect(formatResearchConnectorError(error)).toContain("Provider returned error");
+    expect(formatResearchConnectorError(error)).toContain("status=500");
+    expect(formatResearchConnectorError(error)).toContain("schema compiler failed");
+    expect(formatResearchConnectorError(error)).toContain("raw upstream failure");
+    expect(formatResearchConnectorError(error)).toContain("No output generated.");
   });
 });
 
