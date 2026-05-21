@@ -122,7 +122,7 @@ const snapshot: CassieStoreSnapshot = {
       snippet: "Exa raised $250M.",
       rank: 1,
       duplicateOf: null,
-      metadata: {},
+      metadata: [],
     },
   ],
   researchEvidenceClaims: [

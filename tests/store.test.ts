@@ -120,7 +120,7 @@ describe("InMemoryCassieStore", () => {
       snippet: "Exa raised $250M.",
       rank: 1,
       duplicateOf: null,
-      metadata: {},
+      metadata: [],
     };
     const evidenceClaim: EvidenceClaim = {
       id: "claim_1",

@@ -741,7 +741,7 @@ describe("research query planner policy", () => {
       snippet: "The raise was misreported.",
       rank: 1,
       duplicateOf: null,
-      metadata: {},
+      metadata: [],
     });
 
     await researchThesis({
@@ -1015,7 +1015,7 @@ describe("research query planner policy", () => {
           snippet: claimId === "claim_adaptive_1" ? "Primary confirmation." : "Context only.",
           rank: 1,
           duplicateOf: null,
-          metadata: {},
+          metadata: [],
         },
       ],
       evidenceClaims: [
@@ -1212,7 +1212,7 @@ describe("research query planner policy", () => {
                   snippet: "Exa raised $250M.",
                   rank: 1,
                   duplicateOf: null,
-                  metadata: {},
+                  metadata: [],
                 },
               ],
               evidenceClaims: [],

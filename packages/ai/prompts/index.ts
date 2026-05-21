@@ -237,6 +237,7 @@ Rules:
 - Use "context" when evidence explains the situation but does not support or contradict a goal.
 - Use "contradicts" only when the claim materially weakens, refutes, or blocks the goal.
 - Prefer "unknown" reliability when the source quality cannot be established.
+- Set searchResult metadata to an empty array unless there is a specific string key/value detail worth preserving.
 - Use stable deterministic ids based on the query job, such as result_<queryJobId>_1, claim_<queryJobId>_1, link_<queryJobId>_<goalId>_1.
 
 Input:

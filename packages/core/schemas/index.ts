@@ -312,7 +312,10 @@ export const SearchResultSchema = z.object({
   snippet: z.string().nullable(),
   rank: z.number().int().nullable(),
   duplicateOf: z.string().nullable(),
-  metadata: z.record(z.string(), z.unknown()),
+  metadata: z.array(z.object({
+    key: z.string(),
+    value: z.string().nullable(),
+  })),
 });
 
 export const EvidenceClaimSchema = z.object({
