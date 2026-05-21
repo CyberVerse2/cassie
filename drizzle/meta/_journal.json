@@ -29,6 +29,13 @@
       "when": 1779332520000,
       "tag": "0003_control_plane",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1779332580000,
+      "tag": "0004_research_persistence",
+      "breakpoints": true
     }
   ]
 }

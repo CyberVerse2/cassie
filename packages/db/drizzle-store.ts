@@ -3,7 +3,11 @@ import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
   ControlRun,
+  EvidenceLedger,
   ExecutionJob,
+  GoalResolution,
+  QueryJob,
+  ResearchContinuationDecision,
   ResearchReport,
   RunStep,
   SourcePost,
@@ -16,9 +20,18 @@ import {
   executionJobs,
   mentions,
   researchReports,
+  researchContinuationDecisions,
+  researchEvidenceClaims,
+  researchGoalEvidenceLinks,
+  researchGoalResolutions,
+  researchQueryJobs,
+  researchRuns,
+  researchSearchResults,
   runtimeState,
   runSteps,
   tradeTickets,
+  modelCallUsage,
+  tradeabilityDecisions,
   userSettings,
 } from "./schema.ts";
 import { createCassieDb, type CassieDb } from "./client.ts";
@@ -26,8 +39,12 @@ import type {
   CassieStore,
   CassieStoreSnapshot,
   MentionRecord,
+  NewModelCallUsage,
   NewRunStep,
+  NewTradeabilityDecision,
   ResearchReportRecord,
+  ResearchRunRecord,
+  ResearchQueryJobRecord,
 } from "./store.ts";
 
 export class DrizzleCassieStore implements CassieStore {
@@ -43,6 +60,15 @@ export class DrizzleCassieStore implements CassieStore {
       auditRows,
       controlRunRows,
       stepRows,
+      researchRunRows,
+      queryJobRows,
+      searchResultRows,
+      evidenceClaimRows,
+      goalEvidenceLinkRows,
+      goalResolutionRows,
+      continuationDecisionRows,
+      modelCallUsageRows,
+      tradeabilityDecisionRows,
     ] = await Promise.all([
       this.db.select().from(userSettings),
       this.db.select().from(mentions),
@@ -52,6 +78,15 @@ export class DrizzleCassieStore implements CassieStore {
       this.db.select().from(auditEvents),
       this.db.select().from(controlRuns),
       this.db.select().from(runSteps),
+      this.db.select().from(researchRuns),
+      this.db.select().from(researchQueryJobs),
+      this.db.select().from(researchSearchResults),
+      this.db.select().from(researchEvidenceClaims),
+      this.db.select().from(researchGoalEvidenceLinks),
+      this.db.select().from(researchGoalResolutions),
+      this.db.select().from(researchContinuationDecisions),
+      this.db.select().from(modelCallUsage),
+      this.db.select().from(tradeabilityDecisions),
     ]);
 
     return {
@@ -73,6 +108,62 @@ export class DrizzleCassieStore implements CassieStore {
         input: row.input ?? null,
         output: row.output ?? null,
       })),
+      researchRuns: researchRunRows.map((row) => ({
+        ...row,
+        queryPlan: row.queryPlan ?? null,
+        completedAt: row.completedAt ?? null,
+        error: row.error ?? null,
+      })),
+      researchQueryJobs: queryJobRows.map((row) => ({
+        ...row.job,
+        researchRunId: row.researchRunId,
+        status: row.status,
+        startedAt: row.startedAt ?? null,
+        completedAt: row.completedAt ?? null,
+        error: row.error ?? null,
+      })),
+      researchSearchResults: searchResultRows.map((row) => ({
+        ...row.result,
+        researchRunId: row.researchRunId,
+      })),
+      researchEvidenceClaims: evidenceClaimRows.map((row) => ({
+        ...row.claim,
+        researchRunId: row.researchRunId,
+      })),
+      researchGoalEvidenceLinks: goalEvidenceLinkRows.map((row) => ({
+        ...row.link,
+        researchRunId: row.researchRunId,
+      })),
+      researchGoalResolutions: goalResolutionRows.map((row) => ({
+        ...row.resolution,
+        id: row.id,
+        researchRunId: row.researchRunId,
+        wave: row.wave,
+        createdAt: row.createdAt,
+      })),
+      researchContinuationDecisions: continuationDecisionRows.map((row) => ({
+        ...row.decision,
+        id: row.id,
+        researchRunId: row.researchRunId,
+        wave: row.wave,
+        createdAt: row.createdAt,
+      })),
+      modelCallUsage: modelCallUsageRows.map((row) => ({
+        ...row,
+        researchRunId: row.researchRunId ?? null,
+        runStepId: row.runStepId ?? null,
+        promptName: row.promptName ?? null,
+        promptVersion: row.promptVersion ?? null,
+        inputTokens: row.inputTokens ?? null,
+        outputTokens: row.outputTokens ?? null,
+        reasoningTokens: row.reasoningTokens ?? null,
+        cachedTokens: row.cachedTokens ?? null,
+        totalTokens: row.totalTokens ?? null,
+        estimatedCostUsd: row.estimatedCostUsd ?? null,
+        latencyMs: row.latencyMs ?? null,
+        error: row.error ?? null,
+      })),
+      tradeabilityDecisions: tradeabilityDecisionRows.map((row) => row.record),
     };
   }
 
@@ -232,6 +323,240 @@ export class DrizzleCassieStore implements CassieStore {
       data: { runId: input.runId, stance: input.report.stance },
     });
 
+    return record;
+  }
+
+  async createResearchRun(input: {
+    controlRunId: string;
+    angle: string;
+    queryPlan: unknown;
+  }): Promise<ResearchRunRecord> {
+    const record: ResearchRunRecord = {
+      researchRunId: randomUUID(),
+      controlRunId: input.controlRunId,
+      angle: input.angle,
+      status: "running",
+      queryPlan: input.queryPlan,
+      startedAt: new Date().toISOString(),
+      completedAt: null,
+      error: null,
+    };
+
+    await this.db.insert(researchRuns).values(record);
+    return record;
+  }
+
+  async updateResearchRun(input: {
+    researchRunId: string;
+    status: ResearchRunRecord["status"];
+    queryPlan?: unknown;
+    completedAt?: string | null;
+    error?: string | null;
+  }): Promise<ResearchRunRecord> {
+    const rows = await this.db
+      .select()
+      .from(researchRuns)
+      .where(eq(researchRuns.researchRunId, input.researchRunId))
+      .limit(1);
+    const existing = rows[0];
+    if (!existing) {
+      throw new Error(`Research run ${input.researchRunId} was not found.`);
+    }
+    const updated: ResearchRunRecord = {
+      ...existing,
+      queryPlan: input.queryPlan ?? existing.queryPlan,
+      status: input.status,
+      completedAt: input.completedAt ?? existing.completedAt ?? null,
+      error: input.error ?? existing.error ?? null,
+    };
+    await this.db
+      .update(researchRuns)
+      .set({
+        status: updated.status,
+        queryPlan: updated.queryPlan,
+        completedAt: updated.completedAt,
+        error: updated.error,
+      })
+      .where(eq(researchRuns.researchRunId, input.researchRunId));
+    return updated;
+  }
+
+  async addResearchQueryJobs(researchRunId: string, jobs: QueryJob[]): Promise<ResearchQueryJobRecord[]> {
+    const records = jobs.map((job): ResearchQueryJobRecord => ({
+      ...job,
+      researchRunId,
+      status: "queued",
+      startedAt: null,
+      completedAt: null,
+      error: null,
+    }));
+    if (records.length > 0) {
+      await this.db.insert(researchQueryJobs).values(records.map((record) => ({
+        id: record.id,
+        researchRunId,
+        job: record,
+        wave: record.wave,
+        lane: record.lane,
+        provider: record.provider,
+        querySpecId: record.querySpecId,
+        status: record.status,
+        startedAt: record.startedAt,
+        completedAt: record.completedAt,
+        error: record.error,
+      })));
+    }
+    return records;
+  }
+
+  async updateResearchQueryJobStatus(
+    queryJobId: string,
+    input: {
+      status: ResearchQueryJobRecord["status"];
+      startedAt?: string | null;
+      completedAt?: string | null;
+      error?: string | null;
+    },
+  ): Promise<ResearchQueryJobRecord | undefined> {
+    const rows = await this.db
+      .select()
+      .from(researchQueryJobs)
+      .where(eq(researchQueryJobs.id, queryJobId))
+      .limit(1);
+    const existing = rows[0];
+    if (!existing) return undefined;
+    const updated = {
+      status: input.status,
+      startedAt: input.startedAt ?? existing.startedAt ?? null,
+      completedAt: input.completedAt ?? existing.completedAt ?? null,
+      error: input.error ?? existing.error ?? null,
+    };
+    await this.db
+      .update(researchQueryJobs)
+      .set(updated)
+      .where(eq(researchQueryJobs.id, queryJobId));
+    return {
+      ...existing.job,
+      researchRunId: existing.researchRunId,
+      ...updated,
+    };
+  }
+
+  async addResearchEvidenceLedger(researchRunId: string, ledger: EvidenceLedger): Promise<void> {
+    if (ledger.searchResults.length > 0) {
+      await this.db.insert(researchSearchResults).values(ledger.searchResults.map((result) => ({
+        id: result.id,
+        researchRunId,
+        queryJobId: result.queryJobId,
+        queryId: result.queryId,
+        wave: result.wave,
+        lane: result.lane,
+        provider: result.provider,
+        sourceType: result.sourceType,
+        url: result.url,
+        result,
+        retrievedAt: result.retrievedAt,
+      })));
+    }
+    if (ledger.evidenceClaims.length > 0) {
+      await this.db.insert(researchEvidenceClaims).values(ledger.evidenceClaims.map((claim) => ({
+        id: claim.id,
+        researchRunId,
+        resultId: claim.resultId,
+        queryJobId: claim.queryJobId,
+        wave: claim.wave,
+        sourceType: claim.sourceType,
+        directness: claim.directness,
+        reliability: claim.reliability,
+        claim,
+      })));
+    }
+    if (ledger.goalEvidenceLinks.length > 0) {
+      await this.db.insert(researchGoalEvidenceLinks).values(ledger.goalEvidenceLinks.map((link) => ({
+        id: link.id,
+        researchRunId,
+        goalId: link.goalId,
+        evidenceClaimId: link.evidenceClaimId,
+        stance: link.stance,
+        link,
+      })));
+    }
+  }
+
+  async addResearchGoalResolutions(
+    researchRunId: string,
+    wave: number,
+    resolutions: GoalResolution[],
+  ) {
+    const records = resolutions.map((resolution) => ({
+      ...resolution,
+      id: randomUUID(),
+      researchRunId,
+      wave,
+      createdAt: new Date().toISOString(),
+    }));
+    if (records.length > 0) {
+      await this.db.insert(researchGoalResolutions).values(records.map((record) => ({
+        id: record.id,
+        researchRunId,
+        wave,
+        goalId: record.goalId,
+        status: record.status,
+        confidence: record.confidence,
+        resolution: record,
+        createdAt: record.createdAt,
+      })));
+    }
+    return records;
+  }
+
+  async addResearchContinuationDecision(input: {
+    researchRunId: string;
+    wave: number;
+    decision: ResearchContinuationDecision;
+  }) {
+    const record = {
+      ...input.decision,
+      id: randomUUID(),
+      researchRunId: input.researchRunId,
+      wave: input.wave,
+      createdAt: new Date().toISOString(),
+    };
+    await this.db.insert(researchContinuationDecisions).values({
+      id: record.id,
+      researchRunId: input.researchRunId,
+      wave: input.wave,
+      action: input.decision.action,
+      decision: input.decision,
+      createdAt: record.createdAt,
+    });
+    return record;
+  }
+
+  async addModelCallUsage(input: NewModelCallUsage) {
+    const record = {
+      ...input,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    await this.db.insert(modelCallUsage).values(record);
+    return record;
+  }
+
+  async addTradeabilityDecision(input: NewTradeabilityDecision) {
+    const record = {
+      ...input,
+      id: randomUUID(),
+      createdAt: new Date().toISOString(),
+    };
+    await this.db.insert(tradeabilityDecisions).values({
+      id: record.id,
+      controlRunId: record.controlRunId,
+      researchRunId: record.researchRunId,
+      decision: record.decision,
+      directTradability: record.directTradability,
+      record,
+      createdAt: record.createdAt,
+    });
     return record;
   }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
+import { InMemoryCassieStore } from "../packages/db/store.ts";
 import type {
   GoalResolution,
   QueryJob,
@@ -1086,5 +1087,157 @@ describe("research query planner policy", () => {
     expect(executedJobs).toContain("q_adaptive_g_verify_funding_1_1");
     expect(executedJobs.indexOf("q_adaptive_g_verify_funding_1_1")).toBeLessThan(executedJobs.indexOf("q_trade_web"));
     expect(aiCalls).toContain("cassie_adaptive_query_request");
+  });
+
+  it("persists query jobs, ledgers, resolutions, and continuation decisions during research", async () => {
+    const store = new InMemoryCassieStore();
+    const controlRun = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie critic this",
+      sourcePost,
+    });
+    const queryPlan: ResearchQueryPlan = {
+      version: "research-query-plan/v1",
+      normalizedClaim: "Exa raised $250M.",
+      signalType: "funding",
+      mode: "standard",
+      assets: [],
+      topics: ["AI search", "funding"],
+      sourceHandle: "example",
+      sourceName: "Example",
+      scores: {
+        specificity: 0.9,
+        marketLinkage: 0.45,
+        sourceValue: 0.5,
+        urgency: 0.3,
+        risk: 0.2,
+        novelty: 0.7,
+        expectedValueOfResearch: 0.65,
+      },
+      goals: [
+        {
+          id: "g_verify",
+          kind: "event_validation",
+          question: "Did Exa raise $250M?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.95,
+          mustResolve: true,
+          lanes: ["web", "x"],
+          evidenceNeeds: ["Primary or credible secondary confirmation."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "Funding is confirmed.",
+            contradictedIf: "Funding is denied.",
+            unresolvedIf: "No credible source confirms it.",
+          },
+          budget: { maxQueries: 2, maxResults: 10, wave: 0 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "verification",
+          purpose: "Verify the funding claim.",
+          queries: [
+            {
+              id: "q_verify_web",
+              goalIds: ["g_verify"],
+              lane: "web",
+              queryKind: "entity_event",
+              query: "\"Exa\" \"$250M\" funding",
+              priority: 0.95,
+              maxResults: 5,
+              expectedEvidence: "Funding confirmation.",
+              rationale: "Verify the core claim.",
+            },
+            {
+              id: "q_verify_x",
+              goalIds: ["g_verify"],
+              lane: "x",
+              queryKind: "exact_claim",
+              query: "\"Exa\" \"$250M\"",
+              priority: 0.8,
+              maxResults: 5,
+              expectedEvidence: "Social confirmation or contradiction.",
+              rationale: "Check X context.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify"],
+        cannotConcludeIfUnresolved: ["g_verify"],
+      },
+    };
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: { name: string }) {
+        if (input.name === "cassie_research_query_plan") return queryPlan as T;
+        if (input.name === "cassie_goal_resolution") return [goalResolution] as T;
+        if (input.name === "cassie_research_report") return researchReport as T;
+        throw new Error(`Unexpected AI call ${input.name}`);
+      },
+    };
+
+    await researchThesis({
+      ai,
+      lanes: {
+        async runOpenAiQueryJob(job) {
+          return {
+            lane: "openai_search",
+            evidence: [],
+            warnings: [],
+            ledger: {
+              searchResults: [
+                {
+                  id: "result_web_1",
+                  runId: job.runId,
+                  queryJobId: job.id,
+                  queryId: job.querySpecId,
+                  goalIds: job.goalIds,
+                  wave: job.wave,
+                  lane: job.lane,
+                  provider: job.provider,
+                  title: "Exa raises funding",
+                  url: "https://example.com/exa",
+                  canonicalUrl: "https://example.com/exa",
+                  author: null,
+                  sourceName: "Example",
+                  sourceType: "news",
+                  publishedAt: null,
+                  retrievedAt: "2026-05-21T00:00:00.000Z",
+                  rawText: null,
+                  snippet: "Exa raised $250M.",
+                  rank: 1,
+                  duplicateOf: null,
+                  metadata: {},
+                },
+              ],
+              evidenceClaims: [],
+              goalEvidenceLinks: [],
+            },
+          };
+        },
+        async runGrokXQueryJob() {
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
+        },
+      },
+      sourcePost,
+      userCommand: "@Cassie critic this",
+      signal: { ...explicitSignal, signalType: "funding" },
+      thesis: { ...thesis, claim: "Exa raised $250M." },
+      researchAngle: "critic",
+      persistence: {
+        store,
+        controlRunId: controlRun.runId,
+      },
+    });
+
+    const snapshot = await store.load();
+    expect(snapshot.researchRuns).toMatchObject([{ controlRunId: controlRun.runId, status: "succeeded" }]);
+    expect(snapshot.researchQueryJobs.map((job) => job.querySpecId).sort()).toEqual(["q_verify_web", "q_verify_x"]);
+    expect(snapshot.researchSearchResults).toMatchObject([{ queryId: "q_verify_web" }]);
+    expect(snapshot.researchGoalResolutions).toMatchObject([{ goalId: "g_verify" }]);
+    expect(snapshot.researchContinuationDecisions).toMatchObject([{ wave: 0, action: "continue_planned" }]);
   });
 });

@@ -180,6 +180,10 @@ export function createCassieSupervisorTools(input: {
             signal,
             thesis,
             researchAngle,
+            persistence: {
+              store: input.store,
+              controlRunId: input.run.runId,
+            },
           });
           await input.store.addResearchReport({
             runId: input.run.runId,

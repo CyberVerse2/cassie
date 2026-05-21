@@ -1,4 +1,5 @@
 import type { StructuredAiClient } from "../ai/client.ts";
+import type { CassieStore } from "../db/store.ts";
 import {
   AdaptiveQueryRequestSchema,
   type AdaptiveQueryRequest,
@@ -38,6 +39,11 @@ export interface ResearchSearchLanes {
   runGrokXQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
 }
 
+export interface ResearchPersistence {
+  store: CassieStore;
+  controlRunId: string;
+}
+
 export async function researchThesis(input: {
   ai: StructuredAiClient;
   lanes: ResearchSearchLanes;
@@ -46,45 +52,81 @@ export async function researchThesis(input: {
   signal: SignalInterpretation;
   thesis: Thesis;
   researchAngle: ResearchAngle;
+  persistence?: ResearchPersistence;
 }): Promise<ResearchReport> {
   const queryPlan = normalizeResearchQueryPlan(await generateResearchQueryPlan(input), input.signal);
-  const waveResults = await executeResearchWaves({
-    ai: input.ai,
-    queryPlan,
-    lanes: input.lanes,
-  });
-  const goalResolutions = waveResults.flatMap((wave) => wave.goalResolutions);
-  const evidenceLedger = mergeLedgers(waveResults.flatMap((wave) => wave.evidenceLedger));
-
-  return input.ai.generateObject({
-    schema: ResearchReportSchema,
-    name: "cassie_research_report",
-    prompt: researchSynthesisPrompt({
-      sourcePost: input.sourcePost,
-      userCommand: input.userCommand,
-      extractedThesis: input.thesis,
-      mode: "deep",
-      researchAngle: input.researchAngle,
+  const researchRun = input.persistence
+    ? await input.persistence.store.createResearchRun({
+      controlRunId: input.persistence.controlRunId,
+      angle: input.researchAngle,
       queryPlan,
-      laneResults: {
-        waves: waveResults.map((wave) => ({
-          wave: wave.wave,
-          openAiResult: settledPayload(wave.openAiResult),
-          xResult: settledPayload(wave.xResult),
-          continuationDecision: wave.continuationDecision,
-          adaptiveDecisions: wave.adaptiveDecisions,
-        })),
-      },
-      evidenceLedger,
-      goalResolutions,
-    }),
-  });
+    })
+    : null;
+  const researchRunId = researchRun?.researchRunId ?? `research_${stableSlug(queryPlan.normalizedClaim)}`;
+
+  try {
+    const waveResults = await executeResearchWaves({
+      ai: input.ai,
+      queryPlan,
+      lanes: input.lanes,
+      researchRunId,
+      persistence: input.persistence,
+    });
+    const goalResolutions = waveResults.flatMap((wave) => wave.goalResolutions);
+    const evidenceLedger = mergeLedgers(waveResults.flatMap((wave) => wave.evidenceLedger));
+
+    const report = await input.ai.generateObject({
+      schema: ResearchReportSchema,
+      name: "cassie_research_report",
+      prompt: researchSynthesisPrompt({
+        sourcePost: input.sourcePost,
+        userCommand: input.userCommand,
+        extractedThesis: input.thesis,
+        mode: "deep",
+        researchAngle: input.researchAngle,
+        queryPlan,
+        laneResults: {
+          waves: waveResults.map((wave) => ({
+            wave: wave.wave,
+            openAiResult: settledPayload(wave.openAiResult),
+            xResult: settledPayload(wave.xResult),
+            continuationDecision: wave.continuationDecision,
+            adaptiveDecisions: wave.adaptiveDecisions,
+          })),
+        },
+        evidenceLedger,
+        goalResolutions,
+      }),
+    });
+
+    if (researchRun) {
+      await input.persistence?.store.updateResearchRun({
+        researchRunId: researchRun.researchRunId,
+        status: "succeeded",
+        completedAt: new Date().toISOString(),
+      });
+    }
+
+    return report;
+  } catch (error) {
+    if (researchRun) {
+      await input.persistence?.store.updateResearchRun({
+        researchRunId: researchRun.researchRunId,
+        status: "failed",
+        completedAt: new Date().toISOString(),
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    throw error;
+  }
 }
 
 async function executeResearchWaves(input: {
   ai: StructuredAiClient;
   queryPlan: ResearchQueryPlan;
   lanes: ResearchSearchLanes;
+  researchRunId: string;
+  persistence?: ResearchPersistence;
 }): Promise<Array<{
   wave: number;
   openAiResult: PromiseSettledResult<SearchLaneResult>;
@@ -107,15 +149,33 @@ async function executeResearchWaves(input: {
 
   for (const wave of waves) {
     const wavePlan = planForWave(input.queryPlan, wave);
-    const queryJobs = compileQueryJobs(input.queryPlan, wave);
+    const queryJobs = compileQueryJobs(input.queryPlan, wave, input.researchRunId);
+    await input.persistence?.store.addResearchQueryJobs(input.researchRunId, queryJobs);
     let [openAiResult, xResult] = await Promise.all([
-      settle(runLaneForWave({ lane: "web", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs })),
-      settle(runLaneForWave({ lane: "x", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs })),
+      settle(runLaneForWave({
+        lane: "web",
+        lanes: input.lanes,
+        queryPlan: input.queryPlan,
+        wavePlan,
+        queryJobs,
+        persistence: input.persistence,
+        researchRunId: input.researchRunId,
+      })),
+      settle(runLaneForWave({
+        lane: "x",
+        lanes: input.lanes,
+        queryPlan: input.queryPlan,
+        wavePlan,
+        queryJobs,
+        persistence: input.persistence,
+        researchRunId: input.researchRunId,
+      })),
     ]);
     let evidenceLedger = mergeLedgers([
       ledgerFromSettledResult(openAiResult),
       ledgerFromSettledResult(xResult),
     ]);
+    await input.persistence?.store.addResearchEvidenceLedger(input.researchRunId, evidenceLedger);
     let goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
       ai: input.ai,
       queryPlan: input.queryPlan,
@@ -124,10 +184,16 @@ async function executeResearchWaves(input: {
       xResult,
       evidenceLedger,
     }));
+    await input.persistence?.store.addResearchGoalResolutions(input.researchRunId, wave, goalResolutions);
     let continuationDecision = decideContinuation({
       queryPlan: input.queryPlan,
       wave,
       goalResolutions,
+    });
+    await input.persistence?.store.addResearchContinuationDecision({
+      researchRunId: input.researchRunId,
+      wave,
+      decision: continuationDecision,
     });
     const adaptiveDecisions: ResearchContinuationDecision[] = [];
     let adaptiveRound = 0;
@@ -149,7 +215,9 @@ async function executeResearchWaves(input: {
         wave,
         adaptiveRound,
         adaptiveRequest,
+        researchRunId: input.researchRunId,
       });
+      await input.persistence?.store.addResearchQueryJobs(input.researchRunId, adaptiveJobs);
       if (adaptiveJobs.length === 0) {
         continuationDecision = {
           ...continuationDecision,
@@ -162,8 +230,24 @@ async function executeResearchWaves(input: {
       }
 
       const [adaptiveOpenAiResult, adaptiveXResult] = await Promise.all([
-        settle(runLaneForWave({ lane: "web", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs: adaptiveJobs })),
-        settle(runLaneForWave({ lane: "x", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs: adaptiveJobs })),
+        settle(runLaneForWave({
+          lane: "web",
+          lanes: input.lanes,
+          queryPlan: input.queryPlan,
+          wavePlan,
+          queryJobs: adaptiveJobs,
+          persistence: input.persistence,
+          researchRunId: input.researchRunId,
+        })),
+        settle(runLaneForWave({
+          lane: "x",
+          lanes: input.lanes,
+          queryPlan: input.queryPlan,
+          wavePlan,
+          queryJobs: adaptiveJobs,
+          persistence: input.persistence,
+          researchRunId: input.researchRunId,
+        })),
       ]);
       openAiResult = mergeSettledLaneResults("openai_search", openAiResult, adaptiveOpenAiResult);
       xResult = mergeSettledLaneResults("x_search", xResult, adaptiveXResult);
@@ -172,6 +256,13 @@ async function executeResearchWaves(input: {
         ledgerFromSettledResult(adaptiveOpenAiResult),
         ledgerFromSettledResult(adaptiveXResult),
       ]);
+      await input.persistence?.store.addResearchEvidenceLedger(
+        input.researchRunId,
+        mergeLedgers([
+          ledgerFromSettledResult(adaptiveOpenAiResult),
+          ledgerFromSettledResult(adaptiveXResult),
+        ]),
+      );
       goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
         ai: input.ai,
         queryPlan: input.queryPlan,
@@ -180,10 +271,16 @@ async function executeResearchWaves(input: {
         xResult,
         evidenceLedger,
       }));
+      await input.persistence?.store.addResearchGoalResolutions(input.researchRunId, wave, goalResolutions);
       continuationDecision = decideContinuation({
         queryPlan: input.queryPlan,
         wave,
         goalResolutions,
+      });
+      await input.persistence?.store.addResearchContinuationDecision({
+        researchRunId: input.researchRunId,
+        wave,
+        decision: continuationDecision,
       });
     }
 
@@ -254,14 +351,14 @@ function compileAdaptiveQueryJobs(input: {
   wave: number;
   adaptiveRound: number;
   adaptiveRequest: AdaptiveQueryRequest;
+  researchRunId: string;
 }): QueryJob[] {
-  const runId = `research_${stableSlug(input.queryPlan.normalizedClaim)}`;
   return input.adaptiveRequest.requests.flatMap((request) =>
     request.proposedQueries.map((query, index): QueryJob => {
       const querySpecId = `q_adaptive_${stableSlug(request.unresolvedGoalId)}_${input.adaptiveRound}_${index + 1}`;
       return {
         id: `job_w${input.wave}_${querySpecId}`,
-        runId,
+        runId: input.researchRunId,
         wave: input.wave,
         querySpecId,
         goalIds: [request.unresolvedGoalId],
@@ -285,13 +382,35 @@ async function runLaneForWave(input: {
   queryPlan: ResearchQueryPlan;
   wavePlan: ResearchQueryPlan;
   queryJobs: QueryJob[];
+  persistence?: ResearchPersistence;
+  researchRunId: string;
 }): Promise<SearchLaneResult> {
   const laneJobs = input.queryJobs.filter((job) => job.lane === input.lane);
   const results: SearchLaneResult[] = [];
 
   if (laneJobs.length > 0) {
     const runJob = input.lane === "web" ? input.lanes.runOpenAiQueryJob : input.lanes.runGrokXQueryJob;
-    const jobResults = await Promise.all(laneJobs.map((job) => runJob.call(input.lanes, job, input.queryPlan)));
+    const jobResults = await Promise.all(laneJobs.map(async (job) => {
+      await input.persistence?.store.updateResearchQueryJobStatus(job.id, {
+        status: "running",
+        startedAt: new Date().toISOString(),
+      });
+      try {
+        const result = await runJob.call(input.lanes, job, input.queryPlan);
+        await input.persistence?.store.updateResearchQueryJobStatus(job.id, {
+          status: "succeeded",
+          completedAt: new Date().toISOString(),
+        });
+        return result;
+      } catch (error) {
+        await input.persistence?.store.updateResearchQueryJobStatus(job.id, {
+          status: "failed",
+          completedAt: new Date().toISOString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }
+    }));
     results.push(...jobResults);
   }
 
@@ -305,8 +424,7 @@ async function runLaneForWave(input: {
   return mergeLaneResults(input.lane === "web" ? "openai_search" : "x_search", results);
 }
 
-function compileQueryJobs(queryPlan: ResearchQueryPlan, wave: number): QueryJob[] {
-  const runId = `research_${stableSlug(queryPlan.normalizedClaim)}`;
+function compileQueryJobs(queryPlan: ResearchQueryPlan, wave: number, researchRunId: string): QueryJob[] {
   const goalsById = new Map(queryPlan.goals.map((goal) => [goal.id, goal]));
 
   return queryPlan.queryBatches
@@ -318,7 +436,7 @@ function compileQueryJobs(queryPlan: ResearchQueryPlan, wave: number): QueryJob[
           .filter((goal): goal is ResearchGoal => Boolean(goal));
         return {
           id: `job_w${batch.wave}_${query.id}`,
-          runId,
+          runId: researchRunId,
           wave: batch.wave,
           querySpecId: query.id,
           goalIds: query.goalIds,
