@@ -1,6 +1,7 @@
 import { openai } from "@ai-sdk/openai";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
+import type { TraceRecorder } from "./trace.ts";
 
 export interface StructuredAiClient {
   generateObject<T>(input: {
@@ -20,7 +21,10 @@ export class MissingAiDependencyError extends Error {
 export class OpenAiStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = process.env.CASSIE_MODEL ?? "gpt-5.5") {
+  constructor(
+    modelName = process.env.CASSIE_MODEL ?? "gpt-5.5",
+    private readonly trace?: TraceRecorder,
+  ) {
     this.modelName = modelName;
   }
 
@@ -33,15 +37,36 @@ export class OpenAiStructuredClient implements StructuredAiClient {
       throw new MissingAiDependencyError();
     }
 
-    const result = await generateText({
-      model: openai(this.modelName),
-      output: Output.object({
-        schema: input.schema,
-        name: input.name,
-      }),
-      prompt: input.prompt,
+    const finishTrace = this.trace?.start({
+      name: input.name,
+      kind: "ai",
+      model: this.modelName,
+      thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
+      input: {
+        schemaName: input.name,
+        promptChars: input.prompt.length,
+      },
     });
 
-    return result.output;
+    try {
+      const result = await generateText({
+        model: openai(this.modelName),
+        output: Output.object({
+          schema: input.schema,
+          name: input.name,
+        }),
+        prompt: input.prompt,
+      });
+
+      finishTrace?.({
+        output: result.output,
+        usage: result.totalUsage,
+      });
+
+      return result.output;
+    } catch (error) {
+      finishTrace?.({ error });
+      throw error;
+    }
   }
 }

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../src/ai.ts";
 import { CassieProduct } from "../src/product.ts";
 import type {
+  AccountState,
+  Critique,
   IntentResult,
   ExecutionJob,
   MarketSelection,
@@ -113,6 +115,39 @@ class FakeAi implements StructuredAiClient {
   }
 }
 
+class FakeCriticAi implements StructuredAiClient {
+  async generateObject<T>(input: { name: string }): Promise<T> {
+    const outputs: Record<string, unknown> = {
+      cassie_intent: {
+        intent: "critic",
+        executionRequested: false,
+        counterThesis: true,
+        specificAsset: null,
+        specificVenue: null,
+        userSizeOverrideUsd: null,
+        confidence: 0.95,
+      } satisfies IntentResult,
+      cassie_thesis: thesis,
+      cassie_research_report: researchReport,
+      cassie_critique: {
+        strongestObjection: "There is no primary source confirming the catalyst.",
+        secondaryObjections: ["The post is social sentiment, not hard evidence."],
+        thesisTradable: false,
+        fadeIsCleaner: false,
+        finalCritique: "Treat this as weak narrative evidence unless corroborated.",
+      } satisfies Critique,
+    };
+
+    return outputs[input.name] as T;
+  }
+}
+
+class ThrowingAccountStateProvider {
+  async getAccountState(): Promise<AccountState> {
+    throw new Error("Account state should not be requested.");
+  }
+}
+
 class FakeExecutionClient implements ExecutionClient {
   async execute(ticket: TradeTicket) {
     return {
@@ -130,6 +165,37 @@ class FakeExecutionJobQueue implements ExecutionJobQueue {
 }
 
 describe("CassieProduct", () => {
+  it("processes a critic mention without requiring account state", async () => {
+    const store = new InMemoryCassieStore();
+    const product = new CassieProduct(
+      store,
+      {
+        ai: new FakeCriticAi(),
+        marketData: { async findCandidates() { return [marketSelection.selectedMarket!]; } },
+        researchLanes: {
+          async runOpenAiWebSearch() { return { lane: "openai_search", evidence: [], warnings: [] }; },
+          async runGrokXSearch() { return { lane: "x_search", evidence: [], warnings: [] }; },
+        },
+      },
+      new FakeExecutionClient(),
+      new ThrowingAccountStateProvider(),
+      new FakeExecutionJobQueue(),
+    );
+
+    await product.upsertSettings({
+      ...settings,
+      walletAddress: null,
+    });
+    const processed = await product.processMention({
+      userId: "user_1",
+      userCommand: "@Cassie critic this",
+      sourcePost,
+    });
+
+    expect(processed.run.responseType).toBe("critique");
+    expect(processed.state.tradeTickets).toHaveLength(0);
+  });
+
   it("processes a mention, stores a ticket, and executes after approval", async () => {
     const store = new InMemoryCassieStore();
     const product = new CassieProduct(

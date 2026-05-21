@@ -111,15 +111,15 @@ export const ResearchEvidenceSchema = z.object({
     "blog",
     "unknown",
   ]),
-  title: z.string().optional(),
-  url: z.string().optional(),
-  author: z.string().optional(),
-  publishedAt: z.string().optional(),
+  title: z.string().nullable(),
+  url: z.string().nullable(),
+  author: z.string().nullable(),
+  publishedAt: z.string().nullable(),
   summary: z.string(),
   stance: z.enum(["supports", "refutes", "mixed", "unclear"]),
   reliability: z.enum(["high", "medium", "low"]),
   relevance: z.number().min(0).max(1),
-  notes: z.array(z.string()).optional(),
+  notes: z.array(z.string()).nullable(),
 });
 
 export const ResearchReportSchema = z.object({

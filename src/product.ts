@@ -65,12 +65,11 @@ export class CassieProduct {
     }
 
     const mention = await this.store.addMention(input);
-    const accountState = await this.accountStateProvider.getAccountState(userSettings);
     const run = await runCassie({
       deps: this.deps,
       sourcePost: input.sourcePost,
       userSettings,
-      accountState,
+      accountState: () => this.accountStateProvider.getAccountState(userSettings),
       userCommand: input.userCommand,
     });
 

@@ -2,6 +2,11 @@ import "dotenv/config";
 import { inspect } from "node:util";
 import { OpenAiStructuredClient } from "./ai.ts";
 import { CompositeMarketDataProvider } from "./connectors/market-data.ts";
+import {
+  GrokXSearchLane,
+  LiveResearchSearchLanes,
+  OpenAiWebSearchLane,
+} from "./connectors/research-lanes.ts";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
 import type { ExecutionJob, SourcePost, UserSettings } from "./schemas.ts";
 import { DrizzleCassieStore } from "./db/store.ts";
@@ -10,6 +15,7 @@ import { routeIntent } from "./tools/intent-router.ts";
 import { extractThesis } from "./tools/thesis.ts";
 import { CassieProduct } from "./product.ts";
 import type { ExecutionJobQueue } from "./jobs/execution-jobs.ts";
+import { TraceRecorder, type TraceEvent } from "./trace.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -17,6 +23,7 @@ type ParsedArgs = {
   command: string;
   positionals: string[];
   flags: CliFlags;
+  trace: TraceRecorder;
 };
 
 class CliExecutionQueue implements ExecutionJobQueue {
@@ -56,13 +63,22 @@ try {
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
+  args.trace = createCliTrace(args);
   const handler = commands.get(args.command);
 
   if (!handler) {
     throw new CliError(`Unknown command "${args.command}". Run "npm run cli -- help".`);
   }
 
-  const result = await handler(args);
+  let result = await handler(args);
+  const trace = args.trace.snapshot();
+  if (trace.length > 0 && args.flags.json) {
+    result = {
+      result,
+      trace,
+      tokenUsage: args.trace.usageTotals(),
+    };
+  }
   if (result !== undefined) {
     print(result, Boolean(args.flags.json));
   }
@@ -129,12 +145,12 @@ async function settingsSet(args: ParsedArgs) {
     autoTradeEnabled: booleanFlag(args, "auto-trade", false),
   };
 
-  await product().upsertSettings(settings);
+  await product(args.trace).upsertSettings(settings);
   return { saved: true, settings };
 }
 
 async function mention(args: ParsedArgs) {
-  return product().processMention({
+  return product(args.trace).processMention({
     userId: flag(args, "user", "local-user"),
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
     sourcePost: await sourcePostFromFlags(args),
@@ -142,7 +158,7 @@ async function mention(args: ParsedArgs) {
 }
 
 async function state(args: ParsedArgs) {
-  const snapshot = await product().state();
+  const snapshot = await product(args.trace).state();
   if (args.flags.full) {
     return snapshot;
   }
@@ -151,7 +167,7 @@ async function state(args: ParsedArgs) {
 }
 
 async function runs(args: ParsedArgs) {
-  const snapshot = await product().state();
+  const snapshot = await product(args.trace).state();
   const userId = nullableFlag(args, "user");
   return snapshot.runs
     .filter((run) => !userId || run.userId === userId)
@@ -166,7 +182,7 @@ async function runs(args: ParsedArgs) {
 }
 
 async function tickets(args: ParsedArgs) {
-  const snapshot = await product().state();
+  const snapshot = await product(args.trace).state();
   const userId = nullableFlag(args, "user");
   return snapshot.tradeTickets
     .filter((ticket) => !userId || ticket.userId === userId)
@@ -184,7 +200,7 @@ async function tickets(args: ParsedArgs) {
 }
 
 async function approve(args: ParsedArgs) {
-  return product().approveTicket(requiredPositional(args, 0, "ticketId"));
+  return product(args.trace).approveTicket(requiredPositional(args, 0, "ticketId"));
 }
 
 async function executeNext(args: ParsedArgs) {
@@ -192,11 +208,11 @@ async function executeNext(args: ParsedArgs) {
     throw new CliError("Refusing live execution without --yes.");
   }
 
-  return product().processNextExecutionJob();
+  return product(args.trace).processNextExecutionJob();
 }
 
 async function smokeAi(args: ParsedArgs) {
-  const ai = new OpenAiStructuredClient();
+  const ai = new OpenAiStructuredClient(undefined, args.trace);
   const userCommand = flag(args, "command", "@Cassie should we trade this?");
   const sourcePost = await sourcePostFromFlags(args);
   const intent = await routeIntent({ ai, sourcePost, userCommand });
@@ -227,10 +243,17 @@ async function smokeMarket(args: ParsedArgs) {
   };
 }
 
-function product() {
+function product(trace: TraceRecorder) {
   return new CassieProduct(
     new DrizzleCassieStore(),
-    undefined,
+    {
+      ai: new OpenAiStructuredClient(undefined, trace),
+      marketData: new CompositeMarketDataProvider(),
+      researchLanes: new LiveResearchSearchLanes(
+        new OpenAiWebSearchLane(undefined, undefined, trace),
+        new GrokXSearchLane(undefined, undefined, trace),
+      ),
+    },
     null,
     undefined,
     new CliExecutionQueue(),
@@ -262,7 +285,7 @@ async function sourcePostFromFlags(args: ParsedArgs): Promise<SourcePost> {
       throw new CliError("Use either --tweet-url or --post, not both.");
     }
 
-    return new GrokXPostResolver().resolve(tweetUrl);
+    return new GrokXPostResolver(undefined, undefined, args.trace).resolve(tweetUrl);
   }
 
   return {
@@ -301,7 +324,34 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  return { command: rawCommand, positionals, flags };
+  return { command: rawCommand, positionals, flags, trace: new TraceRecorder() };
+}
+
+function createCliTrace(args: ParsedArgs): TraceRecorder {
+  if (args.flags.json || args.flags["quiet-trace"]) {
+    return new TraceRecorder();
+  }
+
+  return new TraceRecorder((event) => {
+    printTraceEvent(event);
+  });
+}
+
+function printTraceEvent(event: TraceEvent) {
+  if (event.status === "running") {
+    console.error(`[trace:${event.stepId}] start ${event.name} (${event.kind}${event.model ? `, ${event.model}` : ""})`);
+    console.error(`  ${event.thinkingTrace}`);
+    return;
+  }
+
+  const usage = event.usage
+    ? ` tokens=${event.usage.totalTokens ?? "?"} in=${event.usage.inputTokens ?? "?"} out=${event.usage.outputTokens ?? "?"} reasoning=${event.usage.reasoningTokens ?? "?"}`
+    : "";
+  const status = event.status === "succeeded" ? "done" : "fail";
+  console.error(`[trace:${event.stepId}] ${status} ${event.name} ${event.durationMs ?? 0}ms${usage}`);
+  if (event.error) {
+    console.error(`  error: ${event.error}`);
+  }
 }
 
 function flag(args: ParsedArgs, name: string, defaultValue: string): string {

@@ -3,6 +3,7 @@ import { generateText } from "ai";
 import { z } from "zod";
 import { MissingConnectorConfigError } from "./errors.ts";
 import { SourcePostSchema, type SourcePost } from "../schemas.ts";
+import type { TraceRecorder } from "../trace.ts";
 
 const XPostResolutionSchema = z.object({
   found: z.boolean(),
@@ -27,6 +28,7 @@ export class GrokXPostResolver {
   constructor(
     private readonly apiKey = process.env.XAI_API_KEY,
     private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
+    private readonly trace?: TraceRecorder,
   ) {}
 
   async resolve(tweetUrl: string): Promise<SourcePost> {
@@ -36,32 +38,57 @@ export class GrokXPostResolver {
 
     const locator = parseXPostUrl(tweetUrl);
     const xai = createXai({ apiKey: this.apiKey });
-    const result = await generateText({
-      model: xai.responses(this.model),
-      tools: {
-        x_search: xai.tools.xSearch({
-          allowedXHandles: locator.handle ? [locator.handle] : undefined,
-          enableImageUnderstanding: true,
-          enableVideoUnderstanding: true,
-        }),
-      },
-      toolChoice: "required",
-      prompt: buildXPostResolutionPrompt(locator),
+    const finishTrace = this.trace?.start({
+      name: "resolve_x_post",
+      kind: "connector",
+      model: this.model,
+      thinkingTrace: "Resolving the exact X status URL into Cassie's SourcePost shape before reasoning.",
+      input: locator,
     });
 
-    const resolution = XPostResolutionSchema.parse(parseJsonObject(result.text));
-    if (!resolution.found || !resolution.sourcePost) {
-      throw new XPostResolutionError(
-        resolution.reason ?? `Grok could not resolve X post ${locator.canonicalUrl}.`,
-      );
-    }
+    try {
+      const result = await generateText({
+        model: xai.responses(this.model),
+        tools: {
+          x_search: xai.tools.xSearch({
+            allowedXHandles: locator.handle ? [locator.handle] : undefined,
+            enableImageUnderstanding: true,
+            enableVideoUnderstanding: true,
+          }),
+        },
+        toolChoice: "required",
+        prompt: buildXPostResolutionPrompt(locator),
+      });
 
-    return {
-      ...resolution.sourcePost,
-      postId: resolution.sourcePost.postId ?? locator.postId,
-      url: resolution.sourcePost.url ?? locator.canonicalUrl,
-      authorHandle: resolution.sourcePost.authorHandle ?? locator.handle,
-    };
+      const resolution = XPostResolutionSchema.parse(parseJsonObject(result.text));
+      if (!resolution.found || !resolution.sourcePost) {
+        throw new XPostResolutionError(
+          resolution.reason ?? `Grok could not resolve X post ${locator.canonicalUrl}.`,
+        );
+      }
+
+      const sourcePost = {
+        ...resolution.sourcePost,
+        postId: resolution.sourcePost.postId ?? locator.postId,
+        url: resolution.sourcePost.url ?? locator.canonicalUrl,
+        authorHandle: resolution.sourcePost.authorHandle ?? locator.handle,
+      };
+      finishTrace?.({
+        output: {
+          postId: sourcePost.postId,
+          url: sourcePost.url,
+          authorHandle: sourcePost.authorHandle,
+          text: sourcePost.text,
+          linkedUrls: sourcePost.linkedUrls ?? [],
+          mediaDescriptions: sourcePost.mediaDescriptions ?? [],
+        },
+        usage: result.totalUsage,
+      });
+      return sourcePost;
+    } catch (error) {
+      finishTrace?.({ error });
+      throw error;
+    }
   }
 }
 

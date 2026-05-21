@@ -52,11 +52,13 @@ export interface CassieDependencies {
   researchLanes: ResearchSearchLanes;
 }
 
+type AccountStateInput = AccountState | (() => Promise<AccountState>);
+
 export async function runCassie(input: {
   deps: CassieDependencies;
   sourcePost: SourcePost;
   userSettings: UserSettings;
-  accountState: AccountState;
+  accountState?: AccountStateInput;
   userCommand: string;
 }): Promise<CassieRun> {
   const intent = await routeIntent({
@@ -129,7 +131,7 @@ export async function runCassie(input: {
     const riskDecision = evaluateRisk({
       marketSelection,
       userSettings: input.userSettings,
-      accountState: input.accountState,
+      accountState: await requireAccountState(input.accountState),
       sizeUsd: intent.userSizeOverrideUsd,
     });
     const tradeTicket = createTradeTicket({
@@ -172,7 +174,7 @@ export async function runCassie(input: {
   const riskDecision = evaluateRisk({
     marketSelection,
     userSettings: input.userSettings,
-    accountState: input.accountState,
+    accountState: await requireAccountState(input.accountState),
     sizeUsd: intent.userSizeOverrideUsd,
   });
 
@@ -203,4 +205,16 @@ export async function runCassie(input: {
     riskDecision,
     responseType: "analysis",
   };
+}
+
+async function requireAccountState(accountState: AccountStateInput | undefined): Promise<AccountState> {
+  if (!accountState) {
+    throw new Error("Account state is required for trade routing and risk evaluation.");
+  }
+
+  if (typeof accountState === "function") {
+    return accountState();
+  }
+
+  return accountState;
 }
