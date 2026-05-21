@@ -99,7 +99,7 @@ export class GrokXSearchLane {
         tools: {
           x_search: xai.tools.xSearch({
             enableImageUnderstanding: true,
-            enableVideoUnderstanding: false,
+            enableVideoUnderstanding: true,
           }),
         },
         toolChoice: "auto",
