@@ -639,17 +639,6 @@ export const AuditEventSchema = z.object({
   createdAt: z.string(),
 });
 
-export const StoredRunSchema = z.object({
-  runId: z.string(),
-  mentionId: z.string(),
-  userId: z.string(),
-  userCommand: z.string(),
-  sourcePost: SourcePostSchema,
-  responseType: z.enum(["analysis", "critique", "trade_decision", "trade_ticket"]),
-  result: z.unknown(),
-  createdAt: z.string(),
-});
-
 export const ControlRunStatusSchema = z.enum([
   "queued",
   "running",
@@ -746,7 +735,6 @@ export type AccountState = z.infer<typeof AccountStateSchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;
 export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
-export type StoredRun = z.infer<typeof StoredRunSchema>;
 export type ControlRunStatus = z.infer<typeof ControlRunStatusSchema>;
 export type SupervisorFinalResult = z.infer<typeof SupervisorFinalResultSchema>;
 export type RunStepStatus = z.infer<typeof RunStepStatusSchema>;

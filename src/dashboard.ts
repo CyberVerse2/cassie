@@ -93,7 +93,7 @@ export function renderDashboard(state: CassieStoreSnapshot): string {
 <body>
   <header>
     <h1>Cassie</h1>
-    <span class="muted">${state.runs.length} runs / ${state.tradeTickets.length} tickets / ${state.auditEvents.length} audit events</span>
+    <span class="muted">${state.controlRuns.length} runs / ${state.tradeTickets.length} tickets / ${state.auditEvents.length} audit events</span>
   </header>
   <main>
     <div class="stack">
@@ -114,10 +114,10 @@ export function renderDashboard(state: CassieStoreSnapshot): string {
       </section>
       <section>
         <h2>Runs</h2>
-        ${state.runs.slice().reverse().map((run) => `
+        ${state.controlRuns.slice().reverse().map((run) => `
           <div class="row">
             <div>
-              <strong>${escapeHtml(run.responseType)}</strong>
+              <strong>${escapeHtml(run.status)}</strong>
               <div class="muted">${escapeHtml(run.userCommand)}</div>
             </div>
             <span class="pill">${new Date(run.createdAt).toLocaleString()}</span>

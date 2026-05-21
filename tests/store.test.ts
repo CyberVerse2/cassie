@@ -18,7 +18,7 @@ const settings: UserSettings = {
 };
 
 describe("InMemoryCassieStore", () => {
-  it("stores user settings, mentions, runs, and audit events", async () => {
+  it("stores user settings, mentions, control runs, and audit events", async () => {
     const store = new InMemoryCassieStore();
 
     await store.upsertUserSettings(settings);
@@ -35,20 +35,22 @@ describe("InMemoryCassieStore", () => {
         createdAt: null,
       },
     });
-    await store.addRun({
-      mentionId: mention.mentionId,
+    const run = await store.createRun({
       userId: "user_1",
       userCommand: mention.userCommand,
       sourcePost: mention.sourcePost,
-      responseType: "critique",
-      result: { ok: true },
+    });
+    await store.updateRun({
+      ...run,
+      status: "succeeded",
+      result: { responseType: "critique" },
+      updatedAt: new Date().toISOString(),
     });
 
     const snapshot = await store.load();
     expect(snapshot.userSettings).toHaveLength(1);
     expect(snapshot.mentions).toHaveLength(1);
-    expect(snapshot.runs).toHaveLength(1);
+    expect(snapshot.controlRuns).toHaveLength(1);
     expect(snapshot.auditEvents.map((event) => event.eventType)).toContain("mention.received");
-    expect(snapshot.auditEvents.map((event) => event.eventType)).toContain("run.completed");
   });
 });

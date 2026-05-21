@@ -110,7 +110,7 @@ App flow:
   run-supervisor <runId>    Run the ToolLoopAgent supervisor for a queued control-plane run.
   control-run <runId>       Show a durable control-plane run and its recorded steps.
   state                     Show the persisted app state summary.
-  runs                      List completed Cassie runs.
+  runs                      List durable control-plane runs.
   tickets                   List trade tickets.
   approve <ticketId>        Approve a pending trade ticket and queue execution.
   execute-next --yes        Execute the next queued execution job.
@@ -195,15 +195,15 @@ async function state(args: ParsedArgs) {
 async function runs(args: ParsedArgs) {
   const snapshot = await product().state();
   const userId = nullableFlag(args, "user");
-  return snapshot.runs
+  return snapshot.controlRuns
     .filter((run) => !userId || run.userId === userId)
     .map((run) => ({
       runId: run.runId,
-      mentionId: run.mentionId,
       userId: run.userId,
-      responseType: run.responseType,
+      status: run.status,
       userCommand: run.userCommand,
       createdAt: run.createdAt,
+      updatedAt: run.updatedAt,
     }));
 }
 
@@ -283,7 +283,7 @@ function product() {
 function summarizeState(snapshot: CassieStoreSnapshot) {
   return {
     mentions: snapshot.mentions.length,
-    runs: countBy(snapshot.runs, (run) => run.responseType),
+    runs: countBy(snapshot.controlRuns, (run) => run.status),
     tradeTickets: countBy(snapshot.tradeTickets, (ticket) => ticket.approvalState),
     executionJobs: countBy(snapshot.executionJobs, (job) => job.status),
     auditEvents: snapshot.auditEvents.length,

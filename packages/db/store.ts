@@ -6,7 +6,6 @@ import type {
   ResearchReport,
   RunStep,
   SourcePost,
-  StoredRun,
   TradeTicket,
   UserSettings,
 } from "../core/schemas/index.ts";
@@ -28,7 +27,6 @@ export interface ResearchReportRecord {
 
 export interface CassieStoreSnapshot {
   mentions: MentionRecord[];
-  runs: StoredRun[];
   researchReports: ResearchReportRecord[];
   tradeTickets: TradeTicket[];
   executionJobs: ExecutionJob[];
@@ -57,7 +55,6 @@ export interface CassieStore {
   updateRunStep(step: RunStep): Promise<RunStep>;
   getRunSteps(runId: string): Promise<RunStep[]>;
   addMention(input: Omit<MentionRecord, "mentionId" | "createdAt">): Promise<MentionRecord>;
-  addRun(run: Omit<StoredRun, "runId" | "createdAt">): Promise<StoredRun>;
   addResearchReport(input: {
     runId: string;
     report: ResearchReport;
@@ -75,7 +72,6 @@ export interface CassieStore {
 
 const emptySnapshot = (): CassieStoreSnapshot => ({
   mentions: [],
-  runs: [],
   researchReports: [],
   tradeTickets: [],
   executionJobs: [],
@@ -171,23 +167,6 @@ export class InMemoryCassieStore implements CassieStore {
       data: mention,
     });
     return mention;
-  }
-
-  async addRun(run: Omit<StoredRun, "runId" | "createdAt">): Promise<StoredRun> {
-    const storedRun: StoredRun = {
-      ...run,
-      runId: randomUUID(),
-      createdAt: new Date().toISOString(),
-    };
-    this.snapshot.runs.push(storedRun);
-    await this.audit({
-      entityId: storedRun.runId,
-      entityType: "run",
-      eventType: "run.completed",
-      message: "Cassie run completed.",
-      data: { responseType: storedRun.responseType, mentionId: storedRun.mentionId },
-    });
-    return storedRun;
   }
 
   async addResearchReport(input: {

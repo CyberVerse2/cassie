@@ -6,7 +6,6 @@ import type {
   ResearchReport,
   RunStep,
   SourcePost,
-  StoredRun,
   TradeTicket,
   UserSettings,
 } from "../core/schemas/index.ts";
@@ -25,20 +24,6 @@ export const mentions = pgTable("mentions", {
   createdAt: text("created_at").notNull(),
 }, (table) => [
   index("mentions_user_created_idx").on(table.userId, table.createdAt),
-]);
-
-export const runs = pgTable("runs", {
-  runId: text("run_id").primaryKey(),
-  mentionId: text("mention_id").notNull(),
-  userId: text("user_id").notNull(),
-  userCommand: text("user_command").notNull(),
-  sourcePost: jsonb("source_post").$type<SourcePost>().notNull(),
-  responseType: text("response_type").$type<StoredRun["responseType"]>().notNull(),
-  result: jsonb("result").notNull(),
-  createdAt: text("created_at").notNull(),
-}, (table) => [
-  index("runs_mention_idx").on(table.mentionId),
-  index("runs_user_created_idx").on(table.userId, table.createdAt),
 ]);
 
 export const researchReports = pgTable("research_reports", {

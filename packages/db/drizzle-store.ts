@@ -7,7 +7,6 @@ import type {
   ResearchReport,
   RunStep,
   SourcePost,
-  StoredRun,
   TradeTicket,
   UserSettings,
 } from "../core/schemas/index.ts";
@@ -18,7 +17,6 @@ import {
   mentions,
   researchReports,
   runtimeState,
-  runs,
   runSteps,
   tradeTickets,
   userSettings,
@@ -39,7 +37,6 @@ export class DrizzleCassieStore implements CassieStore {
     const [
       userSettingsRows,
       mentionRows,
-      runRows,
       reportRows,
       ticketRows,
       jobRows,
@@ -49,7 +46,6 @@ export class DrizzleCassieStore implements CassieStore {
     ] = await Promise.all([
       this.db.select().from(userSettings),
       this.db.select().from(mentions),
-      this.db.select().from(runs),
       this.db.select().from(researchReports),
       this.db.select().from(tradeTickets),
       this.db.select().from(executionJobs),
@@ -61,10 +57,6 @@ export class DrizzleCassieStore implements CassieStore {
     return {
       userSettings: userSettingsRows.map((row) => row.settings),
       mentions: mentionRows,
-      runs: runRows.map((row) => ({
-        ...row,
-        result: row.result,
-      })),
       researchReports: reportRows,
       tradeTickets: ticketRows.map((row) => row.ticket),
       executionJobs: jobRows.map((row) => row.job),
@@ -218,25 +210,6 @@ export class DrizzleCassieStore implements CassieStore {
     });
 
     return mention;
-  }
-
-  async addRun(run: Omit<StoredRun, "runId" | "createdAt">): Promise<StoredRun> {
-    const storedRun: StoredRun = {
-      ...run,
-      runId: randomUUID(),
-      createdAt: new Date().toISOString(),
-    };
-
-    await this.db.insert(runs).values(storedRun);
-    await this.audit({
-      entityId: storedRun.runId,
-      entityType: "run",
-      eventType: "run.completed",
-      message: "Cassie run completed.",
-      data: { responseType: storedRun.responseType, mentionId: storedRun.mentionId },
-    });
-
-    return storedRun;
   }
 
   async addResearchReport(input: {
