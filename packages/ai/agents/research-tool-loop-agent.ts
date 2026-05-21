@@ -262,22 +262,283 @@ function lastContinuationAction(steps: StepLike[]): string | null {
 }
 
 function compressToolPayload(message: Record<string, unknown>) {
-  const text = JSON.stringify(message);
+  const originalChars = JSON.stringify(message).length;
+  const toolResults = Array.isArray(message.content)
+    ? message.content
+      .filter(isRecord)
+      .filter((part) => part.type === "tool-result")
+      .map(compressToolResultPart)
+    : [compressToolResultPart({ output: message })];
+
   return {
     compressed: true,
-    originalChars: text.length,
-    summary: text.slice(0, 500),
-    counts: {
-      searchResults: countPattern(text, "searchResults"),
-      evidenceClaims: countPattern(text, "evidenceClaims"),
-      goalEvidenceLinks: countPattern(text, "goalEvidenceLinks"),
-      goalResolutions: countPattern(text, "goalResolutions"),
-    },
+    kind: "research_tool_digest",
+    originalChars,
+    toolResults,
+    totals: mergeDigestTotals(toolResults),
   };
 }
 
-function countPattern(value: string, pattern: string) {
-  return value.includes(pattern) ? 1 : 0;
+function compressToolResultPart(part: Record<string, unknown>) {
+  const output = isRecord(part.output) && "value" in part.output ? part.output.value : part.output;
+  return {
+    toolName: stringOrNull(part.toolName),
+    toolCallId: stringOrNull(part.toolCallId),
+    digest: compressPayload(output),
+  };
+}
+
+function compressPayload(payload: unknown) {
+  const searchResults = findArraysByKey(payload, "searchResults").flat().filter(isRecord);
+  const evidenceClaims = findArraysByKey(payload, "evidenceClaims").flat().filter(isRecord);
+  const goalEvidenceLinks = findArraysByKey(payload, "goalEvidenceLinks").flat().filter(isRecord);
+  const goalResolutions = findArraysByKey(payload, "goalResolutions").flat().filter(isRecord);
+  const adaptiveRequests = findArraysByKey(payload, "adaptiveQueryRequests").flat().filter(isRecord)
+    .concat(findArraysByKey(payload, "requests").flat().filter(isRecord));
+  const continuationDecisions = findArraysByKey(payload, "researchContinuationDecisions").flat().filter(isRecord)
+    .concat(findArraysByKey(payload, "continuationDecisions").flat().filter(isRecord));
+  const errors = findValuesByKey(payload, "error")
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+
+  return {
+    status: firstStringByKeys(payload, ["status", "action"]),
+    ids: compactStrings([
+      firstStringByKeys(payload, ["runId", "controlRunId"]),
+      firstStringByKeys(payload, ["researchRunId"]),
+      firstStringByKeys(payload, ["queryJobId", "queryId"]),
+    ]),
+    counts: {
+      searchResults: searchResults.length,
+      evidenceClaims: evidenceClaims.length,
+      goalEvidenceLinks: goalEvidenceLinks.length,
+      goalResolutions: goalResolutions.length,
+      adaptiveRequests: adaptiveRequests.length,
+      errors: errors.length,
+    },
+    sources: uniqueBy(searchResults.map(summarizeSearchResult), sourceKey).slice(0, 12),
+    keyClaims: evidenceClaims.map((claim) => summarizeEvidenceClaim(claim, goalEvidenceLinks)).slice(0, 16),
+    contradictions: goalEvidenceLinks
+      .filter((link) => stringOrNull(link.stance) === "contradicts")
+      .map(summarizeGoalEvidenceLink)
+      .slice(0, 12),
+    unresolvedGaps: goalResolutions
+      .filter((resolution) => ["unresolved", "partially_resolved"].includes(stringOrNull(resolution.status) ?? ""))
+      .map(summarizeGoalResolution)
+      .slice(0, 12),
+    continuation: continuationDecisions.map(summarizeContinuationDecision).slice(0, 4),
+    adaptiveRequests: adaptiveRequests.map(summarizeAdaptiveRequest).slice(0, 6),
+    errors: errors.map((error) => truncate(error, 220)).slice(0, 8),
+    preservedRawRefs: searchResults.filter(shouldPreserveRawRef).map((result) => ({
+      resultId: stringOrNull(result.id),
+      reason: rawPreservationReason(result),
+    })).slice(0, 8),
+  };
+}
+
+function summarizeSearchResult(result: Record<string, unknown>) {
+  return {
+    resultId: stringOrNull(result.id),
+    queryJobId: stringOrNull(result.queryJobId),
+    queryId: stringOrNull(result.queryId),
+    goalIds: stringArray(result.goalIds),
+    provider: stringOrNull(result.provider),
+    title: stringOrNull(result.title),
+    url: stringOrNull(result.url),
+    canonicalUrl: stringOrNull(result.canonicalUrl),
+    sourceName: stringOrNull(result.sourceName),
+    sourceType: stringOrNull(result.sourceType),
+    reliabilityHint: reliabilityHint(result),
+    rank: numberOrNull(result.rank),
+    snippet: truncate(stringOrNull(result.snippet) ?? stringOrNull(result.rawText), 240),
+  };
+}
+
+function summarizeEvidenceClaim(claim: Record<string, unknown>, links: Record<string, unknown>[]) {
+  const claimId = stringOrNull(claim.id);
+  const claimLinks = links.filter((link) => stringOrNull(link.evidenceClaimId) === claimId);
+  return {
+    claimId,
+    resultId: stringOrNull(claim.resultId),
+    queryJobId: stringOrNull(claim.queryJobId),
+    queryId: stringOrNull(claim.queryId),
+    goalIds: stringArray(claim.goalIds),
+    claim: truncate(stringOrNull(claim.claimText), 280),
+    sourceType: stringOrNull(claim.sourceType),
+    directness: stringOrNull(claim.directness),
+    reliability: stringOrNull(claim.reliability),
+    extractionConfidence: numberOrNull(claim.extractionConfidence),
+    links: claimLinks.map(summarizeGoalEvidenceLink).slice(0, 6),
+  };
+}
+
+function summarizeGoalEvidenceLink(link: Record<string, unknown>) {
+  return {
+    linkId: stringOrNull(link.id),
+    evidenceClaimId: stringOrNull(link.evidenceClaimId),
+    goalId: stringOrNull(link.goalId),
+    stance: stringOrNull(link.stance),
+    strength: numberOrNull(link.strength),
+    relevance: numberOrNull(link.relevance),
+    rationale: truncate(stringOrNull(link.rationale), 220),
+  };
+}
+
+function summarizeGoalResolution(resolution: Record<string, unknown>) {
+  return {
+    goalId: stringOrNull(resolution.goalId),
+    status: stringOrNull(resolution.status),
+    confidence: numberOrNull(resolution.confidence),
+    summary: truncate(stringOrNull(resolution.summary), 260),
+    missingEvidence: stringArray(resolution.missingEvidence).slice(0, 5),
+    synthesisImplication: truncate(stringOrNull(resolution.synthesisImplication), 240),
+  };
+}
+
+function summarizeContinuationDecision(decision: Record<string, unknown>) {
+  return {
+    action: stringOrNull(decision.action),
+    reason: truncate(stringOrNull(decision.reason), 260),
+    maxAdditionalQueries: numberOrNull(decision.maxAdditionalQueries),
+  };
+}
+
+function summarizeAdaptiveRequest(request: Record<string, unknown>) {
+  return {
+    unresolvedGoalId: stringOrNull(request.unresolvedGoalId),
+    evidenceGap: truncate(stringOrNull(request.evidenceGap), 240),
+    decisionImpact: truncate(stringOrNull(request.decisionImpact), 220),
+    queries: Array.isArray(request.queries)
+      ? request.queries.filter(isRecord).map((query) => ({
+        lane: stringOrNull(query.lane),
+        query: truncate(stringOrNull(query.query), 180),
+        queryKind: stringOrNull(query.queryKind),
+        priority: numberOrNull(query.priority),
+      })).slice(0, 5)
+      : [],
+  };
+}
+
+function mergeDigestTotals(results: Array<{ digest: unknown }>) {
+  return results.reduce((totals, result) => {
+    const counts = isRecord(result.digest) && isRecord(result.digest.counts) ? result.digest.counts : {};
+    return {
+      searchResults: totals.searchResults + numberOrZero(counts.searchResults),
+      evidenceClaims: totals.evidenceClaims + numberOrZero(counts.evidenceClaims),
+      goalEvidenceLinks: totals.goalEvidenceLinks + numberOrZero(counts.goalEvidenceLinks),
+      goalResolutions: totals.goalResolutions + numberOrZero(counts.goalResolutions),
+      adaptiveRequests: totals.adaptiveRequests + numberOrZero(counts.adaptiveRequests),
+      errors: totals.errors + numberOrZero(counts.errors),
+    };
+  }, {
+    searchResults: 0,
+    evidenceClaims: 0,
+    goalEvidenceLinks: 0,
+    goalResolutions: 0,
+    adaptiveRequests: 0,
+    errors: 0,
+  });
+}
+
+function findArraysByKey(value: unknown, targetKey: string): unknown[][] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => findArraysByKey(item, targetKey));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  const matches = Array.isArray(value[targetKey]) ? [value[targetKey] as unknown[]] : [];
+  return matches.concat(Object.values(value).flatMap((item) => findArraysByKey(item, targetKey)));
+}
+
+function findValuesByKey(value: unknown, targetKey: string): unknown[] {
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => findValuesByKey(item, targetKey));
+  }
+  if (!isRecord(value)) {
+    return [];
+  }
+  const matches = targetKey in value ? [value[targetKey]] : [];
+  return matches.concat(Object.values(value).flatMap((item) => findValuesByKey(item, targetKey)));
+}
+
+function firstStringByKeys(value: unknown, keys: string[]): string | null {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstStringByKeys(item, keys);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (!isRecord(value)) return null;
+  for (const key of keys) {
+    const found = stringOrNull(value[key]);
+    if (found) return found;
+  }
+  for (const item of Object.values(value)) {
+    const found = firstStringByKeys(item, keys);
+    if (found) return found;
+  }
+  return null;
+}
+
+function shouldPreserveRawRef(result: Record<string, unknown>) {
+  const sourceType = stringOrNull(result.sourceType);
+  return sourceType === "official" ||
+    sourceType === "regulatory" ||
+    sourceType === "filing" ||
+    sourceType === "company" ||
+    sourceType === "security_researcher";
+}
+
+function rawPreservationReason(result: Record<string, unknown>) {
+  const sourceType = stringOrNull(result.sourceType);
+  return sourceType ? `${sourceType} source may need exact wording` : "source may need exact wording";
+}
+
+function reliabilityHint(result: Record<string, unknown>) {
+  const sourceType = stringOrNull(result.sourceType);
+  if (sourceType === "official" || sourceType === "regulatory" || sourceType === "filing") return "high";
+  if (sourceType === "social" || sourceType === "unknown") return "unknown";
+  return null;
+}
+
+function sourceKey(source: ReturnType<typeof summarizeSearchResult>) {
+  return source.canonicalUrl ?? source.url ?? source.resultId ?? JSON.stringify(source);
+}
+
+function uniqueBy<T>(items: T[], keyForItem: (item: T) => string) {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    const key = keyForItem(item);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function stringOrNull(value: unknown) {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function stringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function numberOrNull(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function numberOrZero(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function compactStrings(values: Array<string | null>) {
+  return values.filter((value): value is string => Boolean(value));
+}
+
+function truncate(value: string | null, maxLength: number) {
+  if (!value) return null;
+  return value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
 }
 
 function researchToolLoopInstructions() {

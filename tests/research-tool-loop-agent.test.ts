@@ -113,14 +113,65 @@ describe("research ToolLoopAgent configuration", () => {
             type: "tool-result",
             toolCallId: "1",
             toolName: "run_web_query",
-            output: { type: "json", value: { raw: "x".repeat(2000), evidenceClaims: [{ id: "claim_1" }] } },
+            output: {
+              type: "json",
+              value: {
+                raw: "x".repeat(2000),
+                searchResults: [{
+                  id: "result_1",
+                  queryJobId: "job_1",
+                  queryId: "q_1",
+                  goalIds: ["g_verify"],
+                  provider: "openrouter_web_search",
+                  title: "SEC filing",
+                  url: "https://sec.gov/example",
+                  sourceType: "filing",
+                  snippet: "Primary filing confirms the event.",
+                }],
+                evidenceClaims: [{
+                  id: "claim_1",
+                  resultId: "result_1",
+                  queryJobId: "job_1",
+                  queryId: "q_1",
+                  goalIds: ["g_verify"],
+                  claimText: "The filing exists.",
+                  sourceType: "filing",
+                  directness: "primary",
+                  reliability: "high",
+                  extractionConfidence: 0.93,
+                }],
+                goalEvidenceLinks: [{
+                  id: "link_1",
+                  evidenceClaimId: "claim_1",
+                  goalId: "g_verify",
+                  stance: "contradicts",
+                  strength: 0.8,
+                  relevance: 0.9,
+                  rationale: "The claim contradicts the assumed nonexistence of the filing.",
+                }],
+                goalResolutions: [{
+                  goalId: "g_tradeability",
+                  status: "unresolved",
+                  confidence: 0.4,
+                  summary: "No tradable instrument confirmed.",
+                  missingEvidence: ["official ticker"],
+                  synthesisImplication: "Do not route to trade.",
+                }],
+              },
+            },
           },
         ],
       },
     ] as never);
 
-    expect(JSON.stringify(messages)).toContain("compressed");
-    expect(JSON.stringify(messages).length).toBeLessThan(900);
+    const serialized = JSON.stringify(messages);
+    expect(serialized).toContain("research_tool_digest");
+    expect(serialized).toContain("The filing exists.");
+    expect(serialized).toContain("contradicts");
+    expect(serialized).toContain("official ticker");
+    expect(serialized).toContain("filing source may need exact wording");
+    expect(serialized).not.toContain("x".repeat(100));
+    expect(serialized.length).toBeLessThan(3000);
   });
 
   it("extracts the final answer from an explicit done tool call", () => {
