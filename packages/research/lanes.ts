@@ -30,7 +30,6 @@ export class OpenAiWebSearchLane {
     private readonly apiKey = process.env.OPENROUTER_API_KEY,
     private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.OPENROUTER_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
     private readonly trace?: TraceRecorder,
-    private readonly timeoutMs = Number(process.env.CASSIE_WEB_QUERY_TIMEOUT_MS ?? 60_000),
     private readonly maxResults = Number(process.env.CASSIE_WEB_SEARCH_MAX_RESULTS ?? 5),
     private readonly searchEngine = process.env.CASSIE_WEB_SEARCH_ENGINE ?? DEFAULT_WEB_SEARCH_ENGINE,
   ) {}
@@ -78,7 +77,6 @@ export class OpenAiWebSearchLane {
       const result = await generateText({
         model: openrouter(this.model),
         prompt,
-        abortSignal: AbortSignal.timeout(this.timeoutMs),
       });
       const ledger = await classifyEvidenceLedger({
         provider: "openrouter_web_search",
@@ -115,7 +113,6 @@ export class GrokXSearchLane {
     private readonly apiKey = process.env.XAI_API_KEY,
     private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
     private readonly trace?: TraceRecorder,
-    private readonly timeoutMs = Number(process.env.CASSIE_X_QUERY_TIMEOUT_MS ?? 60_000),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
@@ -149,7 +146,6 @@ export class GrokXSearchLane {
         },
         toolChoice: "auto",
         prompt,
-        abortSignal: AbortSignal.timeout(this.timeoutMs),
       });
       const ledger = await classifyEvidenceLedger({
         provider: "grok_x_search",

@@ -55,7 +55,7 @@ export async function runCassieSupervisorForRun(input: {
       id: "cassie-supervisor",
       model: openai(process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5"),
       providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-supervisor" }),
-      stopWhen: createCassieStopConditions(Number(process.env.CASSIE_SUPERVISOR_MAX_STEPS ?? 12)),
+      stopWhen: createCassieStopConditions(),
       tools,
       output: Output.object({
         schema: SupervisorFinalResultSchema,

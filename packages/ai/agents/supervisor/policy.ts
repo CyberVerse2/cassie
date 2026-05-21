@@ -4,7 +4,6 @@ import {
   type StopCondition,
   type ToolSet,
   hasToolCall,
-  stepCountIs,
 } from "ai";
 import type { IntentResult, RiskDecision } from "../../../core/schemas/index.ts";
 import type { createCassieSupervisorTools } from "./tools.ts";
@@ -12,10 +11,9 @@ import type { createCassieSupervisorTools } from "./tools.ts";
 export type CassieSupervisorTools = ReturnType<typeof createCassieSupervisorTools>;
 export type CassieSupervisorToolName = keyof CassieSupervisorTools;
 
-export function createCassieStopConditions(maxSteps: number): StopCondition<CassieSupervisorTools>[] {
+export function createCassieStopConditions(): StopCondition<CassieSupervisorTools>[] {
   return [
-    stepCountIs(maxSteps),
-    stopIfModelContinuesAfterFinalize,
+    hasToolCall("finalize_run"),
   ];
 }
 
@@ -88,12 +86,6 @@ export function selectActiveTools(
   }
 
   return ["finalize_run"];
-}
-
-function stopIfModelContinuesAfterFinalize({ steps }: { steps: StepResult<CassieSupervisorTools>[] }): boolean {
-  return hasToolCall("finalize_run")({ steps }) && steps.at(-1)?.toolCalls.some(
-    (call) => call.toolName !== "finalize_run",
-  ) === true;
 }
 
 function hasCalled(

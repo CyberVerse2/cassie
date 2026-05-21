@@ -138,8 +138,6 @@ async function executeResearchWaves(input: {
   adaptiveDecisions: ResearchContinuationDecision[];
 }>> {
   const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
-  const startedAt = Date.now();
-  const maxRuntimeMs = Number(process.env.CASSIE_RESEARCH_MAX_RUNTIME_MS ?? 360_000);
   const results: Array<{
     wave: number;
     openAiResult: PromiseSettledResult<SearchLaneResult>;
@@ -151,9 +149,6 @@ async function executeResearchWaves(input: {
   }> = [];
 
   for (const wave of waves) {
-    if (Date.now() - startedAt > maxRuntimeMs) {
-      break;
-    }
     const wavePlan = planForWave(input.queryPlan, wave);
     const queryJobs = compileQueryJobs(input.queryPlan, wave, input.researchRunId);
     await input.persistence?.store.addResearchQueryJobs(input.researchRunId, queryJobs);
@@ -204,12 +199,7 @@ async function executeResearchWaves(input: {
     const adaptiveDecisions: ResearchContinuationDecision[] = [];
     let adaptiveRound = 0;
 
-    const maxAdaptiveRounds = Number(process.env.CASSIE_RESEARCH_MAX_ADAPTIVE_ROUNDS ?? 1);
-    while (
-      continuationDecision.action === "continue_with_adaptive_queries" &&
-      adaptiveRound < maxAdaptiveRounds &&
-      Date.now() - startedAt <= maxRuntimeMs
-    ) {
+    while (continuationDecision.action === "continue_with_adaptive_queries") {
       adaptiveRound += 1;
       adaptiveDecisions.push(continuationDecision);
       const adaptiveRequest = await generateAdaptiveQueryRequest({
@@ -352,8 +342,6 @@ async function generateAdaptiveQueryRequest(input: {
     prompt: adaptiveQueryRequestPrompt({
       wave: input.wave,
       adaptiveRound: input.adaptiveRound,
-      maxAdaptiveRounds: 2,
-      maxQueries: input.continuationDecision.maxAdditionalQueries,
       queryPlan: input.queryPlan,
       goalResolutions: input.goalResolutions,
       continuationDecision: input.continuationDecision,
@@ -528,7 +516,7 @@ function decideContinuation(input: {
       unresolvedBlockingGoalIds,
       contradictedGoalIds: [],
       allowedNextGoalIds: [],
-      maxAdditionalQueries: 3,
+      maxAdditionalQueries: null,
       adaptiveQueryInstructions: input.goalResolutions
         .filter((resolution) => unresolvedBlockingGoalIds.includes(resolution.goalId))
         .flatMap((resolution) => resolution.unresolvedQuestions.length > 0 ? resolution.unresolvedQuestions : [resolution.summary]),

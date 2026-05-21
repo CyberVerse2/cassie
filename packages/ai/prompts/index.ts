@@ -253,7 +253,6 @@ Rules:
 - Propose queries only when the answer could change the final research/trade classification.
 - Every proposed query must cite a concrete evidence gap.
 - Prefer primary-source, disconfirming, or direct-resolution queries.
-- Keep the total request small: at most 3 requests and at most 3 queries per request.
 - Use web for primary/official/news/docs context and X for origin/social/refutation/source provenance.
 - If no useful adaptive query exists, return an empty requests array.
 

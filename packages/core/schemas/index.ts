@@ -399,7 +399,7 @@ export const ResearchContinuationDecisionSchema = z.object({
   unresolvedBlockingGoalIds: z.array(z.string()),
   contradictedGoalIds: z.array(z.string()),
   allowedNextGoalIds: z.array(z.string()),
-  maxAdditionalQueries: z.number().int().min(0),
+  maxAdditionalQueries: z.number().int().min(0).nullable(),
   adaptiveQueryInstructions: z.array(z.string()),
   blockedActions: z.array(z.string()),
 });
@@ -425,8 +425,8 @@ export const AdaptiveQueryRequestSchema = z.object({
       maxResults: z.number().int().min(1).max(100),
       priority: z.number().min(0).max(1),
       rationale: z.string(),
-    })).max(3),
-  })).max(3),
+    })),
+  })),
 });
 
 export const ResearchReportSchema = z.object({

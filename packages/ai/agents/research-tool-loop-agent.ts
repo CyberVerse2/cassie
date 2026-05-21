@@ -1,6 +1,6 @@
 import { openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { ToolLoopAgent, hasToolCall, stepCountIs, tool } from "ai";
+import { ToolLoopAgent, hasToolCall, tool } from "ai";
 import { z } from "zod";
 import {
   DEFAULT_CHEAP_MODEL,
@@ -40,7 +40,7 @@ export function createResearchToolLoopAgent() {
     instructions: researchToolLoopInstructions(),
     tools: researchTools(),
     toolChoice: "required",
-    stopWhen: [hasToolCall("done"), stepCountIs(14)],
+    stopWhen: [hasToolCall("done")],
     prepareStep: prepareResearchToolLoopStep as never,
   });
 }
