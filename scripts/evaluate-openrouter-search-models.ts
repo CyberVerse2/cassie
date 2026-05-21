@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
+import { openRouterProviderOptions, openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
 
 const MODELS = [
   "deepseek/deepseek-v4-flash",
@@ -113,6 +113,7 @@ async function runModel(input: {
         name: `cassie_search_eval_${input.questionIndex + 1}_${safeName(input.model)}`,
       }),
       prompt: buildPrompt(input.question, input.model),
+      providerOptions: openRouterProviderOptions(),
       abortSignal: AbortSignal.timeout(timeoutMs),
     });
 

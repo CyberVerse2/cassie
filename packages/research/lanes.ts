@@ -16,7 +16,7 @@ import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
-import { openRouterCacheablePrompt, openRouterProviderPreferences } from "../ai/openrouter-options.ts";
+import { openRouterCacheablePrompt, openRouterProviderOptions, openRouterProviderPreferences } from "../ai/openrouter-options.ts";
 
 type SearchSource = {
   title?: string;
@@ -72,17 +72,23 @@ export class OpenAiWebSearchLane {
     });
 
     try {
-      const result = await generateText({
-        model: openrouter(this.model),
-        messages: openRouterCacheablePrompt(prompt),
-      });
-      const ledger = await classifyEvidenceLedger({
-        provider: "openrouter_web_search",
-        job,
-        queryPlan,
-        summary: result.text,
-        sources: result.sources,
-      });
+      const result = await wrapConnectorStage("OpenRouter web search generation", () =>
+        generateText({
+          model: openrouter(this.model),
+          messages: openRouterCacheablePrompt(prompt),
+          providerOptions: openRouterProviderOptions(),
+          abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
+        })
+      );
+      const ledger = await wrapConnectorStage("OpenRouter evidence classification after web search", () =>
+        classifyEvidenceLedger({
+          provider: "openrouter_web_search",
+          job,
+          queryPlan,
+          summary: result.text,
+          sources: result.sources,
+        })
+      );
       const output = {
         lane: "openai_search" as const,
         evidence: evidenceFromLedger("openai_search", ledger),
@@ -134,24 +140,29 @@ export class GrokXSearchLane {
     });
 
     try {
-      const result = await generateText({
-        model: xai.responses(this.model),
-        tools: {
-          x_search: xai.tools.xSearch({
-            enableImageUnderstanding: true,
-            enableVideoUnderstanding: true,
-          }),
-        },
-        toolChoice: "auto",
-        prompt,
-      });
-      const ledger = await classifyEvidenceLedger({
-        provider: "grok_x_search",
-        job,
-        queryPlan,
-        summary: result.text,
-        toolResults: result.toolResults,
-      });
+      const result = await wrapConnectorStage("Grok X search generation", () =>
+        generateText({
+          model: xai.responses(this.model),
+          tools: {
+            x_search: xai.tools.xSearch({
+              enableImageUnderstanding: true,
+              enableVideoUnderstanding: true,
+            }),
+          },
+          toolChoice: "auto",
+          prompt,
+          abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
+        })
+      );
+      const ledger = await wrapConnectorStage("OpenRouter evidence classification after Grok X search", () =>
+        classifyEvidenceLedger({
+          provider: "grok_x_search",
+          job,
+          queryPlan,
+          summary: result.text,
+          toolResults: result.toolResults,
+        })
+      );
       const output = {
         lane: "x_search" as const,
         evidence: evidenceFromLedger("x_search", ledger),
@@ -286,9 +297,28 @@ async function classifyEvidenceLedger(input: {
       name: "cassie_evidence_ledger",
     }),
     messages: openRouterCacheablePrompt(prompt),
+    providerOptions: openRouterProviderOptions(),
+    abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
   });
 
   return result.output;
+}
+
+function connectorCallTimeoutMs() {
+  const value = Number(process.env.CASSIE_CONNECTOR_CALL_TIMEOUT_MS ?? 180_000);
+  return Number.isFinite(value) && value > 0 ? value : 180_000;
+}
+
+async function wrapConnectorStage<T>(stage: string, run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (error) {
+    throw new Error(`${stage} failed: ${errorMessage(error)}`, { cause: error });
+  }
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function evidenceFromLedger(sourceLane: "openai_search" | "x_search", ledger: EvidenceLedger): ResearchEvidence[] {

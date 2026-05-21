@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
+import { openRouterProviderOptions, openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
 
 const DEFAULT_MODEL_A = "google/gemini-3.1-flash-lite";
 const DEFAULT_MODEL_B = "google/gemini-2.5-flash";
@@ -98,6 +98,7 @@ async function runModel(model: string, schemaName: string): Promise<RunResult> {
         name: `openrouter_search_comparison_${schemaName}`,
       }),
       prompt: buildPrompt(query, model),
+      providerOptions: openRouterProviderOptions(),
       abortSignal: AbortSignal.timeout(timeoutMs),
     });
 

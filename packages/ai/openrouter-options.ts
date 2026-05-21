@@ -8,6 +8,14 @@ export function openRouterProviderPreferences() {
   };
 }
 
+export function openRouterProviderOptions() {
+  return {
+    openrouter: {
+      provider: openRouterProviderPreferences(),
+    },
+  };
+}
+
 export function openRouterCacheablePrompt(prompt: string): ModelMessage[] {
   return [
     {

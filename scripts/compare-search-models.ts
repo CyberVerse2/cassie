@@ -3,7 +3,7 @@ import { openai } from "@ai-sdk/openai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
+import { openRouterProviderOptions, openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
 
 const DEFAULT_OPENAI_MODEL = "gpt-5.4-mini";
 const DEFAULT_GEMINI_MODEL = "google/gemini-2.5-flash:online";
@@ -133,6 +133,7 @@ async function runOpenRouterGeminiSearch(): Promise<ModelRunResult> {
         name: "gemini_search_comparison",
       }),
       prompt: buildPrompt(query, "OpenRouter Gemini 2.5 Flash online search"),
+      providerOptions: openRouterProviderOptions(),
       abortSignal: AbortSignal.timeout(timeoutMs),
     });
 

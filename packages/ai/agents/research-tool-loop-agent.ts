@@ -7,7 +7,7 @@ import {
   DEFAULT_EXPENSIVE_MODEL,
 } from "../client.ts";
 import { openAiCostControlOptions } from "../openai-options.ts";
-import { openRouterCacheableSystemMessage, openRouterProviderPreferences } from "../openrouter-options.ts";
+import { openRouterCacheableSystemMessage, openRouterProviderOptions, openRouterProviderPreferences } from "../openrouter-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
   process.env.OPENROUTER_WEB_SEARCH_MODEL ??
@@ -218,7 +218,7 @@ function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
     activeTools.includes("classify_evidence") ||
     activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")
   ) {
-    return undefined;
+    return openRouterProviderOptions();
   }
 
   return openAiCostControlOptions({

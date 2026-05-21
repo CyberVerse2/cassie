@@ -482,74 +482,42 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
     .filter((run) => run.controlRunId === runId)
     .map((run) => run.researchRunId));
   const jobs = snapshot.researchQueryJobs
-    .filter((candidate) => researchRunIds.has(candidate.researchRunId));
-  for (const summary of summarizeLiveQueryJobs(jobs)) {
+    .filter((candidate) => researchRunIds.has(candidate.researchRunId))
+    .sort(compareLiveQueryJobs);
+  for (const job of jobs) {
     events.push({
-      key: `query-summary:${summary.wave}:${summary.lane}`,
-      signature: `${summary.running}:${summary.succeeded}:${summary.failed}:${summary.lastError ?? ""}`,
-      lines: liveQuerySummaryLines(summary, theme),
+      key: `query:${job.id}`,
+      signature: `${job.status}:${job.startedAt ?? ""}:${job.completedAt ?? ""}:${job.error ?? ""}`,
+      lines: liveQueryJobLines(job, theme),
     });
   }
 
   return events;
 }
 
-function summarizeLiveQueryJobs(jobs: CassieStoreSnapshot["researchQueryJobs"]) {
-  const groups = new Map<string, {
-    wave: number;
-    lane: string;
-    provider: string;
-    total: number;
-    running: number;
-    succeeded: number;
-    failed: number;
-    lastError: string | null;
-  }>();
-
-  for (const job of jobs) {
-    const key = `${job.wave}:${job.lane}:${job.provider}`;
-    const group = groups.get(key) ?? {
-      wave: job.wave,
-      lane: job.lane,
-      provider: job.provider,
-      total: 0,
-      running: 0,
-      succeeded: 0,
-      failed: 0,
-      lastError: null,
-    };
-    group.total += 1;
-    if (job.status === "running") group.running += 1;
-    if (job.status === "succeeded") group.succeeded += 1;
-    if (job.status === "failed") {
-      group.failed += 1;
-      group.lastError = job.error ?? "unknown error";
-    }
-    groups.set(key, group);
-  }
-
-  return Array.from(groups.values()).sort((left, right) =>
-    left.wave - right.wave || left.lane.localeCompare(right.lane)
-  );
-}
-
-function liveQuerySummaryLines(
-  summary: ReturnType<typeof summarizeLiveQueryJobs>[number],
+function liveQueryJobLines(
+  job: CassieStoreSnapshot["researchQueryJobs"][number],
   theme: TerminalTheme,
 ): string[] {
-  const badge = summary.lane === "x" ? theme.x(`[wave ${summary.wave}]`) : theme.web(`[wave ${summary.wave}]`);
-  const status = summary.failed > 0 && summary.running === 0
-    ? "completed_with_failures"
-    : summary.running > 0
-      ? "running"
-      : "succeeded";
+  const badge = job.lane === "x" ? theme.x(`[wave ${job.wave}]`) : theme.web(`[wave ${job.wave}]`);
   const lines = [
-    `|   |-- ${badge} ${summary.lane}/${summary.provider} ${statusTag(status, theme)} ${summary.succeeded}/${summary.total} ok ${summary.failed} failed ${summary.running} running`,
+    `|   |-- ${badge} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${liveDuration(job.startedAt, job.completedAt)}`,
+    ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |-- ", theme }),
+    ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |-- ", theme }),
   ];
-  if (summary.lastError) {
-    lines.push(...indentWrap({ text: `${theme.fail("last error")} ${summary.lastError}`, indent: "|   |   |-- ", theme }));
+  if (job.error) {
+    lines.push(...indentWrap({ text: `${theme.fail("error")} ${job.error}`, indent: "|   |   |-- ", theme }));
   }
   return lines;
+}
+
+function compareLiveQueryJobs(
+  left: CassieStoreSnapshot["researchQueryJobs"][number],
+  right: CassieStoreSnapshot["researchQueryJobs"][number],
+) {
+  return left.wave - right.wave ||
+    left.lane.localeCompare(right.lane) ||
+    left.querySpecId.localeCompare(right.querySpecId);
 }
 
 function liveToolBadge(model: string | null, stepType: string, theme: TerminalTheme): string {

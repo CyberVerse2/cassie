@@ -2,7 +2,7 @@ import "dotenv/config";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
+import { openRouterProviderOptions, openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
 
 const DEFAULT_MODEL = "deepseek/deepseek-v4-flash";
 
@@ -47,6 +47,7 @@ const result = await generateText({
     name: "deepseek_v4_flash_smoke_result",
   }),
   prompt: buildPrompt(prompt),
+  providerOptions: openRouterProviderOptions(),
   abortSignal: AbortSignal.timeout(timeoutMs),
 });
 

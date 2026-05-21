@@ -4,7 +4,7 @@ import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { openAiCostControlOptions } from "./openai-options.ts";
-import { openRouterCacheablePrompt, openRouterProviderPreferences } from "./openrouter-options.ts";
+import { openRouterCacheablePrompt, openRouterProviderOptions, openRouterProviderPreferences } from "./openrouter-options.ts";
 
 export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
@@ -140,7 +140,7 @@ export class OpenAiStructuredClient implements StructuredAiClient {
           : { prompt: input.prompt }),
         providerOptions: route.provider === "openai"
           ? openAiCostControlOptions({ promptCacheKey: input.name })
-          : undefined,
+          : openRouterProviderOptions(),
       });
 
       finishTrace?.({
@@ -188,6 +188,7 @@ export class OpenRouterStructuredClient implements StructuredAiClient {
         name: input.name,
       }),
       messages: openRouterCacheablePrompt(input.prompt),
+      providerOptions: openRouterProviderOptions(),
     });
 
     return result.output;
