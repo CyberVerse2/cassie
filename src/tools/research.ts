@@ -25,8 +25,15 @@ export interface ResearchQueryPlan {
   normalizedClaim: string;
   assets: string[];
   topics: string[];
+  sourceHandle: string | null;
+  sourceName: string | null;
   openAiQueries: string[];
   xQueries: string[];
+  sourceReputationQueries: string[];
+  entityResolutionQueries: string[];
+  founderDossierQueries: string[];
+  smartEngagerQueries: string[];
+  farcasterQueries: string[];
   contradictionQueries: string[];
 }
 
@@ -38,7 +45,7 @@ export async function researchThesis(input: {
   thesis: Thesis;
   researchAngle: ResearchAngle;
 }): Promise<ResearchReport> {
-  const queryPlan = buildResearchQueryPlan(input.thesis);
+  const queryPlan = buildResearchQueryPlan(input.thesis, input.sourcePost);
 
   const [openAiResult, xResult] = await Promise.allSettled([
     input.lanes.runOpenAiWebSearch(queryPlan),
@@ -63,25 +70,58 @@ export async function researchThesis(input: {
   });
 }
 
-export function buildResearchQueryPlan(thesis: Thesis): ResearchQueryPlan {
+export function buildResearchQueryPlan(thesis: Thesis, sourcePost?: SourcePost): ResearchQueryPlan {
   const assets = thesis.mentionedAssets;
   const topicText = thesis.topics.join(" ");
   const assetText = assets.join(" ");
   const claim = thesis.claim;
+  const sourceHandle = sourcePost?.authorHandle ?? null;
+  const sourceName = sourcePost?.authorName ?? null;
+  const sourceIdentity = [sourceHandle ? `@${sourceHandle}` : "", sourceName ?? ""].filter(Boolean).join(" ");
+  const entityText = assets.length > 0 ? assets.join(" ") : claim;
 
   return {
     normalizedClaim: claim,
     assets,
     topics: thesis.topics,
+    sourceHandle,
+    sourceName,
     openAiQueries: [
       `${claim} official source ${assetText}`,
       `${claim} reputable news ${topicText}`,
       `${claim} regulatory filing exchange announcement ${assetText}`,
+      `${entityText} founder Jeff Jeffrey product`,
+      `${entityText} Farcaster mini app founder`,
     ],
     xQueries: [
       `${claim} ${assetText}`,
       `${claim} refuted rumor ${assetText}`,
       `${claim} source screenshot ${topicText}`,
+      `${entityText} Jeff founder`,
+      `${entityText} Farcaster mini app`,
+    ],
+    sourceReputationQueries: [
+      sourceIdentity ? `${sourceIdentity} reputation founder product Base` : `${claim} source reputation`,
+      sourceHandle ? `@${sourceHandle} Conca Base founder product` : `${claim} author credibility`,
+    ],
+    entityResolutionQueries: [
+      `${entityText} official website`,
+      `${entityText} Jeff Jeffrey founder`,
+      `${entityText} Twitter X Farcaster`,
+    ],
+    founderDossierQueries: [
+      `Jeff Jeffrey ${entityText} founder profile`,
+      `Jeff Jeffrey ${entityText} Farcaster posts`,
+      `Jeff Jeffrey ${entityText} X posts`,
+    ],
+    smartEngagerQueries: [
+      sourcePost?.url ? `${sourcePost.url} replies likes reposts notable accounts` : `${claim} notable replies likes reposts`,
+      `${entityText} smart followers investors builders replies`,
+    ],
+    farcasterQueries: [
+      `${entityText} Farcaster profile`,
+      `${entityText} Farcaster casts Jeff Jeffrey`,
+      `${entityText} miniapp Farcaster`,
     ],
     contradictionQueries: [
       `${claim} false refuted`,

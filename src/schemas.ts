@@ -139,6 +139,28 @@ export const ResearchReportSchema = z.object({
     manipulationSignal: z.enum(["low", "medium", "high", "unknown"]),
     summary: z.string(),
   }),
+  socialSignal: z.object({
+    sourceCredibility: z.enum(["high", "medium", "low", "unknown"]),
+    endorserReputation: z.string(),
+    entityResolution: z.object({
+      resolvedEntity: z.string().nullable(),
+      confidence: z.enum(["high", "medium", "low", "unknown"]),
+      rationale: z.string(),
+      unverifiedAssumptions: z.array(z.string()),
+    }),
+    founderDossier: z.object({
+      identifiedPeople: z.array(z.string()),
+      evidenceSummary: z.string(),
+      openQuestions: z.array(z.string()),
+    }),
+    smartEngagerSignal: z.object({
+      quality: z.enum(["high", "medium", "low", "unknown"]),
+      summary: z.string(),
+      notableAccounts: z.array(z.string()),
+    }),
+    leadQuality: z.enum(["ignore", "watchlist", "research_lead", "soft_signal", "tradable_now"]),
+    nextResearchActions: z.array(z.string()),
+  }),
   bullCase: z.array(z.string()),
   bearCase: z.array(z.string()),
   contradictions: z.array(z.string()),

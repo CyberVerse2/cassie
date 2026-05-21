@@ -34,7 +34,13 @@ export class OpenAiWebSearchLane {
       thinkingTrace: "Searching external web sources for primary evidence, contradictions, and recency checks.",
       input: {
         claim: queryPlan.normalizedClaim,
-        queries: queryPlan.openAiQueries,
+        queries: [
+          ...queryPlan.openAiQueries,
+          ...queryPlan.sourceReputationQueries,
+          ...queryPlan.entityResolutionQueries,
+          ...queryPlan.founderDossierQueries,
+          ...queryPlan.farcasterQueries,
+        ],
       },
     });
 
@@ -149,9 +155,14 @@ Verify this market claim using web sources.
 Claim: ${queryPlan.normalizedClaim}
 Assets: ${queryPlan.assets.join(", ")}
 Topics: ${queryPlan.topics.join(", ")}
+Source author: ${queryPlan.sourceHandle ? `@${queryPlan.sourceHandle}` : "unknown"} ${queryPlan.sourceName ?? ""}
 
 Search goals:
 - Find official, regulatory, company, exchange, and reputable news sources.
+- Evaluate the source author's public credibility, prior products, and network reputation.
+- Resolve the referenced entity carefully. Say when the post itself did not mention a platform or project and the link is only inferred.
+- Build a founder/project dossier: X profile, Farcaster profile/casts, official site, docs, GitHub, contracts, and prior work.
+- Look for Farcaster evidence only when supported by search results; do not assume it from vague wording.
 - Find contradictions and refutations.
 - Identify whether this is old news being recirculated.
 - Prefer primary sources over commentary.
@@ -162,8 +173,16 @@ function buildXSearchPrompt(queryPlan: ResearchQueryPlan): string {
   return `Investigate this market narrative on X.
 
 Claim: ${queryPlan.normalizedClaim}
+Source author: ${queryPlan.sourceHandle ? `@${queryPlan.sourceHandle}` : "unknown"} ${queryPlan.sourceName ?? ""}
 X queries:
-${queryPlan.xQueries.map((query) => `- ${query}`).join("\n")}
+${[
+  ...queryPlan.xQueries,
+  ...queryPlan.sourceReputationQueries,
+  ...queryPlan.entityResolutionQueries,
+  ...queryPlan.founderDossierQueries,
+  ...queryPlan.smartEngagerQueries,
+  ...queryPlan.farcasterQueries,
+].map((query) => `- ${query}`).join("\n")}
 
 Look for:
 - origin accounts or posts
@@ -172,6 +191,10 @@ Look for:
 - recycled screenshots or links
 - social crowding
 - promotional or coordinated language
+- author reputation: whether the source is a respected builder/operator/investor
+- smart engagement: high-signal replies, likes, reposts, or follower overlap
+- founder/project identity on X and Farcaster
+- whether platform/project claims are directly stated or inferred
 
 X social momentum is not proof of truth.`;
 }

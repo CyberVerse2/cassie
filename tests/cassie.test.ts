@@ -59,6 +59,28 @@ const researchReport: ResearchReport = {
     manipulationSignal: "medium",
     summary: "Active social discussion, mostly repeating one rumor.",
   },
+  socialSignal: {
+    sourceCredibility: "medium",
+    endorserReputation: "The source appears crypto-native but reputation is not fully verified in this fixture.",
+    entityResolution: {
+      resolvedEntity: "SOL",
+      confidence: "high",
+      rationale: "The post directly discusses Solana ETF approval odds.",
+      unverifiedAssumptions: [],
+    },
+    founderDossier: {
+      identifiedPeople: [],
+      evidenceSummary: "No founder-quality claim is required for this fixture.",
+      openQuestions: [],
+    },
+    smartEngagerSignal: {
+      quality: "unknown",
+      summary: "No engagement graph supplied.",
+      notableAccounts: [],
+    },
+    leadQuality: "soft_signal",
+    nextResearchActions: ["Find a primary source confirming ETF approval odds."],
+  },
   bullCase: ["ETF filings are being discussed."],
   bearCase: ["No primary approval source."],
   contradictions: ["Discussion exists, approval is not confirmed."],

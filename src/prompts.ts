@@ -65,6 +65,11 @@ export function critiquePrompt(input: {
 
 Evaluate the thesis after research. Search for weaknesses:
 - Is the source credible?
+- Is the source a respected builder/operator whose vague endorsement should be treated as a research lead rather than dismissed?
+- Did the research verify the source author's reputation, network, and prior products?
+- Did the research resolve the founder/project identity, or is the entity match still an inference?
+- Are Farcaster, X, GitHub, docs, contracts, and prior-work signals verified or merely assumed?
+- Are smart followers or smart engagers present?
 - Is the news already priced in?
 - Is the market already crowded?
 - Is the ticker ambiguous?
@@ -73,6 +78,7 @@ Evaluate the thesis after research. Search for weaknesses:
 - Is the opposite trade cleaner?
 
 Return a direct critique. Do not choose order size or execute anything.
+Distinguish "not tradable yet" from "worth watchlisting/researching." Do not flatten a high-signal lead into a hard reject just because it is early or vague.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -99,6 +105,18 @@ export function researchSynthesisPrompt(input: unknown): string {
 
 Given a source post, extracted thesis, query plan, and lane evidence, produce a structured ResearchReport.
 Separate truth from social momentum. Many X posts repeating the same rumor do not equal many independent sources.
+But do not ignore source quality: a vague post from a respected builder/operator can be a valid research lead even when it is not tradable yet.
+
+Required social-intelligence checks:
+- Identify who is saying the thing and whether they are credible in the relevant ecosystem.
+- Evaluate the source author's reputation, prior products, and network context.
+- Resolve the project/founder/entity explicitly, with confidence and unverified assumptions.
+- If the tweet does not mention Farcaster, Base, a ticker, or a specific project, say that plainly before using inferred evidence.
+- Research the founder/person on X and Farcaster when the claim depends on founder quality.
+- Look for smart followers/engagers/repliers and summarize whether engagement quality is meaningful.
+- Classify leadQuality as ignore, watchlist, research_lead, soft_signal, or tradable_now.
+- Give concrete nextResearchActions.
+
 Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
 

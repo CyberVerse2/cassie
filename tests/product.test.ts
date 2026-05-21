@@ -82,6 +82,28 @@ const researchReport: ResearchReport = {
     manipulationSignal: "medium",
     summary: "Crowded rumor.",
   },
+  socialSignal: {
+    sourceCredibility: "medium",
+    endorserReputation: "Fixture source has unknown reputation.",
+    entityResolution: {
+      resolvedEntity: "SOL",
+      confidence: "high",
+      rationale: "The source post directly mentions Solana/SOL.",
+      unverifiedAssumptions: [],
+    },
+    founderDossier: {
+      identifiedPeople: [],
+      evidenceSummary: "No founder dossier required for this SOL fixture.",
+      openQuestions: [],
+    },
+    smartEngagerSignal: {
+      quality: "unknown",
+      summary: "No engagement graph supplied.",
+      notableAccounts: [],
+    },
+    leadQuality: "soft_signal",
+    nextResearchActions: ["Verify the catalyst with a primary source."],
+  },
   bullCase: [],
   bearCase: [],
   contradictions: [],
