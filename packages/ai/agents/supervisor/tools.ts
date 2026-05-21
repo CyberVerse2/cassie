@@ -3,6 +3,10 @@ import { z } from "zod";
 import type { CassieDependencies } from "../../../workflows/dependencies.ts";
 import type { CassieStore } from "../../../db/store.ts";
 import {
+  HyperliquidAccountStateProvider,
+  type AccountStateProvider,
+} from "../../../execution/account-state.ts";
+import {
   CritiqueSchema,
   MarketSelectionSchema,
   ResearchReportSchema,
@@ -71,7 +75,8 @@ export function createCassieSupervisorTools(input: {
   deps: CassieDependencies;
   run: ControlRun;
   userSettings: UserSettings;
-  accountState: AccountState;
+  accountState?: AccountState;
+  accountStateProvider?: AccountStateProvider;
 }) {
   const cheapModel = process.env.CASSIE_CHEAP_MODEL ?? "deepseek/deepseek-v4-flash";
   const importantModel = process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5";
@@ -243,12 +248,16 @@ export function createCassieSupervisorTools(input: {
         runId: input.run.runId,
         stepType: "risk",
         stepInput: { marketSelection, sizeUsd },
-        execute: async () => evaluateRisk({
-          marketSelection,
-          userSettings: input.userSettings,
-          accountState: input.accountState,
-          sizeUsd,
-        }),
+        execute: async () => {
+          const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
+            .getAccountState(input.userSettings);
+          return evaluateRisk({
+            marketSelection,
+            userSettings: input.userSettings,
+            accountState,
+            sizeUsd,
+          });
+        },
       }),
     }),
     create_trade_ticket: tool({

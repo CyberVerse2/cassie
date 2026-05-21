@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type { AccountStateProvider } from "../packages/execution/account-state.ts";
-import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
 import { createCassieSupervisorTools } from "../packages/ai/agents/supervisor/tools.ts";
 import { InMemoryCassieStore } from "../packages/db/store.ts";
 import type {
@@ -336,18 +335,18 @@ describe("AI SDK supervisor agent", () => {
     expect(state.executionJobs).toHaveLength(0);
   });
 
-  it("marks the run failed when supervisor setup fails", async () => {
+  it("does not require account state before tools need risk evaluation", async () => {
     const store = new InMemoryCassieStore();
-    await store.upsertUserSettings(settings);
     const run = await store.createRun({
       userId: "user_1",
-      userCommand: "@Cassie get me in",
+      userCommand: "@Cassie critic this",
       sourcePost,
     });
 
-    await expect(runCassieSupervisorForRun({
-      runId: run.runId,
+    const tools = createCassieSupervisorTools({
       store,
+      run,
+      userSettings: { ...settings, walletAddress: null },
       deps: {
         ai: new FakeAi(),
         marketData: {
@@ -365,12 +364,15 @@ describe("AI SDK supervisor agent", () => {
         },
       },
       accountStateProvider: new ThrowingAccountStateProvider(),
-    })).rejects.toThrow("account state unavailable");
-
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({
-      status: "failed",
-      error: "account state unavailable",
     });
+
+    await expect(executeTool<IntentResult>(tools.classify_intent, {})).resolves.toMatchObject({
+      intent: "trade",
+    });
+    await expect(executeTool(tools.risk_check, {
+      marketSelection,
+      sizeUsd: null,
+    })).rejects.toThrow("account state unavailable");
   });
 
   it("uses important AI for research synthesis and critique, but cheap AI for market selection", async () => {

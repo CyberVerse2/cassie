@@ -12,10 +12,7 @@ import { CompositeMarketDataProvider } from "../../../market-data/index.ts";
 import { LiveResearchSearchLanes } from "../../../research/lanes.ts";
 import { DrizzleCassieStore } from "../../../db/drizzle-store.ts";
 import type { CassieStore } from "../../../db/store.ts";
-import type {
-  AccountState,
-  ControlRun,
-} from "../../../core/schemas/index.ts";
+import type { ControlRun } from "../../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../../core/schemas/index.ts";
 import type { CassieDependencies } from "../../../workflows/dependencies.ts";
 import { createCassieSupervisorTools } from "./tools.ts";
@@ -46,9 +43,13 @@ export async function runCassieSupervisorForRun(input: {
 
   try {
     const deps = input.deps ?? defaultDependencies();
-    const accountState = await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
-      .getAccountState(userSettings);
-    const tools = createCassieSupervisorTools({ store, deps, run: running, userSettings, accountState });
+    const tools = createCassieSupervisorTools({
+      store,
+      deps,
+      run: running,
+      userSettings,
+      accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
+    });
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
       model: openai(process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5"),

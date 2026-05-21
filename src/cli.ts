@@ -3,7 +3,7 @@ import { inspect } from "node:util";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
 import { OpenAiStructuredClient } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/market-data/index.ts";
-import type { SourcePost, UserSettings } from "../packages/core/schemas/index.ts";
+import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
 import type { ControlRun, ExecutionJob as ControlExecutionJob } from "../packages/core/schemas/index.ts";
 import { CassieProduct } from "../packages/workflows/product.ts";
@@ -16,6 +16,7 @@ import { extractThesis } from "../packages/ai/tools/thesis.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
+import { buildCliUserSettings } from "./cli-settings.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -121,7 +122,8 @@ Smoke checks:
   smoke:market              Test market candidate discovery for an asset.
 
 Useful examples:
-  npm run cli -- settings:set --user local-user --wallet 0xabc... --assets SOL,BTC --size 50
+  npm run cli -- settings:set --user local-user
+  npm run cli -- settings:set --user local-user --assets SOL,BTC --size 50
   npm run cli -- state
   npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
@@ -146,23 +148,10 @@ async function env() {
 }
 
 async function settingsSet(args: ParsedArgs) {
-  const settings: UserSettings = {
-    userId: flag(args, "user", "local-user"),
-    walletAddress: nullableFlag(args, "wallet"),
-    allowedVenues: csvFlag(args, "venues", ["hyperliquid", "polymarket"]),
-    allowedAssets: csvFlag(args, "assets", ["SOL"]),
-    defaultTradeSizeUsd: numberFlag(args, "size", 50),
-    maxTradeSizeUsd: numberFlag(args, "max-size", 100),
-    maxDailyLossUsd: numberFlag(args, "max-daily-loss", 100),
-    minConfidence: numberFlag(args, "min-confidence", 0.75),
-    maxSpreadBps: numberFlag(args, "max-spread-bps", 50),
-    maxSlippageBps: numberFlag(args, "max-slippage-bps", 100),
-    maxPositionUsd: numberFlag(args, "max-position", 1_000),
-    autoTradeEnabled: booleanFlag(args, "auto-trade", false),
-  };
+  const { settings, generatedWallet } = buildCliUserSettings(args.flags);
 
   await product().upsertSettings(settings);
-  return { saved: true, settings };
+  return { saved: true, settings, generatedWallet };
 }
 
 async function mention(args: ParsedArgs) {
