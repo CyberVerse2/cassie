@@ -3,8 +3,8 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 
-const DEFAULT_MODEL_A = "google/gemini-3.1-flash-lite:online";
-const DEFAULT_MODEL_B = "google/gemini-2.5-flash:online";
+const DEFAULT_MODEL_A = "google/gemini-3.1-flash-lite";
+const DEFAULT_MODEL_B = "google/gemini-2.5-flash";
 
 const ComparisonSchema = z.object({
   directAnswer: z.string(),
@@ -32,6 +32,8 @@ const modelA = flag("model-a") ?? DEFAULT_MODEL_A;
 const modelB = flag("model-b") ?? DEFAULT_MODEL_B;
 const timeoutMs = Number(flag("timeout-ms") ?? 90_000);
 const json = hasFlag("json");
+const forceWebPlugin = !hasFlag("no-web-plugin");
+const maxResults = Number(flag("max-results") ?? 5);
 
 if (!process.env.OPENROUTER_API_KEY) {
   throw new Error("Missing OPENROUTER_API_KEY. Add it to .env or export it before running this comparison.");
@@ -46,6 +48,17 @@ const openrouter = createOpenRouter({
       allow_fallbacks: true,
       require_parameters: true,
     },
+    ...(forceWebPlugin
+      ? {
+        plugins: [
+          {
+            id: "web",
+            max_results: maxResults,
+            engine: "exa",
+          },
+        ],
+      }
+      : {}),
     reasoning: {
       max_tokens: 512,
     },
@@ -131,6 +144,7 @@ ${input}`;
 function printHuman(result: { query: string; elapsedMs: number; runs: RunResult[] }) {
   console.log("OpenRouter search model comparison");
   console.log(`Query: ${result.query}`);
+  console.log(`Web plugin: ${forceWebPlugin ? `forced exa max_results=${maxResults}` : "disabled; use model suffix/native behavior"}`);
   console.log(`Total elapsed: ${result.elapsedMs}ms`);
   console.log("");
 
