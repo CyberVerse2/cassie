@@ -152,6 +152,10 @@ export const ResearchWarningSchema = z.enum([
   "OPENAI_SEARCH_FAILED",
 ]);
 
+const UnitScoreFromModelSchema = z.number().min(0).max(10).transform((value) =>
+  value > 1 ? value / 10 : value
+);
+
 export const ResearchEvidenceSchema = z.object({
   sourceLane: z.enum(["openai_search", "x_search"]),
   sourceType: z.enum([
@@ -171,7 +175,7 @@ export const ResearchEvidenceSchema = z.object({
   summary: z.string(),
   stance: z.enum(["supports", "refutes", "mixed", "unclear"]),
   reliability: z.enum(["high", "medium", "low"]),
-  relevance: z.number().min(0).max(1),
+  relevance: UnitScoreFromModelSchema,
   notes: z.array(z.string()).nullable(),
 });
 
