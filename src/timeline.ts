@@ -115,7 +115,7 @@ function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchR
   const lines = [
     `|-- ${theme.ai("[research]")} ${researchRun.researchRunId} ${statusTag(researchRun.status, theme)} ${researchRun.angle} ${mode} ${durationText(researchRun.startedAt, researchRun.completedAt)}`,
     ...indentWrap({
-      text: `${theme.label("thinking")} Plan goals, execute auditable query jobs, classify evidence, resolve goals, and decide whether to stop or continue.`,
+      text: `${theme.label("thinking")} Plan goals, execute auditable query jobs that emit evidence ledgers, resolve goals, and decide whether to stop or continue.`,
       indent: "|   |-- ",
       theme,
     }),
@@ -181,7 +181,7 @@ function formatQueryJob(
   const laneBadge = job.lane === "x" ? theme.x("[x]") : theme.web("[web]");
   const lines = [
     `|   |   |-- ${laneBadge} ${job.querySpecId} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${duration} ${job.mustExecuteAtomically ? "atomic" : "bundled"} p=${job.priority}`,
-    `|   |   |   |-- ${theme.label("tool")} ${job.lane === "web" ? "OpenRouter web query job" : "Grok X query job"}`,
+    `|   |   |   |-- ${theme.label("tool")} ${job.lane === "web" ? "Gemini web query job" : "Grok X query job"}`,
     ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |   |-- ", theme }),
     ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |   |-- ", theme }),
   ];
@@ -272,7 +272,7 @@ function visibleThinkingForStep(step: RunStep): string {
     case "inverse_thesis":
       return "Build the strongest opposing thesis for countertrade or fade analysis.";
     case "research":
-      return "Run goal-first research with query jobs, evidence classification, and goal resolution.";
+      return "Run goal-first research with query jobs that emit evidence ledgers and goal resolution.";
     case "critique":
       return "Use the research report to identify the strongest objections and weaknesses.";
     case "market_candidates":

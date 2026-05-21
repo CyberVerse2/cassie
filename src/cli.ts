@@ -143,7 +143,7 @@ async function env() {
     xAiApiKey: maskSecret(process.env.XAI_API_KEY),
     hyperliquidPrivateKey: maskSecret(process.env.HYPERLIQUID_PRIVATE_KEY),
     cassieModel: process.env.CASSIE_MODEL ?? "gpt-5.5",
-    webSearchModel: process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.OPENROUTER_WEB_SEARCH_MODEL ?? "google/gemini-3.1-flash-lite",
+    webSearchModel: process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? "gemini-3.1-flash-lite",
     grokSearchModel: process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
   };
 }
@@ -472,7 +472,7 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
       signature: `${researchRun.status}:${researchRun.completedAt ?? ""}:${researchRun.error ?? ""}`,
       lines: [
         `|-- ${theme.ai("[research]")} ${researchRun.researchRunId} ${statusTag(researchRun.status, theme)} ${liveDuration(researchRun.startedAt, researchRun.completedAt)}`,
-        ...indentWrap({ text: `${theme.label("thinking")} plan goals, run web/X query jobs, classify evidence, resolve goals`, indent: "|   |-- ", theme }),
+        ...indentWrap({ text: `${theme.label("thinking")} plan goals, run web/X query jobs that emit evidence ledgers, resolve goals`, indent: "|   |-- ", theme }),
         ...(researchRun.error ? indentWrap({ text: `${theme.fail("error")} ${researchRun.error}`, indent: "|   |-- ", theme }) : []),
       ],
     });

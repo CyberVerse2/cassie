@@ -82,13 +82,13 @@ The supervisor never receives a direct order-placement tool. It can create a tra
 Cassie separates mechanical research bookkeeping from analyst judgment.
 
 ```text
-Cheap model: DeepSeek v4 Flash through OpenRouter
-Mini search operator: GPT-5.4 mini for OpenAI web search
+Cheap model: DeepSeek v4 Flash through the DeepSeek AI SDK
+Mini search operator: Gemini 3.1 Flash Lite through the Google AI SDK with Google Search grounding
 Important model: GPT-5.5 for judgment, goal resolution, critique, synthesis, and trade expression
 X search: Grok 4.3 with image/video understanding
 ```
 
-Cheap models handle extraction, tagging, evidence classification, and structured bookkeeping. GPT-5.5 handles what matters, what would disprove the thesis, whether evidence is enough, whether to stop, and whether a trade is justified.
+Cheap models handle extraction, tagging, and structured bookkeeping. Search lanes emit evidence ledgers directly. GPT-5.5 handles what matters, what would disprove the thesis, whether evidence is enough, whether to stop, and whether a trade is justified.
 
 ## Research
 

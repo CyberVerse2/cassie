@@ -1,22 +1,17 @@
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { openai } from "@ai-sdk/openai";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { openAiCostControlOptions } from "./openai-options.ts";
-import {
-  OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
-  openRouterCacheablePrompt,
-  openRouterProviderOptions,
-  openRouterProviderPreferences,
-} from "./openrouter-options.ts";
 
-export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
+export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
+export const DEFAULT_CHEAP_MODEL = "deepseek-v4-flash";
 export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
 export const DEFAULT_EXPENSIVE_MODEL = DEFAULT_IMPORTANT_MODEL;
 
 export type ModelTier = "cheap" | "expensive";
-export type ModelProvider = "openai" | "openrouter";
+export type ModelProvider = "openai" | "deepseek";
 
 export type ModelRoute = {
   tier: ModelTier;
@@ -34,7 +29,7 @@ export interface StructuredAiClient {
 }
 
 export class MissingAiDependencyError extends Error {
-  constructor(message = "AI dependency unavailable. Set OPENROUTER_API_KEY to run Cassie's cheap AI tools.") {
+  constructor(message = "AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap AI tools.") {
     super(message);
     this.name = "MissingAiDependencyError";
   }
@@ -50,7 +45,6 @@ export class MissingImportantAiDependencyError extends MissingAiDependencyError 
 const cheapStructuredSteps = new Set([
   "cassie_intent",
   "cassie_signal",
-  "cassie_evidence_ledger",
 ]);
 
 export function routeStructuredModel(input: {
@@ -59,7 +53,7 @@ export function routeStructuredModel(input: {
   cheapModel?: string;
   expensiveModel?: string;
 }): ModelRoute {
-  const cheapModel = input.cheapModel ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ??
+  const cheapModel = input.cheapModel ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ??
     DEFAULT_CHEAP_MODEL;
   const expensiveModel = input.expensiveModel ??
     process.env.CASSIE_IMPORTANT_MODEL ??
@@ -69,7 +63,7 @@ export function routeStructuredModel(input: {
   const tier = input.tier ?? (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
 
   return tier === "cheap"
-    ? { tier, provider: "openrouter", model: cheapModel }
+    ? { tier, provider: "deepseek", model: cheapModel }
     : { tier, provider: "openai", model: expensiveModel };
 }
 
@@ -83,7 +77,7 @@ export class OpenAiStructuredClient implements StructuredAiClient {
       process.env.CASSIE_MODEL ??
       DEFAULT_EXPENSIVE_MODEL,
     private readonly trace?: TraceRecorder,
-    cheapModelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL,
+    cheapModelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL,
   ) {
     this.expensiveModelName = modelName;
     this.cheapModelName = cheapModelName;
@@ -105,8 +99,8 @@ export class OpenAiStructuredClient implements StructuredAiClient {
     if (route.provider === "openai" && !process.env.OPENAI_API_KEY) {
       throw new MissingImportantAiDependencyError("AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's expensive judgment tools.");
     }
-    if (route.provider === "openrouter" && !process.env.OPENROUTER_API_KEY) {
-      throw new MissingAiDependencyError("AI dependency unavailable. Set OPENROUTER_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
+    if (route.provider === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
+      throw new MissingAiDependencyError("AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
     }
 
     const finishTrace = this.trace?.start({
@@ -125,28 +119,23 @@ export class OpenAiStructuredClient implements StructuredAiClient {
     });
 
     try {
-      const openrouter = route.provider === "openrouter"
-        ? createOpenRouter({
-          apiKey: process.env.OPENROUTER_API_KEY,
-          compatibility: "strict",
-          extraBody: {
-            provider: openRouterProviderPreferences(),
-          },
+      const deepseek = route.provider === "deepseek"
+        ? createDeepSeek({
+          apiKey: process.env.DEEPSEEK_API_KEY,
+          baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
         })
         : null;
       const result = await generateText({
-        model: route.provider === "openrouter" ? openrouter!(route.model) : openai(route.model),
+        model: route.provider === "deepseek" ? deepseek!.chat(route.model) : openai(route.model),
         output: Output.object({
           schema: input.schema,
           name: input.name,
         }),
-        ...(route.provider === "openrouter"
-          ? { messages: openRouterCacheablePrompt(input.prompt) }
-          : { prompt: input.prompt }),
+        prompt: input.prompt,
         providerOptions: route.provider === "openai"
           ? openAiCostControlOptions({ promptCacheKey: input.name })
-          : openRouterProviderOptions(),
-        ...(route.provider === "openrouter" ? { maxOutputTokens: OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS } : {}),
+          : undefined,
+        ...(route.provider === "deepseek" ? { maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } : {}),
       });
 
       finishTrace?.({
@@ -162,10 +151,10 @@ export class OpenAiStructuredClient implements StructuredAiClient {
   }
 }
 
-export class OpenRouterStructuredClient implements StructuredAiClient {
+export class DirectDeepSeekStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = process.env.CASSIE_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL) {
+  constructor(modelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL) {
     this.modelName = modelName;
   }
 
@@ -175,27 +164,23 @@ export class OpenRouterStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    if (!process.env.OPENROUTER_API_KEY) {
+    if (!process.env.DEEPSEEK_API_KEY) {
       throw new MissingAiDependencyError();
     }
 
-    const openrouter = createOpenRouter({
-      apiKey: process.env.OPENROUTER_API_KEY,
-      compatibility: "strict",
-      extraBody: {
-        provider: openRouterProviderPreferences(),
-      },
+    const deepseek = createDeepSeek({
+      apiKey: process.env.DEEPSEEK_API_KEY,
+      baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
     });
 
     const result = await generateText({
-      model: openrouter(this.modelName),
+      model: deepseek.chat(this.modelName),
       output: Output.object({
         schema: input.schema,
         name: input.name,
       }),
-      messages: openRouterCacheablePrompt(input.prompt),
-      providerOptions: openRouterProviderOptions(),
-      maxOutputTokens: OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
+      prompt: input.prompt,
+      maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
     });
 
     return result.output;

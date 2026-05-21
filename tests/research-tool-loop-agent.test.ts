@@ -14,7 +14,6 @@ describe("research ToolLoopAgent configuration", () => {
       "create_query_jobs",
       "run_web_query",
       "run_x_query",
-      "classify_evidence",
       "resolve_goal",
       "decide_continuation",
       "propose_adaptive_queries",
@@ -26,7 +25,7 @@ describe("research ToolLoopAgent configuration", () => {
     await expect(prepareResearchToolLoopStep({ stepNumber: 0, steps: [], messages: [] })).resolves.toMatchObject({
       activeTools: ["create_query_jobs"],
       toolChoice: { type: "tool", toolName: "create_query_jobs" },
-      model: expect.objectContaining({ modelId: "google/gemini-3.1-flash-lite" }),
+      model: expect.objectContaining({ modelId: "gemini-3.1-flash-lite" }),
     });
 
     await expect(prepareResearchToolLoopStep({
@@ -36,22 +35,12 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["run_web_query", "run_x_query"],
       toolChoice: "required",
-      model: expect.objectContaining({ modelId: "google/gemini-3.1-flash-lite" }),
+      model: expect.objectContaining({ modelId: "gemini-3.1-flash-lite" }),
     });
 
     await expect(prepareResearchToolLoopStep({
       stepNumber: 2,
       steps: [stepWithTool("create_query_jobs"), stepWithTool("run_web_query")],
-      messages: [],
-    })).resolves.toMatchObject({
-      activeTools: ["classify_evidence"],
-      toolChoice: { type: "tool", toolName: "classify_evidence" },
-      model: expect.objectContaining({ modelId: "deepseek/deepseek-v4-flash" }),
-    });
-
-    await expect(prepareResearchToolLoopStep({
-      stepNumber: 3,
-      steps: [stepWithTool("classify_evidence")],
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["resolve_goal"],
@@ -88,7 +77,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["run_web_query", "run_x_query"],
       toolChoice: "required",
-      model: expect.objectContaining({ modelId: "google/gemini-3.1-flash-lite" }),
+      model: expect.objectContaining({ modelId: "gemini-3.1-flash-lite" }),
     });
   });
 
@@ -122,7 +111,7 @@ describe("research ToolLoopAgent configuration", () => {
                   queryJobId: "job_1",
                   queryId: "q_1",
                   goalIds: ["g_verify"],
-                  provider: "openrouter_web_search",
+                  provider: "gemini_google_search",
                   title: "SEC filing",
                   url: "https://sec.gov/example",
                   sourceType: "filing",

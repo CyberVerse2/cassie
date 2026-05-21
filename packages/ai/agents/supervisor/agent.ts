@@ -2,7 +2,7 @@ import { Output, ToolLoopAgent, type TelemetryIntegration } from "ai";
 import { openai } from "@ai-sdk/openai";
 import {
   OpenAiImportantStructuredClient,
-  OpenRouterStructuredClient,
+  DirectDeepSeekStructuredClient,
 } from "../../client.ts";
 import {
   HyperliquidAccountStateProvider,
@@ -155,7 +155,7 @@ export async function runCassieSupervisorForRun(input: {
 }
 
 function defaultDependencies(): CassieDependencies {
-  const cheapAi = new OpenRouterStructuredClient();
+  const cheapAi = new DirectDeepSeekStructuredClient();
   const importantAi = new OpenAiImportantStructuredClient();
   return {
     ai: cheapAi,

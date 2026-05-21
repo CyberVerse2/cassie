@@ -39,7 +39,7 @@ const snapshot: CassieStoreSnapshot = {
       input: { userCommand: "@Cassie critic this" },
       output: { intent: "critic", confidence: 0.91 },
       error: null,
-      model: "deepseek/deepseek-v4-flash",
+      model: "deepseek-v4-flash",
       promptName: "cassie_intent",
       promptVersion: "2026-05-20",
       startedAt: "2026-05-21T00:00:01.000Z",
@@ -85,7 +85,7 @@ const snapshot: CassieStoreSnapshot = {
       querySpecId: "q_verify_web",
       goalIds: ["g_verify"],
       lane: "web",
-      provider: "openrouter_web_search",
+      provider: "gemini_google_search",
       query: "\"Exa\" \"$250M\" funding",
       queryKind: "entity_event",
       priority: 0.95,
@@ -109,7 +109,7 @@ const snapshot: CassieStoreSnapshot = {
       goalIds: ["g_verify"],
       wave: 0,
       lane: "web",
-      provider: "openrouter_web_search",
+      provider: "gemini_google_search",
       title: "Exa raises $250M",
       url: "https://example.com/exa",
       canonicalUrl: "https://example.com/exa",
@@ -231,12 +231,12 @@ describe("run timeline", () => {
     expect(timeline).toContain("CASSIE RUN TIMELINE");
     expect(timeline).toContain("[ok] run_1 ok");
     expect(timeline).toContain("|-- [ai] intent [ok] 1.0s");
-    expect(timeline).toContain("|   |-- model deepseek/deepseek-v4-flash");
+    expect(timeline).toContain("|   |-- model deepseek-v4-flash");
     expect(timeline).toContain("|   |-- thinking Classify command and source into a bounded Cassie intent.");
     expect(timeline).toContain("|-- [research] research_1 [ok] critic standard 5.0s");
     expect(timeline).toContain("|   |-- claim Exa raised $250M.");
     expect(timeline).toContain("|   |-- [wave 0]");
-    expect(timeline).toContain("|   |   |-- [web] q_verify_web web/openrouter_web_search [ok] 1.0s atomic p=0.95");
+    expect(timeline).toContain("|   |   |-- [web] q_verify_web web/gemini_google_search [ok] 1.0s atomic p=0.95");
     expect(timeline).toContain("|   |   |   |-- result result_1 news Exa raises $250M");
     expect(timeline).toContain("|   |   |   |-- claim claim_1 medium/direct_secondary Exa raised $250M.");
     expect(timeline).toContain("|   |   |   |   |-- link g_verify supports strength=0.8");

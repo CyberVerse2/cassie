@@ -220,30 +220,6 @@ Input:
 ${JSON.stringify(input, null, 2)}`;
 }
 
-export function evidenceLedgerPrompt(input: unknown): string {
-  return `You are Cassie's evidence-ledger classifier.
-
-Convert retrieved search output into atomic evidence.
-Do not write a final research conclusion. Build an auditable ledger:
-- searchResults are the retrieved sources or posts for the query job.
-- evidenceClaims are specific claims found inside those results.
-- goalEvidenceLinks classify each claim against each relevant research goal.
-
-Rules:
-- Preserve the queryJobId, queryId, goalIds, wave, lane, provider, and runId from the input.
-- Every evidenceClaim must point to a searchResult id.
-- Every goalEvidenceLink must point to an evidenceClaim id and one goalId.
-- Do not treat social repetition as proof of factual truth.
-- Use "context" when evidence explains the situation but does not support or contradict a goal.
-- Use "contradicts" only when the claim materially weakens, refutes, or blocks the goal.
-- Prefer "unknown" reliability when the source quality cannot be established.
-- Set searchResult metadata to an empty array unless there is a specific string key/value detail worth preserving.
-- Use stable deterministic ids based on the query job, such as result_<queryJobId>_1, claim_<queryJobId>_1, link_<queryJobId>_<goalId>_1.
-
-Input:
-${JSON.stringify(input, null, 2)}`;
-}
-
 export function adaptiveQueryRequestPrompt(input: unknown): string {
   return `You are Cassie's adaptive query controller.
 

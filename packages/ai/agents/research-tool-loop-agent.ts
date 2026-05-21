@@ -1,23 +1,18 @@
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { openai } from "@ai-sdk/openai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { ToolLoopAgent, hasToolCall, tool } from "ai";
 import { z } from "zod";
-import {
-  DEFAULT_CHEAP_MODEL,
-  DEFAULT_EXPENSIVE_MODEL,
-} from "../client.ts";
+import { DEFAULT_EXPENSIVE_MODEL } from "../client.ts";
 import { openAiCostControlOptions } from "../openai-options.ts";
-import { openRouterCacheableSystemMessage, openRouterProviderOptions, openRouterProviderPreferences } from "../openrouter-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
-  process.env.OPENROUTER_WEB_SEARCH_MODEL ??
-  "google/gemini-3.1-flash-lite";
+  process.env.GEMINI_WEB_SEARCH_MODEL ??
+  "gemini-3.1-flash-lite";
 
 type ResearchToolName =
   | "create_query_jobs"
   | "run_web_query"
   | "run_x_query"
-  | "classify_evidence"
   | "resolve_goal"
   | "decide_continuation"
   | "propose_adaptive_queries"
@@ -37,8 +32,8 @@ type PrepareInput = {
 export function createResearchToolLoopAgent() {
   return new ToolLoopAgent({
     id: "cassie-research-tool-loop",
-    model: openRouterModel(WEB_SEARCH_MODEL),
-    instructions: openRouterCacheableSystemMessage(researchToolLoopInstructions()),
+    model: googleModel(WEB_SEARCH_MODEL),
+    instructions: researchToolLoopInstructions(),
     tools: researchTools(),
     toolChoice: "required",
     stopWhen: [hasToolCall("done")],
@@ -108,7 +103,7 @@ function researchTools() {
       execute: async (input) => ({ status: "planned", ...input }),
     }),
     run_web_query: tool({
-      description: "Run one auditable OpenRouter web-search query job and return raw search result metadata.",
+      description: "Run one auditable Gemini Google Search query job and return raw search result metadata.",
       inputSchema: z.object({
         queryJobId: z.string(),
         query: z.string(),
@@ -120,13 +115,6 @@ function researchTools() {
       inputSchema: z.object({
         queryJobId: z.string(),
         query: z.string(),
-      }),
-      execute: async (input) => ({ status: "queued_for_host_pipeline", ...input }),
-    }),
-    classify_evidence: tool({
-      description: "Classify retrieved results into SearchResult, EvidenceClaim, and GoalEvidenceLink ledger items.",
-      inputSchema: z.object({
-        queryJobIds: z.array(z.string()),
       }),
       execute: async (input) => ({ status: "queued_for_host_pipeline", ...input }),
     }),
@@ -180,8 +168,6 @@ function chooseActiveTools(steps: StepLike[]): ResearchToolName[] {
       return ["run_web_query", "run_x_query"];
     case "run_web_query":
     case "run_x_query":
-      return ["classify_evidence"];
-    case "classify_evidence":
       return ["resolve_goal"];
     case "resolve_goal":
       return ["decide_continuation"];
@@ -194,10 +180,7 @@ function chooseActiveTools(steps: StepLike[]): ResearchToolName[] {
 
 function modelForTools(activeTools: ResearchToolName[]) {
   if (activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")) {
-    return openRouterModel(WEB_SEARCH_MODEL);
-  }
-  if (activeTools.includes("classify_evidence")) {
-    return openRouterModel(process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL);
+    return googleModel(WEB_SEARCH_MODEL);
   }
   return openai(
     process.env.CASSIE_IMPORTANT_MODEL ??
@@ -215,10 +198,9 @@ function toolChoiceForTools(activeTools: ResearchToolName[]) {
 
 function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
   if (
-    activeTools.includes("classify_evidence") ||
     activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")
   ) {
-    return openRouterProviderOptions();
+    return undefined;
   }
 
   return openAiCostControlOptions({
@@ -226,17 +208,11 @@ function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
   });
 }
 
-function openRouterModel(model: string) {
-  const reasoning = model.includes("gemini-3.1-flash-lite") ? { effort: "minimal" } : undefined;
-  const openrouter = createOpenRouter({
-    apiKey: process.env.OPENROUTER_API_KEY,
-    compatibility: "strict",
-    extraBody: {
-      provider: openRouterProviderPreferences(),
-      ...(reasoning ? { reasoning } : {}),
-    },
+function googleModel(model: string) {
+  const google = createGoogleGenerativeAI({
+    apiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
   });
-  return openrouter(model);
+  return google(model);
 }
 
 function lastToolName(steps: StepLike[]): string | null {
@@ -546,7 +522,7 @@ function researchToolLoopInstructions() {
   return `You are Cassie's constrained research tool loop.
 
 You must use tools at every step. Never answer directly during research.
-Move through the phases: create query jobs, run web/X query jobs, classify evidence, resolve goals, decide continuation, optionally propose adaptive queries, then call done.
+Move through the phases: create query jobs, run web/X query jobs that emit evidence ledgers, resolve goals, decide continuation, optionally propose adaptive queries, then call done.
 Use done only when the research ledger and continuation decision are ready for the host pipeline to synthesize.`;
 }
 

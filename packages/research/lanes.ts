@@ -11,89 +11,35 @@ import {
 } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError } from "../core/connector-errors.ts";
 import { Output, generateText } from "ai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createXai } from "@ai-sdk/xai";
-import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
-import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
-import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
-import {
-  OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
-  OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
-  openRouterCacheablePrompt,
-  openRouterProviderOptions,
-  openRouterProviderPreferences,
-} from "../ai/openrouter-options.ts";
 
-type SearchSource = {
-  title?: string;
-  url?: string;
-};
+const DEFAULT_WEB_SEARCH_MODEL = "gemini-3.1-flash-lite";
+export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
 
-export const SearchQueryOutputSchema = z.object({
-  query: z.string(),
-  queryKind: z.string(),
-  expectedEvidence: z.string(),
-  noFinalTradeView: z.boolean(),
-  findings: z.array(z.object({
-    claim: z.string(),
-    sourceUrls: z.array(z.string()),
-    relevance: z.number().min(0).max(1),
-    supportsExpectedEvidence: z.boolean(),
-    caveat: z.string().nullable(),
-  })),
-  sources: z.array(z.object({
-    title: z.string().nullable(),
-    url: z.string().nullable(),
-    sourceName: z.string().nullable(),
-    publishedAt: z.string().nullable(),
-    snippet: z.string().nullable(),
-  })),
-  unresolved: z.array(z.string()),
-});
-
-type SearchQueryOutput = z.infer<typeof SearchQueryOutputSchema>;
-
-const DEFAULT_WEB_SEARCH_MODEL = "google/gemini-3.1-flash-lite";
-const DEFAULT_WEB_SEARCH_ENGINE = "native";
-
-export class OpenAiWebSearchLane {
+export class GeminiWebSearchLane {
   constructor(
-    private readonly apiKey = process.env.OPENROUTER_API_KEY,
-    private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.OPENROUTER_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
+    private readonly apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
     private readonly trace?: TraceRecorder,
     private readonly maxResults = Number(process.env.CASSIE_WEB_SEARCH_MAX_RESULTS ?? 5),
-    private readonly searchEngine = process.env.CASSIE_WEB_SEARCH_ENGINE ?? DEFAULT_WEB_SEARCH_ENGINE,
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
     if (!this.apiKey) {
-      throw new MissingConnectorConfigError("OpenRouter/Web Search lane", "OPENROUTER_API_KEY");
+      throw new MissingConnectorConfigError("Gemini Web Search lane", "GEMINI_API_KEY");
     }
 
-    const openrouter = createOpenRouter({
+    const google = createGoogleGenerativeAI({
       apiKey: this.apiKey,
-      compatibility: "strict",
-      extraBody: {
-        provider: openRouterProviderPreferences(),
-        plugins: [
-          {
-            id: "web",
-            max_results: this.maxResults,
-            engine: this.searchEngine,
-          },
-        ],
-        reasoning: {
-          effort: "minimal",
-        },
-      },
     });
     const prompt = buildWebQueryJobPrompt(job, queryPlan);
     const finishTrace = this.trace?.start({
-      name: "openrouter_web_query_job",
+      name: "gemini_web_query_job",
       kind: "connector",
       model: this.model,
-      thinkingTrace: `Executing one auditable OpenRouter web query job with ${this.searchEngine} search and classifying returned sources into evidence claims.`,
+      thinkingTrace: "Executing one auditable Gemini web query job with Google Search grounding and classifying returned sources into evidence claims.",
       input: {
         queryJobId: job.id,
         queryId: job.querySpecId,
@@ -103,28 +49,31 @@ export class OpenAiWebSearchLane {
     });
 
     try {
-      const result = await wrapConnectorStage("OpenRouter web search generation", () =>
+      const result = await wrapConnectorStage("Gemini web search generation", () =>
         generateText({
-          model: openrouter(this.model),
+          model: google(this.model),
           output: Output.object({
-            schema: SearchQueryOutputSchema,
-            name: "cassie_web_search_result",
+            schema: EvidenceLedgerSchema,
+            name: "cassie_web_evidence_ledger",
           }),
-          messages: openRouterCacheablePrompt(prompt),
-          providerOptions: openRouterProviderOptions(),
-          maxOutputTokens: OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
+          tools: {
+            google_search: google.tools.googleSearch({
+              searchTypes: { webSearch: {} },
+            }),
+          },
+          prompt,
+          providerOptions: {
+            google: {
+              thinkingConfig: {
+                thinkingLevel: "minimal",
+              },
+            },
+          },
+          maxOutputTokens: GEMINI_SEARCH_MAX_OUTPUT_TOKENS,
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
       );
-      const ledger = await wrapConnectorStage("OpenRouter evidence classification after web search", () =>
-        classifyEvidenceLedger({
-          provider: "openrouter_web_search",
-          job,
-          queryPlan,
-          searchResult: result.output,
-          sources: [...searchSourcesFromStructuredOutput(result.output), ...(result.sources ?? [])],
-        })
-      );
+      const ledger = result.output;
       const output = {
         lane: "openai_search" as const,
         evidence: evidenceFromLedger("openai_search", ledger),
@@ -180,8 +129,8 @@ export class GrokXSearchLane {
         generateText({
           model: xai.responses(this.model),
           output: Output.object({
-            schema: SearchQueryOutputSchema,
-            name: "cassie_x_search_result",
+            schema: EvidenceLedgerSchema,
+            name: "cassie_x_evidence_ledger",
           }),
           tools: {
             x_search: xai.tools.xSearch({
@@ -194,15 +143,7 @@ export class GrokXSearchLane {
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
       );
-      const ledger = await wrapConnectorStage("OpenRouter evidence classification after Grok X search", () =>
-        classifyEvidenceLedger({
-          provider: "grok_x_search",
-          job,
-          queryPlan,
-          searchResult: result.output,
-          toolResults: result.toolResults,
-        })
-      );
+      const ledger = result.output;
       const output = {
         lane: "x_search" as const,
         evidence: evidenceFromLedger("x_search", ledger),
@@ -228,7 +169,7 @@ export class GrokXSearchLane {
 
 export class LiveResearchSearchLanes implements ResearchSearchLanes {
   constructor(
-    private readonly openAiLane = new OpenAiWebSearchLane(),
+    private readonly openAiLane = new GeminiWebSearchLane(),
     private readonly grokLane = new GrokXSearchLane(),
   ) {}
 
@@ -259,7 +200,15 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
-Return structured findings only. Each source-backed finding must include its source URL in sourceUrls and the source entry in sources.
+Return an EvidenceLedger JSON object only:
+- searchResults are the retrieved sources for this exact query job.
+- evidenceClaims are atomic claims extracted from those sources.
+- goalEvidenceLinks classify each evidence claim against the relevant goals.
+- Preserve runId, queryJobId, queryId, goalIds, wave, lane, and provider exactly.
+- Use provider "gemini_google_search".
+- Use stable ids like result_${job.id}_1, claim_${job.id}_1, link_${job.id}_<goalId>_1.
+- Set retrievedAt to the current timestamp if available, otherwise an ISO timestamp for this run.
+- Set metadata to [] unless a specific string key/value matters.
 Do not synthesize a final trade view.`;
 }
 
@@ -280,7 +229,17 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Look for origin posts, author/source reputation, smart engagement, direct refutations, recycled claims, coordinated language, image/video evidence, and whether claims are stated or inferred.
-X social momentum is not proof of factual truth. Return structured findings only. Do not synthesize a final trade view.`;
+X social momentum is not proof of factual truth.
+Return an EvidenceLedger JSON object only:
+- searchResults are the retrieved posts/results for this exact query job.
+- evidenceClaims are atomic claims extracted from those posts/results.
+- goalEvidenceLinks classify each evidence claim against the relevant goals.
+- Preserve runId, queryJobId, queryId, goalIds, wave, lane, and provider exactly.
+- Use provider "grok_x_search".
+- Use stable ids like result_${job.id}_1, claim_${job.id}_1, link_${job.id}_<goalId>_1.
+- Set retrievedAt to the current timestamp if available, otherwise an ISO timestamp for this run.
+- Set metadata to [] unless a specific string key/value matters.
+Do not synthesize a final trade view.`;
 }
 
 function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): string {
@@ -297,61 +256,6 @@ function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): stri
     `  Supported if: ${goal.resolutionCriteria.supportedIf}`,
     `  Contradicted if: ${goal.resolutionCriteria.contradictedIf}`,
   ].join("\n")).join("\n");
-}
-
-async function classifyEvidenceLedger(input: {
-  provider: string;
-  job: QueryJob;
-  queryPlan: ResearchQueryPlan;
-  searchResult: SearchQueryOutput;
-  sources?: SearchSource[];
-  toolResults?: unknown[];
-}): Promise<EvidenceLedger> {
-  if (!process.env.OPENROUTER_API_KEY) {
-    throw new MissingConnectorConfigError("Evidence ledger classifier", "OPENROUTER_API_KEY");
-  }
-
-  const openrouter = createOpenRouter({
-    apiKey: process.env.OPENROUTER_API_KEY,
-    compatibility: "strict",
-    extraBody: {
-      provider: openRouterProviderPreferences(),
-    },
-  });
-  const model = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL;
-  const prompt = evidenceLedgerPrompt({
-    queryJob: input.job,
-    normalizedClaim: input.queryPlan.normalizedClaim,
-    goals: input.queryPlan.goals.filter((goal) => input.job.goalIds.includes(goal.id)),
-    searchOutput: {
-      structuredResult: input.searchResult,
-      sources: input.sources ?? [],
-      toolResults: input.toolResults ?? [],
-    },
-    retrievedAt: new Date().toISOString(),
-  });
-  const result = await generateText({
-    model: openrouter(model),
-    output: Output.object({
-      schema: EvidenceLedgerSchema,
-      name: "cassie_evidence_ledger",
-    }),
-    messages: openRouterCacheablePrompt(prompt),
-    providerOptions: openRouterProviderOptions(),
-    maxOutputTokens: OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
-    abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
-  });
-
-  return result.output;
-}
-
-function searchSourcesFromStructuredOutput(output: SearchQueryOutput): SearchSource[] {
-  return output.sources
-    .filter((source) => source.url || source.title)
-    .map((source) => ({
-      title: source.title ?? undefined,
-      url: source.url ?? undefined,
-    }));
 }
 
 function connectorCallTimeoutMs() {

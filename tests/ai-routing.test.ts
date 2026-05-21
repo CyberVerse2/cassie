@@ -1,31 +1,25 @@
 import { describe, expect, it } from "vitest";
 import {
+  DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
   MissingAiDependencyError,
   OpenAiStructuredClient,
   routeStructuredModel,
 } from "../packages/ai/client.ts";
 import {
+  GEMINI_SEARCH_MAX_OUTPUT_TOKENS,
+  GeminiWebSearchLane,
   GrokXSearchLane,
-  OpenAiWebSearchLane,
 } from "../packages/research/lanes.ts";
-import {
-  OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS,
-  OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS,
-} from "../packages/ai/openrouter-options.ts";
 
 describe("structured AI model routing", () => {
-  it("routes bookkeeping steps to DeepSeek through OpenRouter", () => {
-    expect(routeStructuredModel({ name: "cassie_evidence_ledger" })).toMatchObject({
-      provider: "openrouter",
-      tier: "cheap",
-      model: "deepseek/deepseek-v4-flash",
-    });
+  it("routes bookkeeping steps to direct DeepSeek", () => {
     expect(routeStructuredModel({ name: "cassie_intent" })).toMatchObject({
-      provider: "openrouter",
+      provider: "deepseek",
       tier: "cheap",
+      model: "deepseek-v4-flash",
     });
     expect(routeStructuredModel({ name: "cassie_signal" })).toMatchObject({
-      provider: "openrouter",
+      provider: "deepseek",
       tier: "cheap",
     });
   });
@@ -48,7 +42,7 @@ describe("structured AI model routing", () => {
 
   it("allows explicit tier overrides for structured calls", () => {
     expect(routeStructuredModel({ name: "custom_low_risk_step", tier: "cheap" })).toMatchObject({
-      provider: "openrouter",
+      provider: "deepseek",
       tier: "cheap",
     });
     expect(routeStructuredModel({ name: "cassie_signal", tier: "expensive" })).toMatchObject({
@@ -57,32 +51,32 @@ describe("structured AI model routing", () => {
     });
   });
 
-  it("surfaces missing OpenRouter key for cheap semantic work", async () => {
-    const originalOpenRouterKey = process.env.OPENROUTER_API_KEY;
-    delete process.env.OPENROUTER_API_KEY;
+  it("surfaces missing DeepSeek key for cheap semantic work", async () => {
+    const originalDeepSeekKey = process.env.DEEPSEEK_API_KEY;
+    delete process.env.DEEPSEEK_API_KEY;
 
     await expect(
       new OpenAiStructuredClient().generateObject({
         schema: {} as never,
-        name: "cassie_evidence_ledger",
+        name: "cassie_intent",
         prompt: "test",
       }),
     ).rejects.toBeInstanceOf(MissingAiDependencyError);
 
-    if (originalOpenRouterKey) {
-      process.env.OPENROUTER_API_KEY = originalOpenRouterKey;
+    if (originalDeepSeekKey) {
+      process.env.DEEPSEEK_API_KEY = originalDeepSeekKey;
     }
   });
 
-  it("defaults web search to Gemini Flash Lite through OpenRouter", () => {
-    const lane = new OpenAiWebSearchLane("test-key");
+  it("defaults web search to direct Gemini Flash Lite", () => {
+    const lane = new GeminiWebSearchLane("test-key");
 
-    expect(lane).toHaveProperty("model", "google/gemini-3.1-flash-lite");
+    expect(lane).toHaveProperty("model", "gemini-3.1-flash-lite");
   });
 
-  it("keeps OpenRouter generation ceilings below huge provider defaults", () => {
-    expect(OPENROUTER_SEARCH_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(2_048);
-    expect(OPENROUTER_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(8_192);
+  it("keeps direct provider generation ceilings below huge provider defaults", () => {
+    expect(GEMINI_SEARCH_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(2_048);
+    expect(DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(8_192);
   });
 
   it("defaults Grok X search to 4.3", () => {

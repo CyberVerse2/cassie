@@ -1,10 +1,10 @@
 import "dotenv/config";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { openRouterProviderOptions, openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
+import { DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../packages/ai/client.ts";
 
-const DEFAULT_MODEL = "deepseek/deepseek-v4-flash";
+const DEFAULT_MODEL = "deepseek-v4-flash";
 
 const SmokeResultSchema = z.object({
   signalType: z.enum([
@@ -24,30 +24,27 @@ const SmokeResultSchema = z.object({
 const prompt = flag("prompt") ??
   "JaguarAnalytics says SPCX/SpaceX is worth $1.75T while reporting $18.7B 2025 sales and operating losses, citing an S-1.";
 
-const model = flag("model") ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_MODEL;
+const model = flag("model") ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_MODEL;
 const timeoutMs = Number(flag("timeout-ms") ?? 45_000);
 
-if (!process.env.OPENROUTER_API_KEY) {
-  throw new Error("Missing OPENROUTER_API_KEY. Add it to .env or export it before running this smoke test.");
+if (!process.env.DEEPSEEK_API_KEY) {
+  throw new Error("Missing DEEPSEEK_API_KEY. Add it to .env or export it before running this smoke test.");
 }
 
 const startedAt = Date.now();
-const openrouter = createOpenRouter({
-  apiKey: process.env.OPENROUTER_API_KEY,
-  compatibility: "strict",
-  extraBody: {
-    provider: openRouterProviderPreferences(),
-  },
+const deepseek = createDeepSeek({
+  apiKey: process.env.DEEPSEEK_API_KEY,
+  baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
 });
 
 const result = await generateText({
-  model: openrouter(model),
+  model: deepseek.chat(model),
   output: Output.object({
     schema: SmokeResultSchema,
     name: "deepseek_v4_flash_smoke_result",
   }),
   prompt: buildPrompt(prompt),
-  providerOptions: openRouterProviderOptions(),
+  maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
   abortSignal: AbortSignal.timeout(timeoutMs),
 });
 
@@ -55,7 +52,7 @@ const elapsedMs = Date.now() - startedAt;
 
 console.log(JSON.stringify({
   ok: true,
-  provider: "openrouter",
+  provider: "deepseek",
   model,
   elapsedMs,
   totalUsage: result.totalUsage,

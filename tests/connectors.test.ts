@@ -1,16 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   formatResearchConnectorError,
+  GeminiWebSearchLane,
   GrokXSearchLane,
-  OpenAiWebSearchLane,
-  SearchQueryOutputSchema,
 } from "../packages/research/lanes.ts";
 import {
   HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
 } from "../packages/market-data/index.ts";
 import { MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
-import type { ResearchQueryPlan, Thesis } from "../packages/core/schemas/index.ts";
+import { EvidenceLedgerSchema, type ResearchQueryPlan, type Thesis } from "../packages/core/schemas/index.ts";
 
 const thesis: Thesis = {
   claim: "SOL may rally because Solana ETF approval odds are increasing.",
@@ -99,8 +98,8 @@ const queryPlan: ResearchQueryPlan = {
 };
 
 describe("research connectors", () => {
-  it("requires OpenRouter configuration for web search", async () => {
-    await expect(new OpenAiWebSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
+  it("requires Gemini configuration for web search", async () => {
+    await expect(new GeminiWebSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );
   });
@@ -131,34 +130,73 @@ describe("research connectors", () => {
     expect(formatResearchConnectorError(error)).toContain("No output generated.");
   });
 
-  it("uses a structured output contract for each search query", () => {
-    expect(SearchQueryOutputSchema.parse({
-      query: "Solana ETF approval odds official source",
-      queryKind: "primary_source",
-      expectedEvidence: "Official or reputable evidence.",
-      noFinalTradeView: true,
-      findings: [
+  it("uses an evidence-ledger structured output contract for each search query", () => {
+    expect(EvidenceLedgerSchema.parse({
+      searchResults: [
         {
-          claim: "A regulator filing mentions the relevant ETF.",
-          sourceUrls: ["https://example.com/source"],
-          relevance: 0.9,
-          supportsExpectedEvidence: true,
-          caveat: null,
-        },
-      ],
-      sources: [
-        {
+          id: "result_q_verify_web_1",
+          runId: "research_1",
+          queryJobId: "q_verify_web",
+          queryId: "q_verify_web",
+          goalIds: ["verify_event"],
+          wave: 0,
+          lane: "web",
+          provider: "gemini_google_search",
           title: "Example source",
           url: "https://example.com/source",
+          canonicalUrl: "https://example.com/source",
+          author: null,
           sourceName: "Example",
+          sourceType: "regulatory",
           publishedAt: null,
+          retrievedAt: "2026-05-21T00:00:00.000Z",
+          rawText: null,
           snippet: "A source-backed snippet.",
+          rank: 1,
+          duplicateOf: null,
+          metadata: [],
         },
       ],
-      unresolved: ["Whether the approval odds changed today."],
+      evidenceClaims: [
+        {
+          id: "claim_q_verify_web_1",
+          resultId: "result_q_verify_web_1",
+          queryJobId: "q_verify_web",
+          queryId: "q_verify_web",
+          goalIds: ["verify_event"],
+          wave: 0,
+          claimText: "A regulator filing mentions the relevant ETF.",
+          normalizedClaim: null,
+          entities: ["Solana ETF"],
+          assets: ["SOL"],
+          topics: ["Solana ETF"],
+          eventTime: null,
+          claimTimeRelation: "same_time",
+          sourceType: "regulatory",
+          directness: "primary",
+          reliability: "high",
+          extractionConfidence: 0.9,
+          quote: null,
+          quoteStartChar: null,
+          quoteEndChar: null,
+        },
+      ],
+      goalEvidenceLinks: [
+        {
+          id: "link_q_verify_web_verify_event_1",
+          goalId: "verify_event",
+          evidenceClaimId: "claim_q_verify_web_1",
+          stance: "supports",
+          relevance: 0.9,
+          strength: 0.8,
+          reason: "Primary source supports the catalyst.",
+          satisfiesEvidenceNeeds: ["Primary or credible secondary source for Solana ETF approval odds."],
+          redFlags: [],
+        },
+      ],
     })).toMatchObject({
-      noFinalTradeView: true,
-      findings: [{ supportsExpectedEvidence: true }],
+      evidenceClaims: [{ reliability: "high" }],
+      goalEvidenceLinks: [{ stance: "supports" }],
     });
   });
 });
