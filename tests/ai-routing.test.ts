@@ -11,7 +11,7 @@ describe("structured AI model routing", () => {
     expect(routeStructuredModel({ name: "cassie_evidence_ledger" })).toMatchObject({
       provider: "openrouter",
       tier: "cheap",
-      model: "deepseek/deepseek-chat",
+      model: "deepseek/deepseek-v4-flash",
     });
     expect(routeStructuredModel({ name: "cassie_intent" })).toMatchObject({
       provider: "openrouter",

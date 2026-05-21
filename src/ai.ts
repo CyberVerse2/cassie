@@ -13,6 +13,9 @@ export type ModelRoute = {
   model: string;
 };
 
+export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
+export const DEFAULT_EXPENSIVE_MODEL = "gpt-5.5";
+
 export interface StructuredAiClient {
   generateObject<T>(input: {
     schema: z.ZodType<T>;
@@ -42,9 +45,9 @@ export function routeStructuredModel(input: {
   expensiveModel?: string;
 }): ModelRoute {
   const cheapModel = input.cheapModel ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ??
-    "deepseek/deepseek-chat";
+    DEFAULT_CHEAP_MODEL;
   const expensiveModel = input.expensiveModel ?? process.env.CASSIE_EXPENSIVE_MODEL ?? process.env.CASSIE_MODEL ??
-    "gpt-5.5";
+    DEFAULT_EXPENSIVE_MODEL;
   const tier = input.tier ?? (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
 
   return tier === "cheap"
@@ -57,9 +60,9 @@ export class OpenAiStructuredClient implements StructuredAiClient {
   private readonly cheapModelName: string;
 
   constructor(
-    modelName = process.env.CASSIE_EXPENSIVE_MODEL ?? process.env.CASSIE_MODEL ?? "gpt-5.5",
+    modelName = process.env.CASSIE_EXPENSIVE_MODEL ?? process.env.CASSIE_MODEL ?? DEFAULT_EXPENSIVE_MODEL,
     private readonly trace?: TraceRecorder,
-    cheapModelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? "deepseek/deepseek-chat",
+    cheapModelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL,
   ) {
     this.expensiveModelName = modelName;
     this.cheapModelName = cheapModelName;

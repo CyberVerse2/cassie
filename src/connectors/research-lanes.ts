@@ -17,6 +17,7 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../trace.ts";
 import { evidenceLedgerPrompt } from "../prompts.ts";
+import { DEFAULT_CHEAP_MODEL } from "../ai.ts";
 
 type SearchSource = {
   title?: string;
@@ -461,7 +462,7 @@ async function classifyEvidenceLedger(input: {
   }
 
   const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
-  const model = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? "deepseek/deepseek-chat";
+  const model = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL;
   const result = await generateText({
     model: openrouter(model),
     output: Output.object({
