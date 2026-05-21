@@ -405,6 +405,31 @@ export const ResearchContinuationDecisionSchema = z.object({
   blockedActions: z.array(z.string()),
 });
 
+export const AdaptiveQueryRequestSchema = z.object({
+  requests: z.array(z.object({
+    unresolvedGoalId: z.string(),
+    evidenceGap: z.string(),
+    whyExistingEvidenceInsufficient: z.string(),
+    decisionImpact: z.enum([
+      "could_change_no_trade_to_watchlist",
+      "could_change_watchlist_to_trade_candidate",
+      "could_block_trade",
+      "could_change_trade_expression",
+      "could_change_risk_level",
+      "low_impact",
+    ]),
+    proposedQueries: z.array(z.object({
+      lane: ResearchLaneSchema,
+      queryKind: ResearchQuerySpecSchema.shape.queryKind,
+      query: z.string(),
+      expectedEvidence: z.string(),
+      maxResults: z.number().int().min(1).max(100),
+      priority: z.number().min(0).max(1),
+      rationale: z.string(),
+    })).max(3),
+  })).max(3),
+});
+
 export const ResearchReportSchema = z.object({
   claim: z.string(),
   normalizedThesis: z.string(),
@@ -642,6 +667,7 @@ export type GoalEvidenceLink = z.infer<typeof GoalEvidenceLinkSchema>;
 export type EvidenceLedger = z.infer<typeof EvidenceLedgerSchema>;
 export type GoalResolution = z.infer<typeof GoalResolutionSchema>;
 export type ResearchContinuationDecision = z.infer<typeof ResearchContinuationDecisionSchema>;
+export type AdaptiveQueryRequest = z.infer<typeof AdaptiveQueryRequestSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;

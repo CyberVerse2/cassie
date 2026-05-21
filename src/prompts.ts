@@ -242,6 +242,24 @@ Input:
 ${JSON.stringify(input, null, 2)}`;
 }
 
+export function adaptiveQueryRequestPrompt(input: unknown): string {
+  return `You are Cassie's adaptive query controller.
+
+Generate only targeted follow-up queries for unresolved high-impact research goals.
+Do not explore broadly. Do not repeat queries that already ran. Do not add curiosity queries.
+
+Rules:
+- Propose queries only when the answer could change the final research/trade classification.
+- Every proposed query must cite a concrete evidence gap.
+- Prefer primary-source, disconfirming, or direct-resolution queries.
+- Keep the total request small: at most 3 requests and at most 3 queries per request.
+- Use web for primary/official/news/docs context and X for origin/social/refutation/source provenance.
+- If no useful adaptive query exists, return an empty requests array.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
 export function researchQueryPlanPrompt(input: unknown): string {
   return `You are Cassie's research query planner.
 

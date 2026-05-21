@@ -842,4 +842,276 @@ describe("research query planner policy", () => {
     expect(executedJobs).not.toContain("q_trade_web");
     expect(resolverInputs[0]).toContain("claim_q_verify_web_1");
   });
+
+  it("runs adaptive follow-up query jobs for unresolved blocking goals before continuing", async () => {
+    const queryPlan: ResearchQueryPlan = {
+      version: "research-query-plan/v1",
+      normalizedClaim: "Exa raised $250M.",
+      signalType: "news",
+      mode: "standard",
+      assets: [],
+      topics: ["AI search", "funding"],
+      sourceHandle: "example",
+      sourceName: "Example",
+      scores: {
+        specificity: 0.9,
+        marketLinkage: 0.5,
+        sourceValue: 0.5,
+        urgency: 0.4,
+        risk: 0.3,
+        novelty: 0.8,
+        expectedValueOfResearch: 0.7,
+      },
+      goals: [
+        {
+          id: "g_verify_funding",
+          kind: "event_validation",
+          question: "Did Exa raise $250M?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.95,
+          mustResolve: true,
+          lanes: ["web"],
+          evidenceNeeds: ["Primary or credible secondary confirmation."],
+          disconfirmingQuestions: ["Was the raise denied or misreported?"],
+          resolutionCriteria: {
+            supportedIf: "Credible evidence confirms the raise.",
+            contradictedIf: "Credible evidence refutes the raise.",
+            unresolvedIf: "The raise cannot be verified.",
+          },
+          budget: { maxQueries: 2, maxResults: 20, wave: 0 },
+          stopWhen: [],
+        },
+        {
+          id: "g_trade_expression",
+          kind: "trade_expression",
+          question: "Is there a clean liquid expression?",
+          decisionUse: "identify_trade_expression",
+          priority: 0.7,
+          mustResolve: false,
+          lanes: ["web"],
+          evidenceNeeds: ["Liquid direct or proxy instrument."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "A clean expression exists.",
+            contradictedIf: "No clean expression exists.",
+            unresolvedIf: "The expression cannot be resolved.",
+          },
+          budget: { maxQueries: 2, maxResults: 20, wave: 1 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "Verify funding",
+          purpose: "Verify the core funding event.",
+          queries: [
+            {
+              id: "q_verify_web",
+              goalIds: ["g_verify_funding"],
+              lane: "web",
+              queryKind: "primary_source",
+              query: "\"Exa\" \"$250M\" funding",
+              priority: 0.95,
+              maxResults: 10,
+              expectedEvidence: "Primary or credible funding confirmation.",
+              rationale: "The research depends on the funding event being real.",
+            },
+          ],
+        },
+        {
+          wave: 1,
+          name: "Trade expression",
+          purpose: "Check whether any public expression exists.",
+          queries: [
+            {
+              id: "q_trade_web",
+              goalIds: ["g_trade_expression"],
+              lane: "web",
+              queryKind: "broad_context",
+              query: "Exa AI search public market competitors",
+              priority: 0.7,
+              maxResults: 10,
+              expectedEvidence: "Possible public-market proxies.",
+              rationale: "Only run after verification survives.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify_funding"],
+        cannotConcludeIfUnresolved: ["g_verify_funding"],
+      },
+    };
+    const unresolvedResolution: GoalResolution = {
+      goalId: "g_verify_funding",
+      status: "unresolved",
+      confidence: 0.35,
+      supportingEvidenceIds: [],
+      contradictingEvidenceIds: [],
+      contextualEvidenceIds: ["claim_q_verify_web_1"],
+      unresolvedQuestions: ["No primary confirmation was found."],
+      summary: "The funding claim is still unresolved.",
+      synthesisImplication: "The synthesis must not treat the funding as verified yet.",
+    };
+    const supportedResolution: GoalResolution = {
+      goalId: "g_verify_funding",
+      status: "resolved_supported",
+      confidence: 0.86,
+      supportingEvidenceIds: ["claim_adaptive_1"],
+      contradictingEvidenceIds: [],
+      contextualEvidenceIds: [],
+      unresolvedQuestions: [],
+      summary: "The adaptive query found primary confirmation.",
+      synthesisImplication: "The synthesis may treat the funding event as verified.",
+    };
+    const executedJobs: string[] = [];
+    const aiCalls: string[] = [];
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: { name: string; prompt?: string }) {
+        aiCalls.push(input.name);
+        if (input.name === "cassie_research_query_plan") {
+          return queryPlan as T;
+        }
+        if (input.name === "cassie_goal_resolution") {
+          return (input.prompt?.includes("claim_adaptive_1") ? [supportedResolution] : [unresolvedResolution]) as T;
+        }
+        if (input.name === "cassie_adaptive_query_request") {
+          expect(input.prompt).toContain("g_verify_funding");
+          expect(input.prompt).toContain("No primary confirmation was found.");
+          return {
+            requests: [
+              {
+                unresolvedGoalId: "g_verify_funding",
+                evidenceGap: "Need a primary investor or company announcement.",
+                whyExistingEvidenceInsufficient: "The first result only gave context.",
+                decisionImpact: "could_change_watchlist_to_trade_candidate",
+                proposedQueries: [
+                  {
+                    lane: "web",
+                    queryKind: "primary_source",
+                    query: "site:exa.ai Exa $250M Series C a16z",
+                    expectedEvidence: "Company or investor announcement confirming the round.",
+                    maxResults: 5,
+                    priority: 0.92,
+                    rationale: "Primary confirmation would resolve the blocking goal.",
+                  },
+                ],
+              },
+            ],
+          } as T;
+        }
+        if (input.name === "cassie_research_report") {
+          expect(input.prompt).toContain("continue_with_adaptive_queries");
+          expect(input.prompt).toContain("claim_adaptive_1");
+          return researchReport as T;
+        }
+        throw new Error(`Unexpected AI call ${input.name}`);
+      },
+    };
+    const ledgerFor = (job: QueryJob, claimId: string) => ({
+      searchResults: [
+        {
+          id: `result_${job.id}_1`,
+          runId: job.runId,
+          queryJobId: job.id,
+          queryId: job.querySpecId,
+          goalIds: job.goalIds,
+          wave: job.wave,
+          lane: job.lane,
+          provider: job.provider,
+          title: "Funding result",
+          url: "https://example.com/funding",
+          canonicalUrl: "https://example.com/funding",
+          author: null,
+          sourceName: "Example",
+          sourceType: "news" as const,
+          publishedAt: null,
+          retrievedAt: "2026-05-21T00:00:00.000Z",
+          rawText: null,
+          snippet: claimId === "claim_adaptive_1" ? "Primary confirmation." : "Context only.",
+          rank: 1,
+          duplicateOf: null,
+          metadata: {},
+        },
+      ],
+      evidenceClaims: [
+        {
+          id: claimId,
+          resultId: `result_${job.id}_1`,
+          queryJobId: job.id,
+          queryId: job.querySpecId,
+          goalIds: job.goalIds,
+          wave: job.wave,
+          claimText: claimId === "claim_adaptive_1" ? "Exa confirmed a $250M Series C." : "Exa is an AI search company.",
+          normalizedClaim: null,
+          entities: ["Exa"],
+          assets: [],
+          topics: ["funding"],
+          eventTime: null,
+          claimTimeRelation: "after_signal" as const,
+          sourceType: "news" as const,
+          directness: claimId === "claim_adaptive_1" ? "primary" as const : "context" as const,
+          reliability: claimId === "claim_adaptive_1" ? "high" as const : "medium" as const,
+          extractionConfidence: 0.86,
+          quote: null,
+          quoteStartChar: null,
+          quoteEndChar: null,
+        },
+      ],
+      goalEvidenceLinks: [
+        {
+          id: `link_${claimId}`,
+          goalId: "g_verify_funding",
+          evidenceClaimId: claimId,
+          stance: claimId === "claim_adaptive_1" ? "supports" as const : "context" as const,
+          relevance: 0.9,
+          strength: claimId === "claim_adaptive_1" ? 0.86 : 0.4,
+          reason: claimId === "claim_adaptive_1" ? "Primary confirmation." : "Context only.",
+          satisfiesEvidenceNeeds: [],
+          redFlags: [],
+        },
+      ],
+    });
+
+    await researchThesis({
+      ai,
+      lanes: {
+        async runOpenAiQueryJob(job) {
+          executedJobs.push(job.querySpecId);
+          return {
+            lane: "openai_search",
+            evidence: [],
+            warnings: [],
+            ledger: ledgerFor(job, job.querySpecId.startsWith("q_adaptive") ? "claim_adaptive_1" : "claim_q_verify_web_1"),
+          };
+        },
+        async runGrokXQueryJob() {
+          throw new Error("unexpected X job");
+        },
+        async runOpenAiWebSearch(plan) {
+          executedJobs.push(plan.queryBatches.flatMap((batch) => batch.queries.map((query) => query.id)).join(","));
+          return { lane: "openai_search", evidence: [], warnings: [], ledger: undefined };
+        },
+        async runGrokXSearch() {
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
+        },
+      },
+      sourcePost,
+      userCommand: "@Cassie think this",
+      signal: {
+        ...explicitSignal,
+        signalType: "news",
+        containsExplicitThesis: false,
+        leadQuality: "research_lead",
+      },
+      thesis: { ...thesis, claim: "Exa raised $250M.", topics: ["AI search", "funding"] },
+      researchAngle: "balanced",
+    });
+
+    expect(executedJobs).toContain("q_verify_web");
+    expect(executedJobs).toContain("q_adaptive_g_verify_funding_1_1");
+    expect(executedJobs.indexOf("q_adaptive_g_verify_funding_1_1")).toBeLessThan(executedJobs.indexOf("q_trade_web"));
+    expect(aiCalls).toContain("cassie_adaptive_query_request");
+  });
 });

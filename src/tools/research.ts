@@ -1,5 +1,7 @@
 import type { StructuredAiClient } from "../ai.ts";
 import {
+  AdaptiveQueryRequestSchema,
+  type AdaptiveQueryRequest,
   type EvidenceLedger,
   GoalResolutionSchema,
   type QueryJob,
@@ -15,7 +17,12 @@ import {
   type SourcePost,
   type Thesis,
 } from "../schemas.ts";
-import { goalResolutionPrompt, researchQueryPlanPrompt, researchSynthesisPrompt } from "../prompts.ts";
+import {
+  adaptiveQueryRequestPrompt,
+  goalResolutionPrompt,
+  researchQueryPlanPrompt,
+  researchSynthesisPrompt,
+} from "../prompts.ts";
 
 export type ResearchAngle = "balanced" | "critic" | "counter";
 
@@ -67,6 +74,7 @@ export async function researchThesis(input: {
           openAiResult: settledPayload(wave.openAiResult),
           xResult: settledPayload(wave.xResult),
           continuationDecision: wave.continuationDecision,
+          adaptiveDecisions: wave.adaptiveDecisions,
         })),
       },
       evidenceLedger,
@@ -86,6 +94,7 @@ async function executeResearchWaves(input: {
   evidenceLedger: EvidenceLedger;
   goalResolutions: GoalResolution[];
   continuationDecision: ResearchContinuationDecision;
+  adaptiveDecisions: ResearchContinuationDecision[];
 }>> {
   const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
   const results: Array<{
@@ -95,20 +104,21 @@ async function executeResearchWaves(input: {
     evidenceLedger: EvidenceLedger;
     goalResolutions: GoalResolution[];
     continuationDecision: ResearchContinuationDecision;
+    adaptiveDecisions: ResearchContinuationDecision[];
   }> = [];
 
   for (const wave of waves) {
     const wavePlan = planForWave(input.queryPlan, wave);
     const queryJobs = compileQueryJobs(input.queryPlan, wave);
-    const [openAiResult, xResult] = await Promise.all([
+    let [openAiResult, xResult] = await Promise.all([
       settle(runLaneForWave({ lane: "web", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs })),
       settle(runLaneForWave({ lane: "x", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs })),
     ]);
-    const evidenceLedger = mergeLedgers([
+    let evidenceLedger = mergeLedgers([
       ledgerFromSettledResult(openAiResult),
       ledgerFromSettledResult(xResult),
     ]);
-    const goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
+    let goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
       ai: input.ai,
       queryPlan: input.queryPlan,
       wave,
@@ -116,13 +126,70 @@ async function executeResearchWaves(input: {
       xResult,
       evidenceLedger,
     }));
-    const continuationDecision = decideContinuation({
+    let continuationDecision = decideContinuation({
       queryPlan: input.queryPlan,
       wave,
       goalResolutions,
     });
+    const adaptiveDecisions: ResearchContinuationDecision[] = [];
+    let adaptiveRound = 0;
 
-    results.push({ wave, openAiResult, xResult, evidenceLedger, goalResolutions, continuationDecision });
+    while (continuationDecision.action === "continue_with_adaptive_queries" && adaptiveRound < 2) {
+      adaptiveRound += 1;
+      adaptiveDecisions.push(continuationDecision);
+      const adaptiveRequest = await generateAdaptiveQueryRequest({
+        ai: input.ai,
+        queryPlan: input.queryPlan,
+        wave,
+        adaptiveRound,
+        goalResolutions,
+        continuationDecision,
+        evidenceLedger,
+      });
+      const adaptiveJobs = compileAdaptiveQueryJobs({
+        queryPlan: input.queryPlan,
+        wave,
+        adaptiveRound,
+        adaptiveRequest,
+      });
+      if (adaptiveJobs.length === 0) {
+        continuationDecision = {
+          ...continuationDecision,
+          action: "continue_planned",
+          reason: "No useful adaptive query was generated for the unresolved evidence gap.",
+          maxAdditionalQueries: 0,
+          adaptiveQueryInstructions: [],
+        };
+        break;
+      }
+
+      const [adaptiveOpenAiResult, adaptiveXResult] = await Promise.all([
+        settle(runLaneForWave({ lane: "web", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs: adaptiveJobs })),
+        settle(runLaneForWave({ lane: "x", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs: adaptiveJobs })),
+      ]);
+      openAiResult = mergeSettledLaneResults("openai_search", openAiResult, adaptiveOpenAiResult);
+      xResult = mergeSettledLaneResults("x_search", xResult, adaptiveXResult);
+      evidenceLedger = mergeLedgers([
+        evidenceLedger,
+        ledgerFromSettledResult(adaptiveOpenAiResult),
+        ledgerFromSettledResult(adaptiveXResult),
+      ]);
+      goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
+        ai: input.ai,
+        queryPlan: input.queryPlan,
+        wave,
+        openAiResult,
+        xResult,
+        evidenceLedger,
+      }));
+      continuationDecision = decideContinuation({
+        queryPlan: input.queryPlan,
+        wave,
+        goalResolutions,
+      });
+    }
+
+    results.push({ wave, openAiResult, xResult, evidenceLedger, goalResolutions, continuationDecision, adaptiveDecisions });
     if (continuationDecision.action === "stop_no_trade" || continuationDecision.action === "stop_watchlist") {
       break;
     }
@@ -157,6 +224,61 @@ async function resolveResearchGoals(input: {
       evidenceLedger: input.evidenceLedger,
     }),
   });
+}
+
+async function generateAdaptiveQueryRequest(input: {
+  ai: StructuredAiClient;
+  queryPlan: ResearchQueryPlan;
+  wave: number;
+  adaptiveRound: number;
+  goalResolutions: GoalResolution[];
+  continuationDecision: ResearchContinuationDecision;
+  evidenceLedger: EvidenceLedger;
+}): Promise<AdaptiveQueryRequest> {
+  return input.ai.generateObject({
+    schema: AdaptiveQueryRequestSchema,
+    name: "cassie_adaptive_query_request",
+    prompt: adaptiveQueryRequestPrompt({
+      wave: input.wave,
+      adaptiveRound: input.adaptiveRound,
+      maxAdaptiveRounds: 2,
+      maxQueries: input.continuationDecision.maxAdditionalQueries,
+      queryPlan: input.queryPlan,
+      goalResolutions: input.goalResolutions,
+      continuationDecision: input.continuationDecision,
+      evidenceLedger: input.evidenceLedger,
+    }),
+  });
+}
+
+function compileAdaptiveQueryJobs(input: {
+  queryPlan: ResearchQueryPlan;
+  wave: number;
+  adaptiveRound: number;
+  adaptiveRequest: AdaptiveQueryRequest;
+}): QueryJob[] {
+  const runId = `research_${stableSlug(input.queryPlan.normalizedClaim)}`;
+  return input.adaptiveRequest.requests.flatMap((request) =>
+    request.proposedQueries.map((query, index): QueryJob => {
+      const querySpecId = `q_adaptive_${stableSlug(request.unresolvedGoalId)}_${input.adaptiveRound}_${index + 1}`;
+      return {
+        id: `job_w${input.wave}_${querySpecId}`,
+        runId,
+        wave: input.wave,
+        querySpecId,
+        goalIds: [request.unresolvedGoalId],
+        lane: query.lane,
+        provider: query.lane === "web" ? "openai_web_search" : "grok_x_search",
+        query: query.query,
+        queryKind: query.queryKind,
+        priority: query.priority,
+        maxResults: query.maxResults,
+        mustExecuteAtomically: true,
+        expectedEvidence: query.expectedEvidence,
+        rationale: `${query.rationale} Evidence gap: ${request.evidenceGap}`,
+      };
+    })
+  ).slice(0, 3);
 }
 
 async function runLaneForWave(input: {
@@ -275,6 +397,24 @@ function decideContinuation(input: {
     )
     .map((resolution) => resolution.goalId);
 
+  if (unresolvedBlockingGoalIds.length > 0) {
+    return {
+      action: "continue_with_adaptive_queries",
+      reason: "A required research goal is unresolved, so Cassie needs targeted follow-up queries before continuing.",
+      resolvedGoalIds: input.goalResolutions
+        .filter((resolution) => resolution.status === "resolved_supported")
+        .map((resolution) => resolution.goalId),
+      unresolvedBlockingGoalIds,
+      contradictedGoalIds: [],
+      allowedNextGoalIds: [],
+      maxAdditionalQueries: 3,
+      adaptiveQueryInstructions: input.goalResolutions
+        .filter((resolution) => unresolvedBlockingGoalIds.includes(resolution.goalId))
+        .flatMap((resolution) => resolution.unresolvedQuestions.length > 0 ? resolution.unresolvedQuestions : [resolution.summary]),
+      blockedActions: ["trade_expression", "market_router", "ticket_creation"],
+    };
+  }
+
   return {
     action: "continue_planned",
     reason: "No required goal has been contradicted after this wave.",
@@ -335,6 +475,23 @@ function mergeLaneResults(lane: SearchLaneResult["lane"], results: SearchLaneRes
     warnings: results.flatMap((result) => result.warnings),
     ledger: mergeLedgers(results.map((result) => result.ledger)),
   };
+}
+
+function mergeSettledLaneResults(
+  lane: SearchLaneResult["lane"],
+  left: PromiseSettledResult<SearchLaneResult>,
+  right: PromiseSettledResult<SearchLaneResult>,
+): PromiseSettledResult<SearchLaneResult> {
+  if (left.status === "fulfilled" && right.status === "fulfilled") {
+    return { status: "fulfilled", value: mergeLaneResults(lane, [left.value, right.value]) };
+  }
+  if (left.status === "fulfilled") {
+    return left;
+  }
+  if (right.status === "fulfilled") {
+    return right;
+  }
+  return left;
 }
 
 function emptyLedger(): EvidenceLedger {
