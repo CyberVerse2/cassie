@@ -138,6 +138,8 @@ async function executeResearchWaves(input: {
   adaptiveDecisions: ResearchContinuationDecision[];
 }>> {
   const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
+  const startedAt = Date.now();
+  const maxRuntimeMs = Number(process.env.CASSIE_RESEARCH_MAX_RUNTIME_MS ?? 360_000);
   const results: Array<{
     wave: number;
     openAiResult: PromiseSettledResult<SearchLaneResult>;
@@ -149,6 +151,9 @@ async function executeResearchWaves(input: {
   }> = [];
 
   for (const wave of waves) {
+    if (Date.now() - startedAt > maxRuntimeMs) {
+      break;
+    }
     const wavePlan = planForWave(input.queryPlan, wave);
     const queryJobs = compileQueryJobs(input.queryPlan, wave, input.researchRunId);
     await input.persistence?.store.addResearchQueryJobs(input.researchRunId, queryJobs);
@@ -199,7 +204,12 @@ async function executeResearchWaves(input: {
     const adaptiveDecisions: ResearchContinuationDecision[] = [];
     let adaptiveRound = 0;
 
-    while (continuationDecision.action === "continue_with_adaptive_queries" && adaptiveRound < 2) {
+    const maxAdaptiveRounds = Number(process.env.CASSIE_RESEARCH_MAX_ADAPTIVE_ROUNDS ?? 1);
+    while (
+      continuationDecision.action === "continue_with_adaptive_queries" &&
+      adaptiveRound < maxAdaptiveRounds &&
+      Date.now() - startedAt <= maxRuntimeMs
+    ) {
       adaptiveRound += 1;
       adaptiveDecisions.push(continuationDecision);
       const adaptiveRequest = await generateAdaptiveQueryRequest({
@@ -414,7 +424,12 @@ async function runLaneForWave(input: {
           completedAt: new Date().toISOString(),
           error: error instanceof Error ? error.message : String(error),
         });
-        throw error;
+        return {
+          lane: input.lane === "web" ? "openai_search" as const : "x_search" as const,
+          evidence: [],
+          warnings: [error instanceof Error ? error.message : String(error)],
+          ledger: undefined,
+        };
       }
     }));
     results.push(...jobResults);

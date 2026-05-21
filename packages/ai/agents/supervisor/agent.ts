@@ -123,8 +123,8 @@ export async function runCassieSupervisorForRun(input: {
     const result = await agent.generate({
       prompt: buildSupervisorPrompt(running),
       timeout: {
-        totalMs: Number(process.env.CASSIE_SUPERVISOR_TIMEOUT_MS ?? 120_000),
-        stepMs: Number(process.env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS ?? 45_000),
+        totalMs: Number(process.env.CASSIE_SUPERVISOR_TIMEOUT_MS ?? 900_000),
+        stepMs: Number(process.env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS ?? 300_000),
       },
     });
 

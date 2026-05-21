@@ -28,6 +28,7 @@ export class OpenAiWebSearchLane {
     private readonly apiKey = process.env.OPENAI_API_KEY,
     private readonly model = process.env.OPENAI_WEB_SEARCH_MODEL ?? "gpt-5.4-mini",
     private readonly trace?: TraceRecorder,
+    private readonly timeoutMs = Number(process.env.CASSIE_WEB_QUERY_TIMEOUT_MS ?? 60_000),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
@@ -57,6 +58,7 @@ export class OpenAiWebSearchLane {
         },
         toolChoice: "auto",
         prompt,
+        abortSignal: AbortSignal.timeout(this.timeoutMs),
       });
       const ledger = await classifyEvidenceLedger({
         provider: "openai_web_search",
@@ -93,6 +95,7 @@ export class GrokXSearchLane {
     private readonly apiKey = process.env.XAI_API_KEY,
     private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
     private readonly trace?: TraceRecorder,
+    private readonly timeoutMs = Number(process.env.CASSIE_X_QUERY_TIMEOUT_MS ?? 60_000),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
@@ -126,6 +129,7 @@ export class GrokXSearchLane {
         },
         toolChoice: "auto",
         prompt,
+        abortSignal: AbortSignal.timeout(this.timeoutMs),
       });
       const ledger = await classifyEvidenceLedger({
         provider: "grok_x_search",

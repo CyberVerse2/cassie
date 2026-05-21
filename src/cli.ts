@@ -441,7 +441,7 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
       key: `run:${run.runId}`,
       signature: `${run.status}:${run.updatedAt}:${run.error ?? ""}`,
       lines: [
-        `${statusTag(run.status, theme)} ${theme.section(run.runId)} ${normalizeStatus(run.status)}`,
+        `${statusTag(run.status, theme)} ${theme.section(run.runId)} ${run.status}`,
         ...(run.error ? indentWrap({ text: `${theme.fail("error")} ${run.error}`, indent: "|-- ", theme }) : []),
       ],
     });
@@ -478,24 +478,78 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
     });
   }
 
-  for (const job of snapshot.researchQueryJobs
-    .filter((candidate) => snapshot.researchRuns.some((run) =>
-      run.controlRunId === runId && run.researchRunId === candidate.researchRunId
-    ))
-    .sort((left, right) => left.wave - right.wave || left.querySpecId.localeCompare(right.querySpecId))) {
+  const researchRunIds = new Set(snapshot.researchRuns
+    .filter((run) => run.controlRunId === runId)
+    .map((run) => run.researchRunId));
+  const jobs = snapshot.researchQueryJobs
+    .filter((candidate) => researchRunIds.has(candidate.researchRunId));
+  for (const summary of summarizeLiveQueryJobs(jobs)) {
     events.push({
-      key: `query:${job.id}`,
-      signature: `${job.status}:${job.completedAt ?? ""}:${job.error ?? ""}`,
-      lines: [
-        `|   |-- ${job.lane === "x" ? theme.x(`[wave ${job.wave}]`) : theme.web(`[wave ${job.wave}]`)} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${liveDuration(job.startedAt, job.completedAt)}`,
-        ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |-- ", theme }),
-        ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |-- ", theme }),
-        ...(job.error ? indentWrap({ text: `${theme.fail("error")} ${job.error}`, indent: "|   |   |-- ", theme }) : []),
-      ],
+      key: `query-summary:${summary.wave}:${summary.lane}`,
+      signature: `${summary.running}:${summary.succeeded}:${summary.failed}:${summary.lastError ?? ""}`,
+      lines: liveQuerySummaryLines(summary, theme),
     });
   }
 
   return events;
+}
+
+function summarizeLiveQueryJobs(jobs: CassieStoreSnapshot["researchQueryJobs"]) {
+  const groups = new Map<string, {
+    wave: number;
+    lane: string;
+    provider: string;
+    total: number;
+    running: number;
+    succeeded: number;
+    failed: number;
+    lastError: string | null;
+  }>();
+
+  for (const job of jobs) {
+    const key = `${job.wave}:${job.lane}:${job.provider}`;
+    const group = groups.get(key) ?? {
+      wave: job.wave,
+      lane: job.lane,
+      provider: job.provider,
+      total: 0,
+      running: 0,
+      succeeded: 0,
+      failed: 0,
+      lastError: null,
+    };
+    group.total += 1;
+    if (job.status === "running") group.running += 1;
+    if (job.status === "succeeded") group.succeeded += 1;
+    if (job.status === "failed") {
+      group.failed += 1;
+      group.lastError = job.error ?? "unknown error";
+    }
+    groups.set(key, group);
+  }
+
+  return Array.from(groups.values()).sort((left, right) =>
+    left.wave - right.wave || left.lane.localeCompare(right.lane)
+  );
+}
+
+function liveQuerySummaryLines(
+  summary: ReturnType<typeof summarizeLiveQueryJobs>[number],
+  theme: TerminalTheme,
+): string[] {
+  const badge = summary.lane === "x" ? theme.x(`[wave ${summary.wave}]`) : theme.web(`[wave ${summary.wave}]`);
+  const status = summary.failed > 0 && summary.running === 0
+    ? "completed_with_failures"
+    : summary.running > 0
+      ? "running"
+      : "succeeded";
+  const lines = [
+    `|   |-- ${badge} ${summary.lane}/${summary.provider} ${statusTag(status, theme)} ${summary.succeeded}/${summary.total} ok ${summary.failed} failed ${summary.running} running`,
+  ];
+  if (summary.lastError) {
+    lines.push(...indentWrap({ text: `${theme.fail("last error")} ${summary.lastError}`, indent: "|   |   |-- ", theme }));
+  }
+  return lines;
 }
 
 function liveToolBadge(model: string | null, stepType: string, theme: TerminalTheme): string {
