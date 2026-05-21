@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectActiveTools } from "../packages/ai/agents/supervisor/policy.ts";
+import { prepareCassieSupervisorStep, selectActiveTools } from "../packages/ai/agents/supervisor/policy.ts";
 
 function step(toolName: string, output?: unknown) {
   return {
@@ -7,6 +7,14 @@ function step(toolName: string, output?: unknown) {
     toolResults: output === undefined
       ? []
       : [{ type: "tool-result" as const, toolCallId: `${toolName}_call`, toolName, input: {}, output }],
+  };
+}
+
+function errorStep(toolName: string, error: Error) {
+  return {
+    toolCalls: [{ type: "tool-call" as const, toolCallId: `${toolName}_call`, toolName, input: {} }],
+    toolResults: [],
+    content: [{ type: "tool-error" as const, toolCallId: `${toolName}_call`, toolName, input: {}, error }],
   };
 }
 
@@ -55,5 +63,17 @@ describe("supervisor step policy", () => {
       step("extract_thesis", {}),
       step("finalize_run", {}),
     ])).toEqual([]);
+  });
+
+  it("does not advance past failed required tools", () => {
+    expect(selectActiveTools([
+      step("classify_intent"),
+    ])).toEqual(["classify_intent"]);
+
+    expect(() => prepareCassieSupervisorStep({
+      steps: [
+        errorStep("classify_intent", new Error("rate limited")),
+      ],
+    } as never)).toThrow("Supervisor tool classify_intent failed: rate limited");
   });
 });

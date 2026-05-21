@@ -9,7 +9,7 @@ import type { ControlRun, ExecutionJob as ControlExecutionJob } from "../package
 import { CassieProduct } from "../packages/workflows/product.ts";
 import type { CassieJobQueue } from "../packages/workflows/execution-jobs.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/db/drizzle-store.ts";
-import type { CassieStoreSnapshot } from "../packages/db/store.ts";
+import type { CassieStore, CassieStoreSnapshot } from "../packages/db/store.ts";
 import { routeIntent } from "../packages/ai/tools/intent-router.ts";
 import { interpretSignal } from "../packages/ai/tools/signal.ts";
 import { extractThesis } from "../packages/ai/tools/thesis.ts";
@@ -165,9 +165,16 @@ async function mention(args: ParsedArgs) {
 async function runSupervisor(args: ParsedArgs) {
   const runId = requiredPositional(args, 0, "runId");
   const store = new ControlPlaneStore();
-  const result = await runCassieSupervisorForRun({ runId, store });
+  const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
+  const liveTimeline = showTimeline ? startLiveRunTimeline(store, runId) : null;
+  let result: unknown;
+  try {
+    result = await runCassieSupervisorForRun({ runId, store });
+  } finally {
+    await liveTimeline?.stop();
+  }
   const timeline = formatRunTimeline(await store.load(), runId);
-  if (!args.flags.json && !args.flags["quiet-timeline"]) {
+  if (showTimeline) {
     console.error(timeline);
   }
   return args.flags.json ? { runId, result, timeline } : { runId, result };
@@ -372,6 +379,193 @@ function printTraceEvent(event: TraceEvent) {
   if (event.error) {
     console.error(`  error: ${event.error}`);
   }
+}
+
+function startLiveRunTimeline(store: CassieStore, runId: string) {
+  const seen = new Map<string, string>();
+  let pending = false;
+  let stopped = false;
+
+  console.error("CASSIE LIVE RUN");
+  console.error(`[run] ${runId}`);
+  console.error("|-- waiting for persisted supervisor steps...");
+
+  const render = async () => {
+    if (pending) return;
+    pending = true;
+    try {
+      const snapshot = await store.load();
+      for (const event of liveRunEvents(snapshot, runId)) {
+        const previous = seen.get(event.key);
+        if (previous === event.signature) continue;
+        seen.set(event.key, event.signature);
+        for (const line of event.lines) {
+          console.error(line);
+        }
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const key = "live-timeline-error";
+      if (seen.get(key) !== message) {
+        seen.set(key, message);
+        console.error(`|-- [timeline] failed to refresh: ${message}`);
+      }
+    } finally {
+      pending = false;
+    }
+  };
+
+  const timer = setInterval(() => {
+    void render();
+  }, 1_000);
+  void render();
+
+  return {
+    stop: async () => {
+      if (stopped) return;
+      stopped = true;
+      clearInterval(timer);
+      await render();
+      console.error("");
+    },
+  };
+}
+
+function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
+  const events: Array<{ key: string; signature: string; lines: string[] }> = [];
+  const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
+  if (run) {
+    events.push({
+      key: `run:${run.runId}`,
+      signature: `${run.status}:${run.updatedAt}:${run.error ?? ""}`,
+      lines: [
+        `${runStatusBadge(run.status)} ${run.runId} ${run.status}`,
+        ...(run.error ? [`|-- error ${run.error}`] : []),
+      ],
+    });
+  }
+
+  for (const step of snapshot.runSteps
+    .filter((candidate) => candidate.runId === runId)
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))) {
+    const output = summarizeLiveOutput(step.output);
+    events.push({
+      key: `step:${step.stepId}`,
+      signature: `${step.status}:${step.completedAt ?? ""}:${step.error ?? ""}:${output ?? ""}`,
+      lines: [
+        `|-- ${liveToolBadge(step.model, step.stepType)} ${step.stepType} ${step.status} ${liveDuration(step.startedAt, step.completedAt)}`,
+        `|   |-- tool ${step.promptName ?? step.stepType}${step.model ? ` (${step.model})` : ""}`,
+        `|   |-- thinking ${liveThinking(step.stepType)}`,
+        ...(output ? [`|   |-- output ${output}`] : []),
+        ...(step.error ? [`|   |-- error ${step.error}`] : []),
+      ],
+    });
+  }
+
+  for (const researchRun of snapshot.researchRuns
+    .filter((candidate) => candidate.controlRunId === runId)
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))) {
+    events.push({
+      key: `research:${researchRun.researchRunId}`,
+      signature: `${researchRun.status}:${researchRun.completedAt ?? ""}:${researchRun.error ?? ""}`,
+      lines: [
+        `|-- [research] ${researchRun.researchRunId} ${researchRun.status} ${liveDuration(researchRun.startedAt, researchRun.completedAt)}`,
+        "|   |-- thinking plan goals, run web/X query jobs, classify evidence, resolve goals",
+        ...(researchRun.error ? [`|   |-- error ${researchRun.error}`] : []),
+      ],
+    });
+  }
+
+  for (const job of snapshot.researchQueryJobs
+    .filter((candidate) => snapshot.researchRuns.some((run) =>
+      run.controlRunId === runId && run.researchRunId === candidate.researchRunId
+    ))
+    .sort((left, right) => left.wave - right.wave || left.querySpecId.localeCompare(right.querySpecId))) {
+    events.push({
+      key: `query:${job.id}`,
+      signature: `${job.status}:${job.completedAt ?? ""}:${job.error ?? ""}`,
+      lines: [
+        `|   |-- [wave ${job.wave}] ${job.lane}/${job.provider} ${job.status} ${liveDuration(job.startedAt, job.completedAt)}`,
+        `|   |   |-- query ${job.query}`,
+        `|   |   |-- thinking ${job.rationale}`,
+        ...(job.error ? [`|   |   |-- error ${job.error}`] : []),
+      ],
+    });
+  }
+
+  return events;
+}
+
+function runStatusBadge(status: string): string {
+  if (status === "succeeded") return "[ok]";
+  if (status === "failed") return "[fail]";
+  if (status === "running") return "[run]";
+  if (status === "queued" || status === "awaiting_approval") return "[wait]";
+  return `[${status}]`;
+}
+
+function liveToolBadge(model: string | null, stepType: string): string {
+  if (model) return "[ai]";
+  if (stepType === "risk") return "[risk]";
+  if (stepType === "ticket") return "[ticket]";
+  return "[tool]";
+}
+
+function liveThinking(stepType: string): string {
+  switch (stepType) {
+    case "intake":
+      return "Persist the incoming mention before agent work starts.";
+    case "intent":
+      return "Classify the command into Cassie's bounded intent set.";
+    case "signal":
+      return "Classify the post signal, tradability, lead quality, and research angles.";
+    case "thesis":
+      return "Extract the thesis that research should test.";
+    case "inverse_thesis":
+      return "Build the strongest opposing thesis for countertrade analysis.";
+    case "research":
+      return "Run goal-first research with query jobs and evidence resolution.";
+    case "critique":
+      return "Use evidence to identify the strongest objections.";
+    case "market_selection":
+      return "Select a real market expression without inventing instruments.";
+    case "risk":
+      return "Evaluate deterministic user and account risk limits.";
+    case "ticket":
+      return "Persist a ticket only after the gates allow it.";
+    case "final":
+      return "Persist the final user-facing result.";
+    default:
+      return "Run the next persisted control-plane step.";
+  }
+}
+
+function summarizeLiveOutput(output: unknown): string | null {
+  if (!output || typeof output !== "object") return null;
+  const record = output as Record<string, unknown>;
+  const fields = ["intent", "signalType", "claim", "stance", "decision", "responseType", "publicSummary"];
+  const summary = fields
+    .map((fieldName) => {
+      const value = record[fieldName];
+      return typeof value === "string" ? `${fieldName}=${truncate(value, 160)}` : null;
+    })
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+  return summary.length > 0 ? summary : null;
+}
+
+function liveDuration(startedAt: string | null, completedAt: string | null): string {
+  if (!startedAt) return "unknown";
+  const start = Date.parse(startedAt);
+  const end = completedAt ? Date.parse(completedAt) : Date.now();
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return "unknown";
+  const ms = Math.max(0, end - start);
+  if (ms < 1_000) return `${ms}ms`;
+  return `${(ms / 1_000).toFixed(1)}s`;
+}
+
+function truncate(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
 function flag(args: ParsedArgs, name: string, defaultValue: string): string {

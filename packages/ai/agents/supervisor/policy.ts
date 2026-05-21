@@ -20,6 +20,11 @@ export function createCassieStopConditions(maxSteps: number): StopCondition<Cass
 }
 
 export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTools> = ({ steps }) => {
+  const toolError = latestToolError(steps);
+  if (toolError) {
+    throw new Error(`Supervisor tool ${toolError.toolName} failed: ${toolError.error}`);
+  }
+
   const activeTools = selectActiveTools(steps);
   return {
     activeTools,
@@ -34,41 +39,41 @@ export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTo
 export function selectActiveTools(
   steps: Array<Pick<StepResult<ToolSet>, "toolCalls" | "toolResults">>,
 ): CassieSupervisorToolName[] {
-  if (hasCalled(steps, "finalize_run")) {
+  if (hasSucceeded(steps, "finalize_run")) {
     return [];
   }
 
-  if (!hasCalled(steps, "classify_intent")) {
+  if (!hasSucceeded(steps, "classify_intent")) {
     return ["classify_intent"];
   }
 
-  if (!hasCalled(steps, "interpret_signal")) {
+  if (!hasSucceeded(steps, "interpret_signal")) {
     return ["interpret_signal"];
   }
 
-  if (!hasCalled(steps, "extract_thesis")) {
+  if (!hasSucceeded(steps, "extract_thesis")) {
     return ["extract_thesis"];
   }
 
   const intent = getLatestToolOutput<IntentResult>(steps, "classify_intent")?.intent;
 
-  if (intent === "countertrade" && !hasCalled(steps, "extract_inverse_thesis")) {
+  if (intent === "countertrade" && !hasSucceeded(steps, "extract_inverse_thesis")) {
     return ["extract_inverse_thesis"];
   }
 
-  if ((intent === "critic" || intent === "trade" || intent === "countertrade") && !hasCalled(steps, "research_thesis")) {
+  if ((intent === "critic" || intent === "trade" || intent === "countertrade") && !hasSucceeded(steps, "research_thesis")) {
     return ["research_thesis"];
   }
 
   if (intent === "critic") {
-    return hasCalled(steps, "critique_thesis") ? ["finalize_run"] : ["critique_thesis"];
+    return hasSucceeded(steps, "critique_thesis") ? ["finalize_run"] : ["critique_thesis"];
   }
 
-  if (!hasCalled(steps, "select_market")) {
+  if (!hasSucceeded(steps, "select_market")) {
     return ["select_market"];
   }
 
-  if (!hasCalled(steps, "risk_check")) {
+  if (!hasSucceeded(steps, "risk_check")) {
     return ["risk_check"];
   }
 
@@ -77,7 +82,7 @@ export function selectActiveTools(
     return ["finalize_run"];
   }
 
-  if ((intent === "trade" || intent === "countertrade") && !hasCalled(steps, "create_trade_ticket")) {
+  if ((intent === "trade" || intent === "countertrade") && !hasSucceeded(steps, "create_trade_ticket")) {
     return ["create_trade_ticket"];
   }
 
@@ -97,6 +102,13 @@ function hasCalled(
   return steps.some((step) => step.toolCalls.some((call) => call.toolName === toolName));
 }
 
+function hasSucceeded(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  toolName: string,
+): boolean {
+  return steps.some((step) => step.toolResults.some((result) => result.toolName === toolName));
+}
+
 function getLatestToolOutput<T>(
   steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
   toolName: string,
@@ -105,4 +117,19 @@ function getLatestToolOutput<T>(
     .flatMap((step) => step.toolResults)
     .filter((result) => result.toolName === toolName)
     .at(-1)?.output as T | undefined;
+}
+
+function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string } | null {
+  for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
+    const step = steps[stepIndex];
+    for (let contentIndex = step.content.length - 1; contentIndex >= 0; contentIndex -= 1) {
+      const part = step.content[contentIndex];
+      if (part.type !== "tool-error") continue;
+      return {
+        toolName: String(part.toolName),
+        error: part.error instanceof Error ? part.error.message : String(part.error),
+      };
+    }
+  }
+  return null;
 }
