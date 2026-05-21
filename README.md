@@ -1,6 +1,6 @@
 # Cassie
 
-Cassie is a Twitter/X-native trading agent. She routes a mention into one of four modes, researches the claim when needed, finds market candidates, runs deterministic risk checks, creates trade tickets, and sends approved tickets to an execution webhook.
+Cassie is an X-native trading research and ticketing agent. A mention creates a durable control-plane run, a Graphile Worker supervisor drives bounded AI tools, and approved trade tickets are handed to the execution worker.
 
 Cassie can reason with AI, but she does not directly place orders.
 
@@ -8,6 +8,7 @@ Cassie can reason with AI, but she does not directly place orders.
 
 ```bash
 npm install
+npm run db:migrate
 npm run dev
 ```
 
@@ -25,16 +26,17 @@ Copy `.env.example` to `.env` and set:
 DATABASE_URL
 CASSIE_API_TOKEN
 OPENAI_API_KEY
+OPENROUTER_API_KEY
 XAI_API_KEY
 EXECUTION_WEBHOOK_URL
 ```
 
 Missing database, AI/search, or execution credentials fail clearly. Cassie does not downgrade semantic routing, research, persistence, or execution into local keyword behavior or fake fills.
 
-Run migrations:
+Run the worker in a second terminal:
 
 ```bash
-npm run db:migrate
+npm run worker
 ```
 
 ## API
@@ -60,7 +62,7 @@ curl -X POST http://localhost:3000/api/settings \
   }'
 ```
 
-Process a mention:
+Create a queued mention run:
 
 ```bash
 curl -X POST http://localhost:3000/api/mentions \
@@ -79,6 +81,12 @@ curl -X POST http://localhost:3000/api/mentions \
       "createdAt": null
     }
   }'
+```
+
+Inspect a run:
+
+```bash
+npm run cli -- control-run RUN_ID --json
 ```
 
 Approve a ticket:
@@ -109,14 +117,14 @@ Implemented:
 
 - AI intent routing for `think`, `critic`, `trade`, and `countertrade`
 - AI thesis and inverse-thesis extraction
-- Research subagent workflow with OpenAI web search and Grok X search lanes
+- Goal-first research with query jobs, OpenAI web search, Grok X search, evidence ledgers, and goal resolutions
 - Hyperliquid and Polymarket market-data connectors
 - AI market selection from real connector candidates
 - Deterministic risk checks
 - Trade-ticket creation
 - Approval endpoint
-- Execution webhook workflow
-- Drizzle/Postgres persistence for mentions, runs, research reports, tickets, execution jobs, and audit events
+- Graphile Worker supervisor and execution jobs
+- Drizzle/Postgres persistence for mentions, control runs, run steps, research reports, tickets, execution jobs, and audit events
 - Dashboard for pending tickets, runs, and audit trail
 
 Not included:
