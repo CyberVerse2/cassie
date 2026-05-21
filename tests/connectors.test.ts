@@ -6,8 +6,7 @@ import {
   PolymarketMarketDataProvider,
 } from "../src/index.ts";
 import { MissingConnectorConfigError } from "../src/connectors/errors.ts";
-import type { Thesis } from "../src/schemas.ts";
-import { buildResearchQueryPlan } from "../src/tools/research.ts";
+import type { ResearchQueryPlan, Thesis } from "../src/schemas.ts";
 
 const thesis: Thesis = {
   claim: "SOL may rally because Solana ETF approval odds are increasing.",
@@ -20,15 +19,90 @@ const thesis: Thesis = {
   confidence: 0.8,
 };
 
+const queryPlan: ResearchQueryPlan = {
+  version: "research-query-plan/v1",
+  normalizedClaim: thesis.claim,
+  signalType: "rumor",
+  mode: "standard",
+  assets: thesis.mentionedAssets,
+  topics: thesis.topics,
+  sourceHandle: "example",
+  sourceName: "Example",
+  scores: {
+    specificity: 0.8,
+    marketLinkage: 0.8,
+    sourceValue: 0.5,
+    urgency: 0.4,
+    risk: 0.5,
+    novelty: 0.5,
+    expectedValueOfResearch: 0.7,
+  },
+  goals: [
+    {
+      id: "verify_event",
+      kind: "event_validation",
+      question: "Verify whether the claimed catalyst is real.",
+      decisionUse: "validate_or_kill_thesis",
+      priority: 0.9,
+      mustResolve: true,
+      lanes: ["web", "x"],
+      evidenceNeeds: ["Primary or credible secondary source for Solana ETF approval odds."],
+      disconfirmingQuestions: ["Is the rumor refuted or stale?"],
+      resolutionCriteria: {
+        supportedIf: "Credible current evidence confirms the catalyst.",
+        contradictedIf: "Primary sources refute or invalidate the catalyst.",
+        unresolvedIf: "Only social repetition is available.",
+      },
+      budget: { maxQueries: 2, maxResults: 20, wave: 0 },
+      stopWhen: ["claim is refuted"],
+    },
+  ],
+  queryBatches: [
+    {
+      wave: 0,
+      name: "Catalyst verification",
+      purpose: "Verify the Solana ETF catalyst.",
+      queries: [
+        {
+          id: "q_verify_web",
+          goalIds: ["verify_event"],
+          lane: "web",
+          queryKind: "primary_source",
+          query: "Solana ETF approval odds official source",
+          priority: 0.9,
+          maxResults: 10,
+          expectedEvidence: "Official or reputable evidence.",
+          rationale: "The thesis depends on the catalyst being real.",
+        },
+        {
+          id: "q_verify_x",
+          goalIds: ["verify_event"],
+          lane: "x",
+          queryKind: "social_momentum",
+          query: "Solana ETF approval rumor refuted",
+          priority: 0.8,
+          maxResults: 10,
+          expectedEvidence: "Social confirmation or refutation.",
+          rationale: "X can surface fast refutations and origin posts.",
+        },
+      ],
+    },
+  ],
+  synthesisContract: {
+    requiredGoalIds: ["verify_event"],
+    cannotConcludeIfUnresolved: ["verify_event"],
+  },
+};
+
 describe("research connectors", () => {
   it("requires OpenAI configuration for web search", async () => {
-    await expect(new OpenAiWebSearchLane(undefined).run(buildResearchQueryPlan(thesis))).rejects.toBeInstanceOf(
+    await expect(new OpenAiWebSearchLane(undefined).run(queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );
   });
 
   it("requires xAI configuration for X search", async () => {
-    await expect(new GrokXSearchLane(undefined).run(buildResearchQueryPlan(thesis))).rejects.toBeInstanceOf(
+    await expect(new GrokXSearchLane(undefined).run(queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );
   });

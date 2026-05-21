@@ -7,6 +7,7 @@ import type {
   IntentResult,
   ExecutionJob,
   MarketSelection,
+  ResearchQueryPlan,
   ResearchReport,
   SignalInterpretation,
   SourcePost,
@@ -105,7 +106,7 @@ const researchReport: ResearchReport = {
       rationale: "The source post directly mentions Solana/SOL.",
       unverifiedAssumptions: [],
     },
-    founderDossier: {
+    personProjectDossier: {
       identifiedPeople: [],
       evidenceSummary: "No founder dossier required for this SOL fixture.",
       openQuestions: [],
@@ -130,6 +131,81 @@ const researchReport: ResearchReport = {
   fullResearchBrief: "No primary source.",
 };
 
+const queryPlan: ResearchQueryPlan = {
+  version: "research-query-plan/v1",
+  normalizedClaim: thesis.claim,
+  signalType: signal.signalType,
+  mode: "standard",
+  assets: thesis.mentionedAssets,
+  topics: thesis.topics,
+  sourceHandle: sourcePost.authorHandle,
+  sourceName: sourcePost.authorName,
+  scores: {
+    specificity: 0.8,
+    marketLinkage: 0.8,
+    sourceValue: 0.5,
+    urgency: 0.5,
+    risk: 0.5,
+    novelty: 0.5,
+    expectedValueOfResearch: 0.7,
+  },
+  goals: [
+    {
+      id: "g_verify",
+      kind: "event_validation",
+      question: "Is the SOL ETF catalyst real?",
+      decisionUse: "validate_or_kill_thesis",
+      priority: 0.9,
+      mustResolve: true,
+      lanes: ["web", "x"],
+      evidenceNeeds: ["Primary or credible evidence for the ETF catalyst."],
+      disconfirmingQuestions: ["Is the catalyst refuted or stale?"],
+      resolutionCriteria: {
+        supportedIf: "Credible current evidence confirms the catalyst.",
+        contradictedIf: "Primary sources refute the catalyst.",
+        unresolvedIf: "Only social repetition is available.",
+      },
+      budget: { maxQueries: 2, maxResults: 20, wave: 0 },
+      stopWhen: ["claim is refuted"],
+    },
+  ],
+  queryBatches: [
+    {
+      wave: 0,
+      name: "Verify catalyst",
+      purpose: "Verify the SOL ETF catalyst.",
+      queries: [
+        {
+          id: "q_verify_web",
+          goalIds: ["g_verify"],
+          lane: "web",
+          queryKind: "primary_source",
+          query: "Solana ETF approval odds official source",
+          priority: 0.9,
+          maxResults: 10,
+          expectedEvidence: "Official or reputable evidence.",
+          rationale: "The thesis depends on the catalyst being real.",
+        },
+        {
+          id: "q_verify_x",
+          goalIds: ["g_verify"],
+          lane: "x",
+          queryKind: "social_momentum",
+          query: "Solana ETF approval rumor refuted",
+          priority: 0.8,
+          maxResults: 10,
+          expectedEvidence: "Social confirmation or refutation.",
+          rationale: "X can surface fast refutations and origin posts.",
+        },
+      ],
+    },
+  ],
+  synthesisContract: {
+    requiredGoalIds: ["g_verify"],
+    cannotConcludeIfUnresolved: ["g_verify"],
+  },
+};
+
 class FakeAi implements StructuredAiClient {
   async generateObject<T>(input: { name: string }): Promise<T> {
     const outputs: Record<string, unknown> = {
@@ -144,6 +220,7 @@ class FakeAi implements StructuredAiClient {
       } satisfies IntentResult,
       cassie_signal: signal,
       cassie_thesis: thesis,
+      cassie_research_query_plan: queryPlan,
       cassie_research_report: researchReport,
       cassie_market_selection: marketSelection,
     };
@@ -166,6 +243,7 @@ class FakeCriticAi implements StructuredAiClient {
       } satisfies IntentResult,
       cassie_signal: signal,
       cassie_thesis: thesis,
+      cassie_research_query_plan: queryPlan,
       cassie_research_report: researchReport,
       cassie_critique: {
         strongestObjection: "There is no primary source confirming the catalyst.",

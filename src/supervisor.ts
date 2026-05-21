@@ -91,6 +91,7 @@ export async function runCassie(input: {
       lanes: input.deps.researchLanes,
       sourcePost: input.sourcePost,
       userCommand: input.userCommand,
+      signal,
       thesis,
       researchAngle: "critic",
     });
@@ -131,6 +132,7 @@ export async function runCassie(input: {
       lanes: input.deps.researchLanes,
       sourcePost: input.sourcePost,
       userCommand: input.userCommand,
+      signal,
       thesis: inverseThesis,
       researchAngle: "counter",
     });
@@ -174,6 +176,7 @@ export async function runCassie(input: {
           lanes: input.deps.researchLanes,
           sourcePost: input.sourcePost,
           userCommand: input.userCommand,
+          signal,
           thesis,
           researchAngle: "balanced",
         })

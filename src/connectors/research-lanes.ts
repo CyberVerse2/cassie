@@ -1,8 +1,8 @@
 import type {
-  ResearchQueryPlan,
   ResearchSearchLanes,
   SearchLaneResult,
 } from "../tools/research.ts";
+import type { ResearchGoal, ResearchQueryPlan } from "../schemas.ts";
 import { MissingConnectorConfigError } from "./errors.ts";
 import { generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -34,14 +34,7 @@ export class OpenAiWebSearchLane {
       thinkingTrace: "Searching external web sources for primary evidence, contradictions, and recency checks.",
       input: {
         claim: queryPlan.normalizedClaim,
-        queries: [
-          ...queryPlan.openAiQueries,
-          ...queryPlan.sourceReputationQueries,
-          ...queryPlan.entityResolutionQueries,
-          ...queryPlan.personDossierQueries,
-          ...queryPlan.projectDossierQueries,
-          ...queryPlan.ecosystemQueries,
-        ],
+        goals: goalsForLane(queryPlan, "web"),
       },
     });
 
@@ -96,7 +89,7 @@ export class GrokXSearchLane {
       thinkingTrace: "Searching X for origin posts, refutations, social momentum, and coordinated-push signals.",
       input: {
         claim: queryPlan.normalizedClaim,
-        queries: queryPlan.xQueries,
+        goals: goalsForLane(queryPlan, "x"),
       },
     });
 
@@ -158,15 +151,14 @@ Assets: ${queryPlan.assets.join(", ")}
 Topics: ${queryPlan.topics.join(", ")}
 Source author: ${queryPlan.sourceHandle ? `@${queryPlan.sourceHandle}` : "unknown"} ${queryPlan.sourceName ?? ""}
 
-Search goals:
-- Find official, regulatory, company, exchange, and reputable news sources.
-- Evaluate the source author's public credibility, prior products, and network reputation.
-- Resolve the referenced entity carefully. Say when the post itself did not mention a platform or project and the link is only inferred.
-- Build a person/project dossier when the claim depends on a person, founder, team, project, app, protocol, or product.
-- Check relevant ecosystem surfaces only when supported by the source post or search results. Do not assume a platform or ecosystem from vague wording.
-- Find contradictions and refutations.
-- Identify whether this is old news being recirculated.
-- Prefer primary sources over commentary.
+Research goals for web search:
+${formatGoalsForPrompt(queryPlan, "web")}
+
+General search requirements:
+- Prefer official, regulatory, company, exchange, reputable news, docs, filings, GitHub, contracts, and primary sources.
+- Follow the goals in priority order.
+- Say when a platform, ecosystem, ticker, project, or product link is only inferred.
+- Find contradictions and refutations when a contradiction goal exists.
 - Return concise evidence with citations, and separate facts from market interpretation.`;
 }
 
@@ -175,16 +167,8 @@ function buildXSearchPrompt(queryPlan: ResearchQueryPlan): string {
 
 Claim: ${queryPlan.normalizedClaim}
 Source author: ${queryPlan.sourceHandle ? `@${queryPlan.sourceHandle}` : "unknown"} ${queryPlan.sourceName ?? ""}
-X queries:
-${[
-  ...queryPlan.xQueries,
-  ...queryPlan.sourceReputationQueries,
-  ...queryPlan.entityResolutionQueries,
-  ...queryPlan.personDossierQueries,
-  ...queryPlan.projectDossierQueries,
-  ...queryPlan.socialGraphQueries,
-  ...queryPlan.ecosystemQueries,
-].map((query) => `- ${query}`).join("\n")}
+Research goals for X search:
+${formatGoalsForPrompt(queryPlan, "x")}
 
 Look for:
 - origin accounts or posts
@@ -199,6 +183,37 @@ Look for:
 - whether platform, ecosystem, project, or product claims are directly stated or inferred
 
 X social momentum is not proof of truth.`;
+}
+
+function goalsForLane(queryPlan: ResearchQueryPlan, lane: "web" | "x"): ResearchGoal[] {
+  return queryPlan.goals
+    .filter((goal) => goal.lanes.includes(lane))
+    .map((goal) => goal);
+}
+
+function formatGoalsForPrompt(queryPlan: ResearchQueryPlan, lane: "web" | "x"): string {
+  const goals = goalsForLane(queryPlan, lane);
+  if (goals.length === 0) {
+    return "- No goals assigned to this lane.";
+  }
+
+  return goals.map((goal) => [
+    `- ${goal.id} (${goal.kind}, priority ${goal.priority}, wave ${goal.budget.wave})`,
+    `  Question: ${goal.question}`,
+    `  Decision use: ${goal.decisionUse}`,
+    `  Evidence needed: ${goal.evidenceNeeds.join("; ")}`,
+    `  Supported if: ${goal.resolutionCriteria.supportedIf}`,
+    `  Contradicted if: ${goal.resolutionCriteria.contradictedIf}`,
+    `  Queries:`,
+    ...queriesForGoal(queryPlan, lane, goal.id).map((query) => `  - [${query.id}] ${query.query}`),
+  ].join("\n")).join("\n");
+}
+
+function queriesForGoal(queryPlan: ResearchQueryPlan, lane: "web" | "x", goalId: string) {
+  return queryPlan.queryBatches
+    .flatMap((batch) => batch.queries.map((query) => ({ ...query, wave: batch.wave })))
+    .filter((query) => query.lane === lane && query.goalIds.includes(goalId))
+    .sort((left, right) => left.wave - right.wave || right.priority - left.priority);
 }
 
 function evidenceFromSources(

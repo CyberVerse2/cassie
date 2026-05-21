@@ -158,3 +158,33 @@ Do not choose markets, size trades, approve orders, or execute anything.
 Input:
 ${JSON.stringify(input, null, 2)}`;
 }
+
+export function researchQueryPlanPrompt(input: unknown): string {
+  return `You are Cassie's research query planner.
+
+Create an inspectable, goal-first research plan for the source signal.
+Do not start by listing search strings. First identify the decision-relevant unknowns that must be resolved before this signal can become a trade, critique, or watchlist item.
+
+Design principles:
+- Generate goals from the signal type, user command, interpreted thesis, and source context.
+- A single post can need several goals: entity resolution, source provenance, social momentum, event validation, technical reality, catalyst timeline, impact materiality, market pricing, second-order implications, risk assessment, disconfirmation, and trade expression.
+- Every query must map to at least one explicit goal. No query should exist just because it sounds useful.
+- Each must-resolve goal needs concrete evidence needs, resolution criteria, and stop conditions.
+- Put queries into wave-based batches. Wave 0 should resolve must-answer gating questions. Later waves should only deepen research if the signal remains useful.
+- Use web for official sources, news, docs, filings, websites, contracts, GitHub, funding, and market/tradability checks.
+- Use X for source reputation, original posts, social graph, smart engagers, rumor propagation, refutations, and current discussion.
+- Do not assume an ecosystem, token, platform, or tradable asset unless the signal or prior interpretation supports it.
+- Prefer high-priority goals that can invalidate the rest of the research early.
+- For vague posts, prefer minimal_watchlist mode and source/entity goals. Do not manufacture a trade thesis from a normal post.
+- For explicit trade ideas, include at least one disconfirmation goal.
+
+Return fields that match the schema exactly:
+- version must be "research-query-plan/v1".
+- mode must be minimal_watchlist, standard, deep_dive, or crisis.
+- scores should estimate specificity, marketLinkage, sourceValue, urgency, risk, novelty, and expectedValueOfResearch from 0 to 1.
+- queryBatches should contain concrete provider-ready web or X queries, each tied to goalIds.
+- synthesisContract should name the goals the final synthesis cannot ignore.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}

@@ -147,6 +147,113 @@ export const ResearchEvidenceSchema = z.object({
   notes: z.array(z.string()).nullable(),
 });
 
+export const ResearchLaneSchema = z.enum(["web", "x"]);
+
+export const ResearchGoalKindSchema = z.enum([
+  "event_validation",
+  "entity_resolution",
+  "source_provenance",
+  "social_momentum",
+  "technical_reality",
+  "market_pricing",
+  "catalyst_timeline",
+  "impact_materiality",
+  "second_order_implications",
+  "risk_assessment",
+  "disconfirmation",
+  "trade_expression",
+]);
+
+export const ResearchDecisionUseSchema = z.enum([
+  "validate_or_kill_thesis",
+  "decide_watchlist_priority",
+  "estimate_materiality",
+  "estimate_market_pricing",
+  "identify_trade_expression",
+  "identify_risk",
+  "find_disconfirming_evidence",
+  "route_to_deeper_research",
+]);
+
+export const ResearchGoalSchema = z.object({
+  id: z.string(),
+  kind: ResearchGoalKindSchema,
+  question: z.string(),
+  decisionUse: ResearchDecisionUseSchema,
+  priority: z.number().min(0).max(1),
+  mustResolve: z.boolean(),
+  lanes: z.array(ResearchLaneSchema).min(1),
+  evidenceNeeds: z.array(z.string()).min(1),
+  disconfirmingQuestions: z.array(z.string()),
+  resolutionCriteria: z.object({
+    supportedIf: z.string(),
+    contradictedIf: z.string(),
+    unresolvedIf: z.string(),
+  }),
+  budget: z.object({
+    maxQueries: z.number().int().min(0),
+    maxResults: z.number().int().min(0),
+    wave: z.number().int().min(0),
+  }),
+  stopWhen: z.array(z.string()),
+});
+
+export const ResearchQuerySpecSchema = z.object({
+  id: z.string(),
+  goalIds: z.array(z.string()).min(1),
+  lane: ResearchLaneSchema,
+  queryKind: z.enum([
+    "exact_claim",
+    "entity_event",
+    "primary_source",
+    "broad_context",
+    "disconfirming",
+    "social_provenance",
+    "social_momentum",
+    "market_timeseries",
+    "code_docs",
+    "regulatory_lookup",
+  ]),
+  query: z.string(),
+  priority: z.number().min(0).max(1),
+  maxResults: z.number().int().min(1).max(100),
+  expectedEvidence: z.string(),
+  rationale: z.string(),
+});
+
+export const ResearchQueryBatchSchema = z.object({
+  wave: z.number().int().min(0),
+  name: z.string(),
+  purpose: z.string(),
+  queries: z.array(ResearchQuerySpecSchema),
+});
+
+export const ResearchQueryPlanSchema = z.object({
+  version: z.literal("research-query-plan/v1"),
+  normalizedClaim: z.string(),
+  signalType: SignalInterpretationSchema.shape.signalType,
+  mode: z.enum(["minimal_watchlist", "standard", "deep_dive", "crisis"]),
+  assets: z.array(z.string()),
+  topics: z.array(z.string()),
+  sourceHandle: z.string().nullable(),
+  sourceName: z.string().nullable(),
+  scores: z.object({
+    specificity: z.number().min(0).max(1),
+    marketLinkage: z.number().min(0).max(1),
+    sourceValue: z.number().min(0).max(1),
+    urgency: z.number().min(0).max(1),
+    risk: z.number().min(0).max(1),
+    novelty: z.number().min(0).max(1),
+    expectedValueOfResearch: z.number().min(0).max(1),
+  }),
+  goals: z.array(ResearchGoalSchema),
+  queryBatches: z.array(ResearchQueryBatchSchema),
+  synthesisContract: z.object({
+    requiredGoalIds: z.array(z.string()),
+    cannotConcludeIfUnresolved: z.array(z.string()),
+  }),
+});
+
 export const ResearchReportSchema = z.object({
   claim: z.string(),
   normalizedThesis: z.string(),
@@ -173,7 +280,7 @@ export const ResearchReportSchema = z.object({
       rationale: z.string(),
       unverifiedAssumptions: z.array(z.string()),
     }),
-    founderDossier: z.object({
+    personProjectDossier: z.object({
       identifiedPeople: z.array(z.string()),
       evidenceSummary: z.string(),
       openQuestions: z.array(z.string()),
@@ -344,6 +451,8 @@ export type Thesis = z.infer<typeof ThesisSchema>;
 export type InverseThesis = z.infer<typeof InverseThesisSchema>;
 export type ResearchReport = z.infer<typeof ResearchReportSchema>;
 export type ResearchEvidence = z.infer<typeof ResearchEvidenceSchema>;
+export type ResearchGoal = z.infer<typeof ResearchGoalSchema>;
+export type ResearchQueryPlan = z.infer<typeof ResearchQueryPlanSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;

@@ -3,6 +3,7 @@ import type { StructuredAiClient } from "../src/ai.ts";
 import type {
   IntentResult,
   MarketSelection,
+  ResearchQueryPlan,
   ResearchReport,
   SignalInterpretation,
   SourcePost,
@@ -82,7 +83,7 @@ const researchReport: ResearchReport = {
       rationale: "The post directly discusses Solana ETF approval odds.",
       unverifiedAssumptions: [],
     },
-    founderDossier: {
+    personProjectDossier: {
       identifiedPeople: [],
       evidenceSummary: "No founder-quality claim is required for this fixture.",
       openQuestions: [],
@@ -105,6 +106,81 @@ const researchReport: ResearchReport = {
   recommendedResearchAction: "proceed_with_caution",
   publicSummary: "Plausible but unconfirmed.",
   fullResearchBrief: "No primary source confirms approval.",
+};
+
+const queryPlan: ResearchQueryPlan = {
+  version: "research-query-plan/v1",
+  normalizedClaim: thesis.claim,
+  signalType: signal.signalType,
+  mode: "standard",
+  assets: thesis.mentionedAssets,
+  topics: thesis.topics,
+  sourceHandle: sourcePost.authorHandle,
+  sourceName: sourcePost.authorName,
+  scores: {
+    specificity: 0.8,
+    marketLinkage: 0.8,
+    sourceValue: 0.5,
+    urgency: 0.5,
+    risk: 0.5,
+    novelty: 0.5,
+    expectedValueOfResearch: 0.7,
+  },
+  goals: [
+    {
+      id: "g_verify",
+      kind: "event_validation",
+      question: "Is the SOL ETF catalyst real?",
+      decisionUse: "validate_or_kill_thesis",
+      priority: 0.9,
+      mustResolve: true,
+      lanes: ["web", "x"],
+      evidenceNeeds: ["Primary or credible evidence for the ETF catalyst."],
+      disconfirmingQuestions: ["Is the catalyst refuted or stale?"],
+      resolutionCriteria: {
+        supportedIf: "Credible current evidence confirms the catalyst.",
+        contradictedIf: "Primary sources refute the catalyst.",
+        unresolvedIf: "Only social repetition is available.",
+      },
+      budget: { maxQueries: 2, maxResults: 20, wave: 0 },
+      stopWhen: ["claim is refuted"],
+    },
+  ],
+  queryBatches: [
+    {
+      wave: 0,
+      name: "Verify catalyst",
+      purpose: "Verify the SOL ETF catalyst.",
+      queries: [
+        {
+          id: "q_verify_web",
+          goalIds: ["g_verify"],
+          lane: "web",
+          queryKind: "primary_source",
+          query: "Solana ETF approval odds official source",
+          priority: 0.9,
+          maxResults: 10,
+          expectedEvidence: "Official or reputable evidence.",
+          rationale: "The thesis depends on the catalyst being real.",
+        },
+        {
+          id: "q_verify_x",
+          goalIds: ["g_verify"],
+          lane: "x",
+          queryKind: "social_momentum",
+          query: "Solana ETF approval rumor refuted",
+          priority: 0.8,
+          maxResults: 10,
+          expectedEvidence: "Social confirmation or refutation.",
+          rationale: "X can surface fast refutations and origin posts.",
+        },
+      ],
+    },
+  ],
+  synthesisContract: {
+    requiredGoalIds: ["g_verify"],
+    cannotConcludeIfUnresolved: ["g_verify"],
+  },
 };
 
 const marketSelection: MarketSelection = {
@@ -140,6 +216,7 @@ class FakeAi implements StructuredAiClient {
       } satisfies IntentResult,
       cassie_signal: signal,
       cassie_thesis: thesis,
+      cassie_research_query_plan: queryPlan,
       cassie_inverse_thesis: {
         originalThesis: thesis,
         inverseClaim: "SOL may sell off because ETF approval is unconfirmed and crowded.",
