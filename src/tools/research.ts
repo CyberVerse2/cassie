@@ -35,15 +35,10 @@ export async function researchThesis(input: {
   researchAngle: ResearchAngle;
 }): Promise<ResearchReport> {
   const queryPlan = normalizeResearchQueryPlan(await generateResearchQueryPlan(input), input.signal);
-
-  const [openAiResult, xResult] = await Promise.allSettled([
-    hasLaneQueries(queryPlan, "web")
-      ? input.lanes.runOpenAiWebSearch(queryPlan)
-      : Promise.resolve(skippedLane("openai_search", "No policy-approved web goals or queries.")),
-    hasLaneQueries(queryPlan, "x")
-      ? input.lanes.runGrokXSearch(queryPlan)
-      : Promise.resolve(skippedLane("x_search", "No policy-approved X goals or queries.")),
-  ]);
+  const waveResults = await executeResearchWaves({
+    queryPlan,
+    lanes: input.lanes,
+  });
 
   return input.ai.generateObject({
     schema: ResearchReportSchema,
@@ -56,11 +51,54 @@ export async function researchThesis(input: {
       researchAngle: input.researchAngle,
       queryPlan,
       laneResults: {
-        openAiResult: settledPayload(openAiResult),
-        xResult: settledPayload(xResult),
+        waves: waveResults.map((wave) => ({
+          wave: wave.wave,
+          openAiResult: settledPayload(wave.openAiResult),
+          xResult: settledPayload(wave.xResult),
+        })),
       },
     }),
   });
+}
+
+async function executeResearchWaves(input: {
+  queryPlan: ResearchQueryPlan;
+  lanes: ResearchSearchLanes;
+}): Promise<Array<{
+  wave: number;
+  openAiResult: PromiseSettledResult<SearchLaneResult>;
+  xResult: PromiseSettledResult<SearchLaneResult>;
+}>> {
+  const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
+  const results: Array<{
+    wave: number;
+    openAiResult: PromiseSettledResult<SearchLaneResult>;
+    xResult: PromiseSettledResult<SearchLaneResult>;
+  }> = [];
+
+  for (const wave of waves) {
+    const wavePlan = planForWave(input.queryPlan, wave);
+    const [openAiResult, xResult] = await Promise.allSettled([
+      hasLaneQueries(wavePlan, "web")
+        ? input.lanes.runOpenAiWebSearch(wavePlan)
+        : Promise.resolve(skippedLane("openai_search", `No policy-approved web queries for wave ${wave}.`)),
+      hasLaneQueries(wavePlan, "x")
+        ? input.lanes.runGrokXSearch(wavePlan)
+        : Promise.resolve(skippedLane("x_search", `No policy-approved X queries for wave ${wave}.`)),
+    ]);
+
+    results.push({ wave, openAiResult, xResult });
+  }
+
+  return results;
+}
+
+function planForWave(queryPlan: ResearchQueryPlan, wave: number): ResearchQueryPlan {
+  return {
+    ...queryPlan,
+    goals: queryPlan.goals.filter((goal) => goal.budget.wave <= wave),
+    queryBatches: queryPlan.queryBatches.filter((batch) => batch.wave === wave),
+  };
 }
 
 function hasLaneQueries(queryPlan: ResearchQueryPlan, lane: "web" | "x") {
@@ -129,7 +167,7 @@ export function normalizeResearchQueryPlan(
     ...goals.filter((goal) => goal.mustResolve).map((goal) => goal.id),
   ]).filter((goalId) => allowedGoalIds.has(goalId));
 
-  return {
+  return ensureMandatoryResearchLanes({
     ...policyPlan,
     mode: needsMinimalWatchlist ? "minimal_watchlist" : policyPlan.mode,
     goals,
@@ -138,7 +176,7 @@ export function normalizeResearchQueryPlan(
       requiredGoalIds,
       cannotConcludeIfUnresolved,
     },
-  };
+  });
 }
 
 export async function generateResearchQueryPlan(input: {
@@ -243,6 +281,106 @@ function ensureDisconfirmationGoal(plan: ResearchQueryPlan): ResearchQueryPlan {
   };
 }
 
+function ensureMandatoryResearchLanes(plan: ResearchQueryPlan): ResearchQueryPlan {
+  let nextPlan = plan;
+  if (!hasLaneQueries(nextPlan, "web")) {
+    nextPlan = addMandatoryLane(nextPlan, "web");
+  }
+  if (!hasLaneQueries(nextPlan, "x")) {
+    nextPlan = addMandatoryLane(nextPlan, "x");
+  }
+  return nextPlan;
+}
+
+function addMandatoryLane(plan: ResearchQueryPlan, lane: "web" | "x"): ResearchQueryPlan {
+  const goalId = lane === "web" ? "g_mandatory_web_context" : "g_mandatory_x_context";
+  if (plan.goals.some((goal) => goal.id === goalId)) {
+    return plan;
+  }
+
+  const goal: ResearchGoal = {
+    id: goalId,
+    kind: lane === "web" ? "entity_resolution" : "source_provenance",
+    question: lane === "web"
+      ? "What does the public web say about the source signal, entities, and primary context?"
+      : "What does X say about the source signal, origin, author context, and social-market reaction?",
+    decisionUse: lane === "web" ? "route_to_deeper_research" : "decide_watchlist_priority",
+    priority: 0.8,
+    mustResolve: true,
+    lanes: [lane],
+    evidenceNeeds: [
+      lane === "web"
+        ? "At least one public web check for entity context, primary sources, or credible secondary context."
+        : "At least one X check for origin, author context, social reaction, or refutation.",
+    ],
+    disconfirmingQuestions: [
+      lane === "web"
+        ? "Do public sources fail to support or identify the claimed event or entity?"
+        : "Does X show the claim is recycled, refuted, promotional, or low-signal?",
+    ],
+    resolutionCriteria: {
+      supportedIf: lane === "web"
+        ? "Public web context identifies the entity, event, or credible source context."
+        : "X context identifies the origin, author credibility, social reaction, or refutation status.",
+      contradictedIf: lane === "web"
+        ? "Public web context contradicts or cannot identify the signal."
+        : "X context contradicts the signal or shows low-quality provenance.",
+      unresolvedIf: `The mandatory ${lane === "web" ? "web" : "X"} surface cannot produce useful context.`,
+    },
+    budget: { maxQueries: 1, maxResults: 10, wave: 0 },
+    stopWhen: [],
+  };
+  const query = {
+    id: lane === "web" ? "q_mandatory_web_context" : "q_mandatory_x_context",
+    goalIds: [goalId],
+    lane,
+    queryKind: lane === "web" ? "broad_context" as const : "social_provenance" as const,
+    query: lane === "web"
+      ? `${plan.normalizedClaim} ${plan.assets.join(" ")} ${plan.topics.join(" ")} primary source context`.trim()
+      : `${plan.sourceHandle ? `from:${plan.sourceHandle} ` : ""}${plan.normalizedClaim} origin reaction refuted`.trim(),
+    priority: 0.8,
+    maxResults: 10,
+    expectedEvidence: lane === "web"
+      ? "Public web grounding for the signal."
+      : "X provenance and social-market context for the signal.",
+    rationale: `Cassie requires a mandatory ${lane === "web" ? "web" : "X"} surface check for every research run.`,
+  };
+
+  return {
+    ...plan,
+    goals: [...plan.goals, goal].sort(compareGoals),
+    queryBatches: upsertWaveZeroQuery(plan.queryBatches, query),
+    synthesisContract: {
+      requiredGoalIds: uniqueIds([...plan.synthesisContract.requiredGoalIds, goalId]),
+      cannotConcludeIfUnresolved: uniqueIds([...plan.synthesisContract.cannotConcludeIfUnresolved, goalId]),
+    },
+  };
+}
+
+function upsertWaveZeroQuery(
+  batches: ResearchQueryPlan["queryBatches"],
+  query: ResearchQueryPlan["queryBatches"][number]["queries"][number],
+): ResearchQueryPlan["queryBatches"] {
+  const waveZero = batches.find((batch) => batch.wave === 0);
+  if (!waveZero) {
+    return [
+      {
+        wave: 0,
+        name: "Mandatory surface check",
+        purpose: "Run mandatory web/X context checks before synthesis.",
+        queries: [query],
+      },
+      ...batches,
+    ];
+  }
+
+  return batches.map((batch) =>
+    batch.wave === 0
+      ? { ...batch, queries: [...batch.queries, query].sort(compareQueries) }
+      : batch,
+  );
+}
+
 function compareGoals(left: ResearchGoal, right: ResearchGoal) {
   return right.priority - left.priority || left.budget.wave - right.budget.wave || left.id.localeCompare(right.id);
 }
@@ -256,6 +394,10 @@ function compareQueries(
 
 function uniqueIds(ids: string[]) {
   return [...new Set(ids)];
+}
+
+function uniqueNumbers(values: number[]) {
+  return [...new Set(values)];
 }
 
 function settledPayload<T>(result: PromiseSettledResult<T>) {

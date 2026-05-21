@@ -281,7 +281,7 @@ describe("research query planner policy", () => {
     expect(normalized.synthesisContract.cannotConcludeIfUnresolved).toContain("g_disconfirmation");
   });
 
-  it("does not run a search lane when the policy-normalized plan has no goals for it", async () => {
+  it("injects and runs mandatory web and X lanes even when the planner omits one", async () => {
     const xOnlyPlan: ResearchQueryPlan = {
       version: "research-query-plan/v1",
       normalizedClaim: thesis.claim,
@@ -372,7 +372,158 @@ describe("research query planner policy", () => {
       researchAngle: "critic",
     });
 
-    expect(webCalls).toBe(0);
+    expect(webCalls).toBe(1);
     expect(xCalls).toBe(1);
+  });
+
+  it("executes research wave by wave instead of handing every batch to each lane at once", async () => {
+    const twoWavePlan: ResearchQueryPlan = {
+      version: "research-query-plan/v1",
+      normalizedClaim: "SOL ETF approval is underpriced.",
+      signalType: "explicit_trade",
+      mode: "deep_dive",
+      assets: ["SOL"],
+      topics: ["Solana ETF"],
+      sourceHandle: "example",
+      sourceName: "Example",
+      scores: {
+        specificity: 0.85,
+        marketLinkage: 0.9,
+        sourceValue: 0.5,
+        urgency: 0.6,
+        risk: 0.7,
+        novelty: 0.5,
+        expectedValueOfResearch: 0.8,
+      },
+      goals: [
+        {
+          id: "g_verify",
+          kind: "event_validation",
+          question: "Is the catalyst real?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.95,
+          mustResolve: true,
+          lanes: ["web", "x"],
+          evidenceNeeds: ["Primary and social evidence."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "Primary evidence supports it.",
+            contradictedIf: "Primary evidence refutes it.",
+            unresolvedIf: "Evidence is incomplete.",
+          },
+          budget: { maxQueries: 2, maxResults: 20, wave: 0 },
+          stopWhen: [],
+        },
+        {
+          id: "g_pricing",
+          kind: "market_pricing",
+          question: "Is it already priced?",
+          decisionUse: "estimate_market_pricing",
+          priority: 0.7,
+          mustResolve: false,
+          lanes: ["web", "x"],
+          evidenceNeeds: ["Market and social pricing context."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "Pricing context is found.",
+            contradictedIf: "No pricing evidence exists.",
+            unresolvedIf: "Pricing context is incomplete.",
+          },
+          budget: { maxQueries: 2, maxResults: 20, wave: 1 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "Verify",
+          purpose: "Verify the catalyst.",
+          queries: [
+            {
+              id: "q_w0_web",
+              goalIds: ["g_verify"],
+              lane: "web",
+              queryKind: "primary_source",
+              query: "Solana ETF official filing",
+              priority: 0.95,
+              maxResults: 10,
+              expectedEvidence: "Official evidence.",
+              rationale: "Verify catalyst.",
+            },
+            {
+              id: "q_w0_x",
+              goalIds: ["g_verify"],
+              lane: "x",
+              queryKind: "social_momentum",
+              query: "Solana ETF approval source",
+              priority: 0.9,
+              maxResults: 10,
+              expectedEvidence: "Origin social evidence.",
+              rationale: "Find source.",
+            },
+          ],
+        },
+        {
+          wave: 1,
+          name: "Pricing",
+          purpose: "Check pricing.",
+          queries: [
+            {
+              id: "q_w1_web",
+              goalIds: ["g_pricing"],
+              lane: "web",
+              queryKind: "broad_context",
+              query: "SOL ETF priced in",
+              priority: 0.7,
+              maxResults: 10,
+              expectedEvidence: "Pricing evidence.",
+              rationale: "Estimate market pricing.",
+            },
+            {
+              id: "q_w1_x",
+              goalIds: ["g_pricing"],
+              lane: "x",
+              queryKind: "social_momentum",
+              query: "SOL ETF priced in CT",
+              priority: 0.65,
+              maxResults: 10,
+              expectedEvidence: "Social pricing context.",
+              rationale: "Estimate crowding.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify"],
+        cannotConcludeIfUnresolved: ["g_verify"],
+      },
+    };
+    const calls: string[] = [];
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: { name: string }) {
+        return (input.name === "cassie_research_query_plan" ? twoWavePlan : researchReport) as T;
+      },
+    };
+
+    await researchThesis({
+      ai,
+      lanes: {
+        async runOpenAiWebSearch(plan) {
+          calls.push(`web:${[...new Set(plan.queryBatches.map((batch) => batch.wave))].join(",")}`);
+          return { lane: "openai_search", evidence: [], warnings: [] };
+        },
+        async runGrokXSearch(plan) {
+          calls.push(`x:${[...new Set(plan.queryBatches.map((batch) => batch.wave))].join(",")}`);
+          return { lane: "x_search", evidence: [], warnings: [] };
+        },
+      },
+      sourcePost,
+      userCommand: "@Cassie trade this",
+      signal: explicitSignal,
+      thesis,
+      researchAngle: "balanced",
+    });
+
+    expect(calls).toEqual(["web:0", "x:0", "web:1", "x:1"]);
   });
 });
