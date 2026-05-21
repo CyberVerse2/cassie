@@ -4,7 +4,7 @@ import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { openAiCostControlOptions } from "./openai-options.ts";
-import { openRouterCacheablePrompt } from "./openrouter-options.ts";
+import { openRouterCacheablePrompt, openRouterProviderPreferences } from "./openrouter-options.ts";
 
 export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
@@ -125,10 +125,7 @@ export class OpenAiStructuredClient implements StructuredAiClient {
           apiKey: process.env.OPENROUTER_API_KEY,
           compatibility: "strict",
           extraBody: {
-            provider: {
-              allow_fallbacks: true,
-              require_parameters: true,
-            },
+            provider: openRouterProviderPreferences(),
           },
         })
         : null;
@@ -180,10 +177,7 @@ export class OpenRouterStructuredClient implements StructuredAiClient {
       apiKey: process.env.OPENROUTER_API_KEY,
       compatibility: "strict",
       extraBody: {
-        provider: {
-          allow_fallbacks: true,
-          require_parameters: true,
-        },
+        provider: openRouterProviderPreferences(),
       },
     });
 

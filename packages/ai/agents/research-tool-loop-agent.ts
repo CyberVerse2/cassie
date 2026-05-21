@@ -7,7 +7,7 @@ import {
   DEFAULT_EXPENSIVE_MODEL,
 } from "../client.ts";
 import { openAiCostControlOptions } from "../openai-options.ts";
-import { openRouterCacheableSystemMessage } from "../openrouter-options.ts";
+import { openRouterCacheableSystemMessage, openRouterProviderPreferences } from "../openrouter-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
   process.env.OPENROUTER_WEB_SEARCH_MODEL ??
@@ -232,7 +232,7 @@ function openRouterModel(model: string) {
     apiKey: process.env.OPENROUTER_API_KEY,
     compatibility: "strict",
     extraBody: {
-      provider: { allow_fallbacks: true, require_parameters: true },
+      provider: openRouterProviderPreferences(),
       ...(reasoning ? { reasoning } : {}),
     },
   });

@@ -16,7 +16,7 @@ import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../core/trace.ts";
 import { evidenceLedgerPrompt } from "../ai/prompts/index.ts";
 import { DEFAULT_CHEAP_MODEL } from "../ai/client.ts";
-import { openRouterCacheablePrompt } from "../ai/openrouter-options.ts";
+import { openRouterCacheablePrompt, openRouterProviderPreferences } from "../ai/openrouter-options.ts";
 
 type SearchSource = {
   title?: string;
@@ -44,10 +44,7 @@ export class OpenAiWebSearchLane {
       apiKey: this.apiKey,
       compatibility: "strict",
       extraBody: {
-        provider: {
-          allow_fallbacks: true,
-          require_parameters: true,
-        },
+        provider: openRouterProviderPreferences(),
         plugins: [
           {
             id: "web",
@@ -263,7 +260,13 @@ async function classifyEvidenceLedger(input: {
     throw new MissingConnectorConfigError("Evidence ledger classifier", "OPENROUTER_API_KEY");
   }
 
-  const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
+  const openrouter = createOpenRouter({
+    apiKey: process.env.OPENROUTER_API_KEY,
+    compatibility: "strict",
+    extraBody: {
+      provider: openRouterProviderPreferences(),
+    },
+  });
   const model = process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL;
   const prompt = evidenceLedgerPrompt({
     queryJob: input.job,

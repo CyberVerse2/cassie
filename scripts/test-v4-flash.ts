@@ -2,6 +2,7 @@ import "dotenv/config";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import { Output, generateText } from "ai";
 import { z } from "zod";
+import { openRouterProviderPreferences } from "../packages/ai/openrouter-options.ts";
 
 const DEFAULT_MODEL = "deepseek/deepseek-v4-flash";
 
@@ -35,10 +36,7 @@ const openrouter = createOpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
   compatibility: "strict",
   extraBody: {
-    provider: {
-      allow_fallbacks: true,
-      require_parameters: true,
-    },
+    provider: openRouterProviderPreferences(),
   },
 });
 

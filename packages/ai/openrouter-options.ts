@@ -1,5 +1,13 @@
 import type { ModelMessage, SystemModelMessage } from "ai";
 
+export function openRouterProviderPreferences() {
+  return {
+    allow_fallbacks: true,
+    require_parameters: true,
+    ignore: ["AkashML"],
+  };
+}
+
 export function openRouterCacheablePrompt(prompt: string): ModelMessage[] {
   return [
     {
