@@ -139,7 +139,7 @@ export class OpenAiWebSearchLane {
 export class GrokXSearchLane {
   constructor(
     private readonly apiKey = process.env.XAI_API_KEY,
-    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4",
+    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
     private readonly trace?: TraceRecorder,
   ) {}
 

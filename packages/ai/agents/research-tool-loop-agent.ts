@@ -195,7 +195,12 @@ function modelForTools(activeTools: ResearchToolName[]) {
     const openrouter = createOpenRouter({ apiKey: process.env.OPENROUTER_API_KEY });
     return openrouter(process.env.CASSIE_CHEAP_MODEL ?? process.env.OPENROUTER_CHEAP_MODEL ?? DEFAULT_CHEAP_MODEL);
   }
-  return openai(process.env.CASSIE_EXPENSIVE_MODEL ?? process.env.CASSIE_MODEL ?? DEFAULT_EXPENSIVE_MODEL);
+  return openai(
+    process.env.CASSIE_IMPORTANT_MODEL ??
+      process.env.CASSIE_EXPENSIVE_MODEL ??
+      process.env.CASSIE_MODEL ??
+      DEFAULT_EXPENSIVE_MODEL,
+  );
 }
 
 function toolChoiceForTools(activeTools: ResearchToolName[]) {
