@@ -214,7 +214,8 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
-Return concise findings with citations. Do not synthesize a final trade view.`;
+Return concise findings with citations. Every source-backed finding should include a markdown link to the cited source.
+Do not synthesize a final trade view.`;
 }
 
 function buildXQueryJobPrompt(job: QueryJob, queryPlan: ResearchQueryPlan): string {
