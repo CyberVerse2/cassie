@@ -34,7 +34,6 @@ if (!process.env.DEEPSEEK_API_KEY) {
 const startedAt = Date.now();
 const deepseek = createDeepSeek({
   apiKey: process.env.DEEPSEEK_API_KEY,
-  baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
 });
 
 const result = await generateText({

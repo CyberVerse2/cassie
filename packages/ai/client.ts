@@ -122,7 +122,6 @@ export class OpenAiStructuredClient implements StructuredAiClient {
       const deepseek = route.provider === "deepseek"
         ? createDeepSeek({
           apiKey: process.env.DEEPSEEK_API_KEY,
-          baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
         })
         : null;
       const result = await generateText({
@@ -170,7 +169,6 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
 
     const deepseek = createDeepSeek({
       apiKey: process.env.DEEPSEEK_API_KEY,
-      baseURL: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com",
     });
 
     const result = await generateText({
