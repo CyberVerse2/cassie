@@ -319,10 +319,8 @@ describe("AI SDK supervisor agent", () => {
     });
     await executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
-      result: {
-        publicSummary: "Created a trade ticket for review.",
-        tradeTicket: { ticketId: ticket.ticketId },
-      },
+      publicSummary: "Created a trade ticket for review.",
+      tradeTicket: { ticketId: ticket.ticketId },
     });
 
     const state = await store.load();

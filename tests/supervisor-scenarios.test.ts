@@ -321,11 +321,9 @@ describe("supervisor scenario coverage", () => {
     });
     await executeTool(tools.finalize_run, {
       responseType: "critique",
-      result: {
-        publicSummary: result.finalCritique,
-        critique: result,
-        researchReport: report,
-      },
+      publicSummary: result.finalCritique,
+      critique: result,
+      researchReport: report,
     });
 
     const state = await store.load();
@@ -399,11 +397,9 @@ describe("supervisor scenario coverage", () => {
     expect(risk.decision).toBe("reject");
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
-      result: {
-        publicSummary: risk.decision === "reject" ? risk.reason : "Risk check passed.",
-        thesis: extracted,
-        marketSelection: selected,
-      },
+      publicSummary: risk.decision === "reject" ? risk.reason : "Risk check passed.",
+      thesis: extracted,
+      marketSelection: selected,
     });
 
     const state = await store.load();

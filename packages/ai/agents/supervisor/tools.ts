@@ -44,31 +44,17 @@ const NonRejectedRiskDecisionSchema = z.discriminatedUnion("decision", [
   }),
 ]);
 
-const FinalizeRunInputSchema = z.discriminatedUnion("responseType", [
-  z.object({
-    responseType: z.literal("analysis"),
-    result: z.object({
-      publicSummary: z.string(),
-      thesis: ThesisSchema.optional(),
-      marketSelection: MarketSelectionSchema.optional(),
-    }),
-  }),
-  z.object({
-    responseType: z.literal("critique"),
-    result: z.object({
-      publicSummary: z.string(),
-      critique: CritiqueSchema,
-      researchReport: ResearchReportSchema.optional(),
-    }),
-  }),
-  z.object({
-    responseType: z.literal("trade_ticket"),
-    result: z.object({
-      publicSummary: z.string(),
-      tradeTicket: TradeTicketSchema.or(z.object({ ticketId: z.string() })),
-    }),
-  }),
-]);
+const FinalizeRunInputSchema = z.object({
+  responseType: z.enum(["analysis", "critique", "trade_ticket"]),
+  publicSummary: z.string(),
+  thesis: ThesisSchema.optional(),
+  marketSelection: MarketSelectionSchema.optional(),
+  critique: CritiqueSchema.optional(),
+  researchReport: ResearchReportSchema.optional(),
+  tradeTicket: TradeTicketSchema.or(z.object({ ticketId: z.string() })).optional(),
+});
+
+type FinalizeRunInput = z.infer<typeof FinalizeRunInputSchema>;
 
 export function createCassieSupervisorTools(input: {
   store: CassieStore;
@@ -290,16 +276,17 @@ export function createCassieSupervisorTools(input: {
     finalize_run: tool({
       description: "Finalize the Cassie run with the user-facing result after analysis, critique, or trade-ticket creation.",
       inputSchema: FinalizeRunInputSchema,
-      execute: async ({ responseType, result }) => recordRunStep({
+      execute: async (finalInput) => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "final",
-        stepInput: { responseType, result },
+        stepInput: finalInput,
         execute: async () => {
+          const result = finalizeResult(finalInput);
           const updated = {
             ...input.run,
-            status: responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
-            result: { responseType, result },
+            status: finalInput.responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
+            result,
             error: null,
             updatedAt: new Date().toISOString(),
           };
@@ -308,5 +295,41 @@ export function createCassieSupervisorTools(input: {
         },
       }),
     }),
+  };
+}
+
+function finalizeResult(input: FinalizeRunInput) {
+  if (input.responseType === "analysis") {
+    return {
+      responseType: input.responseType,
+      result: {
+        publicSummary: input.publicSummary,
+        thesis: input.thesis,
+        marketSelection: input.marketSelection,
+      },
+    };
+  }
+  if (input.responseType === "critique") {
+    if (!input.critique) {
+      throw new Error("finalize_run critique response requires critique.");
+    }
+    return {
+      responseType: input.responseType,
+      result: {
+        publicSummary: input.publicSummary,
+        critique: input.critique,
+        researchReport: input.researchReport,
+      },
+    };
+  }
+  if (!input.tradeTicket) {
+    throw new Error("finalize_run trade_ticket response requires tradeTicket.");
+  }
+  return {
+    responseType: input.responseType,
+    result: {
+      publicSummary: input.publicSummary,
+      tradeTicket: input.tradeTicket,
+    },
   };
 }
