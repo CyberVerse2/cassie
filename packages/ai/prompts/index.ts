@@ -11,6 +11,11 @@ function postContext(sourcePost: SourcePost, userCommand: string): string {
   );
 }
 
+const sourceQualityPrinciple = `Source-quality principle:
+- Evaluate source identity, reputation, track record, network context, and engagement quality when they affect the claim.
+- Treat credible but non-tradable signals as research_lead, soft_signal, or watchlist instead of forcing a trade or hard reject.
+- Separate independent evidence from repeated social momentum.`;
+
 export function intentRouterPrompt(input: {
   sourcePost: SourcePost;
   userCommand: string;
@@ -99,12 +104,9 @@ export function critiquePrompt(input: {
   return `You are Cassie's critique tool.
 
 Evaluate the thesis after research. Search for weaknesses:
-- Is the source credible?
-- Is the source a respected builder/operator whose vague endorsement should be treated as a research lead rather than dismissed?
-- Did the research verify the source author's reputation, network, and prior products?
-- Did the research resolve the relevant person/project/product/entity, or is the match still an inference?
-- Are relevant ecosystem surfaces, social profiles, GitHub, docs, contracts, and prior-work signals verified or merely assumed?
-- Are smart followers or smart engagers present?
+- Source credibility, provenance, reputation, and engagement quality
+- Entity resolution and remaining inferred assumptions
+- Verification from relevant ecosystem surfaces, docs, contracts, filings, social profiles, GitHub, or prior products
 - Is the news already priced in?
 - Is the market already crowded?
 - Is the ticker ambiguous?
@@ -113,7 +115,7 @@ Evaluate the thesis after research. Search for weaknesses:
 - Is the opposite trade cleaner?
 
 Return a direct critique. Do not choose order size or execute anything.
-Distinguish "not tradable yet" from "worth watchlisting/researching." Do not flatten a high-signal lead into a hard reject just because it is early or vague.
+Classify credible but non-tradable signals as watchlist or research_lead when appropriate.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -140,7 +142,7 @@ ${JSON.stringify(input, null, 2)}`;
 export function tradeExpressionPrompt(input: unknown): string {
   return `You are Cassie's trade-expression planner.
 
-Your job is not to find an exciting ticker. Your job is to decide whether the researched signal has a clean monetizable expression.
+Decide whether the researched signal has a clean monetizable expression.
 
 Evaluate these decision factors:
 - what changed
@@ -149,10 +151,9 @@ Evaluate these decision factors:
 - most direct asset or exposure
 - liquid public, crypto, or prediction-market instrument
 - read-through strength
-- pricing, crowding, timing, and accessibility
+- pricing, crowding, timing, and access constraints
 
 Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
-Funding events often validate a private-market category before they create a clean public trade.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
 
 Score every candidate from 0 to 1:
@@ -179,16 +180,13 @@ export function researchSynthesisPrompt(input: unknown): string {
   return `You are Cassie's Research Subagent synthesis step.
 
 Given a source post, extracted thesis, query plan, and lane evidence, produce a structured ResearchReport.
-Separate truth from social momentum. Many X posts repeating the same rumor do not equal many independent sources.
-But do not ignore source quality: a vague post from a respected builder/operator can be a valid research lead even when it is not tradable yet.
 
-Required social-intelligence checks:
-- Identify who is saying the thing and whether they are credible in the relevant ecosystem.
-- Evaluate the source author's reputation, prior products, and network context.
-- Resolve the relevant entity explicitly, with confidence and unverified assumptions. The entity may be a person, project, company, protocol, app, token, product, event, or market.
-- If the source post does not mention a platform, ecosystem, ticker, or specific project, say that plainly before using inferred evidence.
-- Research the person/team/project on X and any relevant ecosystem surfaces when the claim depends on reputation, founder quality, product quality, or network context.
-- Look for smart followers/engagers/repliers and summarize whether engagement quality is meaningful.
+${sourceQualityPrinciple}
+
+Synthesis requirements:
+- Resolve the relevant person, project, company, protocol, product, event, or market explicitly.
+- State confidence and unverified assumptions for inferred entity matches.
+- Use source reputation, founder quality, product quality, network context, and engagement quality only when they affect the claim.
 - Classify leadQuality as ignore, watchlist, research_lead, soft_signal, or tradable_now.
 - Give concrete nextResearchActions.
 
@@ -240,19 +238,18 @@ export function researchQueryPlanPrompt(input: unknown): string {
   return `You are Cassie's research query planner.
 
 Create an inspectable, goal-first research plan for the source signal.
-Do not start by listing search strings. First identify the decision-relevant unknowns that must be resolved before this signal can become a trade, critique, or watchlist item.
 
 Design principles:
 - Generate goals from the signal type, user command, interpreted thesis, and source context.
 - A single post can need several goals: entity resolution, source provenance, social momentum, event validation, technical reality, catalyst timeline, impact materiality, market pricing, second-order implications, risk assessment, disconfirmation, and trade expression.
 - Every query must map to at least one explicit goal. No query should exist just because it sounds useful.
 - Each must-resolve goal needs concrete evidence needs, resolution criteria, and stop conditions.
-- Put queries into wave-based batches. Wave 0 should resolve must-answer gating questions. Later waves should only deepen research if the signal remains useful.
+- Put queries into wave-based batches. Wave 0 resolves must-answer gating questions. Later waves deepen research only if the signal remains useful.
 - Use web for official sources, news, docs, filings, websites, contracts, GitHub, funding, and market/tradability checks.
 - Use X for source reputation, original posts, social graph, smart engagers, rumor propagation, refutations, and current discussion.
 - Do not assume an ecosystem, token, platform, or tradable asset unless the signal or prior interpretation supports it.
 - Prefer high-priority goals that can invalidate the rest of the research early.
-- For vague posts, prefer minimal_watchlist mode and source/entity goals. Do not manufacture a trade thesis from a normal post.
+- For vague posts, prefer minimal_watchlist mode and source/entity goals.
 - For explicit trade ideas, include at least one disconfirmation goal.
 
 Fill the structured output fields exactly:
