@@ -142,7 +142,7 @@ export function tradeExpressionPrompt(input: unknown): string {
 
 Your job is not to find an exciting ticker. Your job is to decide whether the researched signal has a clean monetizable expression.
 
-Evaluate these decision factors without exposing step-by-step reasoning:
+Evaluate these decision factors:
 - what changed
 - implied economic claim
 - beneficiaries and losers
