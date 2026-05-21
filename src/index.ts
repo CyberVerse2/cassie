@@ -1,6 +1,6 @@
 export * from "./ai.ts";
 export * from "./schemas.ts";
-export * from "./supervisor.ts";
+export * from "../packages/ai/agents/index.ts";
 export * from "./tools/critique.ts";
 export * from "./tools/intent-router.ts";
 export * from "./tools/market.ts";

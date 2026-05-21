@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { CassieProduct } from "./product.ts";
+import { CassieProduct } from "../packages/workflows/product.ts";
 
 const userId = process.env.X_POLL_USER_ID;
 if (!userId) {
@@ -13,7 +13,7 @@ async function tick() {
   const result = await product.pollXMentions(userId as string);
   console.log(JSON.stringify({
     at: new Date().toISOString(),
-    processed: result.processed,
+    queued: result.queued,
     newestId: result.newestId,
   }));
 }

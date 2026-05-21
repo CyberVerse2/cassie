@@ -2,25 +2,17 @@ import "dotenv/config";
 import { inspect } from "node:util";
 import { OpenAiStructuredClient } from "./ai.ts";
 import { CompositeMarketDataProvider } from "./connectors/market-data.ts";
-import {
-  GrokXSearchLane,
-  LiveResearchSearchLanes,
-  OpenAiWebSearchLane,
-} from "./connectors/research-lanes.ts";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
-import type { ExecutionJob, SourcePost, UserSettings } from "./schemas.ts";
-import { DrizzleCassieStore } from "./db/store.ts";
-import type { CassieStoreSnapshot } from "./store.ts";
+import type { SourcePost, UserSettings } from "./schemas.ts";
 import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
 import type { ControlRun, ExecutionJob as ControlExecutionJob } from "../packages/core/schemas/index.ts";
-import { CassieProduct as ControlPlaneCassieProduct } from "../packages/workflows/product.ts";
+import { CassieProduct } from "../packages/workflows/product.ts";
 import type { CassieJobQueue } from "../packages/workflows/execution-jobs.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/db/drizzle-store.ts";
+import type { CassieStoreSnapshot } from "../packages/db/store.ts";
 import { routeIntent } from "./tools/intent-router.ts";
 import { interpretSignal } from "./tools/signal.ts";
 import { extractThesis } from "./tools/thesis.ts";
-import { CassieProduct } from "./product.ts";
-import type { ExecutionJobQueue } from "./jobs/execution-jobs.ts";
 import { TraceRecorder, type TraceEvent } from "./trace.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 
@@ -32,12 +24,6 @@ type ParsedArgs = {
   flags: CliFlags;
   trace: TraceRecorder;
 };
-
-class CliExecutionQueue implements ExecutionJobQueue {
-  async enqueue(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: null }> {
-    return { executionJobId: job.jobId, graphileJobId: null };
-  }
-}
 
 class CliControlPlaneQueue implements CassieJobQueue {
   async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: null }> {
@@ -121,8 +107,8 @@ Setup:
   env                       Show required runtime dependencies, with secrets masked.
 
 App flow:
-  mention                   Process a Cassie mention synchronously.
-  mention:queue             Create a durable control-plane run for a Cassie mention.
+  mention                   Create a durable control-plane run for a Cassie mention.
+  mention:queue             Alias for mention.
   run-supervisor <runId>    Run the ToolLoopAgent supervisor for a queued control-plane run.
   control-run <runId>       Show a durable control-plane run and its recorded steps.
   state                     Show the persisted app state summary.
@@ -177,12 +163,12 @@ async function settingsSet(args: ParsedArgs) {
     autoTradeEnabled: booleanFlag(args, "auto-trade", false),
   };
 
-  await product(args.trace).upsertSettings(settings);
+  await product().upsertSettings(settings);
   return { saved: true, settings };
 }
 
 async function mention(args: ParsedArgs) {
-  return product(args.trace).processMention({
+  return product().createMentionRun({
     userId: flag(args, "user", "local-user"),
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
     sourcePost: await sourcePostFromFlags(args),
@@ -190,11 +176,7 @@ async function mention(args: ParsedArgs) {
 }
 
 async function mentionQueue(args: ParsedArgs) {
-  return controlProduct().createMentionRun({
-    userId: flag(args, "user", "local-user"),
-    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
-    sourcePost: await sourcePostFromFlags(args),
-  });
+  return mention(args);
 }
 
 async function runSupervisor(args: ParsedArgs) {
@@ -205,11 +187,11 @@ async function runSupervisor(args: ParsedArgs) {
 }
 
 async function controlRun(args: ParsedArgs) {
-  return controlProduct().getRun(requiredPositional(args, 0, "runId"));
+  return product().getRun(requiredPositional(args, 0, "runId"));
 }
 
 async function state(args: ParsedArgs) {
-  const snapshot = await product(args.trace).state();
+  const snapshot = await product().state();
   if (args.flags.full) {
     return snapshot;
   }
@@ -218,7 +200,7 @@ async function state(args: ParsedArgs) {
 }
 
 async function runs(args: ParsedArgs) {
-  const snapshot = await product(args.trace).state();
+  const snapshot = await product().state();
   const userId = nullableFlag(args, "user");
   return snapshot.runs
     .filter((run) => !userId || run.userId === userId)
@@ -233,7 +215,7 @@ async function runs(args: ParsedArgs) {
 }
 
 async function tickets(args: ParsedArgs) {
-  const snapshot = await product(args.trace).state();
+  const snapshot = await product().state();
   const userId = nullableFlag(args, "user");
   return snapshot.tradeTickets
     .filter((ticket) => !userId || ticket.userId === userId)
@@ -251,7 +233,7 @@ async function tickets(args: ParsedArgs) {
 }
 
 async function approve(args: ParsedArgs) {
-  return product(args.trace).approveTicket(requiredPositional(args, 0, "ticketId"));
+  return product().approveTicket(requiredPositional(args, 0, "ticketId"));
 }
 
 async function executeNext(args: ParsedArgs) {
@@ -259,7 +241,7 @@ async function executeNext(args: ParsedArgs) {
     throw new CliError("Refusing live execution without --yes.");
   }
 
-  return product(args.trace).processNextExecutionJob();
+  return product().processNextExecutionJob();
 }
 
 async function smokeAi(args: ParsedArgs) {
@@ -295,25 +277,8 @@ async function smokeMarket(args: ParsedArgs) {
   };
 }
 
-function product(trace: TraceRecorder) {
+function product() {
   return new CassieProduct(
-    new DrizzleCassieStore(),
-    {
-      ai: new OpenAiStructuredClient(undefined, trace),
-      marketData: new CompositeMarketDataProvider(),
-      researchLanes: new LiveResearchSearchLanes(
-        new OpenAiWebSearchLane(undefined, undefined, trace),
-        new GrokXSearchLane(undefined, undefined, trace),
-      ),
-    },
-    null,
-    undefined,
-    new CliExecutionQueue(),
-  );
-}
-
-function controlProduct() {
-  return new ControlPlaneCassieProduct(
     new ControlPlaneStore(),
     undefined,
     null,

@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "./product.ts";
+import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "../packages/workflows/product.ts";
 import { renderDashboard } from "./dashboard.ts";
 import { assertRuntimeConfig } from "./config.ts";
 import {
@@ -89,7 +89,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (request.method === "POST" && url.pathname === "/api/mentions") {
     requireApiToken(request);
     const body = MentionRequestSchema.parse(await readJson(request));
-    sendJson(response, 200, await product.processMention(body));
+    sendJson(response, 202, await product.createMentionRun(body));
     return;
   }
 
@@ -104,9 +104,9 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     const body = XWebhookPayloadSchema.parse(await readJson(request));
     const results = [];
     for (const event of body.tweet_create_events) {
-      results.push(await product.processMention(xEventToMention(event, userId)));
+      results.push(await product.createMentionRun(xEventToMention(event, userId)));
     }
-    sendJson(response, 200, { processed: results.length, results });
+    sendJson(response, 202, { queued: results.length, results });
     return;
   }
 
