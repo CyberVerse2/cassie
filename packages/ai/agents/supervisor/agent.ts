@@ -55,7 +55,6 @@ export async function runCassieSupervisorForRun(input: {
       userSettings,
       accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
     });
-    const resumeContext = await buildSupervisorResumeContext(store, running.runId);
     const google = createGoogleGenerativeAI({
       apiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     });
@@ -127,7 +126,7 @@ export async function runCassieSupervisorForRun(input: {
       instructions: buildSupervisorInstructions(),
     });
     const result = await agent.generate({
-      prompt: buildSupervisorPrompt(running, resumeContext),
+      prompt: buildSupervisorPrompt(running),
       timeout: {
         totalMs: Number(process.env.CASSIE_SUPERVISOR_TIMEOUT_MS ?? 900_000),
         stepMs: Number(process.env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS ?? 300_000),
@@ -190,8 +189,7 @@ function buildSupervisorInstructions(): string {
 Use the available tools to process this run. Do not execute orders. Create a trade ticket only when the user asks for trading or countertrading and risk does not reject the proposal.
 
 Required behavior:
-- If the prompt includes completed tool outputs from a previous attempt, treat those tools as already complete. Do not call the same tool again unless its output is missing, invalid, or contradicted by later required context.
-- If there are no completed tool outputs, start with classify_intent, interpret_signal, and extract_thesis.
+- Start with classify_intent, interpret_signal, and extract_thesis.
 - For critic requests, call research_thesis, critique_thesis, then finalize_run.
 - For trade requests, call research_thesis, select_market, risk_check, create_trade_ticket when allowed, then finalize_run.
 - For countertrade requests, call extract_inverse_thesis before research and market selection.
@@ -204,38 +202,7 @@ Required behavior:
 - Never place orders or enqueue execution.`;
 }
 
-async function buildSupervisorResumeContext(store: CassieStore, runId: string) {
-  const steps = await store.getRunSteps(runId);
-  const completedToolOutputs = steps
-    .filter((step) => step.status === "succeeded" && step.output !== null)
-    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
-    .map((step) => ({
-      stepType: step.stepType,
-      promptName: step.promptName,
-      output: step.output,
-    }));
-  const latestFailedStep = steps
-    .filter((step) => step.status === "failed")
-    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
-
-  if (completedToolOutputs.length === 0 && !latestFailedStep) {
-    return null;
-  }
-
-  return {
-    completedToolOutputs,
-    latestFailedStep: latestFailedStep
-      ? {
-        stepType: latestFailedStep.stepType,
-        promptName: latestFailedStep.promptName,
-        input: latestFailedStep.input,
-        error: latestFailedStep.error,
-      }
-      : null,
-  };
-}
-
-function buildSupervisorPrompt(run: ControlRun, resumeContext: Awaited<ReturnType<typeof buildSupervisorResumeContext>>): string {
+function buildSupervisorPrompt(run: ControlRun): string {
   return `Process this Cassie run.
 
 Run:
@@ -243,12 +210,7 @@ ${JSON.stringify({
   runId: run.runId,
   userCommand: run.userCommand,
   sourcePost: run.sourcePost,
-}, null, 2)}
-
-${resumeContext ? `Resume context:
-${JSON.stringify(resumeContext, null, 2)}
-
-Continue from the latest failed or missing required tool. Reuse completedToolOutputs directly as prior tool results; do not repeat those tools just to recreate the same values.` : "No previous completed tool outputs are available."}`;
+}, null, 2)}`;
 }
 
 function createAuditTelemetryIntegration(
