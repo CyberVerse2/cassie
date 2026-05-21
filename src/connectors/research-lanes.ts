@@ -38,8 +38,9 @@ export class OpenAiWebSearchLane {
           ...queryPlan.openAiQueries,
           ...queryPlan.sourceReputationQueries,
           ...queryPlan.entityResolutionQueries,
-          ...queryPlan.founderDossierQueries,
-          ...queryPlan.farcasterQueries,
+          ...queryPlan.personDossierQueries,
+          ...queryPlan.projectDossierQueries,
+          ...queryPlan.ecosystemQueries,
         ],
       },
     });
@@ -161,8 +162,8 @@ Search goals:
 - Find official, regulatory, company, exchange, and reputable news sources.
 - Evaluate the source author's public credibility, prior products, and network reputation.
 - Resolve the referenced entity carefully. Say when the post itself did not mention a platform or project and the link is only inferred.
-- Build a founder/project dossier: X profile, Farcaster profile/casts, official site, docs, GitHub, contracts, and prior work.
-- Look for Farcaster evidence only when supported by search results; do not assume it from vague wording.
+- Build a person/project dossier when the claim depends on a person, founder, team, project, app, protocol, or product.
+- Check relevant ecosystem surfaces only when supported by the source post or search results. Do not assume a platform or ecosystem from vague wording.
 - Find contradictions and refutations.
 - Identify whether this is old news being recirculated.
 - Prefer primary sources over commentary.
@@ -179,9 +180,10 @@ ${[
   ...queryPlan.xQueries,
   ...queryPlan.sourceReputationQueries,
   ...queryPlan.entityResolutionQueries,
-  ...queryPlan.founderDossierQueries,
-  ...queryPlan.smartEngagerQueries,
-  ...queryPlan.farcasterQueries,
+  ...queryPlan.personDossierQueries,
+  ...queryPlan.projectDossierQueries,
+  ...queryPlan.socialGraphQueries,
+  ...queryPlan.ecosystemQueries,
 ].map((query) => `- ${query}`).join("\n")}
 
 Look for:
@@ -193,8 +195,8 @@ Look for:
 - promotional or coordinated language
 - author reputation: whether the source is a respected builder/operator/investor
 - smart engagement: high-signal replies, likes, reposts, or follower overlap
-- founder/project identity on X and Farcaster
-- whether platform/project claims are directly stated or inferred
+- person/project identity on X and relevant social ecosystems
+- whether platform, ecosystem, project, or product claims are directly stated or inferred
 
 X social momentum is not proof of truth.`;
 }

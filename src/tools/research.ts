@@ -31,9 +31,10 @@ export interface ResearchQueryPlan {
   xQueries: string[];
   sourceReputationQueries: string[];
   entityResolutionQueries: string[];
-  founderDossierQueries: string[];
-  smartEngagerQueries: string[];
-  farcasterQueries: string[];
+  personDossierQueries: string[];
+  projectDossierQueries: string[];
+  socialGraphQueries: string[];
+  ecosystemQueries: string[];
   contradictionQueries: string[];
 }
 
@@ -90,38 +91,43 @@ export function buildResearchQueryPlan(thesis: Thesis, sourcePost?: SourcePost):
       `${claim} official source ${assetText}`,
       `${claim} reputable news ${topicText}`,
       `${claim} regulatory filing exchange announcement ${assetText}`,
-      `${entityText} founder Jeff Jeffrey product`,
-      `${entityText} Farcaster mini app founder`,
+      `${entityText} founder team product`,
+      `${entityText} project app protocol product`,
     ],
     xQueries: [
       `${claim} ${assetText}`,
       `${claim} refuted rumor ${assetText}`,
       `${claim} source screenshot ${topicText}`,
-      `${entityText} Jeff founder`,
-      `${entityText} Farcaster mini app`,
+      `${entityText} founder team project`,
+      `${entityText} app protocol product ecosystem`,
     ],
     sourceReputationQueries: [
-      sourceIdentity ? `${sourceIdentity} reputation founder product Base` : `${claim} source reputation`,
-      sourceHandle ? `@${sourceHandle} Conca Base founder product` : `${claim} author credibility`,
+      sourceIdentity ? `${sourceIdentity} reputation founder operator builder product` : `${claim} source reputation`,
+      sourceHandle ? `@${sourceHandle} prior work products credibility` : `${claim} author credibility`,
     ],
     entityResolutionQueries: [
       `${entityText} official website`,
-      `${entityText} Jeff Jeffrey founder`,
-      `${entityText} Twitter X Farcaster`,
+      `${entityText} founder team official`,
+      `${entityText} Twitter X social profile`,
     ],
-    founderDossierQueries: [
-      `Jeff Jeffrey ${entityText} founder profile`,
-      `Jeff Jeffrey ${entityText} Farcaster posts`,
-      `Jeff Jeffrey ${entityText} X posts`,
+    personDossierQueries: [
+      `${entityText} founder profile prior work`,
+      `${entityText} team founder social posts`,
+      `${entityText} founder X profile`,
     ],
-    smartEngagerQueries: [
+    projectDossierQueries: [
+      `${entityText} docs GitHub contracts demo`,
+      `${entityText} product launch users traction`,
+      `${entityText} official app protocol`,
+    ],
+    socialGraphQueries: [
       sourcePost?.url ? `${sourcePost.url} replies likes reposts notable accounts` : `${claim} notable replies likes reposts`,
       `${entityText} smart followers investors builders replies`,
     ],
-    farcasterQueries: [
-      `${entityText} Farcaster profile`,
-      `${entityText} Farcaster casts Jeff Jeffrey`,
-      `${entityText} miniapp Farcaster`,
+    ecosystemQueries: [
+      `${entityText} ecosystem community app`,
+      `${entityText} social profile community posts`,
+      `${entityText} mini app ecosystem profile`,
     ],
     contradictionQueries: [
       `${claim} false refuted`,

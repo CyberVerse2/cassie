@@ -67,8 +67,8 @@ Evaluate the thesis after research. Search for weaknesses:
 - Is the source credible?
 - Is the source a respected builder/operator whose vague endorsement should be treated as a research lead rather than dismissed?
 - Did the research verify the source author's reputation, network, and prior products?
-- Did the research resolve the founder/project identity, or is the entity match still an inference?
-- Are Farcaster, X, GitHub, docs, contracts, and prior-work signals verified or merely assumed?
+- Did the research resolve the relevant person/project/product/entity, or is the match still an inference?
+- Are relevant ecosystem surfaces, social profiles, GitHub, docs, contracts, and prior-work signals verified or merely assumed?
 - Are smart followers or smart engagers present?
 - Is the news already priced in?
 - Is the market already crowded?
@@ -110,9 +110,9 @@ But do not ignore source quality: a vague post from a respected builder/operator
 Required social-intelligence checks:
 - Identify who is saying the thing and whether they are credible in the relevant ecosystem.
 - Evaluate the source author's reputation, prior products, and network context.
-- Resolve the project/founder/entity explicitly, with confidence and unverified assumptions.
-- If the tweet does not mention Farcaster, Base, a ticker, or a specific project, say that plainly before using inferred evidence.
-- Research the founder/person on X and Farcaster when the claim depends on founder quality.
+- Resolve the relevant entity explicitly, with confidence and unverified assumptions. The entity may be a person, project, company, protocol, app, token, product, event, or market.
+- If the source post does not mention a platform, ecosystem, ticker, or specific project, say that plainly before using inferred evidence.
+- Research the person/team/project on X and any relevant ecosystem surfaces when the claim depends on reputation, founder quality, product quality, or network context.
 - Look for smart followers/engagers/repliers and summarize whether engagement quality is meaningful.
 - Classify leadQuality as ignore, watchlist, research_lead, soft_signal, or tradable_now.
 - Give concrete nextResearchActions.
