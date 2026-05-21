@@ -79,7 +79,6 @@ async function runOpenAiSearch(): Promise<ModelRunResult> {
         openai: {
           store: false,
           serviceTier: "flex",
-          reasoningEffort: "minimal",
           reasoningSummary: "auto",
           textVerbosity: "low",
           promptCacheKey: "cassie-search-comparison-openai",
