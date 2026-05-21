@@ -1,0 +1,137 @@
+import { describe, expect, it } from "vitest";
+import type { TradeExpressionPlan } from "../src/schemas.ts";
+import type { TraceEvent, TraceUsage } from "../src/trace.ts";
+import { buildVisibilityReport } from "../src/visibility.ts";
+
+const usage: TraceUsage = {
+  inputTokens: 100,
+  outputTokens: 50,
+  totalTokens: 150,
+  reasoningTokens: 20,
+  cacheReadTokens: 0,
+};
+
+const tradeExpression: TradeExpressionPlan = {
+  signal: "Exa raised $250M.",
+  coreInterpretation: "Private-market validation of AI search infrastructure.",
+  directAsset: "Exa private equity",
+  directAssetTradable: false,
+  highestPurityExpression: "Private exposure to Exa.",
+  publicMarketReadThrough: "weak",
+  candidates: [
+    {
+      instrument: "Exa private equity",
+      expression: "watchlist",
+      thesis: "Highest purity exposure is private.",
+      causalDirectness: 0.95,
+      liquidity: 0.1,
+      surprise: 0.7,
+      timing: 0.4,
+      crowdingRisk: 0.3,
+      downsideAsymmetry: 0.5,
+      evidenceQuality: 0.8,
+      expectedEdge: 0.66,
+      tradableNow: false,
+      rejectionReason: "Requires private access.",
+      invalidation: ["Round is inaccurate."],
+      evidenceNeeded: ["Revenue and valuation work."],
+    },
+  ],
+  decision: "watchlist",
+  reason: "No clean public expression.",
+  marketRouterInstructions: null,
+};
+
+const trace: TraceEvent[] = [
+  {
+    stepId: 1,
+    name: "cassie_research_query_plan",
+    kind: "ai",
+    status: "succeeded",
+    startedAt: "2026-05-21T00:00:00Z",
+    completedAt: "2026-05-21T00:00:01Z",
+    durationMs: 1000,
+    model: "gpt-5.5",
+    thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
+    input: null,
+    output: {
+      mode: "standard",
+      goals: [
+        {
+          id: "g_verify",
+          kind: "event_validation",
+          question: "Did Exa raise $250M?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.95,
+          mustResolve: true,
+          lanes: ["web"],
+          evidenceNeeds: ["Primary confirmation."],
+          resolutionCriteria: {
+            supportedIf: "Official source confirms it.",
+            contradictedIf: "Official source denies it.",
+            unresolvedIf: "Only social posts exist.",
+          },
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify"],
+        cannotConcludeIfUnresolved: ["g_verify"],
+      },
+    },
+    usage,
+    error: null,
+  },
+  {
+    stepId: 2,
+    name: "cassie_trade_expression",
+    kind: "ai",
+    status: "succeeded",
+    startedAt: "2026-05-21T00:00:02Z",
+    completedAt: "2026-05-21T00:00:03Z",
+    durationMs: 1000,
+    model: "gpt-5.5",
+    thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
+    input: null,
+    output: tradeExpression,
+    usage,
+    error: null,
+  },
+];
+
+describe("visibility report", () => {
+  it("summarizes decision ledger, research goals, trade scores, tool calls, and token usage", () => {
+    const report = buildVisibilityReport({
+      result: {
+        run: {
+          responseType: "trade_decision",
+          tradeExpression,
+          researchReport: {
+            evidence: [{ title: "Exa funding report", stance: "supports", reliability: "high" }],
+            warnings: ["NO_PRIMARY_SOURCE"],
+          },
+        },
+      },
+      trace,
+      tokenUsage: usage,
+    });
+
+    expect(report.decisionLedger.responseType).toBe("trade_decision");
+    expect(report.decisionLedger.tradeDecision).toBe("watchlist");
+    expect(report.researchGoals[0]).toMatchObject({
+      id: "g_verify",
+      kind: "event_validation",
+      mustResolve: true,
+    });
+    expect(report.tradeExpression?.candidates[0]).toMatchObject({
+      instrument: "Exa private equity",
+      expectedEdge: 0.66,
+      tradableNow: false,
+    });
+    expect(report.evidenceSummary.count).toBe(1);
+    expect(report.toolCalls.map((call) => call.name)).toEqual([
+      "cassie_research_query_plan",
+      "cassie_trade_expression",
+    ]);
+    expect(report.tokenUsage.totalTokens).toBe(150);
+  });
+});

@@ -17,6 +17,7 @@ import { extractThesis } from "./tools/thesis.ts";
 import { CassieProduct } from "./product.ts";
 import type { ExecutionJobQueue } from "./jobs/execution-jobs.ts";
 import { TraceRecorder, type TraceEvent } from "./trace.ts";
+import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -73,15 +74,21 @@ async function main() {
 
   let result = await handler(args);
   const trace = args.trace.snapshot();
+  const tokenUsage = args.trace.usageTotals();
+  const visibility = buildVisibilityReport({ result, trace, tokenUsage });
   if (trace.length > 0 && args.flags.json) {
     result = {
       result,
       trace,
-      tokenUsage: args.trace.usageTotals(),
+      visibility,
+      tokenUsage,
     };
   }
   if (result !== undefined) {
     print(result, Boolean(args.flags.json));
+  }
+  if (trace.length > 0 && args.flags.audit && !args.flags.json) {
+    console.error(formatVisibilityReport(visibility));
   }
 }
 
@@ -112,6 +119,7 @@ Useful examples:
   npm run cli -- state
   npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
+  npm run cli -- mention --user local-user --command "@Cassie trade this" --post "Exa raised $250M" --audit
   npm run cli -- tickets --json
   npm run cli -- approve <ticketId>
   npm run cli -- execute-next --yes
