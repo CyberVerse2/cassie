@@ -47,7 +47,6 @@ const commands = new Map<string, (args: ParsedArgs) => Promise<unknown>>([
   ["env", env],
   ["settings:set", settingsSet],
   ["mention", mention],
-  ["mention:queue", mentionQueue],
   ["run-supervisor", runSupervisor],
   ["control-run", controlRun],
   ["state", state],
@@ -108,7 +107,6 @@ Setup:
 
 App flow:
   mention                   Create a durable control-plane run for a Cassie mention.
-  mention:queue             Alias for mention.
   run-supervisor <runId>    Run the ToolLoopAgent supervisor for a queued control-plane run.
   control-run <runId>       Show a durable control-plane run and its recorded steps.
   state                     Show the persisted app state summary.
@@ -127,7 +125,6 @@ Useful examples:
   npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "Exa raised $250M" --audit
-  npm run cli -- mention:queue --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
   npm run cli -- run-supervisor <runId>
   npm run cli -- tickets --json
   npm run cli -- approve <ticketId>
@@ -173,10 +170,6 @@ async function mention(args: ParsedArgs) {
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
     sourcePost: await sourcePostFromFlags(args),
   });
-}
-
-async function mentionQueue(args: ParsedArgs) {
-  return mention(args);
 }
 
 async function runSupervisor(args: ParsedArgs) {

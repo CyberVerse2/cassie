@@ -288,10 +288,10 @@ async function createScenario(intent: IntentResult["intent"], settings: UserSett
         },
       },
       researchLanes: {
-        async runOpenAiWebSearch() {
+        async runOpenAiQueryJob() {
           return { lane: "openai_search" as const, evidence: [], warnings: [] };
         },
-        async runGrokXSearch() {
+        async runGrokXQueryJob() {
           return { lane: "x_search" as const, evidence: [], warnings: [] };
         },
       },

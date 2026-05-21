@@ -391,12 +391,6 @@ describe("research query planner policy", () => {
           xCalls += 1;
           return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
         },
-        async runOpenAiWebSearch() {
-          throw new Error("expected mandatory web to execute as a query job");
-        },
-        async runGrokXSearch() {
-          throw new Error("expected mandatory X to execute as a query job");
-        },
       },
       sourcePost,
       userCommand: "@Cassie critic this",
@@ -562,14 +556,6 @@ describe("research query planner policy", () => {
           calls.push(`xjob:${job.querySpecId}`);
           return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
         },
-        async runOpenAiWebSearch(plan) {
-          calls.push(`web:${[...new Set(plan.queryBatches.map((batch) => batch.wave))].join(",")}`);
-          return { lane: "openai_search", evidence: [], warnings: [] };
-        },
-        async runGrokXSearch(plan) {
-          calls.push(`x:${[...new Set(plan.queryBatches.map((batch) => batch.wave))].join(",")}`);
-          return { lane: "x_search", evidence: [], warnings: [] };
-        },
       },
       sourcePost,
       userCommand: "@Cassie trade this",
@@ -581,10 +567,10 @@ describe("research query planner policy", () => {
     expect(calls).toEqual([
       "webjob:q_w0_web",
       "xjob:q_w0_x",
+      "webjob:q_w1_web",
       "webjob:q_disconfirm_web",
+      "xjob:q_w1_x",
       "xjob:q_disconfirm_x",
-      "web:1",
-      "x:1",
     ]);
     expect(resolverInputs).toHaveLength(2);
   });
@@ -818,12 +804,6 @@ describe("research query planner policy", () => {
               goalEvidenceLinks: [],
             },
           };
-        },
-        async runOpenAiWebSearch() {
-          throw new Error("expected atomic web query execution");
-        },
-        async runGrokXSearch() {
-          throw new Error("expected atomic X query execution");
         },
       },
       sourcePost,
@@ -1088,13 +1068,6 @@ describe("research query planner policy", () => {
         },
         async runGrokXQueryJob() {
           throw new Error("unexpected X job");
-        },
-        async runOpenAiWebSearch(plan) {
-          executedJobs.push(plan.queryBatches.flatMap((batch) => batch.queries.map((query) => query.id)).join(","));
-          return { lane: "openai_search", evidence: [], warnings: [], ledger: undefined };
-        },
-        async runGrokXSearch() {
-          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
         },
       },
       sourcePost,

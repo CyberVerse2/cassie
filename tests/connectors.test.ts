@@ -95,13 +95,13 @@ const queryPlan: ResearchQueryPlan = {
 
 describe("research connectors", () => {
   it("requires OpenAI configuration for web search", async () => {
-    await expect(new OpenAiWebSearchLane(undefined).run(queryPlan)).rejects.toBeInstanceOf(
+    await expect(new OpenAiWebSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );
   });
 
   it("requires xAI configuration for X search", async () => {
-    await expect(new GrokXSearchLane(undefined).run(queryPlan)).rejects.toBeInstanceOf(
+    await expect(new GrokXSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
       MissingConnectorConfigError,
     );
   });

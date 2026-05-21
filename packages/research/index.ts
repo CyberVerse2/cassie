@@ -34,10 +34,8 @@ export interface SearchLaneResult {
 }
 
 export interface ResearchSearchLanes {
-  runOpenAiWebSearch(queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
-  runGrokXSearch(queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
-  runOpenAiQueryJob?(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
-  runGrokXQueryJob?(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
+  runOpenAiQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
+  runGrokXQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
 }
 
 export async function researchThesis(input: {
@@ -289,28 +287,12 @@ async function runLaneForWave(input: {
   queryJobs: QueryJob[];
 }): Promise<SearchLaneResult> {
   const laneJobs = input.queryJobs.filter((job) => job.lane === input.lane);
-  const atomicJobs = laneJobs.filter((job) => job.mustExecuteAtomically);
-  const bundledQueryIds = new Set(laneJobs.filter((job) => !job.mustExecuteAtomically).map((job) => job.querySpecId));
   const results: SearchLaneResult[] = [];
 
-  if (atomicJobs.length > 0) {
+  if (laneJobs.length > 0) {
     const runJob = input.lane === "web" ? input.lanes.runOpenAiQueryJob : input.lanes.runGrokXQueryJob;
-    if (!runJob) {
-      throw new Error(`Atomic ${input.lane} query execution is required but not configured.`);
-    }
-    const atomicResults = await Promise.all(atomicJobs.map((job) => runJob.call(input.lanes, job, input.queryPlan)));
-    results.push(...atomicResults);
-  }
-
-  if (bundledQueryIds.size > 0) {
-    const bundledPlan = filterQueries(input.wavePlan, (query) => query.lane === input.lane && bundledQueryIds.has(query.id));
-    if (hasLaneQueries(bundledPlan, input.lane)) {
-      results.push(
-        input.lane === "web"
-          ? await input.lanes.runOpenAiWebSearch(bundledPlan)
-          : await input.lanes.runGrokXSearch(bundledPlan),
-      );
-    }
+    const jobResults = await Promise.all(laneJobs.map((job) => runJob.call(input.lanes, job, input.queryPlan)));
+    results.push(...jobResults);
   }
 
   if (results.length === 0) {
@@ -437,21 +419,6 @@ function planForWave(queryPlan: ResearchQueryPlan, wave: number): ResearchQueryP
     ...queryPlan,
     goals: queryPlan.goals.filter((goal) => goal.budget.wave <= wave),
     queryBatches: queryPlan.queryBatches.filter((batch) => batch.wave === wave),
-  };
-}
-
-function filterQueries(
-  queryPlan: ResearchQueryPlan,
-  predicate: (query: ResearchQueryPlan["queryBatches"][number]["queries"][number]) => boolean,
-): ResearchQueryPlan {
-  return {
-    ...queryPlan,
-    queryBatches: queryPlan.queryBatches
-      .map((batch) => ({
-        ...batch,
-        queries: batch.queries.filter(predicate),
-      }))
-      .filter((batch) => batch.queries.length > 0),
   };
 }
 
