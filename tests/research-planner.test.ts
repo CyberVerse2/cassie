@@ -1470,4 +1470,117 @@ describe("research query planner policy", () => {
       { wave: 0, action: "continue_planned" },
     ]);
   });
+
+  it("normalizes 0-to-10 research report relevance scores before returning", async () => {
+    const queryPlan: ResearchQueryPlan = {
+      version: "research-query-plan/v1",
+      normalizedClaim: "A filing confirms the claim.",
+      signalType: "news",
+      mode: "standard",
+      assets: [],
+      topics: ["filing"],
+      sourceHandle: null,
+      sourceName: null,
+      scores: {
+        specificity: 0.8,
+        marketLinkage: 0.4,
+        sourceValue: 0.4,
+        urgency: 0.3,
+        risk: 0.2,
+        novelty: 0.5,
+        expectedValueOfResearch: 0.6,
+      },
+      goals: [
+        {
+          id: "g_verify",
+          kind: "event_validation",
+          question: "Does the filing confirm the claim?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.9,
+          mustResolve: true,
+          lanes: ["web"],
+          evidenceNeeds: ["Filing evidence."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "A filing confirms it.",
+            contradictedIf: "A filing refutes it.",
+            unresolvedIf: "No filing is found.",
+          },
+          budget: { maxQueries: 1, maxResults: 5, wave: 0 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "verify",
+          purpose: "Verify the filing.",
+          queries: [
+            {
+              id: "q_verify_web",
+              goalIds: ["g_verify"],
+              lane: "web",
+              queryKind: "primary_source",
+              query: "filing",
+              priority: 0.9,
+              maxResults: 5,
+              expectedEvidence: "Filing evidence.",
+              rationale: "Verify the claim.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify"],
+        cannotConcludeIfUnresolved: ["g_verify"],
+      },
+    };
+    const reportWithTenPointRelevance = {
+      ...researchReport,
+      confidence: 8,
+      evidence: [
+        {
+          sourceLane: "openai_search",
+          sourceType: "regulatory",
+          title: "Filing",
+          url: "https://example.com/filing",
+          author: "SEC",
+          publishedAt: "2026-05-21",
+          summary: "Filing confirms the claim.",
+          stance: "supports",
+          reliability: "high",
+          relevance: 10,
+          notes: [],
+        },
+      ],
+    } as unknown as ResearchReport;
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: { name: string }) {
+        if (input.name === "cassie_research_query_plan") return queryPlan as T;
+        if (input.name === "cassie_goal_resolution") return [goalResolution] as T;
+        if (input.name === "cassie_research_report") return reportWithTenPointRelevance as T;
+        throw new Error(`Unexpected AI call ${input.name}`);
+      },
+    };
+
+    const report = await researchThesis({
+      ai,
+      lanes: {
+        async runOpenAiQueryJob() {
+          return { lane: "openai_search", evidence: [], warnings: [], ledger: undefined };
+        },
+        async runGrokXQueryJob() {
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
+        },
+      },
+      sourcePost: { ...sourcePost, authorHandle: null },
+      userCommand: "@Cassie critic this",
+      signal: { ...explicitSignal, signalType: "news" },
+      thesis,
+      researchAngle: "critic",
+    });
+
+    expect(report.confidence).toBe(0.8);
+    expect(report.evidence[0]?.relevance).toBe(1);
+  });
 });

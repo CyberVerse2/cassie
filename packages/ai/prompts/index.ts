@@ -186,6 +186,7 @@ ${sourceQualityPrinciple}
 Synthesis requirements:
 - Resolve the relevant person, project, company, protocol, product, event, or market explicitly.
 - State confidence and unverified assumptions for inferred entity matches.
+- Use decimal scores from 0 to 1 for every relevance, confidence, strength, priority, or similar score field. Do not use 0 to 10 scores or percentages.
 - Use sourceProfile as the primary source-author context when available.
 - Use source reputation, founder quality, product quality, network context, and engagement quality only when they affect the claim.
 - Classify leadQuality as ignore, watchlist, research_lead, soft_signal, or tradable_now.

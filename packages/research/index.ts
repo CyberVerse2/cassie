@@ -85,7 +85,7 @@ export async function researchThesis(input: {
     const goalResolutions = waveResults.flatMap((wave) => wave.goalResolutions);
     const evidenceLedger = mergeLedgers(waveResults.flatMap((wave) => wave.evidenceLedger));
 
-    const report = await input.ai.generateObject({
+    const report = normalizeResearchReport(await input.ai.generateObject({
       schema: ResearchReportSchema,
       name: "cassie_research_report",
       prompt: researchSynthesisPrompt({
@@ -108,7 +108,7 @@ export async function researchThesis(input: {
         evidenceLedger,
         goalResolutions,
       }),
-    });
+    }));
 
     if (researchRun) {
       await input.persistence?.store.updateResearchRun({
@@ -130,6 +130,27 @@ export async function researchThesis(input: {
     }
     throw error;
   }
+}
+
+function normalizeResearchReport(report: ResearchReport): ResearchReport {
+  return ResearchReportSchema.parse({
+    ...report,
+    confidence: normalizeUnitScore(report.confidence),
+    evidence: report.evidence.map((evidence) => ({
+      ...evidence,
+      relevance: normalizeUnitScore(evidence.relevance),
+    })),
+  });
+}
+
+function normalizeUnitScore(value: number): number {
+  if (!Number.isFinite(value)) {
+    return 0;
+  }
+  if (value > 1 && value <= 10) {
+    return value / 10;
+  }
+  return Math.max(0, Math.min(1, value));
 }
 
 async function resolveSourceProfile(input: {
