@@ -3,6 +3,10 @@ import type {
   SearchLaneResult,
 } from "./index.ts";
 import {
+  createDeepSeek,
+  type DeepSeekLanguageModelOptions,
+} from "@ai-sdk/deepseek";
+import {
   type EvidenceLedger,
   type QueryJob,
   type ResearchEvidence,
@@ -16,11 +20,13 @@ import { createXai } from "@ai-sdk/xai";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { configureAiSdkWarningLogging } from "../ai/sdk-warnings.ts";
+import { DEFAULT_CHEAP_MODEL, DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../ai/client.ts";
 
 configureAiSdkWarningLogging();
 
 const DEFAULT_WEB_SEARCH_MODEL = "gemini-3.1-flash-lite";
 export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
+const SEARCH_TEXT_MAX_OUTPUT_TOKENS = 1_024;
 
 export const SearchQueryOutputSchema = z.object({
   findings: z.array(z.object({
@@ -46,17 +52,27 @@ export const SearchQueryOutputSchema = z.object({
 
 type SearchQueryOutput = z.infer<typeof SearchQueryOutputSchema>;
 
+type SearchSource = {
+  sourceType: "url" | "document";
+  title?: string;
+  url?: string;
+};
+
 export class GeminiWebSearchLane {
   constructor(
     private readonly apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
     private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
     private readonly trace?: TraceRecorder,
+    private readonly structuredModel = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL,
     private readonly maxResults = Number(process.env.CASSIE_WEB_SEARCH_MAX_RESULTS ?? 5),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
     if (!this.apiKey) {
       throw new MissingConnectorConfigError("Gemini Web Search lane", "GEMINI_API_KEY");
+    }
+    if (!process.env.DEEPSEEK_API_KEY) {
+      throw new MissingConnectorConfigError("Search result structurer", "DEEPSEEK_API_KEY");
     }
 
     const google = createGoogleGenerativeAI({
@@ -67,7 +83,7 @@ export class GeminiWebSearchLane {
       name: "gemini_web_query_job",
       kind: "connector",
       model: this.model,
-      thinkingTrace: "Executing one auditable Gemini web query job with Google Search grounding and compact structured search output.",
+      thinkingTrace: "Executing one auditable Gemini web query job with Google Search grounding, then structuring the compact result with DeepSeek.",
       input: {
         queryJobId: job.id,
         queryId: job.querySpecId,
@@ -80,15 +96,12 @@ export class GeminiWebSearchLane {
       const result = await wrapConnectorStage("Gemini web search generation", () =>
         generateText({
           model: google(this.model),
-          output: Output.object({
-            schema: SearchQueryOutputSchema,
-            name: "cassie_web_search_result",
-          }),
           tools: {
             google_search: google.tools.googleSearch({
               searchTypes: { webSearch: {} },
             }),
           },
+          system: "Return concise source-backed research notes in plain text. Do not return JSON.",
           prompt,
           providerOptions: {
             google: {
@@ -97,14 +110,24 @@ export class GeminiWebSearchLane {
               },
             },
           },
-          maxOutputTokens: GEMINI_SEARCH_MAX_OUTPUT_TOKENS,
+          maxOutputTokens: SEARCH_TEXT_MAX_OUTPUT_TOKENS,
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
+        })
+      );
+      const structured = await wrapConnectorStage("DeepSeek search result structuring", () =>
+        structureSearchText({
+          model: this.structuredModel,
+          provider: "gemini_google_search",
+          job,
+          queryPlan,
+          searchText: result.text,
+          sources: result.sources,
         })
       );
       const ledger = ledgerFromSearchOutput({
         job,
         provider: "gemini_google_search",
-        output: result.output,
+        output: structured,
       });
       const output = {
         lane: "openai_search" as const,
@@ -289,6 +312,90 @@ function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): stri
 function connectorCallTimeoutMs() {
   const value = Number(process.env.CASSIE_CONNECTOR_CALL_TIMEOUT_MS ?? 180_000);
   return Number.isFinite(value) && value > 0 ? value : 180_000;
+}
+
+async function structureSearchText(input: {
+  model: string;
+  provider: string;
+  job: QueryJob;
+  queryPlan: ResearchQueryPlan;
+  searchText: string;
+  sources: SearchSource[];
+}): Promise<SearchQueryOutput> {
+  const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY });
+  const result = await generateText({
+    model: deepseek.chat(input.model),
+    output: Output.object({
+      schema: SearchQueryOutputSchema,
+      name: "cassie_search_result_structuring",
+    }),
+    prompt: buildSearchStructuringPrompt(input),
+    providerOptions: {
+      deepseek: {
+        thinking: { type: "disabled" },
+      } satisfies DeepSeekLanguageModelOptions,
+    },
+    maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
+    abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
+  });
+  return result.output;
+}
+
+function buildSearchStructuringPrompt(input: {
+  provider: string;
+  job: QueryJob;
+  queryPlan: ResearchQueryPlan;
+  searchText: string;
+  sources: SearchSource[];
+}): string {
+  return `You are Cassie's search result structurer.
+
+Convert the raw search notes into the requested compact JSON object.
+Do not add claims that are not present in the raw search notes or source list.
+Every finding sourceUrls entry must match a source URL from the source list when URLs are available.
+Use no more than 4 findings and 6 sources.
+Use unresolved for important missing evidence or ambiguity.
+
+Query job:
+${JSON.stringify({
+    runId: input.job.runId,
+    queryJobId: input.job.id,
+    queryId: input.job.querySpecId,
+    goalIds: input.job.goalIds,
+    lane: input.job.lane,
+    provider: input.provider,
+    query: input.job.query,
+    queryKind: input.job.queryKind,
+    expectedEvidence: input.job.expectedEvidence,
+    rationale: input.job.rationale,
+  }, null, 2)}
+
+Research claim:
+${input.queryPlan.normalizedClaim}
+
+Relevant goals:
+${formatGoalsByIds(input.queryPlan, input.job.goalIds)}
+
+Source list:
+${JSON.stringify(input.sources.map(sourceForPrompt), null, 2)}
+
+Raw search notes:
+${input.searchText}`;
+}
+
+function sourceForPrompt(source: SearchSource) {
+  if (source.sourceType === "url" && source.url) {
+    return {
+      title: source.title ?? null,
+      url: source.url,
+      sourceType: "unknown",
+    };
+  }
+  return {
+    title: source.title,
+    url: null,
+    sourceType: "unknown",
+  };
 }
 
 function ledgerFromSearchOutput(input: {
