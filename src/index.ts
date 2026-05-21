@@ -12,6 +12,7 @@ export * from "./tools/trade-expression.ts";
 export * from "./connectors/errors.ts";
 export * from "./connectors/market-data.ts";
 export * from "./connectors/research-lanes.ts";
+export * from "./agents/research-tool-loop-agent.ts";
 export * from "./execution.ts";
 export * from "./product.ts";
 export * from "./store.ts";
