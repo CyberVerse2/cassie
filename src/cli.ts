@@ -11,6 +11,11 @@ import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
 import type { ExecutionJob, SourcePost, UserSettings } from "./schemas.ts";
 import { DrizzleCassieStore } from "./db/store.ts";
 import type { CassieStoreSnapshot } from "./store.ts";
+import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
+import type { ControlRun, ExecutionJob as ControlExecutionJob } from "../packages/core/schemas/index.ts";
+import { CassieProduct as ControlPlaneCassieProduct } from "../packages/workflows/product.ts";
+import type { CassieJobQueue } from "../packages/workflows/execution-jobs.ts";
+import { DrizzleCassieStore as ControlPlaneStore } from "../packages/db/drizzle-store.ts";
 import { routeIntent } from "./tools/intent-router.ts";
 import { interpretSignal } from "./tools/signal.ts";
 import { extractThesis } from "./tools/thesis.ts";
@@ -34,6 +39,16 @@ class CliExecutionQueue implements ExecutionJobQueue {
   }
 }
 
+class CliControlPlaneQueue implements CassieJobQueue {
+  async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: null }> {
+    return { runId: run.runId, graphileJobId: null };
+  }
+
+  async enqueueExecution(job: ControlExecutionJob): Promise<{ executionJobId: string; graphileJobId: null }> {
+    return { executionJobId: job.jobId, graphileJobId: null };
+  }
+}
+
 class CliError extends Error {
   constructor(message: string) {
     super(message);
@@ -46,6 +61,9 @@ const commands = new Map<string, (args: ParsedArgs) => Promise<unknown>>([
   ["env", env],
   ["settings:set", settingsSet],
   ["mention", mention],
+  ["mention:queue", mentionQueue],
+  ["run-supervisor", runSupervisor],
+  ["control-run", controlRun],
   ["state", state],
   ["runs", runs],
   ["tickets", tickets],
@@ -104,6 +122,9 @@ Setup:
 
 App flow:
   mention                   Process a Cassie mention synchronously.
+  mention:queue             Create a durable control-plane run for a Cassie mention.
+  run-supervisor <runId>    Run the ToolLoopAgent supervisor for a queued control-plane run.
+  control-run <runId>       Show a durable control-plane run and its recorded steps.
   state                     Show the persisted app state summary.
   runs                      List completed Cassie runs.
   tickets                   List trade tickets.
@@ -120,6 +141,8 @@ Useful examples:
   npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "Exa raised $250M" --audit
+  npm run cli -- mention:queue --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
+  npm run cli -- run-supervisor <runId>
   npm run cli -- tickets --json
   npm run cli -- approve <ticketId>
   npm run cli -- execute-next --yes
@@ -164,6 +187,25 @@ async function mention(args: ParsedArgs) {
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
     sourcePost: await sourcePostFromFlags(args),
   });
+}
+
+async function mentionQueue(args: ParsedArgs) {
+  return controlProduct().createMentionRun({
+    userId: flag(args, "user", "local-user"),
+    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
+    sourcePost: await sourcePostFromFlags(args),
+  });
+}
+
+async function runSupervisor(args: ParsedArgs) {
+  const runId = requiredPositional(args, 0, "runId");
+  const store = new ControlPlaneStore();
+  const result = await runCassieSupervisorForRun({ runId, store });
+  return { runId, result };
+}
+
+async function controlRun(args: ParsedArgs) {
+  return controlProduct().getRun(requiredPositional(args, 0, "runId"));
 }
 
 async function state(args: ParsedArgs) {
@@ -267,6 +309,16 @@ function product(trace: TraceRecorder) {
     null,
     undefined,
     new CliExecutionQueue(),
+  );
+}
+
+function controlProduct() {
+  return new ControlPlaneCassieProduct(
+    new ControlPlaneStore(),
+    undefined,
+    null,
+    undefined,
+    new CliControlPlaneQueue(),
   );
 }
 
