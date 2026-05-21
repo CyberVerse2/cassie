@@ -366,8 +366,8 @@ export class DrizzleCassieStore implements CassieStore {
       ...existing,
       queryPlan: input.queryPlan ?? existing.queryPlan,
       status: input.status,
-      completedAt: input.completedAt ?? existing.completedAt ?? null,
-      error: input.error ?? existing.error ?? null,
+      completedAt: input.completedAt === undefined ? existing.completedAt ?? null : input.completedAt,
+      error: input.error === undefined ? existing.error ?? null : input.error,
     };
     await this.db
       .update(researchRuns)

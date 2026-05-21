@@ -375,8 +375,8 @@ export class InMemoryCassieStore implements CassieStore {
       ...existing,
       status: input.status,
       queryPlan: input.queryPlan ?? existing.queryPlan,
-      completedAt: input.completedAt ?? existing.completedAt,
-      error: input.error ?? existing.error,
+      completedAt: input.completedAt === undefined ? existing.completedAt : input.completedAt,
+      error: input.error === undefined ? existing.error : input.error,
     };
     this.snapshot.researchRuns = this.snapshot.researchRuns.map((run) =>
       run.researchRunId === updated.researchRunId ? updated : run,

@@ -1,5 +1,5 @@
 import type { StructuredAiClient } from "../ai/client.ts";
-import type { CassieStore } from "../db/store.ts";
+import type { CassieStore, ResearchQueryJobRecord, ResearchRunRecord } from "../db/store.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
@@ -37,6 +37,7 @@ export interface SearchLaneResult {
   evidence: ResearchEvidence[];
   warnings: string[];
   ledger?: EvidenceLedger;
+  newLedger?: EvidenceLedger;
 }
 
 export interface ResearchSearchLanes {
@@ -60,12 +61,26 @@ export async function researchThesis(input: {
   researchAngle: ResearchAngle;
   persistence?: ResearchPersistence;
 }): Promise<ResearchReport> {
-  const sourceProfile = await resolveSourceProfile(input);
-  const queryPlan = normalizeResearchQueryPlan(await generateResearchQueryPlan({
-    ...input,
-    sourceProfile,
-  }), input.signal);
-  const researchRun = input.persistence
+  const resumedResearchRun = input.persistence
+    ? await findResumableResearchRun(input.persistence, input.researchAngle)
+    : null;
+  const resumedPlan = resumedResearchRun ? parsePersistedResearchPlan(resumedResearchRun.queryPlan) : null;
+  const sourceProfile = resumedPlan ? resumedPlan.sourceProfile : await resolveSourceProfile(input);
+  const queryPlan = resumedPlan
+    ? resumedPlan.queryPlan
+    : normalizeResearchQueryPlan(await generateResearchQueryPlan({
+      ...input,
+      sourceProfile,
+    }), input.signal);
+  const researchRun = resumedResearchRun
+    ? await input.persistence?.store.updateResearchRun({
+      researchRunId: resumedResearchRun.researchRunId,
+      status: "running",
+      queryPlan: { queryPlan, sourceProfile },
+      completedAt: null,
+      error: null,
+    })
+    : input.persistence
     ? await input.persistence.store.createResearchRun({
       controlRunId: input.persistence.controlRunId,
       angle: input.researchAngle,
@@ -151,6 +166,37 @@ function normalizeUnitScore(value: number): number {
     return value / 10;
   }
   return Math.max(0, Math.min(1, value));
+}
+
+const PersistedResearchPlanSchema = z.object({
+  queryPlan: ResearchQueryPlanSchema,
+  sourceProfile: SourceProfileSchema.nullable(),
+});
+
+async function findResumableResearchRun(
+  persistence: ResearchPersistence,
+  angle: ResearchAngle,
+): Promise<ResearchRunRecord | null> {
+  const snapshot = await persistence.store.load();
+  return snapshot.researchRuns
+    .filter((run) =>
+      run.controlRunId === persistence.controlRunId &&
+      run.angle === angle &&
+      run.status !== "succeeded"
+    )
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0] ?? null;
+}
+
+function parsePersistedResearchPlan(value: unknown): { queryPlan: ResearchQueryPlan; sourceProfile: SourceProfile | null } | null {
+  const parsed = PersistedResearchPlanSchema.safeParse(value);
+  if (parsed.success) {
+    return parsed.data;
+  }
+  const legacyPlan = ResearchQueryPlanSchema.safeParse(value);
+  if (legacyPlan.success) {
+    return { queryPlan: legacyPlan.data, sourceProfile: null };
+  }
+  return null;
 }
 
 async function resolveSourceProfile(input: {
@@ -281,6 +327,7 @@ async function executeResearchWaves(input: {
   adaptiveDecisions: ResearchContinuationDecision[];
 }>> {
   const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
+  const resumeState = await loadResearchResumeState(input.persistence, input.researchRunId);
   const results: Array<{
     wave: number;
     openAiResult: PromiseSettledResult<SearchLaneResult>;
@@ -293,8 +340,12 @@ async function executeResearchWaves(input: {
 
   for (const wave of waves) {
     const wavePlan = planForWave(input.queryPlan, wave);
-    const queryJobs = compileQueryJobs(input.queryPlan, wave, input.researchRunId);
-    await input.persistence?.store.addResearchQueryJobs(input.researchRunId, queryJobs);
+    const queryJobs = await prepareResearchJobs({
+      persistence: input.persistence,
+      researchRunId: input.researchRunId,
+      compiledJobs: compileQueryJobs(input.queryPlan, wave, input.researchRunId),
+      resumeState,
+    });
     let [openAiResult, xResult] = await Promise.all([
       settle(runLaneForWave({
         lane: "web",
@@ -304,6 +355,7 @@ async function executeResearchWaves(input: {
         queryJobs,
         persistence: input.persistence,
         researchRunId: input.researchRunId,
+        resumeState,
       })),
       settle(runLaneForWave({
         lane: "x",
@@ -313,13 +365,17 @@ async function executeResearchWaves(input: {
         queryJobs,
         persistence: input.persistence,
         researchRunId: input.researchRunId,
+        resumeState,
       })),
     ]);
     let evidenceLedger = mergeLedgers([
       ledgerFromSettledResult(openAiResult),
       ledgerFromSettledResult(xResult),
     ]);
-    await input.persistence?.store.addResearchEvidenceLedger(input.researchRunId, evidenceLedger);
+    await input.persistence?.store.addResearchEvidenceLedger(input.researchRunId, mergeLedgers([
+      newLedgerFromSettledResult(openAiResult),
+      newLedgerFromSettledResult(xResult),
+    ]));
     let goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
       ai: input.ai,
       queryPlan: input.queryPlan,
@@ -369,14 +425,18 @@ async function executeResearchWaves(input: {
         continuationDecision,
         evidenceLedger,
       });
-      const adaptiveJobs = compileAdaptiveQueryJobs({
+      const adaptiveJobs = await prepareResearchJobs({
+        persistence: input.persistence,
+        researchRunId: input.researchRunId,
+        resumeState,
+        compiledJobs: compileAdaptiveQueryJobs({
         queryPlan: input.queryPlan,
         wave,
         adaptiveRound,
         adaptiveRequest,
         researchRunId: input.researchRunId,
+        }),
       });
-      await input.persistence?.store.addResearchQueryJobs(input.researchRunId, adaptiveJobs);
       if (adaptiveJobs.length === 0) {
         continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
           continuationDecision,
@@ -399,6 +459,7 @@ async function executeResearchWaves(input: {
           queryJobs: adaptiveJobs,
           persistence: input.persistence,
           researchRunId: input.researchRunId,
+          resumeState,
         })),
         settle(runLaneForWave({
           lane: "x",
@@ -408,6 +469,7 @@ async function executeResearchWaves(input: {
           queryJobs: adaptiveJobs,
           persistence: input.persistence,
           researchRunId: input.researchRunId,
+          resumeState,
         })),
       ]);
       openAiResult = mergeSettledLaneResults("openai_search", openAiResult, adaptiveOpenAiResult);
@@ -422,7 +484,10 @@ async function executeResearchWaves(input: {
       ]);
       await input.persistence?.store.addResearchEvidenceLedger(
         input.researchRunId,
-        adaptiveLedger,
+        mergeLedgers([
+          newLedgerFromSettledResult(adaptiveOpenAiResult),
+          newLedgerFromSettledResult(adaptiveXResult),
+        ]),
       );
       if (adaptiveLedger.searchResults.length === 0 && adaptiveLedger.evidenceClaims.length === 0) {
         continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
@@ -472,6 +537,70 @@ const GoalResolutionEnvelopeSchema = z.object({
 
 function asGoalResolutionArray(value: GoalResolution[] | { resolutions: GoalResolution[] }): GoalResolution[] {
   return Array.isArray(value) ? value : value.resolutions;
+}
+
+interface ResearchResumeState {
+  jobsByQuerySpecId: Map<string, ResearchQueryJobRecord>;
+  ledgersByQueryJobId: Map<string, EvidenceLedger>;
+}
+
+async function loadResearchResumeState(
+  persistence: ResearchPersistence | undefined,
+  researchRunId: string,
+): Promise<ResearchResumeState> {
+  if (!persistence) {
+    return {
+      jobsByQuerySpecId: new Map(),
+      ledgersByQueryJobId: new Map(),
+    };
+  }
+  const snapshot = await persistence.store.load();
+  const jobs = snapshot.researchQueryJobs.filter((job) => job.researchRunId === researchRunId);
+  const jobsByQuerySpecId = new Map<string, ResearchQueryJobRecord>();
+  for (const job of jobs) {
+    jobsByQuerySpecId.set(job.querySpecId, job);
+  }
+  const ledgersByQueryJobId = new Map<string, EvidenceLedger>();
+  for (const job of jobs) {
+    const evidenceClaims = snapshot.researchEvidenceClaims
+      .filter((claim) => claim.researchRunId === researchRunId && claim.queryJobId === job.id)
+      .map(({ researchRunId: _, ...claim }) => claim);
+    const claimIds = new Set(evidenceClaims.map((claim) => claim.id));
+    ledgersByQueryJobId.set(job.id, {
+      searchResults: snapshot.researchSearchResults
+        .filter((result) => result.researchRunId === researchRunId && result.queryJobId === job.id)
+        .map(({ researchRunId: _, ...result }) => result),
+      evidenceClaims,
+      goalEvidenceLinks: snapshot.researchGoalEvidenceLinks
+        .filter((link) => link.researchRunId === researchRunId && claimIds.has(link.evidenceClaimId))
+        .map(({ researchRunId: _, ...link }) => link),
+    });
+  }
+  return { jobsByQuerySpecId, ledgersByQueryJobId };
+}
+
+async function prepareResearchJobs(input: {
+  persistence?: ResearchPersistence;
+  researchRunId: string;
+  compiledJobs: QueryJob[];
+  resumeState: ResearchResumeState;
+}): Promise<QueryJob[]> {
+  const jobs: QueryJob[] = [];
+  const missingJobs: QueryJob[] = [];
+  for (const job of input.compiledJobs) {
+    const existing = input.resumeState.jobsByQuerySpecId.get(job.querySpecId);
+    if (existing) {
+      jobs.push(existing);
+      continue;
+    }
+    jobs.push(job);
+    missingJobs.push(job);
+  }
+  const records = await input.persistence?.store.addResearchQueryJobs(input.researchRunId, missingJobs);
+  for (const record of records ?? []) {
+    input.resumeState.jobsByQuerySpecId.set(record.querySpecId, record);
+  }
+  return jobs;
 }
 
 async function resolveResearchGoals(input: {
@@ -560,6 +689,7 @@ async function runLaneForWave(input: {
   queryJobs: QueryJob[];
   persistence?: ResearchPersistence;
   researchRunId: string;
+  resumeState: ResearchResumeState;
 }): Promise<SearchLaneResult> {
   const laneJobs = input.queryJobs.filter((job) => job.lane === input.lane);
   const results: SearchLaneResult[] = [];
@@ -567,6 +697,17 @@ async function runLaneForWave(input: {
   if (laneJobs.length > 0) {
     const runJob = input.lane === "web" ? input.lanes.runOpenAiQueryJob : input.lanes.runGrokXQueryJob;
     const jobResults = await Promise.all(laneJobs.map(async (job) => {
+      const persistedJob = input.resumeState.jobsByQuerySpecId.get(job.querySpecId);
+      if (persistedJob?.status === "succeeded") {
+        const ledger = input.resumeState.ledgersByQueryJobId.get(persistedJob.id) ?? emptyLedger();
+        return {
+          lane: input.lane === "web" ? "openai_search" as const : "x_search" as const,
+          evidence: evidenceFromLedger(input.lane === "web" ? "openai_search" : "x_search", ledger),
+          warnings: [`Reused completed ${input.lane === "web" ? "web" : "X"} query ${persistedJob.querySpecId}.`],
+          ledger,
+          newLedger: emptyLedger(),
+        };
+      }
       await input.persistence?.store.updateResearchQueryJobStatus(job.id, {
         status: "running",
         startedAt: new Date().toISOString(),
@@ -577,7 +718,22 @@ async function runLaneForWave(input: {
           status: "succeeded",
           completedAt: new Date().toISOString(),
         });
-        return result;
+        const output = {
+          ...result,
+          newLedger: result.ledger,
+        };
+        if (result.ledger) {
+          input.resumeState.ledgersByQueryJobId.set(job.id, result.ledger);
+        }
+        input.resumeState.jobsByQuerySpecId.set(job.querySpecId, {
+          ...job,
+          researchRunId: input.researchRunId,
+          status: "succeeded",
+          startedAt: new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+          error: null,
+        });
+        return output;
       } catch (error) {
         await input.persistence?.store.updateResearchQueryJobStatus(job.id, {
           status: "failed",
@@ -589,6 +745,7 @@ async function runLaneForWave(input: {
           evidence: [],
           warnings: [error instanceof Error ? error.message : String(error)],
           ledger: undefined,
+          newLedger: undefined,
         };
       }
     }));
@@ -760,6 +917,7 @@ function mergeLaneResults(lane: SearchLaneResult["lane"], results: SearchLaneRes
     evidence: results.flatMap((result) => result.evidence),
     warnings: results.flatMap((result) => result.warnings),
     ledger: mergeLedgers(results.map((result) => result.ledger)),
+    newLedger: mergeLedgers(results.map((result) => result.newLedger)),
   };
 }
 
@@ -801,8 +959,94 @@ function mergeLedgers(ledgers: Array<EvidenceLedger | undefined>): EvidenceLedge
   }, emptyLedger());
 }
 
+function evidenceFromLedger(sourceLane: "openai_search" | "x_search", ledger: EvidenceLedger): ResearchEvidence[] {
+  if (ledger.evidenceClaims.length === 0) {
+    return ledger.searchResults.map((result) => ({
+      sourceLane,
+      sourceType: sourceTypeForResearchEvidence(result.sourceType),
+      title: result.title,
+      url: result.url,
+      author: result.author,
+      publishedAt: result.publishedAt,
+      summary: result.snippet ?? result.rawText ?? "",
+      stance: "unclear",
+      reliability: "medium",
+      relevance: 0.5,
+      notes: [`queryId: ${result.queryId}`, `queryJobId: ${result.queryJobId}`],
+    }));
+  }
+
+  return ledger.evidenceClaims.map((claim) => {
+    const result = ledger.searchResults.find((item) => item.id === claim.resultId);
+    const strongestLink = ledger.goalEvidenceLinks
+      .filter((link) => link.evidenceClaimId === claim.id)
+      .sort((left, right) => right.strength - left.strength)[0];
+    return {
+      sourceLane,
+      sourceType: sourceTypeForResearchEvidence(claim.sourceType),
+      title: result?.title ?? null,
+      url: result?.url ?? null,
+      author: result?.author ?? null,
+      publishedAt: result?.publishedAt ?? null,
+      summary: claim.claimText,
+      stance: stanceForResearchEvidence(strongestLink?.stance),
+      reliability: reliabilityForResearchEvidence(claim.reliability),
+      relevance: strongestLink?.relevance ?? claim.extractionConfidence,
+      notes: [
+        `queryId: ${claim.queryId}`,
+        `queryJobId: ${claim.queryJobId}`,
+        `evidenceClaimId: ${claim.id}`,
+      ],
+    };
+  });
+}
+
+function sourceTypeForResearchEvidence(sourceType: EvidenceLedger["searchResults"][number]["sourceType"]): ResearchEvidence["sourceType"] {
+  switch (sourceType) {
+    case "official":
+    case "regulatory":
+    case "company":
+    case "exchange":
+    case "news":
+    case "social":
+    case "blog":
+    case "unknown":
+      return sourceType;
+    case "filing":
+    case "court_doc":
+      return "regulatory";
+    case "specialist_media":
+      return "news";
+    case "docs":
+    case "github":
+      return "blog";
+    case "market_data":
+    case "onchain_data":
+    case "prediction_market":
+    case "security_researcher":
+    case "aggregator":
+      return "unknown";
+  }
+}
+
+function stanceForResearchEvidence(stance: EvidenceLedger["goalEvidenceLinks"][number]["stance"] | undefined): ResearchEvidence["stance"] {
+  if (stance === "supports") return "supports";
+  if (stance === "contradicts") return "refutes";
+  if (stance === "qualifies") return "mixed";
+  return "unclear";
+}
+
+function reliabilityForResearchEvidence(reliability: EvidenceLedger["evidenceClaims"][number]["reliability"]): ResearchEvidence["reliability"] {
+  if (reliability === "unknown") return "medium";
+  return reliability;
+}
+
 function ledgerFromSettledResult(result: PromiseSettledResult<SearchLaneResult>): EvidenceLedger {
   return result.status === "fulfilled" ? result.value.ledger ?? emptyLedger() : emptyLedger();
+}
+
+function newLedgerFromSettledResult(result: PromiseSettledResult<SearchLaneResult>): EvidenceLedger {
+  return result.status === "fulfilled" ? result.value.newLedger ?? emptyLedger() : emptyLedger();
 }
 
 async function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> {

@@ -1583,4 +1583,157 @@ describe("research query planner policy", () => {
     expect(report.confidence).toBe(0.8);
     expect(report.evidence[0]?.relevance).toBe(1);
   });
+
+  it("resumes a failed persisted research run without rerunning completed query jobs", async () => {
+    const store = new InMemoryCassieStore();
+    const controlRun = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie critic this",
+      sourcePost: { ...sourcePost, authorHandle: null },
+    });
+    const queryPlan: ResearchQueryPlan = {
+      version: "research-query-plan/v1",
+      normalizedClaim: "A filing confirms the claim.",
+      signalType: "news",
+      mode: "standard",
+      assets: [],
+      topics: ["filing"],
+      sourceHandle: null,
+      sourceName: null,
+      scores: {
+        specificity: 0.8,
+        marketLinkage: 0.4,
+        sourceValue: 0.4,
+        urgency: 0.3,
+        risk: 0.2,
+        novelty: 0.5,
+        expectedValueOfResearch: 0.6,
+      },
+      goals: [
+        {
+          id: "g_verify",
+          kind: "event_validation",
+          question: "Does the filing confirm the claim?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.9,
+          mustResolve: true,
+          lanes: ["web"],
+          evidenceNeeds: ["Filing evidence."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "A filing confirms it.",
+            contradictedIf: "A filing refutes it.",
+            unresolvedIf: "No filing is found.",
+          },
+          budget: { maxQueries: 1, maxResults: 5, wave: 0 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "verify",
+          purpose: "Verify the filing.",
+          queries: [
+            {
+              id: "q_verify_web",
+              goalIds: ["g_verify"],
+              lane: "web",
+              queryKind: "primary_source",
+              query: "filing",
+              priority: 0.9,
+              maxResults: 5,
+              expectedEvidence: "Filing evidence.",
+              rationale: "Verify the claim.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify"],
+        cannotConcludeIfUnresolved: ["g_verify"],
+      },
+    };
+    let reportAttempts = 0;
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: { name: string }) {
+        if (input.name === "cassie_research_query_plan") return queryPlan as T;
+        if (input.name === "cassie_goal_resolution") return [goalResolution] as T;
+        if (input.name === "cassie_research_report") {
+          reportAttempts += 1;
+          if (reportAttempts === 1) {
+            throw new Error("report schema mismatch");
+          }
+          return researchReport as T;
+        }
+        throw new Error(`Unexpected AI call ${input.name}`);
+      },
+    };
+    let webCalls = 0;
+    const lanes = {
+      async runOpenAiQueryJob(job: QueryJob) {
+        webCalls += 1;
+        return {
+          lane: "openai_search" as const,
+          evidence: [],
+          warnings: [],
+          ledger: {
+            searchResults: [
+              {
+                id: `result_${job.id}_1`,
+                runId: job.runId,
+                queryJobId: job.id,
+                queryId: job.querySpecId,
+                goalIds: job.goalIds,
+                wave: job.wave,
+                lane: job.lane,
+                provider: job.provider,
+                title: "Filing",
+                url: "https://example.com/filing",
+                canonicalUrl: "https://example.com/filing",
+                author: "SEC",
+                sourceName: "SEC",
+                sourceType: "filing" as const,
+                publishedAt: "2026-05-21",
+                retrievedAt: "2026-05-21T00:00:00.000Z",
+                rawText: null,
+                snippet: "Filing confirms the claim.",
+                rank: 1,
+                duplicateOf: null,
+                metadata: [],
+              },
+            ],
+            evidenceClaims: [],
+            goalEvidenceLinks: [],
+          },
+        };
+      },
+      async runGrokXQueryJob() {
+        return { lane: "x_search" as const, evidence: [], warnings: [], ledger: undefined };
+      },
+    };
+    const runResearch = () => researchThesis({
+      ai,
+      lanes,
+      sourcePost: { ...sourcePost, authorHandle: null },
+      userCommand: "@Cassie critic this",
+      signal: { ...explicitSignal, signalType: "news" },
+      thesis,
+      researchAngle: "critic",
+      persistence: {
+        store,
+        controlRunId: controlRun.runId,
+      },
+    });
+
+    await expect(runResearch()).rejects.toThrow("report schema mismatch");
+    await expect(runResearch()).resolves.toMatchObject({ publicSummary: researchReport.publicSummary });
+
+    const snapshot = await store.load();
+    expect(webCalls).toBe(1);
+    expect(snapshot.researchRuns).toHaveLength(1);
+    expect(snapshot.researchRuns[0]).toMatchObject({ status: "succeeded", error: null });
+    expect(snapshot.researchQueryJobs).toHaveLength(2);
+    expect(snapshot.researchSearchResults).toHaveLength(1);
+  });
 });
