@@ -3,6 +3,7 @@ import {
   InverseThesisSchema,
   ThesisSchema,
   type InverseThesis,
+  type SignalInterpretation,
   type SourcePost,
   type Thesis,
 } from "../schemas.ts";
@@ -12,6 +13,7 @@ export async function extractThesis(input: {
   ai: StructuredAiClient;
   sourcePost: SourcePost;
   userCommand: string;
+  signal: SignalInterpretation;
 }): Promise<Thesis> {
   return input.ai.generateObject({
     schema: ThesisSchema,

@@ -12,6 +12,7 @@ import type { ExecutionJob, SourcePost, UserSettings } from "./schemas.ts";
 import { DrizzleCassieStore } from "./db/store.ts";
 import type { CassieStoreSnapshot } from "./store.ts";
 import { routeIntent } from "./tools/intent-router.ts";
+import { interpretSignal } from "./tools/signal.ts";
 import { extractThesis } from "./tools/thesis.ts";
 import { CassieProduct } from "./product.ts";
 import type { ExecutionJobQueue } from "./jobs/execution-jobs.ts";
@@ -216,9 +217,10 @@ async function smokeAi(args: ParsedArgs) {
   const userCommand = flag(args, "command", "@Cassie should we trade this?");
   const sourcePost = await sourcePostFromFlags(args);
   const intent = await routeIntent({ ai, sourcePost, userCommand });
-  const thesis = await extractThesis({ ai, sourcePost, userCommand });
+  const signal = await interpretSignal({ ai, sourcePost, userCommand });
+  const thesis = await extractThesis({ ai, sourcePost, userCommand, signal });
 
-  return { intent, thesis };
+  return { intent, signal, thesis };
 }
 
 async function smokeMarket(args: ParsedArgs) {

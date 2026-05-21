@@ -5,6 +5,7 @@ import type {
   MarketSelection,
   ResearchReport,
   RiskDecision,
+  SignalInterpretation,
   SourcePost,
   Thesis,
   TradeTicket,
@@ -18,12 +19,14 @@ import { routeIntent } from "./tools/intent-router.ts";
 import { selectMarket } from "./tools/market.ts";
 import { researchThesis } from "./tools/research.ts";
 import { evaluateRisk } from "./tools/risk.ts";
+import { interpretSignal } from "./tools/signal.ts";
 import { extractInverseThesis, extractThesis } from "./tools/thesis.ts";
 import { createTradeTicket } from "./tools/trade.ts";
 
 export type CassieRun =
   | {
       intent: IntentResult;
+      signal: SignalInterpretation;
       thesis: Thesis;
       marketSelection: MarketSelection;
       riskDecision: RiskDecision;
@@ -31,6 +34,7 @@ export type CassieRun =
     }
   | {
       intent: IntentResult;
+      signal: SignalInterpretation;
       thesis: Thesis;
       researchReport: ResearchReport;
       critique: Critique;
@@ -38,6 +42,7 @@ export type CassieRun =
     }
   | {
       intent: IntentResult;
+      signal: SignalInterpretation;
       thesis: Thesis;
       researchReport: ResearchReport;
       marketSelection: MarketSelection;
@@ -67,10 +72,17 @@ export async function runCassie(input: {
     userCommand: input.userCommand,
   });
 
+  const signal = await interpretSignal({
+    ai: input.deps.ai,
+    sourcePost: input.sourcePost,
+    userCommand: input.userCommand,
+  });
+
   const thesis = await extractThesis({
     ai: input.deps.ai,
     sourcePost: input.sourcePost,
     userCommand: input.userCommand,
+    signal,
   });
 
   if (intent.intent === "critic") {
@@ -91,6 +103,7 @@ export async function runCassie(input: {
 
     return {
       intent,
+      signal,
       thesis,
       researchReport,
       critique,
@@ -144,6 +157,7 @@ export async function runCassie(input: {
 
     return {
       intent,
+      signal,
       thesis: inverseThesis,
       researchReport,
       marketSelection,
@@ -189,6 +203,7 @@ export async function runCassie(input: {
 
     return {
       intent,
+      signal,
       thesis,
       researchReport: researchReport as ResearchReport,
       marketSelection,
@@ -200,6 +215,7 @@ export async function runCassie(input: {
 
   return {
     intent,
+    signal,
     thesis,
     marketSelection,
     riskDecision,

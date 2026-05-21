@@ -61,6 +61,31 @@ export const IntentResultSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
+export const SignalInterpretationSchema = z.object({
+  signalType: z.enum([
+    "explicit_trade",
+    "news",
+    "funding",
+    "product_launch",
+    "exploit_or_risk",
+    "regulatory",
+    "endorsement",
+    "rumor",
+    "social_momentum",
+    "generic_opinion",
+    "unknown",
+  ]),
+  containsExplicitThesis: z.boolean(),
+  impliedTheses: z.array(z.string()),
+  affectedEntities: z.array(z.string()),
+  affectedSectors: z.array(z.string()),
+  directTradability: z.enum(["direct", "indirect", "none", "unknown"]),
+  suggestedResearchAngles: z.array(z.string()),
+  leadQuality: z.enum(["ignore", "watchlist", "research_lead", "soft_signal", "tradable_now"]),
+  summary: z.string(),
+  confidence: z.number().min(0).max(1),
+});
+
 export const ThesisSchema = z.object({
   claim: z.string(),
   direction: DirectionSchema,
@@ -314,6 +339,7 @@ export type CassieIntent = z.infer<typeof CassieIntentSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type IntentResult = z.infer<typeof IntentResultSchema>;
+export type SignalInterpretation = z.infer<typeof SignalInterpretationSchema>;
 export type Thesis = z.infer<typeof ThesisSchema>;
 export type InverseThesis = z.infer<typeof InverseThesisSchema>;
 export type ResearchReport = z.infer<typeof ResearchReportSchema>;

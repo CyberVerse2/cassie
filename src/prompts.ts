@@ -1,4 +1,4 @@
-import type { SourcePost, Thesis } from "./schemas.ts";
+import type { SignalInterpretation, SourcePost, Thesis } from "./schemas.ts";
 
 function postContext(sourcePost: SourcePost, userCommand: string): string {
   return JSON.stringify(
@@ -34,13 +34,48 @@ ${postContext(input.sourcePost, input.userCommand)}`;
 export function thesisPrompt(input: {
   sourcePost: SourcePost;
   userCommand: string;
+  signal: SignalInterpretation;
 }): string {
   return `You are Cassie's thesis extractor.
 
-Extract the actual market claim from the source post and user command.
-Focus on what would need to be true in the world for the post to be right.
+Extract the actual or implied market/research claim from the source post, user command, and signal interpretation.
+Do not force every post into an explicit trade thesis. Some posts are raw signals: news, funding, product launches, endorsements, exploits, regulatory updates, or generic opinions.
+If there is no explicit thesis, extract the best research question or second-order implication and mark uncertainty clearly.
+Focus on what would need to be true in the world for the signal to matter.
 Name affected assets and topics when present.
 If the post is vague, say so through direction, evidenceQuality, manipulationRisk, and confidence.
+
+Input:
+${JSON.stringify(
+  {
+    userCommand: input.userCommand,
+    sourcePost: input.sourcePost,
+    signal: input.signal,
+  },
+  null,
+  2,
+)}`;
+}
+
+export function signalInterpretationPrompt(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+}): string {
+  return `You are Cassie's signal interpreter.
+
+Classify what kind of signal the source post contains before any thesis, research, or market selection.
+A post does not need to contain an explicit trade. It may be raw news, a funding announcement, product launch, exploit/risk chatter, regulatory update, endorsement, rumor, social momentum, generic opinion, or noise.
+
+Ask:
+- What happened, if anything?
+- Is there an explicit thesis, or only an implied research/trading question?
+- Which entities, people, products, protocols, companies, tokens, sectors, ecosystems, or markets might be affected?
+- Is any implication directly tradable, indirectly tradable, not tradable, or unknown?
+- What research angles would a smart analyst investigate next?
+- Should this be ignored, watchlisted, treated as a research lead, treated as a soft signal, or considered tradable now?
+
+Be general. Do not assume the domain is crypto unless the post or command points that way.
+Do not invent a tradable asset. If the signal is interesting but not tradable, say so.
 
 Input:
 ${postContext(input.sourcePost, input.userCommand)}`;

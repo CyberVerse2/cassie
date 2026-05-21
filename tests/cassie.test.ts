@@ -4,6 +4,7 @@ import type {
   IntentResult,
   MarketSelection,
   ResearchReport,
+  SignalInterpretation,
   SourcePost,
   Thesis,
   UserSettings,
@@ -46,6 +47,19 @@ const thesis: Thesis = {
   evidenceQuality: "weak",
   manipulationRisk: "medium",
   confidence: 0.66,
+};
+
+const signal: SignalInterpretation = {
+  signalType: "rumor",
+  containsExplicitThesis: false,
+  impliedTheses: ["SOL may rally if ETF approval odds are improving."],
+  affectedEntities: ["Solana", "SOL"],
+  affectedSectors: ["crypto", "ETF"],
+  directTradability: "direct",
+  suggestedResearchAngles: ["Verify whether ETF approval odds have changed."],
+  leadQuality: "soft_signal",
+  summary: "A social post implies a possible catalyst rather than proving one.",
+  confidence: 0.8,
 };
 
 const researchReport: ResearchReport = {
@@ -124,6 +138,7 @@ class FakeAi implements StructuredAiClient {
         userSizeOverrideUsd: null,
         confidence: 0.92,
       } satisfies IntentResult,
+      cassie_signal: signal,
       cassie_thesis: thesis,
       cassie_inverse_thesis: {
         originalThesis: thesis,
