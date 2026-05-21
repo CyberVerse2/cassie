@@ -26,6 +26,7 @@ export function buildVisibilityReport(input: VisibilityInput) {
     },
     researchGoals: extractResearchGoals(researchPlan),
     goalResolutions: extractGoalResolutions(run, input.trace),
+    evidenceLedger: extractEvidenceLedger(input.trace),
     synthesisContract: objectField(researchPlan, "synthesisContract"),
     evidenceSummary: summarizeEvidence(researchReport),
     tradeExpression: tradeExpression
@@ -91,6 +92,9 @@ export function formatVisibilityReport(report: ReturnType<typeof buildVisibility
       `  - ${item.title ?? "untitled"} [${item.stance ?? "unknown"}, ${item.reliability ?? "unknown"}]`,
     ),
     "",
+    "Evidence ledger",
+    ...formatEvidenceLedger(report.evidenceLedger),
+    "",
     "Trade expression",
     ...formatTradeExpression(report.tradeExpression),
     "",
@@ -105,6 +109,37 @@ export function formatVisibilityReport(report: ReturnType<typeof buildVisibility
   ];
 
   return lines.join("\n");
+}
+
+function extractEvidenceLedger(trace: TraceEvent[]) {
+  const ledgers = trace
+    .map((event) => objectField(objectOrNull(event.output), "ledger"))
+    .filter((ledger): ledger is RecordValue => Boolean(ledger));
+
+  const searchResults = ledgers.flatMap((ledger) => arrayField(ledger, "searchResults"));
+  const evidenceClaims = ledgers.flatMap((ledger) => arrayField(ledger, "evidenceClaims"));
+  const goalEvidenceLinks = ledgers.flatMap((ledger) => arrayField(ledger, "goalEvidenceLinks"));
+
+  return {
+    searchResultCount: searchResults.length,
+    evidenceClaimCount: evidenceClaims.length,
+    goalEvidenceLinkCount: goalEvidenceLinks.length,
+    claims: evidenceClaims.slice(0, 8).map((claim) => ({
+      id: stringField(claim, "id"),
+      queryId: stringField(claim, "queryId"),
+      resultId: stringField(claim, "resultId"),
+      claimText: stringField(claim, "claimText"),
+      reliability: stringField(claim, "reliability"),
+      directness: stringField(claim, "directness"),
+    })),
+    links: goalEvidenceLinks.slice(0, 8).map((link) => ({
+      goalId: stringField(link, "goalId"),
+      evidenceClaimId: stringField(link, "evidenceClaimId"),
+      stance: stringField(link, "stance"),
+      strength: numberField(link, "strength"),
+      reason: stringField(link, "reason"),
+    })),
+  };
 }
 
 function extractRun(value: unknown): RecordValue | null {
@@ -198,6 +233,22 @@ function formatGoalResolutions(resolutions: ReturnType<typeof extractGoalResolut
   return resolutions.map((resolution) =>
     `  - ${resolution.goalId ?? "unknown"} ${resolution.status ?? "unknown"} c=${resolution.confidence ?? "?"}: ${resolution.summary ?? ""}`,
   );
+}
+
+function formatEvidenceLedger(ledger: ReturnType<typeof extractEvidenceLedger>) {
+  if (ledger.searchResultCount === 0 && ledger.evidenceClaimCount === 0 && ledger.goalEvidenceLinkCount === 0) {
+    return ["  none"];
+  }
+
+  return [
+    `  results=${ledger.searchResultCount} claims=${ledger.evidenceClaimCount} links=${ledger.goalEvidenceLinkCount}`,
+    ...ledger.claims.map((claim) =>
+      `  - claim ${claim.id ?? "unknown"} q=${claim.queryId ?? "unknown"} [${claim.reliability ?? "unknown"}, ${claim.directness ?? "unknown"}]: ${claim.claimText ?? ""}`,
+    ),
+    ...ledger.links.map((link) =>
+      `  - link ${link.goalId ?? "unknown"} <- ${link.evidenceClaimId ?? "unknown"} ${link.stance ?? "unknown"} strength=${link.strength ?? "?"}: ${link.reason ?? ""}`,
+    ),
+  ];
 }
 
 function formatTradeExpression(expression: ReturnType<typeof buildVisibilityReport>["tradeExpression"]) {

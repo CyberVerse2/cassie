@@ -83,11 +83,58 @@ const trace: TraceEvent[] = [
   },
   {
     stepId: 2,
-    name: "cassie_goal_resolution",
-    kind: "ai",
+    name: "openai_web_query_job",
+    kind: "connector",
     status: "succeeded",
     startedAt: "2026-05-21T00:00:01Z",
     completedAt: "2026-05-21T00:00:02Z",
+    durationMs: 1000,
+    model: "gpt-5",
+    thinkingTrace: "Executing one auditable web query job and classifying returned sources into evidence claims.",
+    input: null,
+    output: {
+      queryJobId: "job_w0_q_verify",
+      evidenceClaimCount: 1,
+      resultCount: 1,
+      ledger: {
+        searchResults: [
+          {
+            id: "result_job_w0_q_verify_1",
+            queryId: "q_verify",
+            queryJobId: "job_w0_q_verify",
+          },
+        ],
+        evidenceClaims: [
+          {
+            id: "claim_job_w0_q_verify_1",
+            queryId: "q_verify",
+            resultId: "result_job_w0_q_verify_1",
+            claimText: "Exa raised $250M.",
+            reliability: "high",
+            directness: "primary",
+          },
+        ],
+        goalEvidenceLinks: [
+          {
+            goalId: "g_verify",
+            evidenceClaimId: "claim_job_w0_q_verify_1",
+            stance: "supports",
+            strength: 0.9,
+            reason: "Primary source confirms the round.",
+          },
+        ],
+      },
+    },
+    usage,
+    error: null,
+  },
+  {
+    stepId: 3,
+    name: "cassie_goal_resolution",
+    kind: "ai",
+    status: "succeeded",
+    startedAt: "2026-05-21T00:00:02Z",
+    completedAt: "2026-05-21T00:00:03Z",
     durationMs: 1000,
     model: "gpt-5.5",
     thinkingTrace: "Resolving research goals against wave evidence.",
@@ -105,12 +152,12 @@ const trace: TraceEvent[] = [
     error: null,
   },
   {
-    stepId: 3,
+    stepId: 4,
     name: "cassie_trade_expression",
     kind: "ai",
     status: "succeeded",
-    startedAt: "2026-05-21T00:00:02Z",
-    completedAt: "2026-05-21T00:00:03Z",
+    startedAt: "2026-05-21T00:00:03Z",
+    completedAt: "2026-05-21T00:00:04Z",
     durationMs: 1000,
     model: "gpt-5.5",
     thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
@@ -150,6 +197,16 @@ describe("visibility report", () => {
       status: "resolved_supported",
       confidence: 0.86,
     });
+    expect(report.evidenceLedger).toMatchObject({
+      searchResultCount: 1,
+      evidenceClaimCount: 1,
+      goalEvidenceLinkCount: 1,
+    });
+    expect(report.evidenceLedger.claims[0]).toMatchObject({
+      id: "claim_job_w0_q_verify_1",
+      queryId: "q_verify",
+      claimText: "Exa raised $250M.",
+    });
     expect(report.tradeExpression?.candidates[0]).toMatchObject({
       instrument: "Exa private equity",
       expectedEdge: 0.66,
@@ -158,6 +215,7 @@ describe("visibility report", () => {
     expect(report.evidenceSummary.count).toBe(1);
     expect(report.toolCalls.map((call) => call.name)).toEqual([
       "cassie_research_query_plan",
+      "openai_web_query_job",
       "cassie_goal_resolution",
       "cassie_trade_expression",
     ]);

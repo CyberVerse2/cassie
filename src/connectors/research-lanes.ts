@@ -123,6 +123,7 @@ export class OpenAiWebSearchLane {
           queryJobId: job.id,
           evidenceClaimCount: ledger.evidenceClaims.length,
           resultCount: ledger.searchResults.length,
+          ledger,
         },
         usage: result.totalUsage,
       });
@@ -243,6 +244,7 @@ export class GrokXSearchLane {
           queryJobId: job.id,
           evidenceClaimCount: ledger.evidenceClaims.length,
           resultCount: ledger.searchResults.length,
+          ledger,
         },
         usage: result.totalUsage,
       });
