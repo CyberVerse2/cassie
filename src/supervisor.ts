@@ -8,6 +8,7 @@ import type {
   SignalInterpretation,
   SourcePost,
   Thesis,
+  TradeExpressionPlan,
   TradeTicket,
   UserSettings,
   AccountState,
@@ -22,6 +23,7 @@ import { evaluateRisk } from "./tools/risk.ts";
 import { interpretSignal } from "./tools/signal.ts";
 import { extractInverseThesis, extractThesis } from "./tools/thesis.ts";
 import { createTradeTicket } from "./tools/trade.ts";
+import { planTradeExpression, shouldRouteToMarket } from "./tools/trade-expression.ts";
 
 export type CassieRun =
   | {
@@ -45,6 +47,15 @@ export type CassieRun =
       signal: SignalInterpretation;
       thesis: Thesis;
       researchReport: ResearchReport;
+      tradeExpression: TradeExpressionPlan;
+      responseType: "trade_decision";
+    }
+  | {
+      intent: IntentResult;
+      signal: SignalInterpretation;
+      thesis: Thesis;
+      researchReport: ResearchReport;
+      tradeExpression: TradeExpressionPlan;
       marketSelection: MarketSelection;
       riskDecision: RiskDecision;
       tradeTicket: TradeTicket;
@@ -137,11 +148,32 @@ export async function runCassie(input: {
       researchAngle: "counter",
     });
 
+    const tradeExpression = await planTradeExpression({
+      ai: input.deps.ai,
+      sourcePost: input.sourcePost,
+      userCommand: input.userCommand,
+      signal,
+      thesis: inverseThesis,
+      researchReport,
+    });
+
+    if (!shouldRouteToMarket(tradeExpression)) {
+      return {
+        intent,
+        signal,
+        thesis: inverseThesis,
+        researchReport,
+        tradeExpression,
+        responseType: "trade_decision",
+      };
+    }
+
     const marketSelection = await selectMarket({
       ai: input.deps.ai,
       marketData: input.deps.marketData,
       thesis: inverseThesis,
       researchReport,
+      tradeExpression,
     });
     const riskDecision = evaluateRisk({
       marketSelection,
@@ -162,6 +194,7 @@ export async function runCassie(input: {
       signal,
       thesis: inverseThesis,
       researchReport,
+      tradeExpression,
       marketSelection,
       riskDecision,
       tradeTicket,
@@ -182,11 +215,34 @@ export async function runCassie(input: {
         })
       : undefined;
 
+  const tradeExpression = researchReport
+    ? await planTradeExpression({
+        ai: input.deps.ai,
+        sourcePost: input.sourcePost,
+        userCommand: input.userCommand,
+        signal,
+        thesis,
+        researchReport,
+      })
+    : undefined;
+
+  if (tradeExpression && !shouldRouteToMarket(tradeExpression)) {
+    return {
+      intent,
+      signal,
+      thesis,
+      researchReport: researchReport as ResearchReport,
+      tradeExpression,
+      responseType: "trade_decision",
+    };
+  }
+
   const marketSelection = await selectMarket({
     ai: input.deps.ai,
     marketData: input.deps.marketData,
     thesis,
     researchReport,
+    tradeExpression,
   });
   const riskDecision = evaluateRisk({
     marketSelection,
@@ -209,6 +265,7 @@ export async function runCassie(input: {
       signal,
       thesis,
       researchReport: researchReport as ResearchReport,
+      tradeExpression: tradeExpression as TradeExpressionPlan,
       marketSelection,
       riskDecision,
       tradeTicket,

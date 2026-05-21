@@ -5,6 +5,7 @@ import {
   type MarketSelection,
   type ResearchReport,
   type Thesis,
+  type TradeExpressionPlan,
 } from "../schemas.ts";
 import { marketSelectionPrompt } from "../prompts.ts";
 
@@ -20,6 +21,7 @@ export async function selectMarket(input: {
   marketData: MarketDataProvider;
   thesis: Thesis;
   researchReport?: ResearchReport;
+  tradeExpression?: TradeExpressionPlan;
 }): Promise<MarketSelection> {
   const candidates = await input.marketData.findCandidates({
     thesis: input.thesis,
@@ -32,6 +34,7 @@ export async function selectMarket(input: {
     prompt: marketSelectionPrompt({
       thesis: input.thesis,
       researchReport: input.researchReport,
+      tradeExpression: input.tradeExpression,
       candidates,
     }),
   });

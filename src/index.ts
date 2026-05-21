@@ -8,6 +8,7 @@ export * from "./tools/research.ts";
 export * from "./tools/risk.ts";
 export * from "./tools/thesis.ts";
 export * from "./tools/trade.ts";
+export * from "./tools/trade-expression.ts";
 export * from "./connectors/errors.ts";
 export * from "./connectors/market-data.ts";
 export * from "./connectors/research-lanes.ts";

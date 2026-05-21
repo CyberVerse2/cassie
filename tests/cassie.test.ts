@@ -8,6 +8,7 @@ import type {
   SignalInterpretation,
   SourcePost,
   Thesis,
+  TradeExpressionPlan,
   UserSettings,
 } from "../src/schemas.ts";
 import { runCassie } from "../src/supervisor.ts";
@@ -200,8 +201,90 @@ const marketSelection: MarketSelection = {
   noTradeReason: null,
 };
 
+const tradeExpressionPlan: TradeExpressionPlan = {
+  signal: "SOL ETF approval odds may be increasing.",
+  coreInterpretation: "Potential catalyst for SOL if verified.",
+  directAsset: "SOL",
+  directAssetTradable: true,
+  highestPurityExpression: "Long SOL if the ETF catalyst is verified and not already priced.",
+  publicMarketReadThrough: "strong",
+  candidates: [
+    {
+      instrument: "SOL perp",
+      expression: "long",
+      thesis: "SOL benefits directly from higher ETF approval odds.",
+      causalDirectness: 0.9,
+      liquidity: 0.9,
+      surprise: 0.5,
+      timing: 0.7,
+      crowdingRisk: 0.4,
+      downsideAsymmetry: 0.5,
+      evidenceQuality: 0.6,
+      expectedEdge: 0.62,
+      tradableNow: true,
+      rejectionReason: null,
+      invalidation: ["No active ETF process exists."],
+      evidenceNeeded: ["Primary evidence that approval odds changed."],
+    },
+  ],
+  decision: "route_to_market_router",
+  reason: "A direct liquid SOL expression exists.",
+  marketRouterInstructions: "Search for liquid SOL venues only.",
+};
+
+const noTradeExpressionPlan: TradeExpressionPlan = {
+  signal: "Exa raised $250M at a $2.2B valuation.",
+  coreInterpretation: "Private-market validation of AI-native search infrastructure.",
+  directAsset: "Exa private equity",
+  directAssetTradable: false,
+  highestPurityExpression: "Private exposure to Exa or an AI-native search infrastructure basket.",
+  publicMarketReadThrough: "weak",
+  candidates: [
+    {
+      instrument: "Exa private equity",
+      expression: "watchlist",
+      thesis: "The cleanest exposure is private and not available through the configured liquid venues.",
+      causalDirectness: 0.95,
+      liquidity: 0.1,
+      surprise: 0.7,
+      timing: 0.4,
+      crowdingRisk: 0.3,
+      downsideAsymmetry: 0.5,
+      evidenceQuality: 0.8,
+      expectedEdge: 0.66,
+      tradableNow: false,
+      rejectionReason: "Private exposure requires access and valuation work.",
+      invalidation: ["The reported round is inaccurate."],
+      evidenceNeeded: ["Revenue, growth, gross margin, and secondary availability."],
+    },
+    {
+      instrument: "Alphabet",
+      expression: "short",
+      thesis: "AI-native search APIs may pressure parts of Google Search over time.",
+      causalDirectness: 0.25,
+      liquidity: 1,
+      surprise: 0.35,
+      timing: 0.2,
+      crowdingRisk: 0.6,
+      downsideAsymmetry: 0.2,
+      evidenceQuality: 0.45,
+      expectedEdge: 0.22,
+      tradableNow: false,
+      rejectionReason: "Too indirect from this headline alone.",
+      invalidation: ["No evidence of customer substitution or revenue pressure."],
+      evidenceNeeded: ["Direct substitution evidence and material revenue exposure."],
+    },
+  ],
+  decision: "watchlist",
+  reason: "The funding headline is meaningful but not a clean standalone public-market trade.",
+  marketRouterInstructions: null,
+};
+
 class FakeAi implements StructuredAiClient {
-  constructor(private readonly intent: IntentResult["intent"]) {}
+  constructor(
+    private readonly intent: IntentResult["intent"],
+    private readonly expressionPlan: TradeExpressionPlan = tradeExpressionPlan,
+  ) {}
 
   async generateObject<T>(input: { name: string }): Promise<T> {
     const outputs: Record<string, unknown> = {
@@ -227,6 +310,7 @@ class FakeAi implements StructuredAiClient {
         confidence: 0.7,
       },
       cassie_research_report: researchReport,
+      cassie_trade_expression: this.expressionPlan,
       cassie_market_selection: marketSelection,
       cassie_critique: {
         strongestObjection: "No primary source confirms approval.",
@@ -302,6 +386,43 @@ describe("Cassie supervisor", () => {
       throw new Error("Expected critique response.");
     }
     expect(result.critique.strongestObjection).toContain("primary source");
+  });
+
+  it("returns a trade decision without market routing when no clean expression exists", async () => {
+    let marketCalls = 0;
+    const result = await runCassie({
+      deps: {
+        ai: new FakeAi("trade", noTradeExpressionPlan),
+        marketData: {
+          async findCandidates() {
+            marketCalls += 1;
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiWebSearch() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXSearch() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+      sourcePost,
+      userSettings,
+      accountState: async () => {
+        throw new Error("Account state should not be requested for no-trade decisions.");
+      },
+      userCommand: "@Cassie trade this",
+    });
+
+    expect(result.responseType).toBe("trade_decision");
+    if (result.responseType !== "trade_decision") {
+      throw new Error("Expected trade_decision response.");
+    }
+    expect(result.tradeExpression.decision).toBe("watchlist");
+    expect(result.tradeExpression.directAssetTradable).toBe(false);
+    expect(marketCalls).toBe(0);
   });
 });
 

@@ -363,6 +363,37 @@ export const MarketSelectionSchema = z.object({
   noTradeReason: z.string().nullable(),
 });
 
+export const TradeExpressionCandidateSchema = z.object({
+  instrument: z.string(),
+  expression: z.enum(["long", "short", "pair", "basket", "watchlist", "no_trade"]),
+  thesis: z.string(),
+  causalDirectness: z.number().min(0).max(1),
+  liquidity: z.number().min(0).max(1),
+  surprise: z.number().min(0).max(1),
+  timing: z.number().min(0).max(1),
+  crowdingRisk: z.number().min(0).max(1),
+  downsideAsymmetry: z.number().min(0).max(1),
+  evidenceQuality: z.number().min(0).max(1),
+  expectedEdge: z.number().min(0).max(1),
+  tradableNow: z.boolean(),
+  rejectionReason: z.string().nullable(),
+  invalidation: z.array(z.string()),
+  evidenceNeeded: z.array(z.string()),
+});
+
+export const TradeExpressionPlanSchema = z.object({
+  signal: z.string(),
+  coreInterpretation: z.string(),
+  directAsset: z.string().nullable(),
+  directAssetTradable: z.boolean(),
+  highestPurityExpression: z.string(),
+  publicMarketReadThrough: z.enum(["none", "weak", "moderate", "strong"]),
+  candidates: z.array(TradeExpressionCandidateSchema),
+  decision: z.enum(["route_to_market_router", "watchlist", "private_market_research", "no_trade"]),
+  reason: z.string(),
+  marketRouterInstructions: z.string().nullable(),
+});
+
 export const RiskDecisionSchema = z.discriminatedUnion("decision", [
   z.object({
     decision: z.literal("approve"),
@@ -437,7 +468,7 @@ export const StoredRunSchema = z.object({
   userId: z.string(),
   userCommand: z.string(),
   sourcePost: SourcePostSchema,
-  responseType: z.enum(["analysis", "critique", "trade_ticket"]),
+  responseType: z.enum(["analysis", "critique", "trade_decision", "trade_ticket"]),
   result: z.unknown(),
   createdAt: z.string(),
 });
@@ -456,6 +487,8 @@ export type ResearchQueryPlan = z.infer<typeof ResearchQueryPlanSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
+export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSchema>;
+export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type RiskDecision = z.infer<typeof RiskDecisionSchema>;
 export type AccountState = z.infer<typeof AccountStateSchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;

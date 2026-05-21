@@ -123,13 +123,54 @@ export function marketSelectionPrompt(input: {
   thesis: Thesis;
   candidates: unknown[];
   researchReport?: unknown;
+  tradeExpression?: unknown;
 }): string {
   return `You are Cassie's market router.
 
 Choose the best market expression for the thesis from the provided candidates.
-Rank semantically: thesis fit, directness, liquidity, spread, venue suitability, and whether "no trade" is the best answer.
+Rank semantically: thesis fit, directness, liquidity, spread, venue suitability, and the prior trade-expression plan.
+Only choose a market if it matches a tradable-now expression from the trade-expression plan.
 Do not create a candidate that was not provided.
 Do not size the trade. Do not approve execution.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
+export function tradeExpressionPrompt(input: unknown): string {
+  return `You are Cassie's trade-expression planner.
+
+Your job is not to find an exciting ticker. Your job is to decide whether the researched signal has a clean monetizable expression.
+
+Run this funnel:
+1. What changed?
+2. What economic claim does the event imply?
+3. Who benefits or loses?
+4. What is the most direct asset or exposure?
+5. Is there a liquid public/crypto/prediction-market instrument?
+6. Is the read-through strong enough?
+7. Is the signal likely already priced or too crowded?
+8. Pick the cleanest expression or pass.
+
+Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
+Funding events often validate a private-market category before they create a clean public trade.
+Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
+
+Score every candidate from 0 to 1:
+- causalDirectness: whether this instrument really expresses the signal
+- liquidity: whether the expression can be traded cleanly
+- surprise: whether the event was not already known or priced
+- timing: whether there is a near-term catalyst
+- crowdingRisk: higher means worse
+- downsideAsymmetry: higher means better payoff shape
+- evidenceQuality: quality of supporting evidence
+- expectedEdge: net quality after directness, surprise, timing, evidence, asymmetry, liquidity, and crowding
+
+Use decision:
+- route_to_market_router only when at least one liquid candidate is tradable now and has a clean enough causal chain
+- watchlist when the signal is meaningful but not yet a trade
+- private_market_research when the highest-purity expression is private or access-constrained
+- no_trade when the signal is weak, stale, refuted, or too indirect
 
 Input:
 ${JSON.stringify(input, null, 2)}`;

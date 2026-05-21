@@ -12,6 +12,7 @@ import type {
   SignalInterpretation,
   SourcePost,
   Thesis,
+  TradeExpressionPlan,
   TradeTicket,
   UserSettings,
 } from "../src/schemas.ts";
@@ -131,6 +132,37 @@ const researchReport: ResearchReport = {
   fullResearchBrief: "No primary source.",
 };
 
+const tradeExpressionPlan: TradeExpressionPlan = {
+  signal: "SOL ETF approval odds may be increasing.",
+  coreInterpretation: "Potential catalyst for SOL if verified.",
+  directAsset: "SOL",
+  directAssetTradable: true,
+  highestPurityExpression: "Long SOL if the ETF catalyst is verified and not already priced.",
+  publicMarketReadThrough: "strong",
+  candidates: [
+    {
+      instrument: "SOL perp",
+      expression: "long",
+      thesis: "SOL benefits directly from higher ETF approval odds.",
+      causalDirectness: 0.9,
+      liquidity: 0.9,
+      surprise: 0.5,
+      timing: 0.7,
+      crowdingRisk: 0.4,
+      downsideAsymmetry: 0.5,
+      evidenceQuality: 0.6,
+      expectedEdge: 0.62,
+      tradableNow: true,
+      rejectionReason: null,
+      invalidation: ["No active ETF process exists."],
+      evidenceNeeded: ["Primary evidence that approval odds changed."],
+    },
+  ],
+  decision: "route_to_market_router",
+  reason: "A direct liquid SOL expression exists.",
+  marketRouterInstructions: "Search for liquid SOL venues only.",
+};
+
 const queryPlan: ResearchQueryPlan = {
   version: "research-query-plan/v1",
   normalizedClaim: thesis.claim,
@@ -222,6 +254,7 @@ class FakeAi implements StructuredAiClient {
       cassie_thesis: thesis,
       cassie_research_query_plan: queryPlan,
       cassie_research_report: researchReport,
+      cassie_trade_expression: tradeExpressionPlan,
       cassie_market_selection: marketSelection,
     };
 
