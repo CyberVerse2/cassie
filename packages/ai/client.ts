@@ -5,6 +5,7 @@ import type { z } from "zod";
 
 export const DEFAULT_CHEAP_MODEL = "deepseek/deepseek-v4-flash";
 export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
+export const DEFAULT_EXPENSIVE_MODEL = DEFAULT_IMPORTANT_MODEL;
 
 export interface StructuredAiClient {
   generateObject<T>(input: {
