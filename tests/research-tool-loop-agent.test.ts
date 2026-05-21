@@ -45,7 +45,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["resolve_goal"],
       toolChoice: { type: "tool", toolName: "resolve_goal" },
-      model: expect.objectContaining({ modelId: "gpt-5.5" }),
+      model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
 
     await expect(prepareResearchToolLoopStep({
@@ -55,7 +55,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["decide_continuation"],
       toolChoice: { type: "tool", toolName: "decide_continuation" },
-      model: expect.objectContaining({ modelId: "gpt-5.5" }),
+      model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
   });
 
@@ -67,7 +67,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["propose_adaptive_queries"],
       toolChoice: { type: "tool", toolName: "propose_adaptive_queries" },
-      model: expect.objectContaining({ modelId: "gpt-5.5" }),
+      model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
 
     await expect(prepareResearchToolLoopStep({
@@ -89,7 +89,7 @@ describe("research ToolLoopAgent configuration", () => {
     })).resolves.toMatchObject({
       activeTools: ["done"],
       toolChoice: { type: "tool", toolName: "done" },
-      model: expect.objectContaining({ modelId: "gpt-5.5" }),
+      model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
   });
 

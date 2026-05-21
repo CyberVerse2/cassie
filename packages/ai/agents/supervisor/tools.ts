@@ -65,7 +65,7 @@ export function createCassieSupervisorTools(input: {
   accountStateProvider?: AccountStateProvider;
 }) {
   const cheapModel = process.env.CASSIE_CHEAP_MODEL ?? "deepseek/deepseek-v4-flash";
-  const importantModel = process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5";
+  const importantModel = process.env.CASSIE_IMPORTANT_MODEL ?? "gemini-3.5-flash";
   const cheapAi = input.deps.cheapAi ?? input.deps.ai;
   const importantAi = input.deps.importantAi ?? input.deps.ai;
   if (!cheapAi) {

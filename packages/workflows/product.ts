@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  OpenAiImportantStructuredClient,
+  GoogleImportantStructuredClient,
   DirectDeepSeekStructuredClient,
 } from "../ai/client.ts";
 import { CompositeMarketDataProvider } from "../market-data/index.ts";
@@ -41,7 +41,7 @@ export const SettingsRequestSchema = UserSettingsSchema;
 export class CassieProduct {
   private static defaultDependencies(): CassieDependencies {
     const cheapAi = new DirectDeepSeekStructuredClient();
-    const importantAi = new OpenAiImportantStructuredClient();
+    const importantAi = new GoogleImportantStructuredClient();
     return {
       ai: cheapAi,
       cheapAi,

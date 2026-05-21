@@ -436,8 +436,8 @@ describe("AI SDK supervisor agent", () => {
     expect(cheapAi.calls).toEqual(["cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
-      { type: "research", model: "gpt-5.5" },
-      { type: "critique", model: "gpt-5.5" },
+      { type: "research", model: "gemini-3.5-flash" },
+      { type: "critique", model: "gemini-3.5-flash" },
       { type: "market_selection", model: "deepseek/deepseek-v4-flash" },
     ]);
   });

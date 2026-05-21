@@ -1,7 +1,8 @@
 import { Output, ToolLoopAgent, type TelemetryIntegration } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import {
-  OpenAiImportantStructuredClient,
+  DEFAULT_IMPORTANT_MODEL,
+  GoogleImportantStructuredClient,
   DirectDeepSeekStructuredClient,
 } from "../../client.ts";
 import {
@@ -20,7 +21,6 @@ import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
-import { openAiCostControlOptions } from "../../openai-options.ts";
 import { configureAiSdkWarningLogging } from "../../sdk-warnings.ts";
 
 configureAiSdkWarningLogging();
@@ -54,10 +54,12 @@ export async function runCassieSupervisorForRun(input: {
       userSettings,
       accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
     });
+    const google = createGoogleGenerativeAI({
+      apiKey: process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    });
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
-      model: openai(process.env.CASSIE_IMPORTANT_MODEL ?? "gpt-5.5"),
-      providerOptions: openAiCostControlOptions({ promptCacheKey: "cassie-supervisor" }),
+      model: google(process.env.CASSIE_IMPORTANT_MODEL ?? DEFAULT_IMPORTANT_MODEL),
       stopWhen: createCassieStopConditions(),
       tools,
       output: Output.object({
@@ -159,7 +161,7 @@ export async function runCassieSupervisorForRun(input: {
 
 function defaultDependencies(): CassieDependencies {
   const cheapAi = new DirectDeepSeekStructuredClient();
-  const importantAi = new OpenAiImportantStructuredClient();
+  const importantAi = new GoogleImportantStructuredClient();
   return {
     ai: cheapAi,
     cheapAi,

@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { inspect } from "node:util";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
-import { OpenAiStructuredClient } from "../packages/ai/client.ts";
+import { CassieStructuredClient, DEFAULT_IMPORTANT_MODEL } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/market-data/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
@@ -139,10 +139,10 @@ Useful examples:
 async function env() {
   return {
     databaseUrl: maskSecret(process.env.DATABASE_URL),
-    openAiApiKey: maskSecret(process.env.OPENAI_API_KEY),
+    geminiApiKey: maskSecret(process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY),
     xAiApiKey: maskSecret(process.env.XAI_API_KEY),
     hyperliquidPrivateKey: maskSecret(process.env.HYPERLIQUID_PRIVATE_KEY),
-    cassieModel: process.env.CASSIE_MODEL ?? "gpt-5.5",
+    cassieModel: process.env.CASSIE_MODEL ?? DEFAULT_IMPORTANT_MODEL,
     webSearchModel: process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? "gemini-3.1-flash-lite",
     grokSearchModel: process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
   };
@@ -247,7 +247,7 @@ async function executeNext(args: ParsedArgs) {
 }
 
 async function smokeAi(args: ParsedArgs) {
-  const ai = new OpenAiStructuredClient(undefined, args.trace);
+  const ai = new CassieStructuredClient(undefined, args.trace);
   const userCommand = flag(args, "command", "@Cassie should we trade this?");
   const sourcePost = await sourcePostFromFlags(args);
   const intent = await routeIntent({ ai, sourcePost, userCommand });

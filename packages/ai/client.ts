@@ -1,20 +1,19 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { openai } from "@ai-sdk/openai";
+import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
-import { openAiCostControlOptions } from "./openai-options.ts";
 import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
 
 configureAiSdkWarningLogging();
 
 export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
 export const DEFAULT_CHEAP_MODEL = "deepseek-v4-flash";
-export const DEFAULT_IMPORTANT_MODEL = "gpt-5.5";
+export const DEFAULT_IMPORTANT_MODEL = "gemini-3.5-flash";
 export const DEFAULT_EXPENSIVE_MODEL = DEFAULT_IMPORTANT_MODEL;
 
 export type ModelTier = "cheap" | "expensive";
-export type ModelProvider = "openai" | "deepseek";
+export type ModelProvider = "google" | "deepseek";
 
 export type ModelRoute = {
   tier: ModelTier;
@@ -39,7 +38,7 @@ export class MissingAiDependencyError extends Error {
 }
 
 export class MissingImportantAiDependencyError extends MissingAiDependencyError {
-  constructor(message = "AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important AI tools.") {
+  constructor(message = "AI dependency unavailable. Set GEMINI_API_KEY to run Cassie's important AI tools.") {
     super(message);
     this.name = "MissingImportantAiDependencyError";
   }
@@ -67,10 +66,10 @@ export function routeStructuredModel(input: {
 
   return tier === "cheap"
     ? { tier, provider: "deepseek", model: cheapModel }
-    : { tier, provider: "openai", model: expensiveModel };
+    : { tier, provider: "google", model: expensiveModel };
 }
 
-export class OpenAiStructuredClient implements StructuredAiClient {
+export class CassieStructuredClient implements StructuredAiClient {
   private readonly expensiveModelName: string;
   private readonly cheapModelName: string;
 
@@ -99,8 +98,8 @@ export class OpenAiStructuredClient implements StructuredAiClient {
       expensiveModel: this.expensiveModelName,
     });
 
-    if (route.provider === "openai" && !process.env.OPENAI_API_KEY) {
-      throw new MissingImportantAiDependencyError("AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's expensive judgment tools.");
+    if (route.provider === "google" && !googleApiKey()) {
+      throw new MissingImportantAiDependencyError("AI dependency unavailable. Set GEMINI_API_KEY to run Cassie's expensive judgment tools.");
     }
     if (route.provider === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
       throw new MissingAiDependencyError("AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
@@ -127,16 +126,18 @@ export class OpenAiStructuredClient implements StructuredAiClient {
           apiKey: process.env.DEEPSEEK_API_KEY,
         })
         : null;
+      const google = route.provider === "google"
+        ? createGoogleGenerativeAI({
+          apiKey: googleApiKey(),
+        })
+        : null;
       const result = await generateText({
-        model: route.provider === "deepseek" ? deepseek!.chat(route.model) : openai(route.model),
+        model: route.provider === "deepseek" ? deepseek!.chat(route.model) : google!(route.model),
         output: Output.object({
           schema: input.schema,
           name: input.name,
         }),
         prompt: input.prompt,
-        providerOptions: route.provider === "openai"
-          ? openAiCostControlOptions({ promptCacheKey: input.name })
-          : undefined,
         ...(route.provider === "deepseek" ? { maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } : {}),
       });
 
@@ -188,7 +189,7 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
   }
 }
 
-export class OpenAiImportantStructuredClient implements StructuredAiClient {
+export class GoogleImportantStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
   constructor(modelName = process.env.CASSIE_IMPORTANT_MODEL ?? DEFAULT_IMPORTANT_MODEL) {
@@ -201,20 +202,27 @@ export class OpenAiImportantStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!googleApiKey()) {
       throw new MissingImportantAiDependencyError();
     }
 
+    const google = createGoogleGenerativeAI({
+      apiKey: googleApiKey(),
+    });
+
     const result = await generateText({
-      model: openai(this.modelName),
+      model: google(this.modelName),
       output: Output.object({
         schema: input.schema,
         name: input.name,
       }),
       prompt: input.prompt,
-      providerOptions: openAiCostControlOptions({ promptCacheKey: input.name }),
     });
 
     return result.output;
   }
+}
+
+function googleApiKey(): string | undefined {
+  return process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 }

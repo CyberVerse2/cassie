@@ -1,9 +1,7 @@
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import { openai } from "@ai-sdk/openai";
 import { ToolLoopAgent, hasToolCall, tool } from "ai";
 import { z } from "zod";
 import { DEFAULT_EXPENSIVE_MODEL } from "../client.ts";
-import { openAiCostControlOptions } from "../openai-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
   process.env.GEMINI_WEB_SEARCH_MODEL ??
@@ -50,7 +48,6 @@ export async function prepareResearchToolLoopStep(input: PrepareInput) {
     activeTools,
     toolChoice: toolChoiceForTools(activeTools),
     messages: compressResearchToolMessages(input.messages),
-    providerOptions: openAiProviderOptionsForTools(activeTools),
   };
 }
 
@@ -182,7 +179,7 @@ function modelForTools(activeTools: ResearchToolName[]) {
   if (activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")) {
     return googleModel(WEB_SEARCH_MODEL);
   }
-  return openai(
+  return googleModel(
     process.env.CASSIE_IMPORTANT_MODEL ??
       process.env.CASSIE_EXPENSIVE_MODEL ??
       process.env.CASSIE_MODEL ??
@@ -194,18 +191,6 @@ function toolChoiceForTools(activeTools: ResearchToolName[]) {
   return activeTools.length === 1
     ? { type: "tool" as const, toolName: activeTools[0] }
     : "required" as const;
-}
-
-function openAiProviderOptionsForTools(activeTools: ResearchToolName[]) {
-  if (
-    activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")
-  ) {
-    return undefined;
-  }
-
-  return openAiCostControlOptions({
-    promptCacheKey: `cassie-research-tool-loop-${activeTools.join("-")}`,
-  });
 }
 
 function googleModel(model: string) {

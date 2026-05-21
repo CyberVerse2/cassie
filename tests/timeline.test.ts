@@ -53,7 +53,7 @@ const snapshot: CassieStoreSnapshot = {
       input: { researchAngle: "critic" },
       output: { stance: "partially_supported" },
       error: null,
-      model: "gpt-5.5",
+      model: "gemini-3.5-flash",
       promptName: "cassie_research_report",
       promptVersion: "2026-05-20",
       startedAt: "2026-05-21T00:00:03.000Z",
@@ -205,8 +205,8 @@ const snapshot: CassieStoreSnapshot = {
       researchRunId: null,
       runStepId: null,
       purpose: "supervisor_step",
-      provider: "openai",
-      model: "gpt-5.5",
+      provider: "google",
+      model: "gemini-3.5-flash",
       promptName: "cassie_supervisor",
       promptVersion: "2026-05-20",
       inputTokens: 100,
@@ -243,7 +243,7 @@ describe("run timeline", () => {
     expect(timeline).toContain("|   |   |-- [goal] g_verify [resolved_supported] c=0.86");
     expect(timeline).toContain("|   |   |-- [controller] continue_planned");
     expect(timeline).toContain("model");
-    expect(timeline).toContain("gpt-5.5");
+    expect(timeline).toContain("gemini-3.5-flash");
     expect(timeline).toContain("|-- [tokens] total=150 input=100 output=50 reasoning=20 cache=0");
   });
 });

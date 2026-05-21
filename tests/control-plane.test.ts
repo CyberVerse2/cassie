@@ -57,7 +57,7 @@ describe("control plane run persistence", () => {
       input: { userCommand: "@Cassie get me in" },
       output: null,
       error: null,
-      model: "gpt-5.5",
+      model: "gemini-3.5-flash",
       promptName: "cassie_intent",
       promptVersion: "2026-05-20",
     });

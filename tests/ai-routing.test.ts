@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
+  CassieStructuredClient,
   MissingAiDependencyError,
-  OpenAiStructuredClient,
   routeStructuredModel,
 } from "../packages/ai/client.ts";
 import {
@@ -24,18 +24,18 @@ describe("structured AI model routing", () => {
     });
   });
 
-  it("routes judgment steps to GPT-5.5 through OpenAI", () => {
+  it("routes judgment steps to Gemini 3.5 Flash through Google", () => {
     expect(routeStructuredModel({ name: "cassie_goal_resolution" })).toMatchObject({
-      provider: "openai",
+      provider: "google",
       tier: "expensive",
-      model: "gpt-5.5",
+      model: "gemini-3.5-flash",
     });
     expect(routeStructuredModel({ name: "cassie_research_report" })).toMatchObject({
-      provider: "openai",
+      provider: "google",
       tier: "expensive",
     });
     expect(routeStructuredModel({ name: "cassie_trade_expression" })).toMatchObject({
-      provider: "openai",
+      provider: "google",
       tier: "expensive",
     });
   });
@@ -46,7 +46,7 @@ describe("structured AI model routing", () => {
       tier: "cheap",
     });
     expect(routeStructuredModel({ name: "cassie_signal", tier: "expensive" })).toMatchObject({
-      provider: "openai",
+      provider: "google",
       tier: "expensive",
     });
   });
@@ -56,7 +56,7 @@ describe("structured AI model routing", () => {
     delete process.env.DEEPSEEK_API_KEY;
 
     await expect(
-      new OpenAiStructuredClient().generateObject({
+      new CassieStructuredClient().generateObject({
         schema: {} as never,
         name: "cassie_intent",
         prompt: "test",
