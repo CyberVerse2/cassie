@@ -229,19 +229,21 @@ describe("run timeline", () => {
     const timeline = formatRunTimeline(snapshot, "run_1");
 
     expect(timeline).toContain("CASSIE RUN TIMELINE");
-    expect(timeline).toContain("[ok] run_1 succeeded");
-    expect(timeline).toContain("|-- [ai] intent ok 1.0s");
+    expect(timeline).toContain("[ok] run_1 ok");
+    expect(timeline).toContain("|-- [ai] intent [ok] 1.0s");
     expect(timeline).toContain("|   |-- model deepseek/deepseek-v4-flash");
     expect(timeline).toContain("|   |-- thinking Classify command and source into a bounded Cassie intent.");
-    expect(timeline).toContain("|-- [research] research_1 ok critic standard 5.0s");
+    expect(timeline).toContain("|-- [research] research_1 [ok] critic standard 5.0s");
     expect(timeline).toContain("|   |-- claim Exa raised $250M.");
     expect(timeline).toContain("|   |-- [wave 0]");
-    expect(timeline).toContain("|   |   |-- [search] q_verify_web web/openai_web_search ok 1.0s atomic p=0.95");
+    expect(timeline).toContain("|   |   |-- [web] q_verify_web web/openai_web_search [ok] 1.0s atomic p=0.95");
     expect(timeline).toContain("|   |   |   |-- result result_1 news Exa raises $250M");
     expect(timeline).toContain("|   |   |   |-- claim claim_1 medium/direct_secondary Exa raised $250M.");
     expect(timeline).toContain("|   |   |   |   |-- link g_verify supports strength=0.8");
-    expect(timeline).toContain("|   |   |-- [goal] g_verify resolved_supported c=0.86");
+    expect(timeline).toContain("|   |   |-- [goal] g_verify [resolved_supported] c=0.86");
     expect(timeline).toContain("|   |   |-- [controller] continue_planned");
+    expect(timeline).toContain("model");
+    expect(timeline).toContain("gpt-5.5");
     expect(timeline).toContain("|-- [tokens] total=150 input=100 output=50 reasoning=20 cache=0");
   });
 });

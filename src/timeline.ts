@@ -10,23 +10,36 @@ import type {
   ResearchSearchResultRecord,
 } from "../packages/db/store.ts";
 import type { RunStep } from "../packages/core/schemas/index.ts";
+import {
+  createTerminalTheme,
+  indentWrap,
+  normalizeStatus,
+  statusTag,
+  terminalTable,
+  type TerminalTheme,
+} from "./terminal-ui.ts";
 
 type RecordValue = Record<string, unknown>;
 
 export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string): string {
+  const theme = createTerminalTheme();
   const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
   if (!run) {
-    return `CASSIE RUN TIMELINE\n[missing] ${runId}`;
+    return `${theme.title("CASSIE RUN TIMELINE")}\n[missing] ${runId}`;
   }
 
   const lines = [
-    "CASSIE RUN TIMELINE",
-    `${statusBadge(run.status)} ${run.runId} ${run.status}`,
-    `|-- user ${run.userId}`,
-    `|-- command ${run.userCommand}`,
-    `|-- source ${run.sourcePost.authorHandle ?? "unknown"} ${run.sourcePost.url ?? run.sourcePost.postId ?? "local-post"}`,
+    theme.title("CASSIE RUN TIMELINE"),
+    `${statusBadge(run.status, theme)} ${theme.section(run.runId)} ${normalizeStatus(run.status)}`,
+    `|-- ${theme.label("user")} ${run.userId}`,
+    ...indentWrap({ text: `${theme.label("command")} ${run.userCommand}`, indent: "|-- ", theme }),
+    ...indentWrap({
+      text: `${theme.label("source")} ${run.sourcePost.authorHandle ?? "unknown"} ${run.sourcePost.url ?? run.sourcePost.postId ?? "local-post"}`,
+      indent: "|-- ",
+      theme,
+    }),
     "",
-    "TOOLS",
+    theme.section("TOOLS"),
   ];
 
   const steps = snapshot.runSteps
@@ -36,32 +49,30 @@ export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string):
     lines.push("|-- none");
   } else {
     for (const step of steps) {
-      lines.push(...formatRunStep(step));
+      lines.push(...formatRunStep(step, theme));
     }
   }
 
   const researchRuns = snapshot.researchRuns
     .filter((researchRun) => researchRun.controlRunId === runId)
     .sort(compareResearchStarted);
-  lines.push("", "RESEARCH");
+  lines.push("", theme.section("RESEARCH"));
   if (researchRuns.length === 0) {
     lines.push("|-- none");
   } else {
     for (const researchRun of researchRuns) {
-      lines.push(...formatResearchRun(snapshot, researchRun));
+      lines.push(...formatResearchRun(snapshot, researchRun, theme));
     }
   }
 
   const usage = snapshot.modelCallUsage
     .filter((record) => record.controlRunId === runId)
     .sort(compareCreated);
-  lines.push("", "USAGE");
+  lines.push("", theme.section("USAGE"));
   if (usage.length === 0) {
     lines.push("|-- none");
   } else {
-    for (const record of usage) {
-      lines.push(formatModelUsage(record));
-    }
+    lines.push(...formatModelUsageTable(usage, theme));
     const totals = usage.reduce(
       (sum, record) => ({
         input: sum.input + (record.inputTokens ?? 0),
@@ -72,50 +83,58 @@ export function formatRunTimeline(snapshot: CassieStoreSnapshot, runId: string):
       }),
       { input: 0, output: 0, reasoning: 0, cacheRead: 0, total: 0 },
     );
-    lines.push(`|-- [tokens] total=${totals.total} input=${totals.input} output=${totals.output} reasoning=${totals.reasoning} cache=${totals.cacheRead}`);
+    lines.push(`|-- ${theme.ai("[tokens]")} total=${totals.total} input=${totals.input} output=${totals.output} reasoning=${totals.reasoning} cache=${totals.cacheRead}`);
   }
 
   return lines.join("\n");
 }
 
-function formatRunStep(step: RunStep): string[] {
+function formatRunStep(step: RunStep, theme: TerminalTheme): string[] {
   const duration = durationText(step.startedAt, step.completedAt);
   const lines = [
-    `|-- ${toolBadge(step)} ${step.stepType} ${statusWord(step.status)} ${duration}`,
-    `|   |-- model ${step.model ?? "none"}`,
+    `|-- ${toolBadge(step, theme)} ${step.stepType} ${statusTag(step.status, theme)} ${duration}`,
+    `|   |-- ${theme.label("model")} ${step.model ?? "none"}`,
   ];
   if (step.promptName) {
-    lines.push(`|   |-- prompt ${step.promptName}@${step.promptVersion ?? "unknown"}`);
+    lines.push(`|   |-- ${theme.label("prompt")} ${step.promptName}@${step.promptVersion ?? "unknown"}`);
   }
-  lines.push(`|   |-- thinking ${visibleThinkingForStep(step)}`);
+  lines.push(...indentWrap({ text: `${theme.label("thinking")} ${visibleThinkingForStep(step)}`, indent: "|   |-- ", theme }));
   const summary = summarizeStepOutput(step.output);
   if (summary) {
-    lines.push(`|   |-- output ${summary}`);
+    lines.push(...indentWrap({ text: `${theme.label("output")} ${summary}`, indent: "|   |-- ", theme }));
   }
   if (step.error) {
-    lines.push(`|   |-- error ${step.error}`);
+    lines.push(...indentWrap({ text: `${theme.fail("error")} ${step.error}`, indent: "|   |-- ", theme }));
   }
   return lines;
 }
 
-function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchRunRecord): string[] {
+function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchRunRecord, theme: TerminalTheme): string[] {
   const plan = objectOrNull(researchRun.queryPlan);
   const mode = stringField(plan, "mode") ?? "unknown";
   const lines = [
-    `|-- [research] ${researchRun.researchRunId} ${statusWord(researchRun.status)} ${researchRun.angle} ${mode} ${durationText(researchRun.startedAt, researchRun.completedAt)}`,
-    `|   |-- thinking Plan goals, execute auditable query jobs, classify evidence, resolve goals, and decide whether to stop or continue.`,
+    `|-- ${theme.ai("[research]")} ${researchRun.researchRunId} ${statusTag(researchRun.status, theme)} ${researchRun.angle} ${mode} ${durationText(researchRun.startedAt, researchRun.completedAt)}`,
+    ...indentWrap({
+      text: `${theme.label("thinking")} Plan goals, execute auditable query jobs, classify evidence, resolve goals, and decide whether to stop or continue.`,
+      indent: "|   |-- ",
+      theme,
+    }),
   ];
   const normalizedClaim = stringField(plan, "normalizedClaim");
   if (normalizedClaim) {
-    lines.push(`|   |-- claim ${normalizedClaim}`);
+    lines.push(...indentWrap({ text: `${theme.label("claim")} ${normalizedClaim}`, indent: "|   |-- ", theme }));
   }
 
   const goals = arrayField(plan, "goals");
   if (goals.length > 0) {
-    lines.push("|   |-- goals");
+    lines.push(`|   |-- ${theme.label("goals")}`);
     for (const goal of goals.slice(0, 12)) {
       const record = objectOrNull(goal);
-      lines.push(`|   |   |-- ${stringField(record, "id") ?? "unknown"} ${stringField(record, "kind") ?? "unknown"} ${stringField(record, "question") ?? ""}`);
+      lines.push(...indentWrap({
+        text: `${stringField(record, "id") ?? "unknown"} ${stringField(record, "kind") ?? "unknown"} ${stringField(record, "question") ?? ""}`,
+        indent: "|   |   |-- ",
+        theme,
+      }));
     }
   }
 
@@ -129,25 +148,25 @@ function formatResearchRun(snapshot: CassieStoreSnapshot, researchRun: ResearchR
   }
 
   for (const wave of waves) {
-    lines.push(`|   |-- [wave ${wave}]`);
+    lines.push(`|   |-- ${theme.web(`[wave ${wave}]`)}`);
     const waveJobs = jobs.filter((job) => job.wave === wave);
     for (const job of waveJobs) {
-      lines.push(...formatQueryJob(snapshot, researchRun.researchRunId, job));
+      lines.push(...formatQueryJob(snapshot, researchRun.researchRunId, job, theme));
     }
     for (const resolution of snapshot.researchGoalResolutions
       .filter((item) => item.researchRunId === researchRun.researchRunId && item.wave === wave)
       .sort(compareGoalResolution)) {
-      lines.push(formatGoalResolution(resolution));
+      lines.push(formatGoalResolution(resolution, theme));
     }
     for (const decision of snapshot.researchContinuationDecisions
       .filter((item) => item.researchRunId === researchRun.researchRunId && item.wave === wave)
       .sort(compareCreated)) {
-      lines.push(formatContinuationDecision(decision));
+      lines.push(formatContinuationDecision(decision, theme));
     }
   }
 
   if (researchRun.error) {
-    lines.push(`|   |-- error ${researchRun.error}`);
+    lines.push(...indentWrap({ text: `${theme.fail("error")} ${researchRun.error}`, indent: "|   |-- ", theme }));
   }
   return lines;
 }
@@ -156,65 +175,88 @@ function formatQueryJob(
   snapshot: CassieStoreSnapshot,
   researchRunId: string,
   job: ResearchQueryJobRecord,
+  theme: TerminalTheme,
 ): string[] {
   const duration = durationText(job.startedAt, job.completedAt);
+  const laneBadge = job.lane === "x" ? theme.x("[x]") : theme.web("[web]");
   const lines = [
-    `|   |   |-- [search] ${job.querySpecId} ${job.lane}/${job.provider} ${statusWord(job.status)} ${duration} ${job.mustExecuteAtomically ? "atomic" : "bundled"} p=${job.priority}`,
-    `|   |   |   |-- tool ${job.lane === "web" ? "OpenAI web query job" : "Grok X query job"}`,
-    `|   |   |   |-- thinking ${job.rationale}`,
-    `|   |   |   |-- query ${job.query}`,
+    `|   |   |-- ${laneBadge} ${job.querySpecId} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${duration} ${job.mustExecuteAtomically ? "atomic" : "bundled"} p=${job.priority}`,
+    `|   |   |   |-- ${theme.label("tool")} ${job.lane === "web" ? "OpenAI web query job" : "Grok X query job"}`,
+    ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |   |-- ", theme }),
+    ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |   |-- ", theme }),
   ];
   if (job.error) {
-    lines.push(`|   |   |   |-- error ${job.error}`);
+    lines.push(...indentWrap({ text: `${theme.fail("error")} ${job.error}`, indent: "|   |   |   |-- ", theme }));
   }
 
   const results = snapshot.researchSearchResults
     .filter((result) => result.researchRunId === researchRunId && result.queryJobId === job.id)
     .sort(compareSearchResults);
   for (const result of results.slice(0, 6)) {
-    lines.push(formatSearchResult(result));
+    lines.push(...formatSearchResult(result, theme));
   }
 
   const claims = snapshot.researchEvidenceClaims
     .filter((claim) => claim.researchRunId === researchRunId && claim.queryJobId === job.id)
     .sort(compareEvidenceClaims);
   for (const claim of claims.slice(0, 8)) {
-    lines.push(formatEvidenceClaim(claim));
+    lines.push(...formatEvidenceClaim(claim, theme));
     for (const link of snapshot.researchGoalEvidenceLinks
       .filter((item) => item.researchRunId === researchRunId && item.evidenceClaimId === claim.id)
       .sort(compareGoalLinks)) {
-      lines.push(formatGoalEvidenceLink(link));
+      lines.push(...formatGoalEvidenceLink(link, theme));
     }
   }
 
   return lines;
 }
 
-function formatSearchResult(result: ResearchSearchResultRecord): string {
+function formatSearchResult(result: ResearchSearchResultRecord, theme: TerminalTheme): string[] {
   const title = result.title ?? result.url ?? result.id;
   const url = result.url ? ` ${result.url}` : "";
-  return `|   |   |   |-- result ${result.id} ${result.sourceType} ${title}${url}`;
+  return indentWrap({ text: `${theme.label("result")} ${result.id} ${result.sourceType} ${title}${url}`, indent: "|   |   |   |-- ", theme });
 }
 
-function formatEvidenceClaim(claim: ResearchEvidenceClaimRecord): string {
-  return `|   |   |   |-- claim ${claim.id} ${claim.reliability}/${claim.directness} ${claim.claimText}`;
+function formatEvidenceClaim(claim: ResearchEvidenceClaimRecord, theme: TerminalTheme): string[] {
+  return indentWrap({
+    text: `${theme.label("claim")} ${claim.id} ${claim.reliability}/${claim.directness} ${claim.claimText}`,
+    indent: "|   |   |   |-- ",
+    theme,
+  });
 }
 
-function formatGoalEvidenceLink(link: ResearchGoalEvidenceLinkRecord): string {
-  return `|   |   |   |   |-- link ${link.goalId} ${link.stance} strength=${link.strength}: ${link.reason}`;
+function formatGoalEvidenceLink(link: ResearchGoalEvidenceLinkRecord, theme: TerminalTheme): string[] {
+  return indentWrap({
+    text: `${theme.label("link")} ${link.goalId} ${link.stance} strength=${link.strength}: ${link.reason}`,
+    indent: "|   |   |   |   |-- ",
+    theme,
+  });
 }
 
-function formatGoalResolution(resolution: ResearchGoalResolutionRecord): string {
-  return `|   |   |-- [goal] ${resolution.goalId} ${resolution.status} c=${resolution.confidence}: ${resolution.summary}`;
+function formatGoalResolution(resolution: ResearchGoalResolutionRecord, theme: TerminalTheme): string {
+  return `|   |   |-- ${theme.ai("[goal]")} ${resolution.goalId} ${statusTag(resolution.status, theme)} c=${resolution.confidence}: ${resolution.summary}`;
 }
 
-function formatContinuationDecision(decision: ResearchContinuationDecisionRecord): string {
+function formatContinuationDecision(decision: ResearchContinuationDecisionRecord, theme: TerminalTheme): string {
   const blocked = decision.blockedActions.length > 0 ? ` blocked=${decision.blockedActions.join(",")}` : "";
-  return `|   |   |-- [controller] ${decision.action}: ${decision.reason}${blocked}`;
+  return `|   |   |-- ${theme.risk("[controller]")} ${decision.action}: ${decision.reason}${blocked}`;
 }
 
-function formatModelUsage(record: ModelCallUsageRecord): string {
-  return `|-- [model] ${record.purpose} ${record.model} ${statusWord(record.status)} tokens=${record.totalTokens ?? "unknown"} input=${record.inputTokens ?? "unknown"} output=${record.outputTokens ?? "unknown"} reasoning=${record.reasoningTokens ?? "unknown"} cache=${record.cachedTokens ?? "unknown"}`;
+function formatModelUsageTable(records: ModelCallUsageRecord[], theme: TerminalTheme): string[] {
+  return terminalTable({
+    head: ["model", "purpose", "status", "tokens", "in", "out", "reasoning", "cache"],
+    rows: records.map((record) => [
+      record.model,
+      record.purpose,
+      normalizeStatus(record.status),
+      record.totalTokens,
+      record.inputTokens,
+      record.outputTokens,
+      record.reasoningTokens,
+      record.cachedTokens,
+    ]),
+    theme,
+  }).map((line) => `|-- ${line}`);
 }
 
 function visibleThinkingForStep(step: RunStep): string {
@@ -285,19 +327,14 @@ function statusWord(status: string): string {
   return status;
 }
 
-function statusBadge(status: string): string {
-  const word = statusWord(status);
-  if (word === "ok") return "[ok]";
-  if (word === "running") return "[run]";
-  if (word === "failed") return "[fail]";
-  if (word === "pending") return "[wait]";
-  return `[${word}]`;
+function statusBadge(status: string, theme: TerminalTheme): string {
+  return statusTag(status, theme);
 }
 
-function toolBadge(step: RunStep): string {
-  if (step.model) return "[ai]";
-  if (step.stepType === "risk") return "[risk]";
-  if (step.stepType === "ticket") return "[ticket]";
+function toolBadge(step: RunStep, theme: TerminalTheme): string {
+  if (step.model) return theme.ai("[ai]");
+  if (step.stepType === "risk") return theme.risk("[risk]");
+  if (step.stepType === "ticket") return theme.ticket("[ticket]");
   return "[tool]";
 }
 

@@ -17,6 +17,7 @@ import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
 import { buildCliUserSettings } from "./cli-settings.ts";
+import { createTerminalTheme, indentWrap, normalizeStatus, statusTag, type TerminalTheme } from "./terminal-ui.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -382,20 +383,21 @@ function printTraceEvent(event: TraceEvent) {
 }
 
 function startLiveRunTimeline(store: CassieStore, runId: string) {
+  const theme = createTerminalTheme();
   const seen = new Map<string, string>();
   let pending = false;
   let stopped = false;
 
-  console.error("CASSIE LIVE RUN");
-  console.error(`[run] ${runId}`);
-  console.error("|-- waiting for persisted supervisor steps...");
+  console.error(theme.title("CASSIE LIVE RUN"));
+  console.error(`${theme.run("[run]")} ${runId}`);
+  console.error(`|-- ${theme.dim("waiting for persisted supervisor steps...")}`);
 
   const render = async () => {
     if (pending) return;
     pending = true;
     try {
       const snapshot = await store.load();
-      for (const event of liveRunEvents(snapshot, runId)) {
+      for (const event of liveRunEvents(snapshot, runId, theme)) {
         const previous = seen.get(event.key);
         if (previous === event.signature) continue;
         seen.set(event.key, event.signature);
@@ -431,7 +433,7 @@ function startLiveRunTimeline(store: CassieStore, runId: string) {
   };
 }
 
-function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
+function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: TerminalTheme) {
   const events: Array<{ key: string; signature: string; lines: string[] }> = [];
   const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
   if (run) {
@@ -439,8 +441,8 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
       key: `run:${run.runId}`,
       signature: `${run.status}:${run.updatedAt}:${run.error ?? ""}`,
       lines: [
-        `${runStatusBadge(run.status)} ${run.runId} ${run.status}`,
-        ...(run.error ? [`|-- error ${run.error}`] : []),
+        `${statusTag(run.status, theme)} ${theme.section(run.runId)} ${normalizeStatus(run.status)}`,
+        ...(run.error ? indentWrap({ text: `${theme.fail("error")} ${run.error}`, indent: "|-- ", theme }) : []),
       ],
     });
   }
@@ -453,11 +455,11 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
       key: `step:${step.stepId}`,
       signature: `${step.status}:${step.completedAt ?? ""}:${step.error ?? ""}:${output ?? ""}`,
       lines: [
-        `|-- ${liveToolBadge(step.model, step.stepType)} ${step.stepType} ${step.status} ${liveDuration(step.startedAt, step.completedAt)}`,
-        `|   |-- tool ${step.promptName ?? step.stepType}${step.model ? ` (${step.model})` : ""}`,
-        `|   |-- thinking ${liveThinking(step.stepType)}`,
-        ...(output ? [`|   |-- output ${output}`] : []),
-        ...(step.error ? [`|   |-- error ${step.error}`] : []),
+        `|-- ${liveToolBadge(step.model, step.stepType, theme)} ${step.stepType} ${statusTag(step.status, theme)} ${liveDuration(step.startedAt, step.completedAt)}`,
+        `|   |-- ${theme.label("tool")} ${step.promptName ?? step.stepType}${step.model ? ` (${step.model})` : ""}`,
+        ...indentWrap({ text: `${theme.label("thinking")} ${liveThinking(step.stepType)}`, indent: "|   |-- ", theme }),
+        ...(output ? indentWrap({ text: `${theme.label("output")} ${output}`, indent: "|   |-- ", theme }) : []),
+        ...(step.error ? indentWrap({ text: `${theme.fail("error")} ${step.error}`, indent: "|   |-- ", theme }) : []),
       ],
     });
   }
@@ -469,9 +471,9 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
       key: `research:${researchRun.researchRunId}`,
       signature: `${researchRun.status}:${researchRun.completedAt ?? ""}:${researchRun.error ?? ""}`,
       lines: [
-        `|-- [research] ${researchRun.researchRunId} ${researchRun.status} ${liveDuration(researchRun.startedAt, researchRun.completedAt)}`,
-        "|   |-- thinking plan goals, run web/X query jobs, classify evidence, resolve goals",
-        ...(researchRun.error ? [`|   |-- error ${researchRun.error}`] : []),
+        `|-- ${theme.ai("[research]")} ${researchRun.researchRunId} ${statusTag(researchRun.status, theme)} ${liveDuration(researchRun.startedAt, researchRun.completedAt)}`,
+        ...indentWrap({ text: `${theme.label("thinking")} plan goals, run web/X query jobs, classify evidence, resolve goals`, indent: "|   |-- ", theme }),
+        ...(researchRun.error ? indentWrap({ text: `${theme.fail("error")} ${researchRun.error}`, indent: "|   |-- ", theme }) : []),
       ],
     });
   }
@@ -485,10 +487,10 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
       key: `query:${job.id}`,
       signature: `${job.status}:${job.completedAt ?? ""}:${job.error ?? ""}`,
       lines: [
-        `|   |-- [wave ${job.wave}] ${job.lane}/${job.provider} ${job.status} ${liveDuration(job.startedAt, job.completedAt)}`,
-        `|   |   |-- query ${job.query}`,
-        `|   |   |-- thinking ${job.rationale}`,
-        ...(job.error ? [`|   |   |-- error ${job.error}`] : []),
+        `|   |-- ${job.lane === "x" ? theme.x(`[wave ${job.wave}]`) : theme.web(`[wave ${job.wave}]`)} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${liveDuration(job.startedAt, job.completedAt)}`,
+        ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |-- ", theme }),
+        ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |-- ", theme }),
+        ...(job.error ? indentWrap({ text: `${theme.fail("error")} ${job.error}`, indent: "|   |   |-- ", theme }) : []),
       ],
     });
   }
@@ -496,18 +498,10 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string) {
   return events;
 }
 
-function runStatusBadge(status: string): string {
-  if (status === "succeeded") return "[ok]";
-  if (status === "failed") return "[fail]";
-  if (status === "running") return "[run]";
-  if (status === "queued" || status === "awaiting_approval") return "[wait]";
-  return `[${status}]`;
-}
-
-function liveToolBadge(model: string | null, stepType: string): string {
-  if (model) return "[ai]";
-  if (stepType === "risk") return "[risk]";
-  if (stepType === "ticket") return "[ticket]";
+function liveToolBadge(model: string | null, stepType: string, theme: TerminalTheme): string {
+  if (model) return theme.ai("[ai]");
+  if (stepType === "risk") return theme.risk("[risk]");
+  if (stepType === "ticket") return theme.ticket("[ticket]");
   return "[tool]";
 }
 
