@@ -36,6 +36,23 @@ export const SourcePostSchema = z.object({
   mediaDescriptions: z.array(z.string()).optional(),
 });
 
+export const SourceProfileSchema = z.object({
+  handle: z.string(),
+  displayName: z.string().nullable(),
+  profileUrl: z.string().nullable(),
+  bio: z.string().nullable(),
+  accountType: z.enum(["person", "company", "project", "media", "analyst", "trader", "unknown"]),
+  credibility: z.enum(["high", "medium", "low", "unknown"]),
+  expertise: z.array(z.string()),
+  trackRecord: z.string(),
+  networkContext: z.string(),
+  engagementQuality: z.enum(["high", "medium", "low", "unknown"]),
+  recentRelevantActivity: z.array(z.string()),
+  redFlags: z.array(z.string()),
+  unresolvedQuestions: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+});
+
 export const UserSettingsSchema = z.object({
   userId: z.string(),
   walletAddress: z.string().nullable().default(null),
@@ -710,6 +727,7 @@ export const RunStepSchema = z.object({
 
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
+export type SourceProfile = z.infer<typeof SourceProfileSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type IntentResult = z.infer<typeof IntentResultSchema>;
 export type SignalInterpretation = z.infer<typeof SignalInterpretationSchema>;

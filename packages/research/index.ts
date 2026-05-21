@@ -11,6 +11,7 @@ import {
   type ResearchContinuationDecision,
   ResearchQueryPlanSchema,
   ResearchReportSchema,
+  SourceProfileSchema,
   type ResearchEvidence,
   type GoalResolution,
   type ResearchGoal,
@@ -18,6 +19,7 @@ import {
   type ResearchReport,
   type SignalInterpretation,
   type SourcePost,
+  type SourceProfile,
   type Thesis,
 } from "../core/schemas/index.ts";
 import {
@@ -25,6 +27,7 @@ import {
   goalResolutionPrompt,
   researchQueryPlanPrompt,
   researchSynthesisPrompt,
+  sourceProfilePrompt,
 } from "../ai/prompts/index.ts";
 
 export type ResearchAngle = "balanced" | "critic" | "counter";
@@ -56,12 +59,16 @@ export async function researchThesis(input: {
   researchAngle: ResearchAngle;
   persistence?: ResearchPersistence;
 }): Promise<ResearchReport> {
-  const queryPlan = normalizeResearchQueryPlan(await generateResearchQueryPlan(input), input.signal);
+  const sourceProfile = await resolveSourceProfile(input);
+  const queryPlan = normalizeResearchQueryPlan(await generateResearchQueryPlan({
+    ...input,
+    sourceProfile,
+  }), input.signal);
   const researchRun = input.persistence
     ? await input.persistence.store.createResearchRun({
       controlRunId: input.persistence.controlRunId,
       angle: input.researchAngle,
-      queryPlan,
+      queryPlan: { queryPlan, sourceProfile },
     })
     : null;
   const researchRunId = researchRun?.researchRunId ?? `research_${stableSlug(queryPlan.normalizedClaim)}`;
@@ -84,6 +91,7 @@ export async function researchThesis(input: {
         sourcePost: input.sourcePost,
         userCommand: input.userCommand,
         extractedThesis: input.thesis,
+        sourceProfile,
         mode: "deep",
         researchAngle: input.researchAngle,
         queryPlan,
@@ -121,6 +129,111 @@ export async function researchThesis(input: {
     }
     throw error;
   }
+}
+
+async function resolveSourceProfile(input: {
+  ai: StructuredAiClient;
+  lanes: ResearchSearchLanes;
+  sourcePost: SourcePost;
+  thesis: Thesis;
+}): Promise<SourceProfile | null> {
+  const handle = input.sourcePost.authorHandle;
+  if (!handle) {
+    return null;
+  }
+
+  const queryPlan = sourceProfileQueryPlan(input.sourcePost, input.thesis);
+  const job = sourceProfileQueryJob(queryPlan, input.sourcePost);
+  const result = await input.lanes.runGrokXQueryJob(job, queryPlan);
+  return input.ai.generateObject({
+    schema: SourceProfileSchema,
+    name: "cassie_source_profile",
+    prompt: sourceProfilePrompt({
+      sourcePost: input.sourcePost,
+      thesis: input.thesis,
+      xResult: result,
+    }),
+  });
+}
+
+function sourceProfileQueryPlan(sourcePost: SourcePost, thesis: Thesis): ResearchQueryPlan {
+  const handle = sourcePost.authorHandle ?? "unknown";
+  return {
+    version: "research-query-plan/v1",
+    normalizedClaim: thesis.claim,
+    signalType: "generic_opinion",
+    mode: "minimal_watchlist",
+    assets: thesis.mentionedAssets,
+    topics: thesis.topics,
+    sourceHandle: sourcePost.authorHandle,
+    sourceName: sourcePost.authorName,
+    scores: {
+      specificity: 0.5,
+      marketLinkage: 0,
+      sourceValue: 1,
+      urgency: 0.5,
+      risk: 0.5,
+      novelty: 0.5,
+      expectedValueOfResearch: 1,
+    },
+    goals: [
+      {
+        id: "g_source_profile",
+        kind: "source_provenance",
+        question: `Who is @${handle}, and how much source credibility should Cassie assign to this post?`,
+        decisionUse: "decide_watchlist_priority",
+        priority: 1,
+        mustResolve: true,
+        lanes: ["x"],
+        evidenceNeeds: [
+          "Author identity, bio/profile context, recent relevant posts, reputation signals, network context, engagement quality, and red flags.",
+        ],
+        disconfirmingQuestions: [
+          "Is the author promotional, impersonating another account, recycling claims, or lacking relevant domain context?",
+        ],
+        resolutionCriteria: {
+          supportedIf: "X evidence identifies the account and gives enough context to judge credibility.",
+          contradictedIf: "X evidence shows the account is irrelevant, promotional, or unreliable for this claim.",
+          unresolvedIf: "X evidence cannot establish account identity or credibility.",
+        },
+        budget: { maxQueries: 1, maxResults: 10, wave: 0 },
+        stopWhen: ["Source profile is resolved or clearly unavailable."],
+      },
+    ],
+    queryBatches: [
+      {
+        wave: 0,
+        name: "source profile",
+        purpose: "Resolve the source author's identity, reputation, and engagement context before research planning.",
+        queries: [],
+      },
+    ],
+    synthesisContract: {
+      requiredGoalIds: ["g_source_profile"],
+      cannotConcludeIfUnresolved: ["g_source_profile"],
+    },
+  };
+}
+
+function sourceProfileQueryJob(queryPlan: ResearchQueryPlan, sourcePost: SourcePost): QueryJob {
+  const handle = sourcePost.authorHandle ?? "unknown";
+  const statusLocator = sourcePost.postId ? ` OR "${sourcePost.postId}"` : "";
+  return {
+    id: randomUUID(),
+    runId: `source_profile_${stableSlug(handle)}`,
+    wave: 0,
+    querySpecId: "q_source_profile",
+    goalIds: ["g_source_profile"],
+    lane: "x",
+    provider: "grok_x_search",
+    query: `from:${handle}${statusLocator} OR @${handle}`,
+    queryKind: "social_provenance",
+    priority: 1,
+    maxResults: 10,
+    mustExecuteAtomically: true,
+    expectedEvidence: "Author profile context, recent relevant posts, source credibility signals, engagement quality, and red flags.",
+    rationale: `Resolve @${handle}'s profile before planning research for: ${queryPlan.normalizedClaim}`,
+  };
 }
 
 async function executeResearchWaves(input: {
@@ -743,6 +856,7 @@ export async function generateResearchQueryPlan(input: {
   userCommand: string;
   signal: SignalInterpretation;
   thesis: Thesis;
+  sourceProfile?: SourceProfile | null;
   researchAngle: ResearchAngle;
 }): Promise<ResearchQueryPlan> {
   return input.ai.generateObject({
@@ -753,6 +867,7 @@ export async function generateResearchQueryPlan(input: {
       userCommand: input.userCommand,
       signal: input.signal,
       thesis: input.thesis,
+      sourceProfile: input.sourceProfile,
       researchAngle: input.researchAngle,
     }),
   });

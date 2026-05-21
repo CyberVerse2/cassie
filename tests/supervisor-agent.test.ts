@@ -427,6 +427,7 @@ describe("AI SDK supervisor agent", () => {
     });
 
     expect(importantAi.calls).toEqual([
+      "cassie_source_profile",
       "cassie_research_query_plan",
       "cassie_goal_resolution",
       "cassie_goal_resolution",

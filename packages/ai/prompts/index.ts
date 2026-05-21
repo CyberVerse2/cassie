@@ -186,6 +186,7 @@ ${sourceQualityPrinciple}
 Synthesis requirements:
 - Resolve the relevant person, project, company, protocol, product, event, or market explicitly.
 - State confidence and unverified assumptions for inferred entity matches.
+- Use sourceProfile as the primary source-author context when available.
 - Use source reputation, founder quality, product quality, network context, and engagement quality only when they affect the claim.
 - Classify leadQuality as ignore, watchlist, research_lead, soft_signal, or tradable_now.
 - Give concrete nextResearchActions.
@@ -193,6 +194,21 @@ Synthesis requirements:
 Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
 Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in research/critic/watchlist territory.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
+export function sourceProfilePrompt(input: unknown): string {
+  return `You are Cassie's source-profile analyst.
+
+Build a compact profile for the author of the source post using only the supplied X evidence.
+
+Profile requirements:
+- Identify account type, credibility, expertise, track record, network context, and engagement quality.
+- Separate evidence-backed facts from unresolved questions.
+- Treat missing profile evidence as unknown instead of guessing.
+- Note red flags such as promotional behavior, recycled claims, impersonation risk, or weak provenance.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -247,6 +263,7 @@ Design principles:
 - Put queries into wave-based batches. Wave 0 resolves must-answer gating questions. Later waves deepen research only if the signal remains useful.
 - Use web for official sources, news, docs, filings, websites, contracts, GitHub, funding, and market/tradability checks.
 - Use X for source reputation, original posts, social graph, smart engagers, rumor propagation, refutations, and current discussion.
+- Use sourceProfile to calibrate sourceValue, source-provenance goals, and X query priority when available.
 - Do not assume an ecosystem, token, platform, or tradable asset unless the signal or prior interpretation supports it.
 - Prefer high-priority goals that can invalidate the rest of the research early.
 - For vague posts, prefer minimal_watchlist mode and source/entity goals.

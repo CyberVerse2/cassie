@@ -9,6 +9,7 @@ import type {
   SearchResult,
   SignalInterpretation,
   SourcePost,
+  SourceProfile,
   Thesis,
 } from "../packages/core/schemas/index.ts";
 import { normalizeResearchQueryPlan, researchThesis } from "../packages/research/index.ts";
@@ -58,6 +59,23 @@ const thesis: Thesis = {
   evidenceQuality: "weak",
   manipulationRisk: "unknown",
   confidence: 0.4,
+};
+
+const sourceProfile: SourceProfile = {
+  handle: "example",
+  displayName: "Example",
+  profileUrl: "https://x.com/example",
+  bio: null,
+  accountType: "analyst",
+  credibility: "medium",
+  expertise: ["markets"],
+  trackRecord: "Limited test profile.",
+  networkContext: "Test network context.",
+  engagementQuality: "unknown",
+  recentRelevantActivity: [],
+  redFlags: [],
+  unresolvedQuestions: [],
+  confidence: 0.6,
 };
 
 const researchReport: ResearchReport = {
@@ -371,6 +389,9 @@ describe("research query planner policy", () => {
     let xCalls = 0;
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string }) {
+        if (input.name === "cassie_source_profile") {
+          return sourceProfile as T;
+        }
         if (input.name === "cassie_research_query_plan") {
           return xOnlyPlan as T;
         }
@@ -401,7 +422,7 @@ describe("research query planner policy", () => {
     });
 
     expect(webCalls).toBe(1);
-    expect(xCalls).toBe(1);
+    expect(xCalls).toBe(2);
   });
 
   it("executes research wave by wave and resolves goals after each wave", async () => {
@@ -530,6 +551,9 @@ describe("research query planner policy", () => {
     const resolverInputs: unknown[] = [];
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string; prompt?: string; schema?: { safeParse: (value: unknown) => { success: boolean } } }) {
+        if (input.name === "cassie_source_profile") {
+          return sourceProfile as T;
+        }
         if (input.name === "cassie_research_query_plan") {
           return twoWavePlan as T;
         }
@@ -568,6 +592,7 @@ describe("research query planner policy", () => {
     });
 
     expect(calls).toEqual([
+      "xjob:q_source_profile",
       "webjob:q_w0_web",
       "xjob:q_w0_x",
       "webjob:q_w1_web",
@@ -704,6 +729,9 @@ describe("research query planner policy", () => {
     const resolverInputs: string[] = [];
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string; prompt?: string }) {
+        if (input.name === "cassie_source_profile") {
+          return sourceProfile as T;
+        }
         if (input.name === "cassie_research_query_plan") {
           return twoWavePlan as T;
         }
@@ -821,7 +849,7 @@ describe("research query planner policy", () => {
       researchAngle: "balanced",
     });
 
-    expect(executedJobs).toEqual(["q_verify_web", "q_verify_x"]);
+    expect(executedJobs).toEqual(["q_source_profile", "q_verify_web", "q_verify_x"]);
     expect(executedJobs).not.toContain("q_trade_web");
     expect(resolverInputs[0]).toContain("claim_q_verify_web_1");
   });
@@ -953,6 +981,9 @@ describe("research query planner policy", () => {
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string; prompt?: string }) {
         aiCalls.push(input.name);
+        if (input.name === "cassie_source_profile") {
+          return sourceProfile as T;
+        }
         if (input.name === "cassie_research_query_plan") {
           return queryPlan as T;
         }
@@ -1069,8 +1100,9 @@ describe("research query planner policy", () => {
             ledger: ledgerFor(job, job.querySpecId.startsWith("q_adaptive") ? "claim_adaptive_1" : "claim_q_verify_web_1"),
           };
         },
-        async runGrokXQueryJob() {
-          throw new Error("unexpected X job");
+        async runGrokXQueryJob(job) {
+          expect(job.querySpecId).toBe("q_source_profile");
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
         },
       },
       sourcePost,
@@ -1171,6 +1203,9 @@ describe("research query planner policy", () => {
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string; prompt?: string }) {
         aiCalls.push(input.name);
+        if (input.name === "cassie_source_profile") {
+          return sourceProfile as T;
+        }
         if (input.name === "cassie_research_query_plan") {
           return queryPlan as T;
         }
@@ -1225,8 +1260,9 @@ describe("research query planner policy", () => {
             },
           };
         },
-        async runGrokXQueryJob() {
-          throw new Error("unexpected X job");
+        async runGrokXQueryJob(job) {
+          expect(job.querySpecId).toBe("q_source_profile");
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
         },
       },
       sourcePost,
@@ -1329,6 +1365,7 @@ describe("research query planner policy", () => {
     };
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string }) {
+        if (input.name === "cassie_source_profile") return sourceProfile as T;
         if (input.name === "cassie_research_query_plan") return queryPlan as T;
         if (input.name === "cassie_goal_resolution") return [goalResolution] as T;
         if (input.name === "cassie_research_report") return researchReport as T;
