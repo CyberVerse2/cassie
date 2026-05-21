@@ -206,6 +206,7 @@ export function goalResolutionPrompt(input: unknown): string {
 
 Resolve each research goal against the wave evidence gathered so far.
 Do not synthesize a final trading view. Only decide whether each goal is supported, contradicted, partially resolved, unresolved, or not applicable.
+Return an object with a resolutions array.
 
 Rules:
 - Use the goal's evidenceNeeds and resolutionCriteria.

@@ -1,5 +1,6 @@
 import type { StructuredAiClient } from "../ai/client.ts";
 import type { CassieStore } from "../db/store.ts";
+import { z } from "zod";
 import {
   AdaptiveQueryRequestSchema,
   type AdaptiveQueryRequest,
@@ -293,8 +294,12 @@ async function executeResearchWaves(input: {
   return results;
 }
 
-function asGoalResolutionArray(value: GoalResolution[]): GoalResolution[] {
-  return Array.isArray(value) ? value : [];
+const GoalResolutionEnvelopeSchema = z.object({
+  resolutions: GoalResolutionSchema.array(),
+});
+
+function asGoalResolutionArray(value: GoalResolution[] | { resolutions: GoalResolution[] }): GoalResolution[] {
+  return Array.isArray(value) ? value : value.resolutions;
 }
 
 async function resolveResearchGoals(input: {
@@ -305,8 +310,8 @@ async function resolveResearchGoals(input: {
   xResult: PromiseSettledResult<SearchLaneResult>;
   evidenceLedger: EvidenceLedger;
 }): Promise<GoalResolution[]> {
-  return input.ai.generateObject({
-    schema: GoalResolutionSchema.array(),
+  const result = await input.ai.generateObject({
+    schema: GoalResolutionEnvelopeSchema,
     name: "cassie_goal_resolution",
     prompt: goalResolutionPrompt({
       wave: input.wave,
@@ -319,6 +324,7 @@ async function resolveResearchGoals(input: {
       evidenceLedger: input.evidenceLedger,
     }),
   });
+  return asGoalResolutionArray(result);
 }
 
 async function generateAdaptiveQueryRequest(input: {

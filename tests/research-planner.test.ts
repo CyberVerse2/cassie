@@ -529,13 +529,15 @@ describe("research query planner policy", () => {
     const calls: string[] = [];
     const resolverInputs: unknown[] = [];
     const ai: StructuredAiClient = {
-      async generateObject<T>(input: { name: string; prompt?: string }) {
+      async generateObject<T>(input: { name: string; prompt?: string; schema?: { safeParse: (value: unknown) => { success: boolean } } }) {
         if (input.name === "cassie_research_query_plan") {
           return twoWavePlan as T;
         }
         if (input.name === "cassie_goal_resolution") {
+          expect(input.schema?.safeParse({ resolutions: [goalResolution] }).success).toBe(true);
+          expect(input.schema?.safeParse([goalResolution]).success).toBe(false);
           resolverInputs.push(input.prompt ?? "");
-          return [goalResolution] as T;
+          return { resolutions: [goalResolution] } as T;
         }
         if (input.name === "cassie_research_report") {
           expect(input.prompt).toContain("goalResolutions");
