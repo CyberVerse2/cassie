@@ -13,7 +13,7 @@ export function openAiCostControlOptions(input: CostControlInput) {
       store: false,
       serviceTier: input.serviceTier ?? openAiServiceTier(),
       textVerbosity: input.textVerbosity ?? "low",
-      reasoningEffort: input.reasoningEffort ?? "minimal",
+      reasoningEffort: input.reasoningEffort ?? "low",
       promptCacheKey: input.promptCacheKey,
     } satisfies OpenAILanguageModelResponsesOptions,
   };
