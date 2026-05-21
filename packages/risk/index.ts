@@ -24,10 +24,6 @@ export function evaluateRisk(input: {
     return { decision: "reject", reason: "Venue is not enabled by the user." };
   }
 
-  if (!input.userSettings.allowedAssets.includes(market.symbol)) {
-    return { decision: "reject", reason: "Asset is not enabled by the user." };
-  }
-
   if (market.spreadBps > input.userSettings.maxSpreadBps) {
     return { decision: "reject", reason: "Spread is wider than user limit." };
   }

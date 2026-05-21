@@ -23,7 +23,6 @@ export function buildCliUserSettings(flags: CliSettingsFlags): {
     userId: flag(flags, "user", "local-user"),
     walletAddress,
     allowedVenues: csvFlag(flags, "venues", ["hyperliquid", "polymarket"]),
-    allowedAssets: csvFlag(flags, "assets", ["SOL"]),
     defaultTradeSizeUsd: numberFlag(flags, "size", 50),
     maxTradeSizeUsd: numberFlag(flags, "max-size", 100),
     maxDailyLossUsd: numberFlag(flags, "max-daily-loss", 100),

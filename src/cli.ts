@@ -123,7 +123,7 @@ Smoke checks:
 
 Useful examples:
   npm run cli -- settings:set --user local-user
-  npm run cli -- settings:set --user local-user --assets SOL,BTC --size 50
+  npm run cli -- settings:set --user local-user --size 50
   npm run cli -- state
   npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
@@ -292,7 +292,6 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
       userId: settings.userId,
       walletAddress: settings.walletAddress,
       allowedVenues: settings.allowedVenues,
-      allowedAssets: settings.allowedAssets,
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       autoTradeEnabled: settings.autoTradeEnabled,
     })),

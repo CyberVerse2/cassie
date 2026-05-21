@@ -40,7 +40,6 @@ export const UserSettingsSchema = z.object({
   userId: z.string(),
   walletAddress: z.string().nullable().default(null),
   allowedVenues: z.array(z.string()),
-  allowedAssets: z.array(z.string()),
   defaultTradeSizeUsd: z.number().positive(),
   maxTradeSizeUsd: z.number().positive(),
   maxDailyLossUsd: z.number().nonnegative(),

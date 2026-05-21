@@ -31,7 +31,6 @@ const baseSettings: UserSettings = {
   userId: "user_1",
   walletAddress: "0x0000000000000000000000000000000000000000",
   allowedVenues: ["hyperliquid"],
-  allowedAssets: ["SOL"],
   defaultTradeSizeUsd: 50,
   maxTradeSizeUsd: 100,
   maxDailyLossUsd: 100,
@@ -379,7 +378,7 @@ describe("supervisor scenario coverage", () => {
   it("finalizes rejected-risk trade requests without creating a ticket", async () => {
     const { store, run, tools } = await createScenario("trade", {
       ...baseSettings,
-      allowedAssets: ["BTC"],
+      maxSpreadBps: 1,
     });
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });

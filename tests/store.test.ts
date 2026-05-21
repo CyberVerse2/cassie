@@ -13,7 +13,6 @@ const settings: UserSettings = {
   userId: "user_1",
   walletAddress: "0x0000000000000000000000000000000000000000",
   allowedVenues: ["hyperliquid"],
-  allowedAssets: ["SOL"],
   defaultTradeSizeUsd: 50,
   maxTradeSizeUsd: 100,
   maxDailyLossUsd: 100,
