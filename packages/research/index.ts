@@ -1,5 +1,6 @@
 import type { StructuredAiClient } from "../ai/client.ts";
 import type { CassieStore } from "../db/store.ts";
+import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import {
   AdaptiveQueryRequestSchema,
@@ -361,7 +362,7 @@ function compileAdaptiveQueryJobs(input: {
     request.proposedQueries.map((query, index): QueryJob => {
       const querySpecId = `q_adaptive_${stableSlug(request.unresolvedGoalId)}_${input.adaptiveRound}_${index + 1}`;
       return {
-        id: `job_w${input.wave}_${querySpecId}`,
+        id: randomUUID(),
         runId: input.researchRunId,
         wave: input.wave,
         querySpecId,
@@ -377,7 +378,7 @@ function compileAdaptiveQueryJobs(input: {
         rationale: `${query.rationale} Evidence gap: ${request.evidenceGap}`,
       };
     })
-  ).slice(0, 3);
+  );
 }
 
 async function runLaneForWave(input: {
@@ -444,7 +445,7 @@ function compileQueryJobs(queryPlan: ResearchQueryPlan, wave: number, researchRu
           .map((goalId) => goalsById.get(goalId))
           .filter((goal): goal is ResearchGoal => Boolean(goal));
         return {
-          id: `job_w${batch.wave}_${query.id}`,
+          id: randomUUID(),
           runId: researchRunId,
           wave: batch.wave,
           querySpecId: query.id,

@@ -1181,7 +1181,7 @@ describe("research query planner policy", () => {
       },
     };
 
-    await researchThesis({
+    const runResearch = (controlRunId: string) => researchThesis({
       ai,
       lanes: {
         async runOpenAiQueryJob(job) {
@@ -1192,7 +1192,7 @@ describe("research query planner policy", () => {
             ledger: {
               searchResults: [
                 {
-                  id: "result_web_1",
+                  id: `result_${job.id}_1`,
                   runId: job.runId,
                   queryJobId: job.id,
                   queryId: job.querySpecId,
@@ -1231,15 +1231,39 @@ describe("research query planner policy", () => {
       researchAngle: "critic",
       persistence: {
         store,
-        controlRunId: controlRun.runId,
+        controlRunId,
       },
     });
 
+    await runResearch(controlRun.runId);
+    const secondControlRun = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie critic this again",
+      sourcePost,
+    });
+    await runResearch(secondControlRun.runId);
+
     const snapshot = await store.load();
-    expect(snapshot.researchRuns).toMatchObject([{ controlRunId: controlRun.runId, status: "succeeded" }]);
-    expect(snapshot.researchQueryJobs.map((job) => job.querySpecId).sort()).toEqual(["q_verify_web", "q_verify_x"]);
-    expect(snapshot.researchSearchResults).toMatchObject([{ queryId: "q_verify_web" }]);
-    expect(snapshot.researchGoalResolutions).toMatchObject([{ goalId: "g_verify" }]);
-    expect(snapshot.researchContinuationDecisions).toMatchObject([{ wave: 0, action: "continue_planned" }]);
+    expect(snapshot.researchRuns).toMatchObject([
+      { controlRunId: controlRun.runId, status: "succeeded" },
+      { controlRunId: secondControlRun.runId, status: "succeeded" },
+    ]);
+    expect(snapshot.researchQueryJobs.map((job) => job.querySpecId).sort()).toEqual([
+      "q_verify_web",
+      "q_verify_web",
+      "q_verify_x",
+      "q_verify_x",
+    ]);
+    expect(new Set(snapshot.researchQueryJobs.map((job) => job.id)).size).toBe(snapshot.researchQueryJobs.length);
+    expect(snapshot.researchSearchResults.map((result) => result.queryId)).toEqual([
+      "q_verify_web",
+      "q_verify_web",
+    ]);
+    expect(new Set(snapshot.researchSearchResults.map((result) => result.id)).size).toBe(snapshot.researchSearchResults.length);
+    expect(snapshot.researchGoalResolutions.map((resolution) => resolution.goalId)).toEqual(["g_verify", "g_verify"]);
+    expect(snapshot.researchContinuationDecisions).toMatchObject([
+      { wave: 0, action: "continue_planned" },
+      { wave: 0, action: "continue_planned" },
+    ]);
   });
 });
