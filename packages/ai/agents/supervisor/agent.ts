@@ -1,4 +1,4 @@
-import { Output, ToolLoopAgent, type TelemetryIntegration } from "ai";
+import { ToolLoopAgent, type TelemetryIntegration } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import {
   DEFAULT_IMPORTANT_MODEL,
@@ -62,10 +62,6 @@ export async function runCassieSupervisorForRun(input: {
       model: google(process.env.CASSIE_IMPORTANT_MODEL ?? DEFAULT_IMPORTANT_MODEL),
       stopWhen: createCassieStopConditions(),
       tools,
-      output: Output.object({
-        schema: SupervisorFinalResultSchema,
-        name: "cassie_supervisor_final_result",
-      }),
       prepareStep: prepareCassieSupervisorStep,
       onStepFinish: async (step) => {
         const usage = usageRecord(step.usage);
@@ -134,13 +130,14 @@ export async function runCassieSupervisorForRun(input: {
         stepMs: Number(process.env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS ?? 300_000),
       },
     });
+    const finalResult = extractFinalizeRunOutput(result);
 
     const completed = await store.getRun(running.runId);
     if (completed?.status === "running") {
       await store.updateRun({
         ...completed,
         status: "succeeded",
-        result: result.output,
+        result: finalResult,
         error: null,
         updatedAt: new Date().toISOString(),
       });
@@ -157,6 +154,19 @@ export async function runCassieSupervisorForRun(input: {
     });
     throw error;
   }
+}
+
+function extractFinalizeRunOutput(result: { toolResults: unknown[]; steps: Array<{ toolResults: unknown[] }> }) {
+  const toolResults = [
+    ...result.steps.flatMap((step) => step.toolResults),
+    ...result.toolResults,
+  ];
+  const finalizeResult = toolResults
+    .map((toolResult) => objectRecord(toolResult))
+    .filter((toolResult) => toolResult.toolName === "finalize_run")
+    .at(-1);
+  const output = finalizeResult?.output;
+  return SupervisorFinalResultSchema.parse(output);
 }
 
 function defaultDependencies(): CassieDependencies {
@@ -185,7 +195,7 @@ Required behavior:
 - If risk_check rejects, do not call create_trade_ticket. Finalize with analysis and the rejection reason.
 - Always call finalize_run exactly once after the required tools have completed.
 - finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs.
-- After finalize_run succeeds, produce the final structured supervisor output. Match it to the finalize_run result and do not call more tools.
+- After finalize_run succeeds, do not call more tools.
 - Never invent market candidates.
 - Never place orders or enqueue execution.`;
 }
