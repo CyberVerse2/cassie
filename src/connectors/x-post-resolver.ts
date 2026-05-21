@@ -132,35 +132,13 @@ export function buildXPostResolutionPrompt(locator: XPostLocator): string {
   return `You are Cassie's X post resolver.
 
 Use X Search to resolve the exact target post below. Do not answer from memory.
+Fill the structured response schema directly.
 
 Target URL: ${locator.canonicalUrl}
 Target status ID: ${locator.postId}
 Target handle: ${locator.handle ?? "unknown"}
 
-Return only a JSON object with this shape:
-{
-  "found": true,
-  "reason": null,
-  "sourcePost": {
-    "platform": "x",
-    "postId": "${locator.postId}",
-    "url": "${locator.canonicalUrl}",
-    "authorHandle": "handle without @ or null",
-    "authorName": "display name or null",
-    "text": "the target post text, preserving the author's meaning",
-    "createdAt": "ISO timestamp or null",
-    "quotedPostText": "quoted post text if directly attached, otherwise omit",
-    "linkedUrls": ["expanded URLs directly attached to the post"],
-    "mediaDescriptions": ["concise descriptions of images or videos directly attached to the post"]
-  }
-}
-
-If the exact target post cannot be found, return:
-{
-  "found": false,
-  "reason": "brief reason",
-  "sourcePost": null
-}
-
+If found, preserve the author's meaning and include only URLs/media directly attached to the target post.
+If the exact target post cannot be found, set found false, sourcePost null, and give a brief reason.
 Only resolve the target post. Do not include unrelated search results.`;
 }

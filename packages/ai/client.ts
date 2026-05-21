@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
+import { googleThinkingOptions } from "./google-options.ts";
 import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
 
 configureAiSdkWarningLogging();
@@ -138,6 +139,7 @@ export class CassieStructuredClient implements StructuredAiClient {
           name: input.name,
         }),
         prompt: input.prompt,
+        providerOptions: route.provider === "google" ? googleThinkingOptions("medium") : undefined,
         ...(route.provider === "deepseek" ? { maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } : {}),
       });
 
@@ -217,6 +219,7 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
         name: input.name,
       }),
       prompt: input.prompt,
+      providerOptions: googleThinkingOptions("medium"),
     });
 
     return result.output;

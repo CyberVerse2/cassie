@@ -21,6 +21,7 @@ import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { configureAiSdkWarningLogging } from "../ai/sdk-warnings.ts";
 import { DEFAULT_CHEAP_MODEL, DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../ai/client.ts";
+import { googleThinkingOptions } from "../ai/google-options.ts";
 
 configureAiSdkWarningLogging();
 
@@ -103,6 +104,7 @@ export class GeminiWebSearchLane {
           },
           system: "Return concise source-backed research notes in plain text. Do not return JSON.",
           prompt,
+          providerOptions: googleThinkingOptions("minimal"),
           maxOutputTokens: SEARCH_TEXT_MAX_OUTPUT_TOKENS,
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })
@@ -343,7 +345,7 @@ function buildSearchStructuringPrompt(input: {
 }): string {
   return `You are Cassie's search result structurer.
 
-Convert the raw search notes into the requested compact JSON object.
+Fill the structured result from the raw search notes.
 Do not add claims that are not present in the raw search notes or source list.
 Every finding sourceUrls entry must match a source URL from the source list when URLs are available.
 Use no more than 4 findings and 6 sources.

@@ -142,15 +142,14 @@ export function tradeExpressionPrompt(input: unknown): string {
 
 Your job is not to find an exciting ticker. Your job is to decide whether the researched signal has a clean monetizable expression.
 
-Run this funnel:
-1. What changed?
-2. What economic claim does the event imply?
-3. Who benefits or loses?
-4. What is the most direct asset or exposure?
-5. Is there a liquid public/crypto/prediction-market instrument?
-6. Is the read-through strong enough?
-7. Is the signal likely already priced or too crowded?
-8. Pick the cleanest expression or pass.
+Evaluate these decision factors without exposing step-by-step reasoning:
+- what changed
+- implied economic claim
+- beneficiaries and losers
+- most direct asset or exposure
+- liquid public, crypto, or prediction-market instrument
+- read-through strength
+- pricing, crowding, timing, and accessibility
 
 Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
 Funding events often validate a private-market category before they create a clean public trade.
@@ -256,7 +255,7 @@ Design principles:
 - For vague posts, prefer minimal_watchlist mode and source/entity goals. Do not manufacture a trade thesis from a normal post.
 - For explicit trade ideas, include at least one disconfirmation goal.
 
-Return fields that match the schema exactly:
+Fill the structured output fields exactly:
 - version must be "research-query-plan/v1".
 - mode must be minimal_watchlist, standard, deep_dive, or crisis.
 - scores should estimate specificity, marketLinkage, sourceValue, urgency, risk, novelty, and expectedValueOfResearch from 0 to 1.

@@ -2,6 +2,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { ToolLoopAgent, hasToolCall, tool } from "ai";
 import { z } from "zod";
 import { DEFAULT_EXPENSIVE_MODEL } from "../client.ts";
+import { googleThinkingOptions } from "../google-options.ts";
 
 const WEB_SEARCH_MODEL = process.env.CASSIE_WEB_SEARCH_MODEL ??
   process.env.GEMINI_WEB_SEARCH_MODEL ??
@@ -48,6 +49,7 @@ export async function prepareResearchToolLoopStep(input: PrepareInput) {
     activeTools,
     toolChoice: toolChoiceForTools(activeTools),
     messages: compressResearchToolMessages(input.messages),
+    providerOptions: googleThinkingOptions(thinkingLevelForTools(activeTools)),
   };
 }
 
@@ -191,6 +193,12 @@ function toolChoiceForTools(activeTools: ResearchToolName[]) {
   return activeTools.length === 1
     ? { type: "tool" as const, toolName: activeTools[0] }
     : "required" as const;
+}
+
+function thinkingLevelForTools(activeTools: ResearchToolName[]) {
+  return activeTools.some((name) => name === "run_web_query" || name === "run_x_query" || name === "create_query_jobs")
+    ? "low" as const
+    : "medium" as const;
 }
 
 function googleModel(model: string) {

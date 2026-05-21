@@ -36,6 +36,6 @@ describe("X post resolver", () => {
     expect(prompt).toContain("Use X Search");
     expect(prompt).toContain("Do not answer from memory");
     expect(prompt).toContain("2057246023974875269");
-    expect(prompt).toContain("Return only a JSON object");
+    expect(prompt).toContain("Fill the structured response schema directly");
   });
 });

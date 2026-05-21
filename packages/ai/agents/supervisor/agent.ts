@@ -21,6 +21,7 @@ import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
+import { googleThinkingOptions } from "../../google-options.ts";
 import { configureAiSdkWarningLogging } from "../../sdk-warnings.ts";
 
 configureAiSdkWarningLogging();
@@ -60,6 +61,7 @@ export async function runCassieSupervisorForRun(input: {
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
       model: google(process.env.CASSIE_IMPORTANT_MODEL ?? DEFAULT_IMPORTANT_MODEL),
+      providerOptions: googleThinkingOptions("low"),
       stopWhen: createCassieStopConditions(),
       tools,
       prepareStep: prepareCassieSupervisorStep,
