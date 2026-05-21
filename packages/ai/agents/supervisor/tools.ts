@@ -10,9 +10,9 @@ import {
   CritiqueSchema,
   MarketSelectionSchema,
   ResearchReportSchema,
+  RiskDecisionSchema,
   SignalInterpretationSchema,
   ThesisSchema,
-  TradeTicketSchema,
   type AccountState,
   type ControlRun,
   type UserSettings,
@@ -29,20 +29,11 @@ import { recordRunStep } from "./steps.ts";
 
 const promptVersion = "2026-05-20";
 
-const NonRejectedRiskDecisionSchema = z.discriminatedUnion("decision", [
-  z.object({
-    decision: z.literal("approve"),
-    adjustedSizeUsd: z.number().positive(),
-  }),
-  z.object({
-    decision: z.literal("require_approval"),
-    reason: z.string(),
-  }),
-  z.object({
-    decision: z.literal("create_ticket_only"),
-    reason: z.string(),
-  }),
-]);
+const NonRejectedRiskDecisionSchema = z.object({
+  decision: z.enum(["approve", "require_approval", "create_ticket_only"]),
+  adjustedSizeUsd: z.number().positive().optional(),
+  reason: z.string().optional(),
+});
 
 const FinalizeRunInputSchema = z.object({
   responseType: z.enum(["analysis", "critique", "trade_ticket"]),
@@ -51,7 +42,7 @@ const FinalizeRunInputSchema = z.object({
   marketSelection: MarketSelectionSchema.optional(),
   critique: CritiqueSchema.optional(),
   researchReport: ResearchReportSchema.optional(),
-  tradeTicket: TradeTicketSchema.or(z.object({ ticketId: z.string() })).optional(),
+  tradeTicket: z.object({ ticketId: z.string() }).optional(),
 });
 
 type FinalizeRunInput = z.infer<typeof FinalizeRunInputSchema>;
@@ -260,12 +251,13 @@ export function createCassieSupervisorTools(input: {
         stepType: "ticket",
         stepInput: { thesis, marketSelection, riskDecision, sizeUsd },
         execute: async () => {
+          const validatedRiskDecision = RiskDecisionSchema.parse(riskDecision);
           const ticket = createTradeTicket({
             runId: input.run.runId,
             userSettings: input.userSettings,
             thesis,
             marketSelection,
-            riskDecision,
+            riskDecision: validatedRiskDecision,
             sizeUsd,
           });
           await input.store.addTradeTicket(ticket);
