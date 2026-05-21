@@ -142,6 +142,7 @@ export class CassieProduct {
       jobId: queuedJob.jobId,
       store: this.store,
       executionClient: this.executionClient ?? undefined,
+      accountStateProvider: this.accountStateProvider,
     });
     return { processed: true, job };
   }

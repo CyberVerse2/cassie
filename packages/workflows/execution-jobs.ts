@@ -36,7 +36,9 @@ export interface CassieJobQueue {
   enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }>;
 }
 
-export type ExecutionJobQueue = CassieJobQueue;
+export interface ExecutionJobQueue {
+  enqueue(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }>;
+}
 
 export class GraphileExecutionJobQueue implements CassieJobQueue {
   private workerUtils: Promise<WorkerUtils> | null = null;
