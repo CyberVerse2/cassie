@@ -1,6 +1,9 @@
 import type { StructuredAiClient } from "../ai.ts";
 import {
+  type EvidenceLedger,
   GoalResolutionSchema,
+  type QueryJob,
+  type ResearchContinuationDecision,
   ResearchQueryPlanSchema,
   ResearchReportSchema,
   type ResearchEvidence,
@@ -20,11 +23,14 @@ export interface SearchLaneResult {
   lane: "openai_search" | "x_search";
   evidence: ResearchEvidence[];
   warnings: string[];
+  ledger?: EvidenceLedger;
 }
 
 export interface ResearchSearchLanes {
   runOpenAiWebSearch(queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
   runGrokXSearch(queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
+  runOpenAiQueryJob?(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
+  runGrokXQueryJob?(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult>;
 }
 
 export async function researchThesis(input: {
@@ -43,6 +49,7 @@ export async function researchThesis(input: {
     lanes: input.lanes,
   });
   const goalResolutions = waveResults.flatMap((wave) => wave.goalResolutions);
+  const evidenceLedger = mergeLedgers(waveResults.flatMap((wave) => wave.evidenceLedger));
 
   return input.ai.generateObject({
     schema: ResearchReportSchema,
@@ -59,8 +66,10 @@ export async function researchThesis(input: {
           wave: wave.wave,
           openAiResult: settledPayload(wave.openAiResult),
           xResult: settledPayload(wave.xResult),
+          continuationDecision: wave.continuationDecision,
         })),
       },
+      evidenceLedger,
       goalResolutions,
     }),
   });
@@ -74,38 +83,56 @@ async function executeResearchWaves(input: {
   wave: number;
   openAiResult: PromiseSettledResult<SearchLaneResult>;
   xResult: PromiseSettledResult<SearchLaneResult>;
+  evidenceLedger: EvidenceLedger;
   goalResolutions: GoalResolution[];
+  continuationDecision: ResearchContinuationDecision;
 }>> {
   const waves = uniqueNumbers(input.queryPlan.queryBatches.map((batch) => batch.wave)).sort((left, right) => left - right);
   const results: Array<{
     wave: number;
     openAiResult: PromiseSettledResult<SearchLaneResult>;
     xResult: PromiseSettledResult<SearchLaneResult>;
+    evidenceLedger: EvidenceLedger;
     goalResolutions: GoalResolution[];
+    continuationDecision: ResearchContinuationDecision;
   }> = [];
 
   for (const wave of waves) {
     const wavePlan = planForWave(input.queryPlan, wave);
-    const [openAiResult, xResult] = await Promise.allSettled([
-      hasLaneQueries(wavePlan, "web")
-        ? input.lanes.runOpenAiWebSearch(wavePlan)
-        : Promise.resolve(skippedLane("openai_search", `No policy-approved web queries for wave ${wave}.`)),
-      hasLaneQueries(wavePlan, "x")
-        ? input.lanes.runGrokXSearch(wavePlan)
-        : Promise.resolve(skippedLane("x_search", `No policy-approved X queries for wave ${wave}.`)),
+    const queryJobs = compileQueryJobs(input.queryPlan, wave);
+    const [openAiResult, xResult] = await Promise.all([
+      settle(runLaneForWave({ lane: "web", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs })),
+      settle(runLaneForWave({ lane: "x", lanes: input.lanes, queryPlan: input.queryPlan, wavePlan, queryJobs })),
     ]);
-    const goalResolutions = await resolveResearchGoals({
+    const evidenceLedger = mergeLedgers([
+      ledgerFromSettledResult(openAiResult),
+      ledgerFromSettledResult(xResult),
+    ]);
+    const goalResolutions = asGoalResolutionArray(await resolveResearchGoals({
       ai: input.ai,
       queryPlan: input.queryPlan,
       wave,
       openAiResult,
       xResult,
+      evidenceLedger,
+    }));
+    const continuationDecision = decideContinuation({
+      queryPlan: input.queryPlan,
+      wave,
+      goalResolutions,
     });
 
-    results.push({ wave, openAiResult, xResult, goalResolutions });
+    results.push({ wave, openAiResult, xResult, evidenceLedger, goalResolutions, continuationDecision });
+    if (continuationDecision.action === "stop_no_trade" || continuationDecision.action === "stop_watchlist") {
+      break;
+    }
   }
 
   return results;
+}
+
+function asGoalResolutionArray(value: GoalResolution[]): GoalResolution[] {
+  return Array.isArray(value) ? value : [];
 }
 
 async function resolveResearchGoals(input: {
@@ -114,6 +141,7 @@ async function resolveResearchGoals(input: {
   wave: number;
   openAiResult: PromiseSettledResult<SearchLaneResult>;
   xResult: PromiseSettledResult<SearchLaneResult>;
+  evidenceLedger: EvidenceLedger;
 }): Promise<GoalResolution[]> {
   return input.ai.generateObject({
     schema: GoalResolutionSchema.array(),
@@ -126,8 +154,142 @@ async function resolveResearchGoals(input: {
         openAiResult: settledPayload(input.openAiResult),
         xResult: settledPayload(input.xResult),
       },
+      evidenceLedger: input.evidenceLedger,
     }),
   });
+}
+
+async function runLaneForWave(input: {
+  lane: "web" | "x";
+  lanes: ResearchSearchLanes;
+  queryPlan: ResearchQueryPlan;
+  wavePlan: ResearchQueryPlan;
+  queryJobs: QueryJob[];
+}): Promise<SearchLaneResult> {
+  const laneJobs = input.queryJobs.filter((job) => job.lane === input.lane);
+  const atomicJobs = laneJobs.filter((job) => job.mustExecuteAtomically);
+  const bundledQueryIds = new Set(laneJobs.filter((job) => !job.mustExecuteAtomically).map((job) => job.querySpecId));
+  const results: SearchLaneResult[] = [];
+
+  if (atomicJobs.length > 0) {
+    const runJob = input.lane === "web" ? input.lanes.runOpenAiQueryJob : input.lanes.runGrokXQueryJob;
+    if (!runJob) {
+      throw new Error(`Atomic ${input.lane} query execution is required but not configured.`);
+    }
+    const atomicResults = await Promise.all(atomicJobs.map((job) => runJob.call(input.lanes, job, input.queryPlan)));
+    results.push(...atomicResults);
+  }
+
+  if (bundledQueryIds.size > 0) {
+    const bundledPlan = filterQueries(input.wavePlan, (query) => query.lane === input.lane && bundledQueryIds.has(query.id));
+    if (hasLaneQueries(bundledPlan, input.lane)) {
+      results.push(
+        input.lane === "web"
+          ? await input.lanes.runOpenAiWebSearch(bundledPlan)
+          : await input.lanes.runGrokXSearch(bundledPlan),
+      );
+    }
+  }
+
+  if (results.length === 0) {
+    return skippedLane(
+      input.lane === "web" ? "openai_search" : "x_search",
+      `No policy-approved ${input.lane === "web" ? "web" : "X"} queries for wave ${input.wavePlan.queryBatches[0]?.wave ?? "unknown"}.`,
+    );
+  }
+
+  return mergeLaneResults(input.lane === "web" ? "openai_search" : "x_search", results);
+}
+
+function compileQueryJobs(queryPlan: ResearchQueryPlan, wave: number): QueryJob[] {
+  const runId = `research_${stableSlug(queryPlan.normalizedClaim)}`;
+  const goalsById = new Map(queryPlan.goals.map((goal) => [goal.id, goal]));
+
+  return queryPlan.queryBatches
+    .filter((batch) => batch.wave === wave)
+    .flatMap((batch) =>
+      batch.queries.map((query): QueryJob => {
+        const goals = query.goalIds
+          .map((goalId) => goalsById.get(goalId))
+          .filter((goal): goal is ResearchGoal => Boolean(goal));
+        return {
+          id: `job_w${batch.wave}_${query.id}`,
+          runId,
+          wave: batch.wave,
+          querySpecId: query.id,
+          goalIds: query.goalIds,
+          lane: query.lane,
+          provider: query.lane === "web" ? "openai_web_search" : "grok_x_search",
+          query: query.query,
+          queryKind: query.queryKind,
+          priority: query.priority,
+          maxResults: query.maxResults,
+          mustExecuteAtomically: shouldExecuteAtomically(query, goals),
+          expectedEvidence: query.expectedEvidence,
+          rationale: query.rationale,
+        };
+      })
+    );
+}
+
+function shouldExecuteAtomically(
+  query: ResearchQueryPlan["queryBatches"][number]["queries"][number],
+  goals: ResearchGoal[],
+): boolean {
+  return goals.some((goal) => goal.mustResolve || goal.kind === "disconfirmation") ||
+    query.queryKind === "primary_source" ||
+    query.queryKind === "regulatory_lookup" ||
+    query.priority >= 0.75;
+}
+
+function decideContinuation(input: {
+  queryPlan: ResearchQueryPlan;
+  wave: number;
+  goalResolutions: GoalResolution[];
+}): ResearchContinuationDecision {
+  const requiredGoalIds = new Set(input.queryPlan.synthesisContract.requiredGoalIds);
+  const contradictedRequired = input.goalResolutions.filter((resolution) =>
+    requiredGoalIds.has(resolution.goalId) && resolution.status === "resolved_contradicted"
+  );
+
+  if (contradictedRequired.length > 0) {
+    return {
+      action: "stop_no_trade",
+      reason: "A required research goal was contradicted, so deeper waves would be misleading.",
+      resolvedGoalIds: input.goalResolutions
+        .filter((resolution) => resolution.status === "resolved_supported")
+        .map((resolution) => resolution.goalId),
+      unresolvedBlockingGoalIds: [],
+      contradictedGoalIds: contradictedRequired.map((resolution) => resolution.goalId),
+      allowedNextGoalIds: [],
+      maxAdditionalQueries: 0,
+      adaptiveQueryInstructions: [],
+      blockedActions: ["trade_expression", "market_router", "ticket_creation"],
+    };
+  }
+
+  const unresolvedBlockingGoalIds = input.goalResolutions
+    .filter((resolution) =>
+      requiredGoalIds.has(resolution.goalId) &&
+      (resolution.status === "unresolved" || resolution.status === "partially_resolved")
+    )
+    .map((resolution) => resolution.goalId);
+
+  return {
+    action: "continue_planned",
+    reason: "No required goal has been contradicted after this wave.",
+    resolvedGoalIds: input.goalResolutions
+      .filter((resolution) => resolution.status === "resolved_supported")
+      .map((resolution) => resolution.goalId),
+    unresolvedBlockingGoalIds,
+    contradictedGoalIds: [],
+    allowedNextGoalIds: input.queryPlan.goals
+      .filter((goal) => goal.budget.wave > input.wave)
+      .map((goal) => goal.id),
+    maxAdditionalQueries: 0,
+    adaptiveQueryInstructions: [],
+    blockedActions: unresolvedBlockingGoalIds.length > 0 ? ["ticket_creation"] : [],
+  };
 }
 
 function planForWave(queryPlan: ResearchQueryPlan, wave: number): ResearchQueryPlan {
@@ -135,6 +297,21 @@ function planForWave(queryPlan: ResearchQueryPlan, wave: number): ResearchQueryP
     ...queryPlan,
     goals: queryPlan.goals.filter((goal) => goal.budget.wave <= wave),
     queryBatches: queryPlan.queryBatches.filter((batch) => batch.wave === wave),
+  };
+}
+
+function filterQueries(
+  queryPlan: ResearchQueryPlan,
+  predicate: (query: ResearchQueryPlan["queryBatches"][number]["queries"][number]) => boolean,
+): ResearchQueryPlan {
+  return {
+    ...queryPlan,
+    queryBatches: queryPlan.queryBatches
+      .map((batch) => ({
+        ...batch,
+        queries: batch.queries.filter(predicate),
+      }))
+      .filter((batch) => batch.queries.length > 0),
   };
 }
 
@@ -147,7 +324,50 @@ function skippedLane(lane: SearchLaneResult["lane"], reason: string): SearchLane
     lane,
     evidence: [],
     warnings: [reason],
+    ledger: emptyLedger(),
   };
+}
+
+function mergeLaneResults(lane: SearchLaneResult["lane"], results: SearchLaneResult[]): SearchLaneResult {
+  return {
+    lane,
+    evidence: results.flatMap((result) => result.evidence),
+    warnings: results.flatMap((result) => result.warnings),
+    ledger: mergeLedgers(results.map((result) => result.ledger)),
+  };
+}
+
+function emptyLedger(): EvidenceLedger {
+  return {
+    searchResults: [],
+    evidenceClaims: [],
+    goalEvidenceLinks: [],
+  };
+}
+
+function mergeLedgers(ledgers: Array<EvidenceLedger | undefined>): EvidenceLedger {
+  return ledgers.reduce<EvidenceLedger>((merged, ledger) => {
+    if (!ledger) {
+      return merged;
+    }
+    return {
+      searchResults: [...merged.searchResults, ...ledger.searchResults],
+      evidenceClaims: [...merged.evidenceClaims, ...ledger.evidenceClaims],
+      goalEvidenceLinks: [...merged.goalEvidenceLinks, ...ledger.goalEvidenceLinks],
+    };
+  }, emptyLedger());
+}
+
+function ledgerFromSettledResult(result: PromiseSettledResult<SearchLaneResult>): EvidenceLedger {
+  return result.status === "fulfilled" ? result.value.ledger ?? emptyLedger() : emptyLedger();
+}
+
+async function settle<T>(promise: Promise<T>): Promise<PromiseSettledResult<T>> {
+  try {
+    return { status: "fulfilled", value: await promise };
+  } catch (reason) {
+    return { status: "rejected", reason };
+  }
 }
 
 const vagueAllowedGoalKinds = new Set<ResearchGoal["kind"]>([
@@ -446,4 +666,9 @@ function settledPayload<T>(result: PromiseSettledResult<T>) {
     status: "rejected",
     reason: result.reason instanceof Error ? result.reason.message : String(result.reason),
   };
+}
+
+function stableSlug(value: string) {
+  const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48);
+  return slug || "signal";
 }

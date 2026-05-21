@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../src/ai.ts";
 import type {
   GoalResolution,
+  QueryJob,
   ResearchQueryPlan,
   ResearchReport,
+  SearchResult,
   SignalInterpretation,
   SourcePost,
   Thesis,
@@ -368,20 +370,32 @@ describe("research query planner policy", () => {
     let xCalls = 0;
     const ai: StructuredAiClient = {
       async generateObject<T>(input: { name: string }) {
-        return (input.name === "cassie_research_query_plan" ? xOnlyPlan : researchReport) as T;
+        if (input.name === "cassie_research_query_plan") {
+          return xOnlyPlan as T;
+        }
+        if (input.name === "cassie_goal_resolution") {
+          return [goalResolution] as T;
+        }
+        return researchReport as T;
       },
     };
 
     await researchThesis({
       ai,
       lanes: {
-        async runOpenAiWebSearch() {
+        async runOpenAiQueryJob() {
           webCalls += 1;
-          return { lane: "openai_search", evidence: [], warnings: [] };
+          return { lane: "openai_search", evidence: [], warnings: [], ledger: undefined };
+        },
+        async runGrokXQueryJob() {
+          xCalls += 1;
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
+        },
+        async runOpenAiWebSearch() {
+          throw new Error("expected mandatory web to execute as a query job");
         },
         async runGrokXSearch() {
-          xCalls += 1;
-          return { lane: "x_search", evidence: [], warnings: [] };
+          throw new Error("expected mandatory X to execute as a query job");
         },
       },
       sourcePost,
@@ -540,6 +554,14 @@ describe("research query planner policy", () => {
     await researchThesis({
       ai,
       lanes: {
+        async runOpenAiQueryJob(job) {
+          calls.push(`webjob:${job.querySpecId}`);
+          return { lane: "openai_search", evidence: [], warnings: [], ledger: undefined };
+        },
+        async runGrokXQueryJob(job) {
+          calls.push(`xjob:${job.querySpecId}`);
+          return { lane: "x_search", evidence: [], warnings: [], ledger: undefined };
+        },
         async runOpenAiWebSearch(plan) {
           calls.push(`web:${[...new Set(plan.queryBatches.map((batch) => batch.wave))].join(",")}`);
           return { lane: "openai_search", evidence: [], warnings: [] };
@@ -556,7 +578,268 @@ describe("research query planner policy", () => {
       researchAngle: "balanced",
     });
 
-    expect(calls).toEqual(["web:0", "x:0", "web:1", "x:1"]);
+    expect(calls).toEqual([
+      "webjob:q_w0_web",
+      "xjob:q_w0_x",
+      "webjob:q_disconfirm_web",
+      "xjob:q_disconfirm_x",
+      "web:1",
+      "x:1",
+    ]);
     expect(resolverInputs).toHaveLength(2);
+  });
+
+  it("executes decision-critical queries as atomic jobs and stops after a contradicted required goal", async () => {
+    const twoWavePlan: ResearchQueryPlan = {
+      version: "research-query-plan/v1",
+      normalizedClaim: "Exa raised $250M.",
+      signalType: "news",
+      mode: "standard",
+      assets: [],
+      topics: ["AI search", "funding"],
+      sourceHandle: "example",
+      sourceName: "Example",
+      scores: {
+        specificity: 0.9,
+        marketLinkage: 0.5,
+        sourceValue: 0.5,
+        urgency: 0.4,
+        risk: 0.3,
+        novelty: 0.8,
+        expectedValueOfResearch: 0.7,
+      },
+      goals: [
+        {
+          id: "g_verify_funding",
+          kind: "event_validation",
+          question: "Did Exa raise $250M?",
+          decisionUse: "validate_or_kill_thesis",
+          priority: 0.95,
+          mustResolve: true,
+          lanes: ["web", "x"],
+          evidenceNeeds: ["Primary or credible secondary confirmation."],
+          disconfirmingQuestions: ["Was the raise denied or misreported?"],
+          resolutionCriteria: {
+            supportedIf: "Credible evidence confirms the raise.",
+            contradictedIf: "Credible evidence refutes the raise.",
+            unresolvedIf: "The raise cannot be verified.",
+          },
+          budget: { maxQueries: 2, maxResults: 20, wave: 0 },
+          stopWhen: ["funding claim is contradicted"],
+        },
+        {
+          id: "g_trade_expression",
+          kind: "trade_expression",
+          question: "Is there a clean liquid expression?",
+          decisionUse: "identify_trade_expression",
+          priority: 0.7,
+          mustResolve: false,
+          lanes: ["web"],
+          evidenceNeeds: ["Liquid direct or proxy instrument."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "A clean expression exists.",
+            contradictedIf: "No clean expression exists.",
+            unresolvedIf: "The expression cannot be resolved.",
+          },
+          budget: { maxQueries: 2, maxResults: 20, wave: 1 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "Verify funding",
+          purpose: "Verify the core funding event.",
+          queries: [
+            {
+              id: "q_verify_web",
+              goalIds: ["g_verify_funding"],
+              lane: "web",
+              queryKind: "primary_source",
+              query: "\"Exa\" \"$250M\" funding",
+              priority: 0.95,
+              maxResults: 10,
+              expectedEvidence: "Primary or credible funding confirmation.",
+              rationale: "The research depends on the funding event being real.",
+            },
+            {
+              id: "q_verify_x",
+              goalIds: ["g_verify_funding"],
+              lane: "x",
+              queryKind: "social_provenance",
+              query: "\"Exa\" \"$250M\"",
+              priority: 0.8,
+              maxResults: 10,
+              expectedEvidence: "Original social source or refutation.",
+              rationale: "X can find origin and refutation signals.",
+            },
+          ],
+        },
+        {
+          wave: 1,
+          name: "Trade expression",
+          purpose: "Check whether any public expression exists.",
+          queries: [
+            {
+              id: "q_trade_web",
+              goalIds: ["g_trade_expression"],
+              lane: "web",
+              queryKind: "broad_context",
+              query: "Exa AI search public market competitors",
+              priority: 0.7,
+              maxResults: 10,
+              expectedEvidence: "Possible public-market proxies.",
+              rationale: "Only run after verification survives.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_verify_funding"],
+        cannotConcludeIfUnresolved: ["g_verify_funding"],
+      },
+    };
+    const contradictedResolution: GoalResolution = {
+      goalId: "g_verify_funding",
+      status: "resolved_contradicted",
+      confidence: 0.9,
+      supportingEvidenceIds: [],
+      contradictingEvidenceIds: ["claim_q_verify_web_1"],
+      contextualEvidenceIds: [],
+      unresolvedQuestions: [],
+      summary: "The funding claim was contradicted.",
+      synthesisImplication: "The final synthesis must not treat the raise as verified.",
+    };
+    const executedJobs: string[] = [];
+    const resolverInputs: string[] = [];
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: { name: string; prompt?: string }) {
+        if (input.name === "cassie_research_query_plan") {
+          return twoWavePlan as T;
+        }
+        if (input.name === "cassie_goal_resolution") {
+          resolverInputs.push(input.prompt ?? "");
+          return [contradictedResolution] as T;
+        }
+        if (input.name === "cassie_research_report") {
+          expect(input.prompt).toContain("evidenceLedger");
+          expect(input.prompt).toContain("resolved_contradicted");
+          expect(input.prompt).toContain("stop_no_trade");
+          return researchReport as T;
+        }
+        throw new Error(`Unexpected AI call ${input.name}`);
+      },
+    };
+    const resultForJob = (job: QueryJob): SearchResult => ({
+      id: `result_${job.id}_1`,
+      runId: job.runId,
+      queryJobId: job.id,
+      queryId: job.querySpecId,
+      goalIds: job.goalIds,
+      wave: job.wave,
+      lane: job.lane,
+      provider: job.provider,
+      title: "Funding result",
+      url: "https://example.com/funding",
+      canonicalUrl: "https://example.com/funding",
+      author: null,
+      sourceName: "Example",
+      sourceType: "news",
+      publishedAt: null,
+      retrievedAt: "2026-05-21T00:00:00.000Z",
+      rawText: null,
+      snippet: "The raise was misreported.",
+      rank: 1,
+      duplicateOf: null,
+      metadata: {},
+    });
+
+    await researchThesis({
+      ai,
+      lanes: {
+        async runOpenAiQueryJob(job) {
+          executedJobs.push(job.querySpecId);
+          return {
+            lane: "openai_search",
+            evidence: [],
+            warnings: [],
+            ledger: {
+              searchResults: [resultForJob(job)],
+              evidenceClaims: [
+                {
+                  id: `claim_${job.querySpecId}_1`,
+                  resultId: `result_${job.id}_1`,
+                  queryJobId: job.id,
+                  queryId: job.querySpecId,
+                  goalIds: job.goalIds,
+                  wave: job.wave,
+                  claimText: "The raise was misreported.",
+                  normalizedClaim: "The funding claim is contradicted.",
+                  entities: ["Exa"],
+                  assets: [],
+                  topics: ["funding"],
+                  eventTime: null,
+                  claimTimeRelation: "after_signal",
+                  sourceType: "news",
+                  directness: "direct_secondary",
+                  reliability: "high",
+                  extractionConfidence: 0.9,
+                  quote: "misreported",
+                  quoteStartChar: null,
+                  quoteEndChar: null,
+                },
+              ],
+              goalEvidenceLinks: [
+                {
+                  id: `link_${job.querySpecId}_1`,
+                  goalId: "g_verify_funding",
+                  evidenceClaimId: `claim_${job.querySpecId}_1`,
+                  stance: "contradicts",
+                  relevance: 0.95,
+                  strength: 0.9,
+                  reason: "The result directly refutes the funding amount.",
+                  satisfiesEvidenceNeeds: ["Primary or credible secondary confirmation."],
+                  redFlags: [],
+                },
+              ],
+            },
+          };
+        },
+        async runGrokXQueryJob(job) {
+          executedJobs.push(job.querySpecId);
+          return {
+            lane: "x_search",
+            evidence: [],
+            warnings: [],
+            ledger: {
+              searchResults: [resultForJob(job)],
+              evidenceClaims: [],
+              goalEvidenceLinks: [],
+            },
+          };
+        },
+        async runOpenAiWebSearch() {
+          throw new Error("expected atomic web query execution");
+        },
+        async runGrokXSearch() {
+          throw new Error("expected atomic X query execution");
+        },
+      },
+      sourcePost,
+      userCommand: "@Cassie think this",
+      signal: {
+        ...explicitSignal,
+        signalType: "news",
+        containsExplicitThesis: false,
+        leadQuality: "research_lead",
+      },
+      thesis: { ...thesis, claim: "Exa raised $250M.", topics: ["AI search", "funding"] },
+      researchAngle: "balanced",
+    });
+
+    expect(executedJobs).toEqual(["q_verify_web", "q_verify_x"]);
+    expect(executedJobs).not.toContain("q_trade_web");
+    expect(resolverInputs[0]).toContain("claim_q_verify_web_1");
   });
 });

@@ -2,12 +2,20 @@ import type {
   ResearchSearchLanes,
   SearchLaneResult,
 } from "../tools/research.ts";
-import type { ResearchGoal, ResearchQueryPlan } from "../schemas.ts";
+import {
+  EvidenceLedgerSchema,
+  type EvidenceLedger,
+  type QueryJob,
+  type ResearchGoal,
+  type ResearchEvidence,
+  type ResearchQueryPlan,
+} from "../schemas.ts";
 import { MissingConnectorConfigError } from "./errors.ts";
-import { generateText } from "ai";
+import { Output, generateText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { createXai } from "@ai-sdk/xai";
 import type { TraceRecorder } from "../trace.ts";
+import { evidenceLedgerPrompt } from "../prompts.ts";
 
 type SearchSource = {
   title?: string;
@@ -51,12 +59,70 @@ export class OpenAiWebSearchLane {
         lane: "openai_search" as const,
         evidence: evidenceFromSources("openai_search", result.text, result.sources),
         warnings: [],
+        ledger: emptyLedger(),
       };
       finishTrace?.({
         output: {
           evidenceCount: output.evidence.length,
           sourceCount: result.sources.length,
           summary: result.text,
+        },
+        usage: result.totalUsage,
+      });
+      return output;
+    } catch (error) {
+      finishTrace?.({ error });
+      throw error;
+    }
+  }
+
+  async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
+    if (!this.apiKey) {
+      throw new MissingConnectorConfigError("OpenAI/Web Search lane", "OPENAI_API_KEY");
+    }
+
+    const prompt = buildWebQueryJobPrompt(job, queryPlan);
+    const finishTrace = this.trace?.start({
+      name: "openai_web_query_job",
+      kind: "connector",
+      model: this.model,
+      thinkingTrace: "Executing one auditable web query job and classifying returned sources into evidence claims.",
+      input: {
+        queryJobId: job.id,
+        queryId: job.querySpecId,
+        goalIds: job.goalIds,
+        query: job.query,
+      },
+    });
+
+    try {
+      const result = await generateText({
+        model: openai.responses(this.model),
+        tools: {
+          web_search: openai.tools.webSearch({ searchContextSize: "medium" }),
+        },
+        toolChoice: "auto",
+        prompt,
+      });
+      const ledger = await classifyEvidenceLedger({
+        providerModel: this.model,
+        provider: "openai_web_search",
+        job,
+        queryPlan,
+        summary: result.text,
+        sources: result.sources,
+      });
+      const output = {
+        lane: "openai_search" as const,
+        evidence: evidenceFromLedger("openai_search", ledger),
+        warnings: [],
+        ledger,
+      };
+      finishTrace?.({
+        output: {
+          queryJobId: job.id,
+          evidenceClaimCount: ledger.evidenceClaims.length,
+          resultCount: ledger.searchResults.length,
         },
         usage: result.totalUsage,
       });
@@ -109,12 +175,74 @@ export class GrokXSearchLane {
         lane: "x_search" as const,
         evidence: evidenceFromXSearch(result.text, result.toolResults),
         warnings: [],
+        ledger: emptyLedger(),
       };
       finishTrace?.({
         output: {
           evidenceCount: output.evidence.length,
           toolResultCount: result.toolResults.length,
           summary: result.text,
+        },
+        usage: result.totalUsage,
+      });
+      return output;
+    } catch (error) {
+      finishTrace?.({ error });
+      throw error;
+    }
+  }
+
+  async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
+    if (!this.apiKey) {
+      throw new MissingConnectorConfigError("Grok X Search lane", "XAI_API_KEY");
+    }
+
+    const xai = createXai({ apiKey: this.apiKey });
+    const prompt = buildXQueryJobPrompt(job, queryPlan);
+    const finishTrace = this.trace?.start({
+      name: "grok_x_query_job",
+      kind: "connector",
+      model: this.model,
+      thinkingTrace: "Executing one auditable X query job with image/video understanding and classifying posts into evidence claims.",
+      input: {
+        queryJobId: job.id,
+        queryId: job.querySpecId,
+        goalIds: job.goalIds,
+        query: job.query,
+      },
+    });
+
+    try {
+      const result = await generateText({
+        model: xai.responses(this.model),
+        tools: {
+          x_search: xai.tools.xSearch({
+            enableImageUnderstanding: true,
+            enableVideoUnderstanding: true,
+          }),
+        },
+        toolChoice: "auto",
+        prompt,
+      });
+      const ledger = await classifyEvidenceLedger({
+        providerModel: this.model,
+        provider: "grok_x_search",
+        job,
+        queryPlan,
+        summary: result.text,
+        toolResults: result.toolResults,
+      });
+      const output = {
+        lane: "x_search" as const,
+        evidence: evidenceFromLedger("x_search", ledger),
+        warnings: [],
+        ledger,
+      };
+      finishTrace?.({
+        output: {
+          queryJobId: job.id,
+          evidenceClaimCount: ledger.evidenceClaims.length,
+          resultCount: ledger.searchResults.length,
         },
         usage: result.totalUsage,
       });
@@ -139,6 +267,14 @@ export class LiveResearchSearchLanes implements ResearchSearchLanes {
   runGrokXSearch(queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
     return this.grokLane.run(queryPlan);
   }
+
+  runOpenAiQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
+    return this.openAiLane.runQueryJob(job, queryPlan);
+  }
+
+  runGrokXQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
+    return this.grokLane.runQueryJob(job, queryPlan);
+  }
 }
 
 function buildExternalVerificationPrompt(queryPlan: ResearchQueryPlan): string {
@@ -162,6 +298,27 @@ General search requirements:
 - Return concise evidence with citations, and separate facts from market interpretation.`;
 }
 
+function buildWebQueryJobPrompt(job: QueryJob, queryPlan: ResearchQueryPlan): string {
+  return `You are Cassie's web research lane.
+
+Execute exactly this auditable query job.
+
+Query: ${job.query}
+Query kind: ${job.queryKind}
+Expected evidence: ${job.expectedEvidence}
+Rationale: ${job.rationale}
+
+Claim: ${queryPlan.normalizedClaim}
+Assets: ${queryPlan.assets.join(", ")}
+Topics: ${queryPlan.topics.join(", ")}
+
+Goals this query must serve:
+${formatGoalsByIds(queryPlan, job.goalIds)}
+
+Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
+Return concise findings with citations. Do not synthesize a final trade view.`;
+}
+
 function buildXSearchPrompt(queryPlan: ResearchQueryPlan): string {
   return `Investigate this market narrative on X.
 
@@ -183,6 +340,42 @@ Look for:
 - whether platform, ecosystem, project, or product claims are directly stated or inferred
 
 X social momentum is not proof of truth.`;
+}
+
+function buildXQueryJobPrompt(job: QueryJob, queryPlan: ResearchQueryPlan): string {
+  return `You are Cassie's X research lane.
+
+Execute exactly this auditable X query job.
+
+Query: ${job.query}
+Query kind: ${job.queryKind}
+Expected evidence: ${job.expectedEvidence}
+Rationale: ${job.rationale}
+
+Claim: ${queryPlan.normalizedClaim}
+Source author: ${queryPlan.sourceHandle ? `@${queryPlan.sourceHandle}` : "unknown"} ${queryPlan.sourceName ?? ""}
+
+Goals this query must serve:
+${formatGoalsByIds(queryPlan, job.goalIds)}
+
+Look for origin posts, author/source reputation, smart engagement, direct refutations, recycled claims, coordinated language, image/video evidence, and whether claims are stated or inferred.
+X social momentum is not proof of factual truth. Do not synthesize a final trade view.`;
+}
+
+function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): string {
+  const ids = new Set(goalIds);
+  const goals = queryPlan.goals.filter((goal) => ids.has(goal.id));
+  if (goals.length === 0) {
+    return "- No matching goals.";
+  }
+
+  return goals.map((goal) => [
+    `- ${goal.id} (${goal.kind}, priority ${goal.priority}, wave ${goal.budget.wave})`,
+    `  Question: ${goal.question}`,
+    `  Evidence needed: ${goal.evidenceNeeds.join("; ")}`,
+    `  Supported if: ${goal.resolutionCriteria.supportedIf}`,
+    `  Contradicted if: ${goal.resolutionCriteria.contradictedIf}`,
+  ].join("\n")).join("\n");
 }
 
 function goalsForLane(queryPlan: ResearchQueryPlan, lane: "web" | "x"): ResearchGoal[] {
@@ -252,6 +445,128 @@ function evidenceFromSources(
     relevance: 0.8,
     notes: null,
   }));
+}
+
+async function classifyEvidenceLedger(input: {
+  providerModel: string;
+  provider: string;
+  job: QueryJob;
+  queryPlan: ResearchQueryPlan;
+  summary: string;
+  sources?: SearchSource[];
+  toolResults?: unknown[];
+}): Promise<EvidenceLedger> {
+  const result = await generateText({
+    model: openai(input.providerModel),
+    output: Output.object({
+      schema: EvidenceLedgerSchema,
+      name: "cassie_evidence_ledger",
+    }),
+    prompt: evidenceLedgerPrompt({
+      queryJob: input.job,
+      normalizedClaim: input.queryPlan.normalizedClaim,
+      goals: input.queryPlan.goals.filter((goal) => input.job.goalIds.includes(goal.id)),
+      searchOutput: {
+        summary: input.summary,
+        sources: input.sources ?? [],
+        toolResults: input.toolResults ?? [],
+      },
+      retrievedAt: new Date().toISOString(),
+    }),
+  });
+
+  return result.output;
+}
+
+function evidenceFromLedger(sourceLane: "openai_search" | "x_search", ledger: EvidenceLedger): ResearchEvidence[] {
+  if (ledger.evidenceClaims.length === 0) {
+    return ledger.searchResults.map((result) => ({
+      sourceLane,
+      sourceType: sourceTypeForResearchEvidence(result.sourceType),
+      title: result.title,
+      url: result.url,
+      author: result.author,
+      publishedAt: result.publishedAt,
+      summary: result.snippet ?? result.rawText ?? "",
+      stance: "unclear" as const,
+      reliability: reliabilityForResearchEvidence("unknown"),
+      relevance: 0.5,
+      notes: [`queryId: ${result.queryId}`, `queryJobId: ${result.queryJobId}`],
+    }));
+  }
+
+  return ledger.evidenceClaims.map((claim) => {
+    const result = ledger.searchResults.find((item) => item.id === claim.resultId);
+    const strongestLink = ledger.goalEvidenceLinks
+      .filter((link) => link.evidenceClaimId === claim.id)
+      .sort((left, right) => right.strength - left.strength)[0];
+
+    return {
+      sourceLane,
+      sourceType: sourceTypeForResearchEvidence(claim.sourceType),
+      title: result?.title ?? null,
+      url: result?.url ?? null,
+      author: result?.author ?? null,
+      publishedAt: result?.publishedAt ?? null,
+      summary: claim.claimText,
+      stance: stanceForResearchEvidence(strongestLink?.stance),
+      reliability: reliabilityForResearchEvidence(claim.reliability),
+      relevance: strongestLink?.relevance ?? claim.extractionConfidence,
+      notes: [
+        `queryId: ${claim.queryId}`,
+        `queryJobId: ${claim.queryJobId}`,
+        `evidenceClaimId: ${claim.id}`,
+      ],
+    };
+  });
+}
+
+function emptyLedger(): EvidenceLedger {
+  return {
+    searchResults: [],
+    evidenceClaims: [],
+    goalEvidenceLinks: [],
+  };
+}
+
+function sourceTypeForResearchEvidence(sourceType: EvidenceLedger["searchResults"][number]["sourceType"]) {
+  switch (sourceType) {
+    case "official":
+    case "regulatory":
+    case "company":
+    case "exchange":
+    case "news":
+    case "social":
+    case "blog":
+    case "unknown":
+      return sourceType;
+    case "filing":
+    case "court_doc":
+      return "regulatory" as const;
+    case "specialist_media":
+      return "news" as const;
+    case "docs":
+    case "github":
+      return "blog" as const;
+    case "market_data":
+    case "onchain_data":
+    case "prediction_market":
+    case "security_researcher":
+    case "aggregator":
+      return "unknown" as const;
+  }
+}
+
+function stanceForResearchEvidence(stance: EvidenceLedger["goalEvidenceLinks"][number]["stance"] | undefined) {
+  if (stance === "supports") return "supports" as const;
+  if (stance === "contradicts") return "refutes" as const;
+  if (stance === "qualifies") return "mixed" as const;
+  return "unclear" as const;
+}
+
+function reliabilityForResearchEvidence(reliability: EvidenceLedger["evidenceClaims"][number]["reliability"]) {
+  if (reliability === "unknown") return "medium" as const;
+  return reliability;
 }
 
 function evidenceFromXSearch(summary: string, toolResults: unknown[]) {

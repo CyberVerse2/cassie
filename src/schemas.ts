@@ -254,6 +254,120 @@ export const ResearchQueryPlanSchema = z.object({
   }),
 });
 
+export const SearchSourceTypeSchema = z.enum([
+  "official",
+  "regulatory",
+  "company",
+  "exchange",
+  "filing",
+  "court_doc",
+  "news",
+  "specialist_media",
+  "blog",
+  "github",
+  "docs",
+  "social",
+  "security_researcher",
+  "market_data",
+  "onchain_data",
+  "prediction_market",
+  "aggregator",
+  "unknown",
+]);
+
+export const QueryJobSchema = z.object({
+  id: z.string(),
+  runId: z.string(),
+  wave: z.number().int().min(0),
+  querySpecId: z.string(),
+  goalIds: z.array(z.string()).min(1),
+  lane: ResearchLaneSchema,
+  provider: z.string(),
+  query: z.string(),
+  queryKind: ResearchQuerySpecSchema.shape.queryKind,
+  priority: z.number().min(0).max(1),
+  maxResults: z.number().int().min(1).max(100),
+  mustExecuteAtomically: z.boolean(),
+  expectedEvidence: z.string(),
+  rationale: z.string(),
+});
+
+export const SearchResultSchema = z.object({
+  id: z.string(),
+  runId: z.string(),
+  queryJobId: z.string(),
+  queryId: z.string(),
+  goalIds: z.array(z.string()).min(1),
+  wave: z.number().int().min(0),
+  lane: ResearchLaneSchema,
+  provider: z.string(),
+  title: z.string().nullable(),
+  url: z.string().nullable(),
+  canonicalUrl: z.string().nullable(),
+  author: z.string().nullable(),
+  sourceName: z.string().nullable(),
+  sourceType: SearchSourceTypeSchema,
+  publishedAt: z.string().nullable(),
+  retrievedAt: z.string(),
+  rawText: z.string().nullable(),
+  snippet: z.string().nullable(),
+  rank: z.number().int().nullable(),
+  duplicateOf: z.string().nullable(),
+  metadata: z.record(z.string(), z.unknown()),
+});
+
+export const EvidenceClaimSchema = z.object({
+  id: z.string(),
+  resultId: z.string(),
+  queryJobId: z.string(),
+  queryId: z.string(),
+  goalIds: z.array(z.string()).min(1),
+  wave: z.number().int().min(0),
+  claimText: z.string(),
+  normalizedClaim: z.string().nullable(),
+  entities: z.array(z.string()),
+  assets: z.array(z.string()),
+  topics: z.array(z.string()),
+  eventTime: z.string().nullable(),
+  claimTimeRelation: z.enum(["before_signal", "same_time", "after_signal", "unclear"]),
+  sourceType: SearchSourceTypeSchema,
+  directness: z.enum(["primary", "direct_secondary", "indirect", "rumor", "context"]),
+  reliability: z.enum(["high", "medium", "low", "unknown"]),
+  extractionConfidence: z.number().min(0).max(1),
+  quote: z.string().nullable(),
+  quoteStartChar: z.number().int().nullable(),
+  quoteEndChar: z.number().int().nullable(),
+});
+
+export const GoalEvidenceLinkSchema = z.object({
+  id: z.string(),
+  goalId: z.string(),
+  evidenceClaimId: z.string(),
+  stance: z.enum(["supports", "contradicts", "qualifies", "context", "irrelevant"]),
+  relevance: z.number().min(0).max(1),
+  strength: z.number().min(0).max(1),
+  reason: z.string(),
+  satisfiesEvidenceNeeds: z.array(z.string()),
+  redFlags: z.array(z.enum([
+    "source_is_aggregator",
+    "unverified_social",
+    "promotional",
+    "stale",
+    "ambiguous_entity",
+    "ambiguous_resolution",
+    "duplicate",
+    "low_directness",
+    "possible_coordination",
+    "paywalled_or_unverified",
+  ])),
+});
+
+export const EvidenceLedgerSchema = z.object({
+  searchResults: z.array(SearchResultSchema),
+  evidenceClaims: z.array(EvidenceClaimSchema),
+  goalEvidenceLinks: z.array(GoalEvidenceLinkSchema),
+});
+
 export const GoalResolutionSchema = z.object({
   goalId: z.string(),
   status: z.enum([
@@ -270,6 +384,25 @@ export const GoalResolutionSchema = z.object({
   unresolvedQuestions: z.array(z.string()),
   summary: z.string(),
   synthesisImplication: z.string(),
+});
+
+export const ResearchContinuationDecisionSchema = z.object({
+  action: z.enum([
+    "stop_no_trade",
+    "stop_watchlist",
+    "continue_planned",
+    "continue_with_adaptive_queries",
+    "escalate_crisis",
+    "route_to_trade_expression",
+  ]),
+  reason: z.string(),
+  resolvedGoalIds: z.array(z.string()),
+  unresolvedBlockingGoalIds: z.array(z.string()),
+  contradictedGoalIds: z.array(z.string()),
+  allowedNextGoalIds: z.array(z.string()),
+  maxAdditionalQueries: z.number().int().min(0),
+  adaptiveQueryInstructions: z.array(z.string()),
+  blockedActions: z.array(z.string()),
 });
 
 export const ResearchReportSchema = z.object({
@@ -502,7 +635,13 @@ export type ResearchReport = z.infer<typeof ResearchReportSchema>;
 export type ResearchEvidence = z.infer<typeof ResearchEvidenceSchema>;
 export type ResearchGoal = z.infer<typeof ResearchGoalSchema>;
 export type ResearchQueryPlan = z.infer<typeof ResearchQueryPlanSchema>;
+export type QueryJob = z.infer<typeof QueryJobSchema>;
+export type SearchResult = z.infer<typeof SearchResultSchema>;
+export type EvidenceClaim = z.infer<typeof EvidenceClaimSchema>;
+export type GoalEvidenceLink = z.infer<typeof GoalEvidenceLinkSchema>;
+export type EvidenceLedger = z.infer<typeof EvidenceLedgerSchema>;
 export type GoalResolution = z.infer<typeof GoalResolutionSchema>;
+export type ResearchContinuationDecision = z.infer<typeof ResearchContinuationDecisionSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
