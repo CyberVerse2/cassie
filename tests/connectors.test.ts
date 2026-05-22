@@ -162,6 +162,44 @@ describe("research connectors", () => {
     });
   });
 
+  it("normalizes common directness labels from structured search models", () => {
+    expect(SearchQueryOutputSchema.parse({
+      findings: [
+        {
+          claim: "SOL/ETH ratio context is sourced from market data.",
+          sourceUrls: ["https://example.com/source"],
+          relevance: 0.9,
+          stance: "context",
+          sourceType: "market_data",
+          directness: "direct",
+          reliability: "medium",
+          quote: "Market data shows the ratio.",
+        },
+        {
+          claim: "The filing is from an official source.",
+          sourceUrls: ["https://example.com/filing"],
+          relevance: 1,
+          stance: "supports",
+          sourceType: "regulatory",
+          directness: "primary source",
+          reliability: "high",
+          quote: null,
+        },
+      ],
+      sources: [
+        {
+          title: "Example source",
+          url: "https://example.com/source",
+          sourceName: "Example",
+          sourceType: "market_data",
+          publishedAt: null,
+          snippet: "A source-backed snippet.",
+        },
+      ],
+      unresolved: [],
+    }).findings.map((finding) => finding.directness)).toEqual(["primary", "primary"]);
+  });
+
   it("rejects overlarge structured source lists", () => {
     expect(SearchQueryOutputSchema.safeParse({
       findings: [],

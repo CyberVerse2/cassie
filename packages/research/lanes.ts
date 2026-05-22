@@ -29,6 +29,28 @@ const DEFAULT_WEB_SEARCH_MODEL = "gemini-3.1-flash-lite";
 export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
 const SEARCH_TEXT_MAX_OUTPUT_TOKENS = 1_024;
 const MAX_SOURCES_PER_QUERY_JOB = 2;
+const EvidenceDirectnessFromSearchSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
+  switch (normalized) {
+    case "direct":
+    case "primary_source":
+    case "official":
+    case "official_source":
+      return "primary";
+    case "secondary":
+    case "direct_secondary_source":
+    case "directly_secondary":
+      return "direct_secondary";
+    case "indirect_secondary":
+    case "background":
+      return "indirect";
+    case "rumour":
+      return "rumor";
+    default:
+      return normalized;
+  }
+}, z.enum(["primary", "direct_secondary", "indirect", "rumor", "context"]));
 
 export const SearchQueryOutputSchema = z.object({
   findings: z.array(z.object({
@@ -38,7 +60,7 @@ export const SearchQueryOutputSchema = z.object({
     stance: z.enum(["supports", "contradicts", "qualifies", "context", "irrelevant"]),
     sourceType: SearchSourceTypeSchema,
     reliability: z.enum(["high", "medium", "low", "unknown"]),
-    directness: z.enum(["primary", "direct_secondary", "indirect", "rumor", "context"]),
+    directness: EvidenceDirectnessFromSearchSchema,
     quote: z.string().nullable(),
   })).max(4),
   sources: z.array(z.object({
@@ -352,7 +374,7 @@ Use unresolved for important missing evidence or ambiguity.
 Classify each atomic finding as an EvidenceClaim candidate:
 - sourceType
 - stance against the relevant goals
-- directness
+- directness: use exactly one of primary, direct_secondary, indirect, rumor, or context
 - reliability
 - source-backed quote when available
 - relevance to the evidence needs
