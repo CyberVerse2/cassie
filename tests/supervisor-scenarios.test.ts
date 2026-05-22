@@ -518,17 +518,30 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchReport: report,
     });
+    const noTradeMarketSelection: MarketSelection = {
+      selectedMarket: null,
+      rejectedCandidates: [],
+      noTradeReason: "No configured venue candidate matched the trade expression.",
+    };
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_selection",
+      status: "succeeded",
+      input: null,
+      output: noTradeMarketSelection,
+      error: null,
+      model: "deepseek/deepseek-v4-flash",
+      promptName: "cassie_market_selection",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "Model wanted to route.",
       thesis: extracted,
       researchReport: report,
-      marketSelection: {
-        selectedMarket: null,
-        rejectedCandidates: [],
-        noTradeReason: "No configured venue candidate matched the trade expression.",
-      },
+      marketSelection: noTradeMarketSelection,
     });
 
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
@@ -539,5 +552,48 @@ describe("supervisor scenario coverage", () => {
     });
     const completed = await store.getRun(run.runId);
     expect(String(completed?.result)).not.toContain("route_to_market_router");
+  });
+
+  it("ignores unpersisted market selection copied into finalization", async () => {
+    const { store, run, tools } = await createScenario("critic");
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const watchlistExpression: TradeExpressionPlan = {
+      ...tradeExpression,
+      decision: "watchlist",
+      reason: "Configured venues do not provide a clean candidate yet.",
+      marketRouterInstructions: null,
+    };
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "trade_expression",
+      status: "succeeded",
+      input: null,
+      output: watchlistExpression,
+      error: null,
+      model: "gemini-3.5-flash",
+      promptName: "cassie_trade_expression",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+
+    await executeTool(tools.finalize_run, {
+      responseType: "analysis",
+      publicSummary: "Watchlist only.",
+      thesis: extracted,
+      tradeExpression: watchlistExpression,
+      marketSelection: {
+        selectedMarket: null,
+        rejectedCandidates: [],
+        noTradeReason: "Model-copied no-trade reason that was not produced by select_market.",
+      },
+    });
+
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
+        actionState: "watchlist",
+        publicSummary: expect.not.stringContaining("Model-copied no-trade"),
+      },
+    });
   });
 });

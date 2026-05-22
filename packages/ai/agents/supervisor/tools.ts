@@ -466,7 +466,7 @@ async function canonicalizeFinalInput(
     critique,
     researchReport,
     tradeExpression,
-    marketSelection: marketSelection ?? input.marketSelection,
+    marketSelection,
     riskDecision,
   });
 
@@ -477,7 +477,7 @@ async function canonicalizeFinalInput(
     researchReport: researchReport ?? input.researchReport,
     tradeExpression: tradeExpression ?? input.tradeExpression,
     critique: critique ?? input.critique,
-    marketSelection: marketSelection ?? input.marketSelection,
+    marketSelection,
     riskDecision: riskDecision ?? input.riskDecision,
   };
 }
