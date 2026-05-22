@@ -60,7 +60,7 @@ export function selectActiveTools(
     return ["extract_inverse_thesis"];
   }
 
-  if ((intent === "think" || intent === "critic" || intent === "trade" || intent === "countertrade") && !hasSucceeded(steps, "research_thesis")) {
+  if ((intent === "think" || intent === "critic" || intent === "trade" || intent === "countertrade" || intent === "watch") && !hasSucceeded(steps, "research_thesis")) {
     return ["research_thesis"];
   }
 
@@ -68,6 +68,17 @@ export function selectActiveTools(
     if (!hasSucceeded(steps, "critique_thesis")) {
       return ["critique_thesis"];
     }
+    const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
+    if (!expression) {
+      return ["plan_trade_expression"];
+    }
+    if (shouldRouteToMarket(expression) && !hasSucceeded(steps, "select_market")) {
+      return ["select_market"];
+    }
+    return ["finalize_run"];
+  }
+
+  if (intent === "watch") {
     const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
     if (!expression) {
       return ["plan_trade_expression"];
@@ -108,8 +119,11 @@ export function selectActiveTools(
 }
 
 function shouldRouteToMarket(expression: TradeExpressionPlan): boolean {
-  return expression.decision === "route_to_market_router" &&
-    expression.candidates.some((candidate) => candidate.tradableNow);
+  return expression.decision === "needs_market_check" ||
+    (
+      expression.decision === "route_to_market_router" &&
+      expression.candidates.some((candidate) => candidate.tradableNow)
+    );
 }
 
 function hasCalled(

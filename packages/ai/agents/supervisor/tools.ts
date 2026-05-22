@@ -8,6 +8,7 @@ import {
 } from "../../../execution/account-state.ts";
 import {
   CritiqueSchema,
+  IntentResultSchema,
   MarketSelectionSchema,
   ResearchReportSchema,
   RiskDecisionSchema,
@@ -20,6 +21,7 @@ import {
   type CassieActionState,
   type ControlRun,
   type Critique,
+  type IntentResult,
   type MarketSelection,
   type ResearchReport,
   type RiskDecision,
@@ -52,6 +54,7 @@ const NonRejectedRiskDecisionSchema = z.object({
 const FinalizeRunInputSchema = z.object({
   responseType: z.enum(["analysis", "critique", "trade_ticket"]),
   publicSummary: z.string(),
+  intent: IntentResultSchema.optional(),
   thesis: ThesisSchema.optional(),
   marketSelection: MarketSelectionSchema.optional(),
   critique: CritiqueSchema.optional(),
@@ -67,7 +70,8 @@ export async function finalizeRunFromPersistedSteps(input: {
   store: CassieStore;
   run: ControlRun;
 }) {
-  const [thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
+  const [intent, thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
+    tryCanonicalStepOutput<IntentResult>(input.store, input.run.runId, "intent", IntentResultSchema),
     tryCanonicalStepOutput<Thesis>(input.store, input.run.runId, "thesis", ThesisSchema),
     tryCanonicalStepOutput<ResearchReport>(input.store, input.run.runId, "research", ResearchReportSchema),
     tryCanonicalStepOutput<Critique>(input.store, input.run.runId, "critique", CritiqueSchema),
@@ -82,6 +86,7 @@ export async function finalizeRunFromPersistedSteps(input: {
     publicSummary: riskDecision?.decision === "reject"
       ? riskDecision.reason
       : critique?.finalCritique ?? tradeExpression?.reason ?? researchReport?.publicSummary ?? "Cassie run completed.",
+    intent,
     thesis,
     researchReport,
     critique,
@@ -508,7 +513,8 @@ async function canonicalizeFinalInput(
   runId: string,
   input: FinalizeRunInput,
 ): Promise<FinalizeRunInput> {
-  const [thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision] = await Promise.all([
+  const [intent, thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision] = await Promise.all([
+    tryCanonicalStepOutput<IntentResult>(store, runId, "intent", IntentResultSchema),
     tryCanonicalStepOutput<Thesis>(store, runId, "thesis", ThesisSchema),
     tryCanonicalStepOutput<ResearchReport>(store, runId, "research", ResearchReportSchema),
     tryCanonicalStepOutput<Critique>(store, runId, "critique", CritiqueSchema),
@@ -528,6 +534,7 @@ async function canonicalizeFinalInput(
   return {
     ...input,
     publicSummary,
+    intent: intent ?? input.intent,
     thesis: thesis ?? input.thesis,
     researchReport: researchReport ?? input.researchReport,
     tradeExpression: tradeExpression ?? input.tradeExpression,
@@ -636,6 +643,7 @@ function finalizeResult(input: FinalizeRunInput) {
 
 function resolveActionState(input: FinalizeRunInput): CassieActionState {
   if (input.responseType === "trade_ticket") return "create_ticket";
+  if (input.intent?.intent === "watch") return "watchlist";
   if (input.riskDecision?.decision === "reject") return "block_trade";
 
   const selectedSide = input.marketSelection?.selectedMarket?.side;
@@ -648,8 +656,9 @@ function resolveActionState(input: FinalizeRunInput): CassieActionState {
 
   const tradeExpression = input.tradeExpression;
   if (tradeExpression?.decision === "route_to_market_router") return "route_to_market";
-  if (tradeExpression?.decision === "watchlist" || tradeExpression?.decision === "private_market_research") return "watchlist";
+  if (tradeExpression?.decision === "needs_market_check") return "needs_market_check";
+  if (tradeExpression?.decision === "insufficient_evidence" || tradeExpression?.decision === "private_market_research") return "insufficient_evidence";
   if (tradeExpression?.decision === "no_trade") return "no_trade";
 
-  return "watchlist";
+  return "insufficient_evidence";
 }

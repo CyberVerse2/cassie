@@ -554,14 +554,14 @@ describe("supervisor scenario coverage", () => {
     expect(String(completed?.result)).not.toContain("route_to_market_router");
   });
 
-  it("ignores unpersisted market selection copied into finalization", async () => {
+  it("maps non-watch unresolved expressions to insufficient evidence", async () => {
     const { store, run, tools } = await createScenario("critic");
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const watchlistExpression: TradeExpressionPlan = {
+    const unresolvedExpression: TradeExpressionPlan = {
       ...tradeExpression,
-      decision: "watchlist",
-      reason: "Configured venues do not provide a clean candidate yet.",
+      decision: "insufficient_evidence",
+      reason: "Evidence is too weak to route.",
       marketRouterInstructions: null,
     };
     await store.addRunStep({
@@ -569,7 +569,7 @@ describe("supervisor scenario coverage", () => {
       stepType: "trade_expression",
       status: "succeeded",
       input: null,
-      output: watchlistExpression,
+      output: unresolvedExpression,
       error: null,
       model: "gemini-3.5-flash",
       promptName: "cassie_trade_expression",
@@ -579,9 +579,9 @@ describe("supervisor scenario coverage", () => {
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
-      publicSummary: "Watchlist only.",
+      publicSummary: "Evidence is too weak.",
       thesis: extracted,
-      tradeExpression: watchlistExpression,
+      tradeExpression: unresolvedExpression,
       marketSelection: {
         selectedMarket: null,
         rejectedCandidates: [],
@@ -591,7 +591,7 @@ describe("supervisor scenario coverage", () => {
 
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
-        actionState: "watchlist",
+        actionState: "insufficient_evidence",
         publicSummary: expect.not.stringContaining("Model-copied no-trade"),
       },
     });
@@ -620,7 +620,7 @@ describe("supervisor scenario coverage", () => {
       input: null,
       output: {
         ...tradeExpression,
-        decision: "watchlist",
+        decision: "insufficient_evidence",
         reason: "Wait for the catalyst to resolve before routing.",
         marketRouterInstructions: null,
       },
@@ -634,16 +634,55 @@ describe("supervisor scenario coverage", () => {
     const final = await finalizeRunFromPersistedSteps({ store, run });
 
     expect(final).toMatchObject({
-      actionState: "watchlist",
+      actionState: "insufficient_evidence",
       responseType: "analysis",
-      publicSummary: expect.stringContaining("Trade expression: watchlist"),
+      publicSummary: expect.stringContaining("Trade expression: insufficient_evidence"),
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       status: "succeeded",
       result: {
-        actionState: "watchlist",
+        actionState: "insufficient_evidence",
       },
     });
     expect(extracted.claim).toBeTruthy();
+  });
+
+  it("keeps watchlist action state reserved for explicit watch requests", async () => {
+    const { store, run, tools } = await createScenario("watch");
+    await executeTool<IntentResult>(tools.classify_intent, {});
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const watchExpression: TradeExpressionPlan = {
+      ...tradeExpression,
+      decision: "insufficient_evidence",
+      reason: "User explicitly asked Cassie to watch this setup.",
+      marketRouterInstructions: null,
+    };
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "trade_expression",
+      status: "succeeded",
+      input: null,
+      output: watchExpression,
+      error: null,
+      model: "gemini-3.5-flash",
+      promptName: "cassie_trade_expression",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+
+    await executeTool(tools.finalize_run, {
+      responseType: "analysis",
+      publicSummary: "Explicit watch request.",
+      thesis: extracted,
+      tradeExpression: watchExpression,
+    });
+
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
+        actionState: "watchlist",
+        publicSummary: expect.stringContaining("Trade expression: insufficient_evidence"),
+      },
+    });
   });
 });

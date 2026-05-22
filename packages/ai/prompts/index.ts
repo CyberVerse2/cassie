@@ -13,7 +13,7 @@ function postContext(sourcePost: SourcePost, userCommand: string): string {
 
 const sourceQualityPrinciple = `Source-quality principle:
 - Evaluate source identity, reputation, track record, network context, and engagement quality when they affect the claim.
-- Treat credible but non-tradable signals as research_lead, soft_signal, or watchlist instead of forcing a trade or hard reject.
+- Treat credible but non-tradable signals as research_lead or soft_signal instead of forcing a trade or hard reject.
 - Separate independent evidence from repeated social momentum.`;
 
 export function intentRouterPrompt(input: {
@@ -27,6 +27,7 @@ Classify the user command into exactly one supported Cassie intent:
 - critic: critique, tear down, verify, "is this real", weakness, or skepticism requests.
 - trade: create a trade ticket, "get me in", buy/sell/long/short this, or explicit trading requests.
 - countertrade: fade, inverse, opposite trade, or countertrade requests.
+- watch: explicitly add to watchlist, track this, monitor this, watch this, or follow up later.
 
 Use semantic understanding. Do not use keyword-only matching.
 If the command is ambiguous, choose the safest supported intent and lower confidence.
@@ -44,7 +45,8 @@ export function thesisPrompt(input: {
   return `You are Cassie's thesis extractor.
 
 Extract the actual or implied market/research claim from the source post, user command, and signal interpretation.
-Do not force every post into an explicit trade thesis. Some posts are raw signals: news, funding, product launches, endorsements, exploits, regulatory updates, or generic opinions.
+Do not require the post to literally say "buy" or "sell." Assume the user selected the post because it may contain an implicit market idea worth testing.
+Do not force every post into an executable trade thesis. Some posts are raw signals: news, funding, product launches, endorsements, exploits, regulatory updates, or generic opinions.
 If there is no explicit thesis, extract the best research question or second-order implication and mark uncertainty clearly.
 Focus on what would need to be true in the world for the signal to matter.
 Name affected assets and topics when present.
@@ -77,7 +79,7 @@ Ask:
 - Which entities, people, products, protocols, companies, tokens, sectors, ecosystems, or markets might be affected?
 - Is any implication directly tradable, indirectly tradable, not tradable, or unknown?
 - What research angles would a smart analyst investigate next?
-- Should this be ignored, watchlisted, treated as a research lead, treated as a soft signal, or considered tradable now?
+- Should this be ignored, treated as a research lead, treated as a soft signal, considered tradable now, or watched only because the user explicitly asked to watch it?
 
 Be general. Do not assume the domain is crypto unless the post or command points that way.
 Do not invent a tradable asset. If the signal is interesting but not tradable, say so.
@@ -122,7 +124,8 @@ Evidence-grounding rules:
 - Distinguish "not proven by the filing" from "false."
 
 Return a direct critique. Do not choose order size or execute anything.
-Classify credible but non-tradable signals as watchlist or research_lead when appropriate.
+Do not treat ambiguity as user error. The user selected the post because it may contain a market idea. Identify the strongest plausible trade interpretation, then attack that interpretation with evidence, market availability, pricing, liquidity, and invalidation.
+Classify credible but non-routable signals as insufficient_evidence, needs_market_check, private_market_research, or no_trade. Do not output watchlist from this tool.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -154,7 +157,14 @@ export function tradeExpressionPrompt(input: unknown): string {
 Decide whether the researched signal has a clean monetizable expression.
 
 Return a concrete action path, not a generic summary. The downstream final action must be one of:
-no_trade, watchlist, route_to_market, long_perp, short_perp, buy_yes, buy_no, create_ticket, or block_trade.
+no_trade, needs_market_check, insufficient_evidence, trade_candidate, route_to_market, long_perp, short_perp, buy_yes, buy_no, create_ticket, or block_trade. Do not output watchlist from this tool.
+
+Posture:
+- Assume the user selected this post because it may contain an implicit market idea, not because they need protection from ambiguity.
+- Do not require the post to contain literal buy/sell language.
+- Extract the strongest plausible trade interpretation, test whether it survives, then decide whether venue search, routing, no-trade, or insufficient-evidence is appropriate.
+- A missing primary filing or inaccessible source should reduce evidence confidence, not automatically block market investigation when reputable secondary evidence supports the news claim.
+- News can be sufficient evidence for "reported news" claims. Official filings, venue listings, and live market prices still require the relevant official/venue/market source.
 
 Evaluate these decision factors:
 - what changed
@@ -177,14 +187,14 @@ Valuation discipline:
 - For each candidate, fill currentMarketPriceOrOdds when known or explicitly state the missing price/odds.
 - For each valuation or probability thesis, fill fairValueOrExpectedValue with the model, range, or expected-value comparison used for the decision.
 - Fill venueChecks with the exact venues inspected or required before routing.
-- Treat SEC/official-filing claims as unverified unless evidence includes the actual regulator/company filing URL or direct filing metadata. News, blogs, and search summaries may support a rumor but must not be upgraded to official filing proof by themselves.
+- Treat SEC/official-filing claims as officially verified only when evidence includes the actual regulator/company filing URL or direct filing metadata. News, blogs, and search summaries can still be sufficient secondary validation for reported-news claims and can justify market discovery.
 
-Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
+Treat no-trade, insufficient_evidence, needs_market_check, and private-market research as successful disciplined decisions when the causal chain is weak, evidence is incomplete, or the cleanest exposure is inaccessible.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
-In the current Cassie market-data surface, route_to_market_router is appropriate only for expressions that can be checked through configured market candidates such as Hyperliquid or Polymarket. Public-equity read-throughs without a configured candidate should be watchlist or no_trade, not route_to_market_router.
+In the current Cassie market-data surface, needs_market_check is appropriate when Hyperliquid or Polymarket should be searched before deciding. route_to_market_router is appropriate only after a clean, liquid, tradable-now candidate is known or strongly expected. Public-equity read-throughs without a configured candidate should be insufficient_evidence, private_market_research, or no_trade, not route_to_market_router.
 For vague sector watchlists or broad macro/sector commentary with no concrete ticker, instrument, catalyst, entry trigger, or venue:
 - Set directAsset to null and directAssetTradable to false.
-- Use no_trade or watchlist.
+- Use no_trade or insufficient_evidence unless the user explicitly asked to watch it.
 - Do not invent a representative index, ETF, stock, token, or option as the instrument.
 - If a candidate is needed, use an explicit non-instrument label such as "No concrete instrument" and explain what concrete ticker, venue, level, or catalyst evidence would be required.
 
@@ -200,7 +210,8 @@ Score every candidate from 0 to 1:
 
 Use decision:
 - route_to_market_router only when at least one liquid candidate is tradable now and has a clean enough causal chain
-- watchlist when the signal is meaningful but not yet a trade
+- needs_market_check when Hyperliquid, Polymarket, or another configured venue needs to be searched before deciding
+- insufficient_evidence when the idea is not dead but evidence, source access, pricing, or venue confirmation is too weak
 - private_market_research when the highest-purity expression is private or access-constrained
 - no_trade when the signal is weak, stale, refuted, or too indirect
 
@@ -221,12 +232,12 @@ Synthesis requirements:
 - Use decimal scores from 0 to 1 for every relevance, confidence, strength, priority, or similar score field. Do not use 0 to 10 scores or percentages.
 - Use sourceProfile as the primary source-author context when available.
 - Use source reputation, founder quality, product quality, network context, and engagement quality only when they affect the claim.
-- Classify leadQuality as ignore, watchlist, research_lead, soft_signal, or tradable_now.
+- Classify leadQuality as ignore, research_lead, soft_signal, or tradable_now. Do not emit watchlist from this tool; use research_lead or soft_signal for interesting but not-yet-routable signals.
 - Give concrete nextResearchActions.
 
 Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
-Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in research/critic/watchlist territory.
+Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in insufficient_evidence, needs_market_check, private_market_research, or no_trade territory.
 Preserve canonical tool outputs: do not rewrite supported goal resolutions into contradictions, and do not turn a missing venue into "the underlying claim is false" unless evidence actually refutes that claim component.
 If a continuation decision blocks trade_expression, market_router, or ticket_creation, set recommendedResearchAction to critic_only or do_not_continue and state the blocked action plainly.
 For S-1, IPO, ticker, listing, and regulatory filing claims, separate "reported by news/search result" from "verified in primary SEC/company/exchange filing." Do not call a filing official unless a primary source in the evidence ledger supports it.

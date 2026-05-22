@@ -59,10 +59,22 @@ describe("supervisor step policy", () => {
       step("research_thesis", {}),
       step("critique_thesis", {}),
       step("plan_trade_expression", {
-        decision: "watchlist",
+        decision: "insufficient_evidence",
         candidates: [],
       }),
     ])).toEqual(["finalize_run"]);
+
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "critic" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("critique_thesis", {}),
+      step("plan_trade_expression", {
+        decision: "needs_market_check",
+        candidates: [{ tradableNow: false }],
+      }),
+    ])).toEqual(["select_market"]);
 
     expect(selectActiveTools([
       step("classify_intent", { intent: "critic" }),
@@ -75,6 +87,25 @@ describe("supervisor step policy", () => {
         candidates: [{ tradableNow: true }],
       }),
     ])).toEqual(["select_market"]);
+  });
+
+  it("allows watchlist only for explicit watch requests", () => {
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "watch" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+    ])).toEqual(["research_thesis"]);
+
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "watch" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("plan_trade_expression", {
+        decision: "insufficient_evidence",
+        candidates: [],
+      }),
+    ])).toEqual(["finalize_run"]);
   });
 
   it("blocks ticket creation after rejected risk", () => {

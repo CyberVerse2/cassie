@@ -192,13 +192,14 @@ Use the available tools to process this run. Do not execute orders. Create a tra
 
 Required behavior:
 - Start with classify_intent, interpret_signal, and extract_thesis.
-- For critic requests, call research_thesis, critique_thesis, plan_trade_expression, select_market when the trade expression routes to market, then finalize_run. Do not create tickets for critic requests.
+- For critic requests, call research_thesis, critique_thesis, plan_trade_expression, select_market when the trade expression needs market checking or routes to market, then finalize_run. Do not create tickets for critic requests.
 - For trade requests, call research_thesis, plan_trade_expression, select_market, risk_check, create_trade_ticket when allowed, then finalize_run.
 - For countertrade requests, call extract_inverse_thesis before research and market selection.
-- For think requests, call research_thesis, plan_trade_expression, select_market when routed, risk_check when a market is selected, then finalize_run without creating a ticket.
+- For think requests, call research_thesis, plan_trade_expression, select_market when market checking or routing is needed, risk_check when a market is selected, then finalize_run without creating a ticket.
+- For watch requests, call research_thesis, plan_trade_expression, select_market when market checking or routing is needed, then finalize_run. Watchlist is valid only for explicit watch requests.
 - If risk_check rejects, do not call create_trade_ticket. Finalize with analysis and the rejection reason.
 - Always call finalize_run exactly once after the required tools have completed.
-- finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs. Include the concrete action state implied by the tool outputs: no trade, watchlist, route to market, long/short perp, buy YES/NO, create ticket, or block trade.
+- finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs. Include the concrete action state implied by the tool outputs: no trade, needs market check, insufficient evidence, trade candidate, route to market, long/short perp, buy YES/NO, create ticket, or block trade.
 - After finalize_run succeeds, do not call more tools.
 - Never invent market candidates.
 - Never place orders or enqueue execution.`;

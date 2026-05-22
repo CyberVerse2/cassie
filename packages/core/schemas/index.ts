@@ -5,6 +5,7 @@ export const CassieIntentSchema = z.enum([
   "critic",
   "trade",
   "countertrade",
+  "watch",
 ]);
 
 export const DirectionSchema = z.enum([
@@ -576,7 +577,11 @@ export const MarketSelectionSchema = z.object({
 
 export const TradeExpressionCandidateSchema = z.object({
   instrument: z.string(),
-  expression: z.enum(["long", "short", "pair", "basket", "watchlist", "no_trade"]),
+  venue: z.enum(["hyperliquid", "polymarket", "public_equity", "listed_options", "crypto_spot", "private_market", "other"]).nullable().optional(),
+  symbol: z.string().nullable().optional(),
+  instrumentType: z.enum(["spot", "perp", "pre_stock_perp", "prediction_market", "equity", "option", "private", "unknown"]).nullable().optional(),
+  venueQuery: z.string().nullable().optional(),
+  expression: z.enum(["long", "short", "pair", "basket", "market_check", "no_trade"]),
   thesis: z.string(),
   venueChecks: z.array(z.string()).optional(),
   currentMarketPriceOrOdds: z.string().nullable().optional(),
@@ -600,10 +605,19 @@ export const TradeExpressionPlanSchema = z.object({
   coreInterpretation: z.string(),
   directAsset: z.string().nullable(),
   directAssetTradable: z.boolean(),
+  evidenceConfidence: z.number().min(0).max(1).optional(),
+  marketDiscoveryConfidence: z.number().min(0).max(1).optional(),
+  tradeExpressionConfidence: z.number().min(0).max(1).optional(),
   highestPurityExpression: z.string(),
   publicMarketReadThrough: z.enum(["none", "weak", "moderate", "strong"]),
   candidates: z.array(TradeExpressionCandidateSchema),
-  decision: z.enum(["route_to_market_router", "watchlist", "private_market_research", "no_trade"]),
+  decision: z.enum([
+    "route_to_market_router",
+    "needs_market_check",
+    "insufficient_evidence",
+    "private_market_research",
+    "no_trade",
+  ]),
   reason: z.string(),
   marketRouterInstructions: z.string().nullable(),
 });
@@ -630,6 +644,9 @@ export const RiskDecisionSchema = z.discriminatedUnion("decision", [
 export const CassieActionStateSchema = z.enum([
   "no_trade",
   "watchlist",
+  "needs_market_check",
+  "insufficient_evidence",
+  "trade_candidate",
   "route_to_market",
   "long_perp",
   "short_perp",

@@ -29,7 +29,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "needs_market_check",
         "route_to_market",
         "block_trade"
       ],
@@ -63,7 +63,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "needs_market_check",
         "route_to_market",
         "long_perp"
       ],
@@ -97,7 +97,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "needs_market_check",
         "no_trade",
         "route_to_market"
       ],
@@ -132,7 +132,7 @@
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
         "no_trade",
-        "watchlist"
+        "needs_market_check"
       ],
       "candidateVenuesToCheck": [
         "public_equity",
@@ -164,7 +164,7 @@
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
         "no_trade",
-        "watchlist",
+        "needs_market_check",
         "short_perp"
       ],
       "candidateVenuesToCheck": [
@@ -198,7 +198,7 @@
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
         "no_trade",
-        "watchlist",
+        "needs_market_check",
         "route_to_market"
       ],
       "candidateVenuesToCheck": [
@@ -221,7 +221,7 @@
       "expectedBehavior": [
         "Treat as sentiment/social momentum unless volume, trend, and venue data confirm.",
         "Check HYPE price structure, open interest, and liquidation risk.",
-        "Consider watchlist rather than auto-routing."
+        "Consider insufficient_evidence rather than auto-routing."
       ],
       "forbiddenBehavior": [
         "Enter long because of hyperbolic wording.",
@@ -230,7 +230,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "needs_market_check",
         "no_trade",
         "long_perp"
       ],
@@ -265,7 +265,7 @@
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
         "block_trade",
-        "watchlist"
+        "needs_market_check"
       ],
       "candidateVenuesToCheck": [
         "public_equity",
@@ -297,7 +297,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "needs_market_check",
         "buy_no",
         "block_trade"
       ],
@@ -331,7 +331,7 @@
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
         "block_trade",
-        "watchlist",
+        "needs_market_check",
         "short_perp"
       ],
       "candidateVenuesToCheck": [
@@ -354,7 +354,7 @@
       "expectedBehavior": [
         "Separate exploit, bad security, rug pull, and recoverable incident.",
         "Look for primary incident reports, on-chain flows, and protocol response.",
-        "Block trade or watchlist if exploit facts are unresolved."
+        "Block trade or mark insufficient evidence if exploit facts are unresolved."
       ],
       "forbiddenBehavior": [
         "Call every exploit a rug without evidence.",
@@ -364,7 +364,7 @@
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
         "block_trade",
-        "watchlist"
+        "needs_market_check"
       ],
       "candidateVenuesToCheck": [
         "crypto_spot",
@@ -395,7 +395,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "needs_market_check",
         "route_to_market",
         "block_trade"
       ],
@@ -412,13 +412,13 @@
     },
     {
       "id": "sector-watchlist-ambiguous",
-      "category": "ambiguous watchlist",
+      "category": "ambiguous sector list",
       "postUrl": "https://x.com/ATWealthAdvisor/status/2057635053174202481",
       "authorHandle": "@ATWealthAdvisor",
       "postText": "My watchlist for today: Banking: Potential strength if market holds support. Pharma: Defensive sector; may remain stable. Auto: Could benefit from improving sentiment. IT: Watch carefully; sector has shown pressure recently.",
-      "whyUseful": "Tests minimal-watchlist handling for vague sector commentary.",
+      "whyUseful": "Tests conservative handling for vague sector commentary.",
       "expectedBehavior": [
-        "Classify as vague watchlist unless the user asks for deeper sector research.",
+        "Classify as insufficient_evidence or no_trade unless the user asks for deeper sector research.",
         "Ask for or infer specific tickers only if supported by the post context.",
         "Avoid creating a trade without a concrete catalyst and instrument."
       ],
@@ -429,7 +429,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "watchlist",
+        "insufficient_evidence",
         "no_trade"
       ],
       "candidateVenuesToCheck": [

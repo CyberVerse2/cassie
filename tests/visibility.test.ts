@@ -21,7 +21,7 @@ const tradeExpression: TradeExpressionPlan = {
   candidates: [
     {
       instrument: "Exa private equity",
-      expression: "watchlist",
+      expression: "market_check",
       thesis: "Highest purity exposure is private.",
       causalDirectness: 0.95,
       liquidity: 0.1,
@@ -37,7 +37,7 @@ const tradeExpression: TradeExpressionPlan = {
       evidenceNeeded: ["Revenue and valuation work."],
     },
   ],
-  decision: "watchlist",
+  decision: "insufficient_evidence",
   reason: "No clean public expression.",
   marketRouterInstructions: null,
 };
@@ -186,7 +186,7 @@ describe("visibility report", () => {
     });
 
     expect(report.decisionLedger.responseType).toBe("trade_decision");
-    expect(report.decisionLedger.tradeDecision).toBe("watchlist");
+    expect(report.decisionLedger.tradeDecision).toBe("insufficient_evidence");
     expect(report.researchGoals[0]).toMatchObject({
       id: "g_verify",
       kind: "event_validation",

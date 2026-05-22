@@ -3,7 +3,7 @@ import { evaluateXPostCaseOutcome, type XPostGoldenEvalCase } from "../packages/
 
 const baseCase = {
   id: "private-company-spacex-no-clean-venue",
-  expectedActionStates: ["watchlist", "route_to_market", "block_trade"],
+  expectedActionStates: ["needs_market_check", "route_to_market", "block_trade", "insufficient_evidence", "no_trade"],
   requiredVenuesToCheck: ["hyperliquid_pre_stock", "polymarket", "private_market"],
   requiredReasoning: ["venue availability", "valuation or odds", "risk and invalidation"],
   forbiddenBehavior: [
@@ -35,7 +35,7 @@ describe("X post eval runner", () => {
     const result = evaluateXPostCaseOutcome({
       evalCase: baseCase,
       outcome: {
-        actionState: "watchlist",
+        actionState: "insufficient_evidence",
         publicSummary: "SpaceX is not public yet, so there is no possible trade.",
       },
     });

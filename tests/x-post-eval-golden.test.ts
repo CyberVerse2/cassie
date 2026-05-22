@@ -6,6 +6,9 @@ import { z } from "zod";
 const ActionStateSchema = z.enum([
   "no_trade",
   "watchlist",
+  "needs_market_check",
+  "insufficient_evidence",
+  "trade_candidate",
   "route_to_market",
   "long_perp",
   "short_perp",
@@ -70,7 +73,7 @@ describe("X post eval fixture", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "private-company-spacex-no-clean-venue",
-          candidateActionStates: expect.arrayContaining(["watchlist", "route_to_market", "block_trade"]),
+          candidateActionStates: expect.arrayContaining(["needs_market_check", "route_to_market", "block_trade"]),
           candidateVenuesToCheck: expect.arrayContaining(["hyperliquid_pre_stock", "polymarket", "private_market"]),
           candidateReasoningChecks: expect.arrayContaining(["venue availability", "valuation or odds", "risk and invalidation"]),
         }),
