@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type { AccountStateProvider } from "../packages/execution/account-state.ts";
+import { buildSupervisorInstructions } from "../packages/ai/agents/supervisor/agent.ts";
 import { createCassieSupervisorTools } from "../packages/ai/agents/supervisor/tools.ts";
 import { InMemoryCassieStore } from "../packages/db/store.ts";
 import type {
@@ -321,6 +322,16 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 }
 
 describe("AI SDK supervisor agent", () => {
+  it("instructs the supervisor to use a flexible governed loop", () => {
+    const instructions = buildSupervisorInstructions();
+
+    expect(instructions).toContain("You may choose tools dynamically");
+    expect(instructions).toContain("Do not ask the user follow-up questions mid-run");
+    expect(instructions).toContain("Treat ambiguity conservatively");
+    expect(instructions).toContain("Never invent market candidates, prices, account state, or risk approvals");
+    expect(instructions).toContain("Always use finalize_run");
+  });
+
   it("records bounded tool steps and creates a pending trade ticket", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
