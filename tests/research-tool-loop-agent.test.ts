@@ -7,7 +7,7 @@ import {
 } from "../packages/ai/agents/research-tool-loop-agent.ts";
 
 describe("research ToolLoopAgent configuration", () => {
-  it("creates a forced-tool agent with the expected research tools", () => {
+  it("creates an agent with the expected research tools without forcing tool choice", () => {
     const agent = createResearchToolLoopAgent();
 
     expect(Object.keys(agent.tools)).toEqual([
@@ -19,14 +19,15 @@ describe("research ToolLoopAgent configuration", () => {
       "propose_adaptive_queries",
       "done",
     ]);
+    expect("toolChoice" in agent).toBe(false);
   });
 
-  it("phase-gates tools and routes models through prepareStep", async () => {
+  it("phase-gates available tools and routes models through prepareStep without forcing tool choice", async () => {
     await expect(prepareResearchToolLoopStep({ stepNumber: 0, steps: [], messages: [] })).resolves.toMatchObject({
       activeTools: ["create_query_jobs"],
-      toolChoice: { type: "tool", toolName: "create_query_jobs" },
       model: expect.objectContaining({ modelId: "gemini-3.1-flash-lite" }),
     });
+    await expect(prepareResearchToolLoopStep({ stepNumber: 0, steps: [], messages: [] })).resolves.not.toHaveProperty("toolChoice");
 
     await expect(prepareResearchToolLoopStep({
       stepNumber: 1,
@@ -34,7 +35,6 @@ describe("research ToolLoopAgent configuration", () => {
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["run_web_query", "run_x_query"],
-      toolChoice: "required",
       model: expect.objectContaining({ modelId: "gemini-3.1-flash-lite" }),
     });
 
@@ -44,7 +44,6 @@ describe("research ToolLoopAgent configuration", () => {
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["resolve_goal"],
-      toolChoice: { type: "tool", toolName: "resolve_goal" },
       model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
 
@@ -54,7 +53,6 @@ describe("research ToolLoopAgent configuration", () => {
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["decide_continuation"],
-      toolChoice: { type: "tool", toolName: "decide_continuation" },
       model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
   });
@@ -66,7 +64,6 @@ describe("research ToolLoopAgent configuration", () => {
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["propose_adaptive_queries"],
-      toolChoice: { type: "tool", toolName: "propose_adaptive_queries" },
       model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
 
@@ -76,7 +73,6 @@ describe("research ToolLoopAgent configuration", () => {
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["run_web_query", "run_x_query"],
-      toolChoice: "required",
       model: expect.objectContaining({ modelId: "gemini-3.1-flash-lite" }),
     });
   });
@@ -88,7 +84,6 @@ describe("research ToolLoopAgent configuration", () => {
       messages: [],
     })).resolves.toMatchObject({
       activeTools: ["done"],
-      toolChoice: { type: "tool", toolName: "done" },
       model: expect.objectContaining({ modelId: "gemini-3.5-flash" }),
     });
   });

@@ -34,7 +34,6 @@ export function createResearchToolLoopAgent() {
     model: googleModel(WEB_SEARCH_MODEL),
     instructions: researchToolLoopInstructions(),
     tools: researchTools(),
-    toolChoice: "required",
     stopWhen: [hasToolCall("done")],
     prepareStep: prepareResearchToolLoopStep as never,
   });
@@ -47,7 +46,6 @@ export async function prepareResearchToolLoopStep(input: PrepareInput) {
   return {
     model,
     activeTools,
-    toolChoice: toolChoiceForTools(activeTools),
     messages: compressResearchToolMessages(input.messages),
     providerOptions: googleThinkingOptions(thinkingLevelForTools(activeTools)),
   };
@@ -187,12 +185,6 @@ function modelForTools(activeTools: ResearchToolName[]) {
       process.env.CASSIE_MODEL ??
       DEFAULT_EXPENSIVE_MODEL,
   );
-}
-
-function toolChoiceForTools(activeTools: ResearchToolName[]) {
-  return activeTools.length === 1
-    ? { type: "tool" as const, toolName: activeTools[0] }
-    : "required" as const;
 }
 
 function thinkingLevelForTools(activeTools: ResearchToolName[]) {

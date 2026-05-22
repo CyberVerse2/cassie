@@ -212,7 +212,6 @@ export class GrokXSearchLane {
               enableVideoUnderstanding: true,
             }),
           },
-          toolChoice: "auto",
           prompt,
           abortSignal: AbortSignal.timeout(connectorCallTimeoutMs()),
         })

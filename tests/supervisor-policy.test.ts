@@ -72,10 +72,10 @@ describe("supervisor step policy", () => {
         errorStep("extract_thesis", new SupervisorPrerequisiteError("extract_thesis is not ready yet. Call interpret_signal first.")),
       ],
       messages: [],
-    } as never) as { activeTools: string[]; toolChoice: unknown };
+    } as never) as { activeTools: string[]; toolChoice?: unknown };
 
     expect(prepared.activeTools).toEqual(fullToolSurface);
-    expect(prepared.toolChoice).toBe("required");
+    expect(prepared.toolChoice).toBeUndefined();
   });
 
   it("keeps critique substance when compressing tool messages before finalization", () => {
