@@ -330,6 +330,11 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("Treat ambiguity conservatively");
     expect(instructions).toContain("Never invent market candidates, prices, account state, or risk approvals");
     expect(instructions).toContain("Always use finalize_run");
+    expect(instructions).toContain("Mode policy:");
+    expect(instructions).toContain("trade:");
+    expect(instructions).toContain("critic:");
+    expect(instructions).toContain("countertrade:");
+    expect(instructions).toContain("watch:");
   });
 
   it("records bounded tool steps and creates a pending trade ticket", async () => {
