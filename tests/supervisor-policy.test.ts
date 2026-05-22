@@ -70,6 +70,27 @@ describe("supervisor step policy", () => {
         },
         candidates: [],
       }),
+    ])).toEqual(["find_polymarket_markets"]);
+
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "critic" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("critique_thesis", {}),
+      step("plan_trade_expression", {
+        decision: "needs_market_check",
+        tradeExpressionConfidence: 0.32,
+        insufficiency: {
+          score: 0.32,
+          requiredThreshold: 0.65,
+          failedDimensions: ["market_discovery"],
+          summary: "No venue-confirmed market.",
+          evidenceNeededToClear: ["Venue market confirmation"],
+        },
+        candidates: [],
+      }),
+      step("find_polymarket_markets", []),
     ])).toEqual(["select_market"]);
 
     expect(selectActiveTools([
@@ -82,7 +103,7 @@ describe("supervisor step policy", () => {
         decision: "needs_market_check",
         candidates: [{ tradableNow: false }],
       }),
-    ])).toEqual(["select_market"]);
+    ])).toEqual(["find_polymarket_markets"]);
 
     expect(selectActiveTools([
       step("classify_intent", { intent: "critic" }),
@@ -114,7 +135,7 @@ describe("supervisor step policy", () => {
         tradeExpressionConfidence: 0.32,
         candidates: [],
       }),
-    ])).toEqual(["select_market"]);
+    ])).toEqual(["find_polymarket_markets"]);
   });
 
   it("blocks ticket creation after rejected risk", () => {

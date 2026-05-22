@@ -133,6 +133,7 @@ Implemented:
 - AI intent routing for `critic`, `trade`, `countertrade`, and `watch`
 - AI thesis and inverse-thesis extraction
 - Goal-first research with query jobs, OpenAI web search, Grok X search, evidence ledgers, and goal resolutions
+- Polymarket market discovery using the documented market/search surfaces indexed in `docs/llms/`
 - Hyperliquid and Polymarket market-data connectors
 - AI market selection from real connector candidates
 - Deterministic risk checks

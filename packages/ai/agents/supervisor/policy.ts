@@ -72,9 +72,8 @@ export function selectActiveTools(
     if (!expression) {
       return ["plan_trade_expression"];
     }
-    if (shouldRouteToMarket(expression) && !hasSucceeded(steps, "select_market")) {
-      return ["select_market"];
-    }
+    const nextMarketTool = selectNextMarketTool(steps, expression);
+    if (nextMarketTool) return [nextMarketTool];
     return ["finalize_run"];
   }
 
@@ -83,9 +82,8 @@ export function selectActiveTools(
     if (!expression) {
       return ["plan_trade_expression"];
     }
-    if (shouldRouteToMarket(expression) && !hasSucceeded(steps, "select_market")) {
-      return ["select_market"];
-    }
+    const nextMarketTool = selectNextMarketTool(steps, expression);
+    if (nextMarketTool) return [nextMarketTool];
     return ["finalize_run"];
   }
 
@@ -98,9 +96,8 @@ export function selectActiveTools(
     return ["finalize_run"];
   }
 
-  if (!hasSucceeded(steps, "select_market")) {
-    return ["select_market"];
-  }
+  const nextMarketTool = selectNextMarketTool(steps, expression);
+  if (nextMarketTool) return [nextMarketTool];
 
   if (!hasSucceeded(steps, "risk_check")) {
     return ["risk_check"];
@@ -118,12 +115,42 @@ export function selectActiveTools(
   return ["finalize_run"];
 }
 
+function selectNextMarketTool(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  expression: TradeExpressionPlan,
+): "find_polymarket_markets" | "select_market" | null {
+  if (!shouldRouteToMarket(expression)) return null;
+  if (shouldCheckPolymarket(expression) && !hasSucceeded(steps, "find_polymarket_markets")) {
+    return "find_polymarket_markets";
+  }
+  if (!hasSucceeded(steps, "select_market")) return "select_market";
+  return null;
+}
+
 function shouldRouteToMarket(expression: TradeExpressionPlan): boolean {
   return expression.decision === "needs_market_check" ||
     (
       expression.decision === "route_to_market_router" &&
       expression.candidates.some((candidate) => candidate.tradableNow)
     );
+}
+
+function shouldCheckPolymarket(expression: TradeExpressionPlan): boolean {
+  const searchable = [
+    expression.highestPurityExpression,
+    expression.marketRouterInstructions,
+    ...expression.candidates.flatMap((candidate) => [
+      candidate.venue,
+      candidate.instrumentType,
+      candidate.venueQuery,
+      ...(candidate.venueChecks ?? []),
+    ]),
+  ].filter((value): value is string => Boolean(value)).join(" ").toLowerCase();
+
+  return expression.decision === "needs_market_check" ||
+    searchable.includes("polymarket") ||
+    searchable.includes("prediction_market") ||
+    searchable.includes("prediction market");
 }
 
 function hasCalled(

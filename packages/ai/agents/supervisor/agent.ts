@@ -9,7 +9,7 @@ import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
 } from "../../../execution/account-state.ts";
-import { CompositeMarketDataProvider } from "../../../market-data/index.ts";
+import { CompositeMarketDataProvider, PolymarketMarketDataProvider } from "../../../market-data/index.ts";
 import { LiveResearchSearchLanes } from "../../../research/lanes.ts";
 import { DrizzleCassieStore } from "../../../db/drizzle-store.ts";
 import type { CassieStore } from "../../../db/store.ts";
@@ -181,6 +181,7 @@ function defaultDependencies(): CassieDependencies {
     cheapAi,
     importantAi,
     marketData: new CompositeMarketDataProvider(),
+    polymarketMarketFinder: new PolymarketMarketDataProvider(),
     researchLanes: new LiveResearchSearchLanes(),
   };
 }

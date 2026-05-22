@@ -1,5 +1,5 @@
 import type { MarketCandidate, ResearchReport, Thesis, TradeExpressionPlan } from "../core/schemas/index.ts";
-import type { MarketDataProvider } from "../ai/tools/market.ts";
+import type { MarketDataProvider, PolymarketMarketFinder } from "../ai/tools/market.ts";
 import { readJsonResponse } from "../core/connector-errors.ts";
 
 type HyperliquidMetaAndCtxs = [
@@ -124,15 +124,19 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
   }
 }
 
-export class PolymarketMarketDataProvider implements MarketDataProvider {
+export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {
   constructor(
     private readonly endpoint = "https://gamma-api.polymarket.com/markets",
     private readonly clobEndpoint = "https://clob.polymarket.com",
   ) {}
 
   async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
+    return this.findPolymarketMarkets(input);
+  }
+
+  async findPolymarketMarkets(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan; limit?: number }): Promise<MarketCandidate[]> {
     const url = new URL(this.endpoint);
-    url.searchParams.set("limit", "10");
+    url.searchParams.set("limit", String(input.limit ?? 10));
     url.searchParams.set("active", "true");
     url.searchParams.set("closed", "false");
     url.searchParams.set("search", polymarketSearchQuery(input.thesis, input.tradeExpression));

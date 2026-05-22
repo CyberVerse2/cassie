@@ -9,6 +9,7 @@ import {
 import {
   CritiqueSchema,
   IntentResultSchema,
+  MarketCandidateSchema,
   MarketSelectionSchema,
   ResearchReportSchema,
   RiskDecisionSchema,
@@ -23,6 +24,7 @@ import {
   type Critique,
   type IntentResult,
   type MarketSelection,
+  type MarketCandidate,
   type ResearchReport,
   type RiskDecision,
   type SignalInterpretation,
@@ -35,7 +37,7 @@ import {
 import { routeIntent } from "../../tools/intent-router.ts";
 import { interpretSignal } from "../../tools/signal.ts";
 import { critiqueThesis } from "../../tools/critique.ts";
-import { selectMarket } from "../../tools/market.ts";
+import { findPolymarketMarkets, selectMarket } from "../../tools/market.ts";
 import { planTradeExpression } from "../../tools/trade-expression.ts";
 import { researchThesis } from "../../../research/index.ts";
 import { evaluateRisk } from "../../../risk/index.ts";
@@ -331,6 +333,49 @@ export function createCassieSupervisorTools(input: {
         });
       }),
     }),
+    find_polymarket_markets: tool({
+      description: "Find real Polymarket markets related to the researched thesis and trade expression.",
+      inputSchema: z.object({
+        thesis: ThesisSchema,
+        researchReport: ResearchReportSchema.optional(),
+        tradeExpression: TradeExpressionPlanSchema.optional(),
+        limit: z.number().int().positive().max(25).optional(),
+      }),
+      execute: async ({ thesis, researchReport, tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
+        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
+        const canonicalResearchReport = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "research",
+          ResearchReportSchema,
+          researchReport,
+        );
+        const canonicalTradeExpression = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "trade_expression",
+          TradeExpressionPlanSchema,
+          tradeExpression,
+        );
+        const polymarket = input.deps.polymarketMarketFinder;
+        if (!polymarket) {
+          throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
+        }
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "market_candidates",
+          stepInput: { thesis: canonicalThesis, researchReport: canonicalResearchReport, tradeExpression: canonicalTradeExpression, limit },
+          execute: () => findPolymarketMarkets({
+            polymarket,
+            thesis: canonicalThesis,
+            researchReport: canonicalResearchReport,
+            tradeExpression: canonicalTradeExpression,
+            limit,
+          }),
+        });
+      }),
+    }),
     select_market: tool({
       description: "Select the best market expression from real market candidates; do not invent markets.",
       inputSchema: z.object({
@@ -354,6 +399,12 @@ export function createCassieSupervisorTools(input: {
           TradeExpressionPlanSchema,
           tradeExpression,
         );
+        const polymarketCandidates = await tryCanonicalStepOutput<MarketCandidate[]>(
+          input.store,
+          input.run.runId,
+          "market_candidates",
+          MarketCandidateSchema.array(),
+        );
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -361,13 +412,14 @@ export function createCassieSupervisorTools(input: {
           promptName: "cassie_market_selection",
           promptVersion,
           model: cheapModel,
-          stepInput: { thesis: canonicalThesis, researchReport: canonicalResearchReport, tradeExpression: canonicalTradeExpression },
+          stepInput: { thesis: canonicalThesis, researchReport: canonicalResearchReport, tradeExpression: canonicalTradeExpression, candidates: polymarketCandidates },
           execute: () => selectMarket({
             ai: cheapAi,
             marketData: input.deps.marketData,
             thesis: canonicalThesis,
             researchReport: canonicalResearchReport,
             tradeExpression: canonicalTradeExpression,
+            candidates: polymarketCandidates,
           }),
         });
       }),
