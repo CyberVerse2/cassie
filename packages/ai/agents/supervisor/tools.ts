@@ -14,6 +14,7 @@ import {
   SignalInterpretationSchema,
   SupervisorFinalResultSchema,
   ThesisSchema,
+  TradeTicketSchema,
   TradeExpressionPlanSchema,
   type AccountState,
   type CassieActionState,
@@ -24,6 +25,7 @@ import {
   type RiskDecision,
   type SignalInterpretation,
   type Thesis,
+  type TradeTicket,
   type TradeExpressionPlan,
   type RunStepType,
   type UserSettings,
@@ -60,6 +62,59 @@ const FinalizeRunInputSchema = z.object({
 });
 
 type FinalizeRunInput = z.infer<typeof FinalizeRunInputSchema>;
+
+export async function finalizeRunFromPersistedSteps(input: {
+  store: CassieStore;
+  run: ControlRun;
+}) {
+  const [thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
+    tryCanonicalStepOutput<Thesis>(input.store, input.run.runId, "thesis", ThesisSchema),
+    tryCanonicalStepOutput<ResearchReport>(input.store, input.run.runId, "research", ResearchReportSchema),
+    tryCanonicalStepOutput<Critique>(input.store, input.run.runId, "critique", CritiqueSchema),
+    tryCanonicalStepOutput<TradeExpressionPlan>(input.store, input.run.runId, "trade_expression", TradeExpressionPlanSchema),
+    tryCanonicalStepOutput<MarketSelection>(input.store, input.run.runId, "market_selection", MarketSelectionSchema),
+    tryCanonicalStepOutput<RiskDecision>(input.store, input.run.runId, "risk", RiskDecisionSchema),
+    tryCanonicalStepOutput<TradeTicket>(input.store, input.run.runId, "ticket", TradeTicketSchema),
+  ]);
+
+  const finalInput: FinalizeRunInput = {
+    responseType: tradeTicket ? "trade_ticket" : critique ? "critique" : "analysis",
+    publicSummary: riskDecision?.decision === "reject"
+      ? riskDecision.reason
+      : critique?.finalCritique ?? tradeExpression?.reason ?? researchReport?.publicSummary ?? "Cassie run completed.",
+    thesis,
+    researchReport,
+    critique,
+    tradeExpression,
+    marketSelection,
+    riskDecision,
+    tradeTicket: tradeTicket ? { ticketId: tradeTicket.ticketId } : undefined,
+  };
+  const canonicalFinalInput = await canonicalizeFinalInput(input.store, input.run.runId, finalInput);
+
+  return recordRunStep({
+    store: input.store,
+    runId: input.run.runId,
+    stepType: "final",
+    stepInput: canonicalFinalInput,
+    execute: async () => {
+      await validateFinalizationPrerequisites({
+        store: input.store,
+        runId: input.run.runId,
+        input: canonicalFinalInput,
+      });
+      const result = finalizeResult(canonicalFinalInput);
+      await input.store.updateRun({
+        ...input.run,
+        status: canonicalFinalInput.responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
+        result,
+        error: null,
+        updatedAt: new Date().toISOString(),
+      });
+      return result;
+    },
+  });
+}
 
 export function createCassieSupervisorTools(input: {
   store: CassieStore;

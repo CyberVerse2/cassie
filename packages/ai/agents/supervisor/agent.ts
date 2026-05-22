@@ -17,7 +17,7 @@ import type { ControlRun } from "../../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../../core/schemas/index.ts";
 import { formatErrorForLog } from "../../../core/error-format.ts";
 import type { CassieDependencies } from "../../../workflows/dependencies.ts";
-import { createCassieSupervisorTools } from "./tools.ts";
+import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
 import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
@@ -133,7 +133,8 @@ export async function runCassieSupervisorForRun(input: {
         stepMs: Number(process.env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS ?? 900_000),
       },
     });
-    const finalResult = extractFinalizeRunOutput(result);
+    const finalResult = extractFinalizeRunOutput(result)
+      ?? await finalizeRunFromPersistedSteps({ store, run: running });
 
     const completed = await store.getRun(running.runId);
     if (completed?.status === "running") {
@@ -169,7 +170,7 @@ function extractFinalizeRunOutput(result: { toolResults: unknown[]; steps: Array
     .filter((toolResult) => toolResult.toolName === "finalize_run")
     .at(-1);
   const output = finalizeResult?.output;
-  return SupervisorFinalResultSchema.parse(output);
+  return output == null ? null : SupervisorFinalResultSchema.parse(output);
 }
 
 function defaultDependencies(): CassieDependencies {

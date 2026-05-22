@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { createCassieSupervisorTools } from "../packages/ai/agents/supervisor/tools.ts";
+import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../packages/ai/agents/supervisor/tools.ts";
 import { InMemoryCassieStore } from "../packages/db/store.ts";
 import type {
   Critique,
@@ -595,5 +595,55 @@ describe("supervisor scenario coverage", () => {
         publicSummary: expect.not.stringContaining("Model-copied no-trade"),
       },
     });
+  });
+
+  it("finalizes from persisted canonical steps when the agent loop does not call finalize_run", async () => {
+    const { store, run, tools } = await createScenario("trade");
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "research",
+      status: "succeeded",
+      input: null,
+      output: researchReport,
+      error: null,
+      model: "gemini-3.5-flash",
+      promptName: "cassie_research_report",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "trade_expression",
+      status: "succeeded",
+      input: null,
+      output: {
+        ...tradeExpression,
+        decision: "watchlist",
+        reason: "Wait for the catalyst to resolve before routing.",
+        marketRouterInstructions: null,
+      },
+      error: null,
+      model: "gemini-3.5-flash",
+      promptName: "cassie_trade_expression",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+
+    const final = await finalizeRunFromPersistedSteps({ store, run });
+
+    expect(final).toMatchObject({
+      actionState: "watchlist",
+      responseType: "analysis",
+      publicSummary: expect.stringContaining("Trade expression: watchlist"),
+    });
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      status: "succeeded",
+      result: {
+        actionState: "watchlist",
+      },
+    });
+    expect(extracted.claim).toBeTruthy();
   });
 });
