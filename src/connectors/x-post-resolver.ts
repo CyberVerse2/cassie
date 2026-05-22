@@ -63,6 +63,7 @@ export class GrokXPostResolver {
             enableVideoUnderstanding: true,
           }),
         },
+        toolChoice: "required",
         prompt: buildXPostResolutionPrompt(locator),
       });
 
