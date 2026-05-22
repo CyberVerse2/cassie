@@ -68,6 +68,13 @@ const FinalizeRunInputSchema = z.object({
 
 type FinalizeRunInput = z.infer<typeof FinalizeRunInputSchema>;
 
+export class SupervisorPrerequisiteError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "SupervisorPrerequisiteError";
+  }
+}
+
 export async function finalizeRunFromPersistedSteps(input: {
   store: CassieStore;
   run: ControlRun;
@@ -178,21 +185,40 @@ export function createCassieSupervisorTools(input: {
       inputSchema: z.object({
         signal: SignalInterpretationSchema,
       }),
-      execute: async ({ signal }) => runStepOnce("thesis", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "thesis",
-        promptName: "cassie_thesis",
-        promptVersion,
-        model: cheapModel,
-        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost, signal },
-        execute: () => extractThesis({
-          ai: cheapAi,
-          userCommand: input.run.userCommand,
-          sourcePost: input.run.sourcePost,
-          signal,
-        }),
-      })),
+      execute: async () => runStepOnce("thesis", async () => {
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "extract_thesis",
+          required: [{
+            stepType: "signal",
+            toolName: "interpret_signal",
+            reason: "Thesis extraction must use Cassie's persisted signal interpretation rather than a model-supplied signal.",
+          }],
+        });
+        const canonicalSignal = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "signal",
+          SignalInterpretationSchema,
+          "extract_thesis requires a persisted signal interpretation. Call interpret_signal first, then retry extract_thesis.",
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "thesis",
+          promptName: "cassie_thesis",
+          promptVersion,
+          model: cheapModel,
+          stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost, signal: canonicalSignal },
+          execute: () => extractThesis({
+            ai: cheapAi,
+            userCommand: input.run.userCommand,
+            sourcePost: input.run.sourcePost,
+            signal: canonicalSignal,
+          }),
+        });
+      }),
     }),
     interpret_signal: tool({
       description: "Classify the source post into signal type, lead quality, tradability, and research angles.",
@@ -215,16 +241,52 @@ export function createCassieSupervisorTools(input: {
     extract_inverse_thesis: tool({
       description: "Create the strongest opposing thesis for a countertrade or fade request.",
       inputSchema: z.object({ thesis: ThesisSchema }),
-      execute: async ({ thesis }) => runStepOnce("inverse_thesis", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "inverse_thesis",
-        promptName: "cassie_inverse_thesis",
-        promptVersion,
-        model: cheapModel,
-        stepInput: { thesis },
-        execute: () => extractInverseThesis({ ai: cheapAi, thesis }),
-      })),
+      execute: async () => runStepOnce("inverse_thesis", async () => {
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "extract_inverse_thesis",
+          required: [
+            {
+              stepType: "intent",
+              toolName: "classify_intent",
+              reason: "Inverse thesis extraction is only valid after Cassie knows this is a countertrade or fade request.",
+            },
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Inverse thesis extraction needs the persisted original thesis first.",
+            },
+          ],
+        });
+        const intent = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "intent",
+          IntentResultSchema,
+          "extract_inverse_thesis requires persisted intent. Call classify_intent first.",
+        );
+        if (intent.intent !== "countertrade") {
+          throw new SupervisorPrerequisiteError("extract_inverse_thesis is only for countertrade or fade requests. If this is not countertrade, continue with research, trade expression planning, or finalization.");
+        }
+        const canonicalThesis = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "thesis",
+          ThesisSchema,
+          "extract_inverse_thesis requires a persisted thesis. Call extract_thesis first.",
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "inverse_thesis",
+          promptName: "cassie_inverse_thesis",
+          promptVersion,
+          model: cheapModel,
+          stepInput: { thesis: canonicalThesis },
+          execute: () => extractInverseThesis({ ai: cheapAi, thesis: canonicalThesis }),
+        });
+      }),
     }),
     research_thesis: tool({
       description: "Run Cassie's research subagent. It verifies evidence but never chooses markets or executes orders.",
@@ -233,36 +295,69 @@ export function createCassieSupervisorTools(input: {
         thesis: ThesisSchema,
         researchAngle: z.enum(["balanced", "critic", "counter"]),
       }),
-      execute: async ({ signal, thesis, researchAngle }) => runStepOnce("research", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "research",
-        promptName: "cassie_research_report",
-        promptVersion,
-        model: importantModel,
-        stepInput: { signal, thesis, researchAngle },
-        execute: async () => {
-          const report = await researchThesis({
-            ai: importantAi,
-            sourceProfileAi: importantAi,
-            lanes: input.deps.researchLanes,
-            sourcePost: input.run.sourcePost,
-            userCommand: input.run.userCommand,
-            signal,
-            thesis,
-            researchAngle,
-            persistence: {
-              store: input.store,
-              controlRunId: input.run.runId,
+      execute: async ({ researchAngle }) => runStepOnce("research", async () => {
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "research_thesis",
+          required: [
+            {
+              stepType: "signal",
+              toolName: "interpret_signal",
+              reason: "Research must use Cassie's persisted signal interpretation.",
             },
-          });
-          await input.store.addResearchReport({
-            runId: input.run.runId,
-            report,
-          });
-          return report;
-        },
-      })),
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Research must use Cassie's persisted thesis.",
+            },
+          ],
+        });
+        const canonicalSignal = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "signal",
+          SignalInterpretationSchema,
+          "research_thesis requires a persisted signal interpretation. Call interpret_signal first.",
+        );
+        const canonicalThesis = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "thesis",
+          ThesisSchema,
+          "research_thesis requires a persisted thesis. Call extract_thesis first.",
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "research",
+          promptName: "cassie_research_report",
+          promptVersion,
+          model: importantModel,
+          stepInput: { signal: canonicalSignal, thesis: canonicalThesis, researchAngle },
+          execute: async () => {
+            const report = await researchThesis({
+              ai: importantAi,
+              sourceProfileAi: importantAi,
+              lanes: input.deps.researchLanes,
+              sourcePost: input.run.sourcePost,
+              userCommand: input.run.userCommand,
+              signal: canonicalSignal,
+              thesis: canonicalThesis,
+              researchAngle,
+              persistence: {
+                store: input.store,
+                controlRunId: input.run.runId,
+              },
+            });
+            await input.store.addResearchReport({
+              runId: input.run.runId,
+              report,
+            });
+            return report;
+          },
+        });
+      }),
     }),
     critique_thesis: tool({
       description: "Critique a researched thesis and identify weaknesses without creating a trade.",
@@ -271,13 +366,32 @@ export function createCassieSupervisorTools(input: {
         researchReport: ResearchReportSchema,
       }),
       execute: async ({ thesis, researchReport }) => runStepOnce("critique", async () => {
-        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
-        const canonicalResearchReport = await getCanonicalStepOutput(
+        void thesis;
+        void researchReport;
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "critique_thesis",
+          required: [
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Critique requires the persisted thesis.",
+            },
+            {
+              stepType: "research",
+              toolName: "research_thesis",
+              reason: "Critique must use the persisted research report.",
+            },
+          ],
+        });
+        const canonicalThesis = await requireCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, "critique_thesis requires a persisted thesis. Call extract_thesis first.");
+        const canonicalResearchReport = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "research",
           ResearchReportSchema,
-          researchReport,
+          "critique_thesis requires a persisted research report. Call research_thesis first.",
         );
         return recordRunStep({
           store: input.store,
@@ -299,14 +413,39 @@ export function createCassieSupervisorTools(input: {
         researchReport: ResearchReportSchema,
       }),
       execute: async ({ signal, thesis, researchReport }) => runStepOnce("trade_expression", async () => {
-        const canonicalSignal = await getCanonicalStepOutput(input.store, input.run.runId, "signal", SignalInterpretationSchema, signal);
-        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
-        const canonicalResearchReport = await getCanonicalStepOutput(
+        void signal;
+        void thesis;
+        void researchReport;
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "plan_trade_expression",
+          required: [
+            {
+              stepType: "signal",
+              toolName: "interpret_signal",
+              reason: "Trade-expression planning must use Cassie's persisted signal interpretation.",
+            },
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Trade-expression planning must use Cassie's persisted thesis.",
+            },
+            {
+              stepType: "research",
+              toolName: "research_thesis",
+              reason: "Trade-expression planning must use the persisted research report.",
+            },
+          ],
+        });
+        const canonicalSignal = await requireCanonicalStepOutput(input.store, input.run.runId, "signal", SignalInterpretationSchema, "plan_trade_expression requires a persisted signal interpretation. Call interpret_signal first.");
+        const canonicalThesis = await requireCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, "plan_trade_expression requires a persisted thesis. Call extract_thesis first.");
+        const canonicalResearchReport = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "research",
           ResearchReportSchema,
-          researchReport,
+          "plan_trade_expression requires a persisted research report. Call research_thesis first.",
         );
         return recordRunStep({
           store: input.store,
@@ -342,20 +481,45 @@ export function createCassieSupervisorTools(input: {
         limit: z.number().int().positive().max(25).optional(),
       }),
       execute: async ({ thesis, researchReport, tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
-        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
-        const canonicalResearchReport = await getCanonicalStepOutput(
+        void thesis;
+        void researchReport;
+        void tradeExpression;
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "find_polymarket_markets",
+          required: [
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Market discovery must use Cassie's persisted thesis.",
+            },
+            {
+              stepType: "research",
+              toolName: "research_thesis",
+              reason: "Market discovery must use the persisted research report.",
+            },
+            {
+              stepType: "trade_expression",
+              toolName: "plan_trade_expression",
+              reason: "Market discovery must use the persisted trade-expression plan.",
+            },
+          ],
+        });
+        const canonicalThesis = await requireCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, "find_polymarket_markets requires a persisted thesis. Call extract_thesis first.");
+        const canonicalResearchReport = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "research",
           ResearchReportSchema,
-          researchReport,
+          "find_polymarket_markets requires a persisted research report. Call research_thesis first.",
         );
-        const canonicalTradeExpression = await getCanonicalStepOutput(
+        const canonicalTradeExpression = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "trade_expression",
           TradeExpressionPlanSchema,
-          tradeExpression,
+          "find_polymarket_markets requires a persisted trade-expression plan. Call plan_trade_expression first.",
         );
         const polymarket = input.deps.polymarketMarketFinder;
         if (!polymarket) {
@@ -384,20 +548,45 @@ export function createCassieSupervisorTools(input: {
         tradeExpression: TradeExpressionPlanSchema.optional(),
       }),
       execute: async ({ thesis, researchReport, tradeExpression }) => runStepOnce("market_selection", async () => {
-        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
-        const canonicalResearchReport = await getCanonicalStepOutput(
+        void thesis;
+        void researchReport;
+        void tradeExpression;
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "select_market",
+          required: [
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Market selection must use Cassie's persisted thesis.",
+            },
+            {
+              stepType: "research",
+              toolName: "research_thesis",
+              reason: "Market selection must use the persisted research report.",
+            },
+            {
+              stepType: "trade_expression",
+              toolName: "plan_trade_expression",
+              reason: "Market selection must use the persisted trade-expression plan.",
+            },
+          ],
+        });
+        const canonicalThesis = await requireCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, "select_market requires a persisted thesis. Call extract_thesis first.");
+        const canonicalResearchReport = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "research",
           ResearchReportSchema,
-          researchReport,
+          "select_market requires a persisted research report. Call research_thesis first.",
         );
-        const canonicalTradeExpression = await getCanonicalStepOutput(
+        const canonicalTradeExpression = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "trade_expression",
           TradeExpressionPlanSchema,
-          tradeExpression,
+          "select_market requires a persisted trade-expression plan. Call plan_trade_expression first.",
         );
         const polymarketCandidates = await tryCanonicalStepOutput<MarketCandidate[]>(
           input.store,
@@ -432,6 +621,16 @@ export function createCassieSupervisorTools(input: {
       }),
       execute: async ({ marketSelection, sizeUsd }) => runStepOnce("risk", async () => {
         void marketSelection;
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "risk_check",
+          required: [{
+            stepType: "market_selection",
+            toolName: "select_market",
+            reason: "Risk checks must use a persisted usable market selection.",
+          }],
+        });
         const canonicalMarketSelection = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
@@ -470,6 +669,43 @@ export function createCassieSupervisorTools(input: {
         void thesis;
         void marketSelection;
         void riskDecision;
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "create_trade_ticket",
+          required: [
+            {
+              stepType: "intent",
+              toolName: "classify_intent",
+              reason: "Trade-ticket creation is allowed only for persisted trade or countertrade intent.",
+            },
+            {
+              stepType: "thesis",
+              toolName: "extract_thesis",
+              reason: "Trade-ticket creation must use Cassie's persisted thesis.",
+            },
+            {
+              stepType: "market_selection",
+              toolName: "select_market",
+              reason: "Trade-ticket creation must use a persisted usable market selection.",
+            },
+            {
+              stepType: "risk",
+              toolName: "risk_check",
+              reason: "Trade-ticket creation requires a persisted non-rejected risk decision.",
+            },
+          ],
+        });
+        const intent = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "intent",
+          IntentResultSchema,
+          "Trade ticket creation requires persisted intent. Call classify_intent first.",
+        );
+        if (intent.intent !== "trade" && intent.intent !== "countertrade") {
+          throw new SupervisorPrerequisiteError("create_trade_ticket is only allowed for trade or countertrade intent. For critic/watch requests, call finalize_run with analysis or critique.");
+        }
         const canonicalThesis = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
@@ -518,17 +754,17 @@ export function createCassieSupervisorTools(input: {
       inputSchema: FinalizeRunInputSchema,
       execute: async (finalInput) => runStepOnce("final", async () => {
         const canonicalFinalInput = await canonicalizeFinalInput(input.store, input.run.runId, finalInput);
+        await validateFinalizationPrerequisites({
+          store: input.store,
+          runId: input.run.runId,
+          input: canonicalFinalInput,
+        });
         return recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "final",
         stepInput: canonicalFinalInput,
         execute: async () => {
-          await validateFinalizationPrerequisites({
-            store: input.store,
-            runId: input.run.runId,
-            input: canonicalFinalInput,
-          });
           const result = finalizeResult(canonicalFinalInput);
           const updated = {
             ...input.run,
@@ -560,6 +796,31 @@ async function getCanonicalStepOutput<T>(
   return schema.parse(persisted ?? fallback);
 }
 
+async function requirePriorSteps(input: {
+  store: CassieStore;
+  runId: string;
+  toolName: string;
+  required: Array<{
+    stepType: RunStepType;
+    toolName: string;
+    reason: string;
+  }>;
+}) {
+  const steps = await input.store.getRunSteps(input.runId);
+  const completed = new Set(
+    steps
+      .filter((step) => step.status === "succeeded" && step.output != null)
+      .map((step) => step.stepType),
+  );
+  const missing = input.required.filter((requirement) => !completed.has(requirement.stepType));
+  if (missing.length === 0) return;
+
+  const first = missing[0];
+  throw new SupervisorPrerequisiteError(
+    `${input.toolName} is not ready yet. Call ${first.toolName} first. ${first.reason}`,
+  );
+}
+
 async function tryCanonicalStepOutput<T>(
   store: CassieStore,
   runId: string,
@@ -582,20 +843,20 @@ async function requireCanonicalStepOutput<T>(
 ): Promise<T> {
   const output = await tryCanonicalStepOutput<T>(store, runId, stepType, schema);
   if (output == null) {
-    throw new Error(message);
+    throw new SupervisorPrerequisiteError(message);
   }
   return output;
 }
 
 function assertUsableMarketSelection(selection: MarketSelection): void {
   if (!selection.selectedMarket || selection.noTradeReason) {
-    throw new Error("Risk check requires a persisted usable market selection.");
+    throw new SupervisorPrerequisiteError("Risk check requires a persisted usable market selection.");
   }
 }
 
 function assertNonRejectedRiskDecision(decision: RiskDecision): void {
   if (decision.decision === "reject") {
-    throw new Error("Trade ticket creation requires a persisted non-rejected risk decision.");
+    throw new SupervisorPrerequisiteError("Trade ticket creation requires a persisted non-rejected risk decision.");
   }
 }
 
@@ -724,6 +985,29 @@ async function validateFinalizationPrerequisites(input: {
   runId: string;
   input: FinalizeRunInput;
 }) {
+  await requirePriorSteps({
+    store: input.store,
+    runId: input.runId,
+    toolName: "finalize_run",
+    required: [
+      {
+        stepType: "intent",
+        toolName: "classify_intent",
+        reason: "Finalization needs Cassie's persisted intent.",
+      },
+      {
+        stepType: "signal",
+        toolName: "interpret_signal",
+        reason: "Finalization needs Cassie's persisted signal interpretation.",
+      },
+      {
+        stepType: "thesis",
+        toolName: "extract_thesis",
+        reason: "Finalization needs Cassie's persisted thesis.",
+      },
+    ],
+  });
+
   if (input.input.responseType === "trade_ticket") {
     const persistedTicket = await tryCanonicalStepOutput<TradeTicket>(
       input.store,
@@ -732,7 +1016,7 @@ async function validateFinalizationPrerequisites(input: {
       TradeTicketSchema,
     );
     if (!persistedTicket || input.input.tradeTicket?.ticketId !== persistedTicket.ticketId) {
-      throw new Error("Trade-ticket finalization requires a persisted trade ticket.");
+      throw new SupervisorPrerequisiteError("Trade-ticket finalization requires a persisted trade ticket.");
     }
 
     const riskDecision = await requireCanonicalStepOutput(
@@ -746,16 +1030,23 @@ async function validateFinalizationPrerequisites(input: {
     return;
   }
 
-  if (input.input.responseType !== "critique") return;
-
   const steps = await input.store.getRunSteps(input.runId);
-  const hasCompletedCritique = steps.some((step) => step.stepType === "critique" && step.status === "succeeded");
-  if (!hasCompletedCritique) {
-    throw new Error("finalize_run critique response requires a completed critique_thesis step.");
+
+  if (input.input.responseType === "critique") {
+    const hasCompletedCritique = steps.some((step) => step.stepType === "critique" && step.status === "succeeded" && step.output != null);
+    if (!hasCompletedCritique) {
+      throw new SupervisorPrerequisiteError("finalize_run critique response is not ready. Call critique_thesis first so the final critique is grounded in persisted analysis.");
+    }
+    return;
   }
-  const hasCompletedTradeExpression = steps.some((step) => step.stepType === "trade_expression" && step.status === "succeeded");
-  if (!hasCompletedTradeExpression) {
-    throw new Error("finalize_run critique response requires a completed plan_trade_expression step.");
+
+  const hasMeaningfulAnalysisBasis = steps.some((step) =>
+    step.status === "succeeded" &&
+    step.output != null &&
+    ["research", "trade_expression", "market_selection", "risk", "critique", "ticket"].includes(step.stepType)
+  );
+  if (!hasMeaningfulAnalysisBasis) {
+    throw new SupervisorPrerequisiteError("finalize_run analysis response is not ready. Call research_thesis or plan_trade_expression first so the final answer is grounded in persisted analysis.");
   }
 }
 

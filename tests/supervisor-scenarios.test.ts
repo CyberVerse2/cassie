@@ -341,6 +341,7 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 describe("supervisor scenario coverage", () => {
   it("handles critic requests without creating trade tickets", async () => {
     const { store, run, tools } = await createScenario("critic");
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
@@ -372,6 +373,7 @@ describe("supervisor scenario coverage", () => {
 
   it("finalizes critic requests without requiring the model to copy critique JSON", async () => {
     const { store, run, tools } = await createScenario("critic");
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
@@ -413,6 +415,7 @@ describe("supervisor scenario coverage", () => {
 
   it("handles countertrade requests through inverse thesis before ticket creation", async () => {
     const { store, tools } = await createScenario("countertrade");
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const inverse = await executeTool<InverseThesis>(tools.extract_inverse_thesis, { thesis: extracted });
@@ -463,6 +466,7 @@ describe("supervisor scenario coverage", () => {
       ...baseSettings,
       maxSpreadBps: 1,
     });
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
@@ -506,6 +510,7 @@ describe("supervisor scenario coverage", () => {
 
   it("finalizes no-trade market routing without preserving stale route language", async () => {
     const { store, run, tools } = await createScenario("critic");
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
@@ -556,6 +561,7 @@ describe("supervisor scenario coverage", () => {
 
   it("maps non-watch unresolved expressions to insufficient evidence", async () => {
     const { store, run, tools } = await createScenario("critic");
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const unresolvedExpression: TradeExpressionPlan = {
@@ -619,6 +625,7 @@ describe("supervisor scenario coverage", () => {
 
   it("finalizes from persisted canonical steps when the agent loop does not call finalize_run", async () => {
     const { store, run, tools } = await createScenario("trade");
+    await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     await store.addRunStep({

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { prepareCassieSupervisorStep, selectActiveTools } from "../packages/ai/agents/supervisor/policy.ts";
+import { SupervisorPrerequisiteError } from "../packages/ai/agents/supervisor/tools.ts";
 
 function step(toolName: string, output?: unknown) {
   return {
@@ -18,134 +19,32 @@ function errorStep(toolName: string, error: Error) {
   };
 }
 
-const tradeExpression = {
-  decision: "route_to_market_router",
-  candidates: [{ tradableNow: true, venue: "polymarket" }],
-  highestPurityExpression: "Long SOL perp.",
-  marketRouterInstructions: "Prefer direct SOL perps.",
-};
-
-const noTradeExpression = {
-  decision: "no_trade",
-  candidates: [],
-  highestPurityExpression: "No clean expression.",
-  marketRouterInstructions: null,
-};
-
 describe("supervisor step policy", () => {
-  it("starts with broad analytical tools instead of a single fixed first tool", () => {
+  const fullToolSurface = [
+    "classify_intent",
+    "interpret_signal",
+    "extract_thesis",
+    "extract_inverse_thesis",
+    "research_thesis",
+    "critique_thesis",
+    "plan_trade_expression",
+    "find_polymarket_markets",
+    "select_market",
+    "risk_check",
+    "create_trade_ticket",
+    "finalize_run",
+  ];
+
+  it("exposes the full supervisor tool surface until finalization", () => {
     expect(selectActiveTools([])).toEqual([
-      "classify_intent",
-      "interpret_signal",
-      "extract_thesis",
-    ]);
-  });
-
-  it("requires core trade context before finalization is available", () => {
-    const afterThesis = selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
+      ...fullToolSurface,
     ]);
 
-    expect(afterThesis).toEqual(expect.arrayContaining([
-      "research_thesis",
-      "plan_trade_expression",
-    ]));
-    expect(afterThesis).not.toContain("finalize_run");
-
     expect(selectActiveTools([
       step("classify_intent", { intent: "trade" }),
       step("interpret_signal", {}),
       step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", noTradeExpression),
-    ])).toContain("finalize_run");
-  });
-
-  it("does not allow early finalization after intent and signal only", () => {
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-    ])).not.toContain("finalize_run");
-  });
-
-  it("allows critique after research context exists", () => {
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-    ])).toEqual(expect.arrayContaining([
-      "critique_thesis",
-      "plan_trade_expression",
-    ]));
-  });
-
-  it("unlocks market tools after a tradable expression exists", () => {
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", tradeExpression),
-    ])).toEqual(expect.arrayContaining([
-      "find_polymarket_markets",
-      "select_market",
-      "finalize_run",
-    ]));
-  });
-
-  it("does not unlock risk or ticket tools until market selection and risk prerequisites exist", () => {
-    expect(selectActiveTools([
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", tradeExpression),
-    ])).not.toEqual(expect.arrayContaining(["risk_check", "create_trade_ticket"]));
-
-    expect(selectActiveTools([
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", tradeExpression),
-      step("select_market", { selectedMarket: { symbol: "SOL" }, noTradeReason: null }),
-    ])).toEqual(expect.arrayContaining(["risk_check"]));
-
-    expect(selectActiveTools([
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", tradeExpression),
-      step("select_market", { selectedMarket: { symbol: "SOL" }, noTradeReason: null }),
-      step("risk_check", { decision: "approve" }),
-    ])).toEqual(expect.arrayContaining(["create_trade_ticket"]));
-  });
-
-  it("keeps finalization available for no-trade analysis without risk or ticket tools", () => {
-    const activeTools = selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", noTradeExpression),
-    ]);
-
-    expect(activeTools).toContain("finalize_run");
-    expect(activeTools).not.toContain("risk_check");
-    expect(activeTools).not.toContain("create_trade_ticket");
-  });
-
-  it("blocks ticket creation after rejected risk", () => {
-    const activeTools = selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("plan_trade_expression", tradeExpression),
-      step("select_market", { selectedMarket: { symbol: "SOL" }, noTradeReason: null }),
-      step("risk_check", { decision: "reject", reason: "No." }),
-    ]);
-
-    expect(activeTools).toContain("finalize_run");
-    expect(activeTools).not.toContain("create_trade_ticket");
+    ])).toEqual(fullToolSurface);
   });
 
   it("exposes no tools after finalization", () => {
@@ -157,16 +56,24 @@ describe("supervisor step policy", () => {
     ])).toEqual([]);
   });
 
-  it("does not advance past failed required tools", () => {
-    expect(selectActiveTools([
-      step("classify_intent"),
-    ])).toEqual(["classify_intent", "interpret_signal", "extract_thesis"]);
-
+  it("still aborts the loop on hard tool errors", () => {
     expect(() => prepareCassieSupervisorStep({
       steps: [
         errorStep("classify_intent", new Error("rate limited")),
       ],
     } as never)).toThrow("Supervisor tool classify_intent failed: rate limited");
+  });
+
+  it("lets the model recover from prerequisite guidance errors", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        errorStep("extract_thesis", new SupervisorPrerequisiteError("extract_thesis is not ready yet. Call interpret_signal first.")),
+      ],
+      messages: [],
+    } as never) as { activeTools: string[]; toolChoice: unknown };
+
+    expect(prepared.activeTools).toEqual(fullToolSurface);
+    expect(prepared.toolChoice).toBe("required");
   });
 
   it("keeps critique substance when compressing tool messages before finalization", () => {

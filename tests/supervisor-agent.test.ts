@@ -452,10 +452,22 @@ describe("AI SDK supervisor agent", () => {
     await expect(executeTool<IntentResult>(tools.classify_intent, {})).resolves.toMatchObject({
       intent: "trade",
     });
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+      signal: interpreted,
+      thesis: extracted,
+      researchAngle: "balanced",
+    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: extracted,
+      researchReport: report,
+    });
     await executeTool(tools.select_market, {
-      thesis,
-      researchReport,
-      tradeExpression,
+      thesis: extracted,
+      researchReport: report,
+      tradeExpression: expression,
     });
     await expect(executeTool(tools.risk_check, {
       marketSelection,
@@ -503,7 +515,7 @@ describe("AI SDK supervisor agent", () => {
     await expect(executeTool(tools.risk_check, {
       marketSelection,
       sizeUsd: null,
-    })).rejects.toThrow("Risk check requires a persisted usable market selection.");
+    })).rejects.toThrow("risk_check is not ready yet. Call select_market first.");
   });
 
   it("rejects trade ticket creation without a persisted non-rejected risk decision", async () => {
@@ -536,18 +548,30 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    await executeTool<IntentResult>(tools.classify_intent, {});
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+      signal: interpreted,
+      thesis: extracted,
+      researchAngle: "balanced",
+    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: extracted,
+      researchReport: report,
+    });
     await executeTool(tools.select_market, {
       thesis: extracted,
-      researchReport,
-      tradeExpression,
+      researchReport: report,
+      tradeExpression: expression,
     });
     await expect(executeTool(tools.create_trade_ticket, {
       thesis: extracted,
       marketSelection,
       riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
       sizeUsd: null,
-    })).rejects.toThrow("Trade ticket creation requires a persisted non-rejected risk decision.");
+    })).rejects.toThrow("create_trade_ticket is not ready yet. Call risk_check first.");
   });
 
   it("allows early grounded analysis finalization without market or risk state", async () => {
@@ -580,9 +604,11 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    await executeTool<IntentResult>(tools.classify_intent, {});
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal,
+      signal: interpreted,
       thesis: extracted,
       researchAngle: "balanced",
     });
@@ -627,6 +653,10 @@ describe("AI SDK supervisor agent", () => {
         },
       },
     });
+
+    await executeTool<IntentResult>(tools.classify_intent, {});
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
 
     await expect(executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
@@ -717,9 +747,10 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal,
+      signal: interpreted,
       thesis: extracted,
       researchAngle: "critic",
     });
@@ -728,7 +759,7 @@ describe("AI SDK supervisor agent", () => {
       researchReport: report,
     });
     await executeTool(tools.plan_trade_expression, {
-      signal,
+      signal: interpreted,
       thesis,
       researchReport: report,
     });
@@ -747,9 +778,10 @@ describe("AI SDK supervisor agent", () => {
       "cassie_critique",
       "cassie_trade_expression",
     ]);
-    expect(cheapAi.calls).toEqual(["cassie_thesis", "cassie_market_selection"]);
+    expect(cheapAi.calls).toEqual(["cassie_signal", "cassie_thesis", "cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
+      { type: "signal", model: "deepseek/deepseek-v4-flash" },
       { type: "thesis", model: "deepseek/deepseek-v4-flash" },
       { type: "research", model: "gemini-3.5-flash" },
       { type: "critique", model: "gemini-3.5-flash" },
@@ -787,9 +819,10 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal,
+      signal: interpreted,
       thesis: extracted,
       researchAngle: "critic",
     });
@@ -806,7 +839,7 @@ describe("AI SDK supervisor agent", () => {
       researchReport: lossyReport,
     });
     await executeTool(tools.plan_trade_expression, {
-      signal,
+      signal: interpreted,
       thesis,
       researchReport: lossyReport,
     });
