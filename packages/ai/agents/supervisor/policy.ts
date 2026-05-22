@@ -42,77 +42,68 @@ export function selectActiveTools(
     return [];
   }
 
-  if (!hasSucceeded(steps, "classify_intent")) {
-    return ["classify_intent"];
-  }
-
-  if (!hasSucceeded(steps, "interpret_signal")) {
-    return ["interpret_signal"];
-  }
-
-  if (!hasSucceeded(steps, "extract_thesis")) {
-    return ["extract_thesis"];
-  }
-
+  const active = new Set<CassieSupervisorToolName>();
   const intent = getLatestToolOutput<IntentResult>(steps, "classify_intent")?.intent;
+  const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
+  const riskDecision = getLatestToolOutput<RiskDecision>(steps, "risk_check");
+
+  if (!hasSucceeded(steps, "classify_intent")) active.add("classify_intent");
+  if (!hasSucceeded(steps, "interpret_signal")) active.add("interpret_signal");
+  if (!hasSucceeded(steps, "extract_thesis")) active.add("extract_thesis");
 
   if (intent === "countertrade" && !hasSucceeded(steps, "extract_inverse_thesis")) {
-    return ["extract_inverse_thesis"];
+    active.add("extract_inverse_thesis");
   }
 
-  if ((intent === "critic" || intent === "trade" || intent === "countertrade" || intent === "watch") && !hasSucceeded(steps, "research_thesis")) {
-    return ["research_thesis"];
+  if (hasSucceeded(steps, "extract_thesis")) {
+    if (!hasSucceeded(steps, "research_thesis")) active.add("research_thesis");
+    active.add("plan_trade_expression");
   }
 
-  if (intent === "critic") {
-    if (!hasSucceeded(steps, "critique_thesis")) {
-      return ["critique_thesis"];
-    }
-    const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
-    if (!expression) {
-      return ["plan_trade_expression"];
-    }
+  if (hasSucceeded(steps, "research_thesis")) {
+    active.add("critique_thesis");
+    active.add("plan_trade_expression");
+  }
+
+  if (expression && shouldRouteToMarket(expression)) {
     const nextMarketTool = selectNextMarketTool(steps, expression);
-    if (nextMarketTool) return [nextMarketTool];
-    return ["finalize_run"];
+    if (nextMarketTool) active.add(nextMarketTool);
+    active.add("select_market");
   }
 
-  if (intent === "watch") {
-    const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
-    if (!expression) {
-      return ["plan_trade_expression"];
-    }
-    const nextMarketTool = selectNextMarketTool(steps, expression);
-    if (nextMarketTool) return [nextMarketTool];
-    return ["finalize_run"];
+  if (hasUsableMarketSelection(steps) && !hasSucceeded(steps, "risk_check")) {
+    active.add("risk_check");
   }
 
-  const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
-  if (!expression) {
-    return ["plan_trade_expression"];
+  if (
+    riskDecision &&
+    riskDecision.decision !== "reject" &&
+    !hasSucceeded(steps, "create_trade_ticket")
+  ) {
+    active.add("create_trade_ticket");
   }
 
-  if (!shouldRouteToMarket(expression)) {
-    return ["finalize_run"];
-  }
+  active.add("finalize_run");
 
-  const nextMarketTool = selectNextMarketTool(steps, expression);
-  if (nextMarketTool) return [nextMarketTool];
+  return orderedTools(active);
+}
 
-  if (!hasSucceeded(steps, "risk_check")) {
-    return ["risk_check"];
-  }
-
-  const riskDecision = getLatestToolOutput<RiskDecision>(steps, "risk_check");
-  if (riskDecision?.decision === "reject") {
-    return ["finalize_run"];
-  }
-
-  if ((intent === "trade" || intent === "countertrade") && !hasSucceeded(steps, "create_trade_ticket")) {
-    return ["create_trade_ticket"];
-  }
-
-  return ["finalize_run"];
+function orderedTools(active: Set<CassieSupervisorToolName>): CassieSupervisorToolName[] {
+  const order: CassieSupervisorToolName[] = [
+    "classify_intent",
+    "interpret_signal",
+    "extract_thesis",
+    "extract_inverse_thesis",
+    "research_thesis",
+    "critique_thesis",
+    "plan_trade_expression",
+    "find_polymarket_markets",
+    "select_market",
+    "risk_check",
+    "create_trade_ticket",
+    "finalize_run",
+  ];
+  return order.filter((toolName) => active.has(toolName));
 }
 
 function selectNextMarketTool(
@@ -175,6 +166,13 @@ function getLatestToolOutput<T>(
     .flatMap((step) => step.toolResults)
     .filter((result) => result.toolName === toolName)
     .at(-1)?.output as T | undefined;
+}
+
+function hasUsableMarketSelection(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+): boolean {
+  const selection = getLatestToolOutput<{ selectedMarket?: unknown; noTradeReason?: unknown }>(steps, "select_market");
+  return Boolean(selection?.selectedMarket) && !selection?.noTradeReason;
 }
 
 function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string } | null {

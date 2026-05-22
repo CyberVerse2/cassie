@@ -18,139 +18,115 @@ function errorStep(toolName: string, error: Error) {
   };
 }
 
+const tradeExpression = {
+  decision: "route_to_market_router",
+  candidates: [{ tradableNow: true, venue: "polymarket" }],
+  highestPurityExpression: "Long SOL perp.",
+  marketRouterInstructions: "Prefer direct SOL perps.",
+};
+
+const noTradeExpression = {
+  decision: "no_trade",
+  candidates: [],
+  highestPurityExpression: "No clean expression.",
+  marketRouterInstructions: null,
+};
+
 describe("supervisor step policy", () => {
-  it("starts with intent routing, signal interpretation, and thesis extraction", () => {
-    expect(selectActiveTools([])).toEqual(["classify_intent"]);
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-    ])).toEqual(["interpret_signal"]);
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-    ])).toEqual(["extract_thesis"]);
+  it("starts with broad analytical tools instead of a single fixed first tool", () => {
+    expect(selectActiveTools([])).toEqual([
+      "classify_intent",
+      "interpret_signal",
+      "extract_thesis",
+      "finalize_run",
+    ]);
   });
 
-  it("routes critic requests through research and critique", () => {
+  it("allows research, trade planning, and finalization after thesis context exists", () => {
     expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
+      step("classify_intent", { intent: "trade" }),
       step("interpret_signal", {}),
       step("extract_thesis", {}),
-    ])).toEqual(["research_thesis"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-    ])).toEqual(["critique_thesis"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("critique_thesis", {}),
-    ])).toEqual(["plan_trade_expression"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("critique_thesis", {}),
-      step("plan_trade_expression", {
-        decision: "needs_market_check",
-        tradeExpressionConfidence: 0.32,
-        insufficiency: {
-          score: 0.32,
-          requiredThreshold: 0.65,
-          failedDimensions: ["market_discovery"],
-          summary: "No venue-confirmed market.",
-          evidenceNeededToClear: ["Venue market confirmation"],
-        },
-        candidates: [],
-      }),
-    ])).toEqual(["find_polymarket_markets"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("critique_thesis", {}),
-      step("plan_trade_expression", {
-        decision: "needs_market_check",
-        tradeExpressionConfidence: 0.32,
-        insufficiency: {
-          score: 0.32,
-          requiredThreshold: 0.65,
-          failedDimensions: ["market_discovery"],
-          summary: "No venue-confirmed market.",
-          evidenceNeededToClear: ["Venue market confirmation"],
-        },
-        candidates: [],
-      }),
-      step("find_polymarket_markets", []),
-    ])).toEqual(["select_market"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("critique_thesis", {}),
-      step("plan_trade_expression", {
-        decision: "needs_market_check",
-        candidates: [{ tradableNow: false }],
-      }),
-    ])).toEqual(["find_polymarket_markets"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "critic" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-      step("research_thesis", {}),
-      step("critique_thesis", {}),
-      step("plan_trade_expression", {
-        decision: "route_to_market_router",
-        candidates: [{ tradableNow: true }],
-      }),
-    ])).toEqual(["select_market"]);
+    ])).toEqual(expect.arrayContaining([
+      "research_thesis",
+      "plan_trade_expression",
+      "finalize_run",
+    ]));
   });
 
-  it("allows watchlist only for explicit watch requests", () => {
+  it("allows critique after research context exists", () => {
     expect(selectActiveTools([
-      step("classify_intent", { intent: "watch" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
-    ])).toEqual(["research_thesis"]);
-
-    expect(selectActiveTools([
-      step("classify_intent", { intent: "watch" }),
+      step("classify_intent", { intent: "critic" }),
       step("interpret_signal", {}),
       step("extract_thesis", {}),
       step("research_thesis", {}),
-      step("plan_trade_expression", {
-        decision: "needs_market_check",
-        tradeExpressionConfidence: 0.32,
-        candidates: [],
-      }),
-    ])).toEqual(["find_polymarket_markets"]);
+    ])).toEqual(expect.arrayContaining([
+      "critique_thesis",
+      "plan_trade_expression",
+      "finalize_run",
+    ]));
+  });
+
+  it("unlocks market tools after a tradable expression exists", () => {
+    expect(selectActiveTools([
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("plan_trade_expression", tradeExpression),
+    ])).toEqual(expect.arrayContaining([
+      "find_polymarket_markets",
+      "select_market",
+      "finalize_run",
+    ]));
+  });
+
+  it("does not unlock risk or ticket tools until market selection and risk prerequisites exist", () => {
+    expect(selectActiveTools([
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("plan_trade_expression", tradeExpression),
+    ])).not.toEqual(expect.arrayContaining(["risk_check", "create_trade_ticket"]));
+
+    expect(selectActiveTools([
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("plan_trade_expression", tradeExpression),
+      step("select_market", { selectedMarket: { symbol: "SOL" }, noTradeReason: null }),
+    ])).toEqual(expect.arrayContaining(["risk_check"]));
+
+    expect(selectActiveTools([
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("plan_trade_expression", tradeExpression),
+      step("select_market", { selectedMarket: { symbol: "SOL" }, noTradeReason: null }),
+      step("risk_check", { decision: "approve" }),
+    ])).toEqual(expect.arrayContaining(["create_trade_ticket"]));
+  });
+
+  it("keeps finalization available for no-trade analysis without risk or ticket tools", () => {
+    const activeTools = selectActiveTools([
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("plan_trade_expression", noTradeExpression),
+    ]);
+
+    expect(activeTools).toContain("finalize_run");
+    expect(activeTools).not.toContain("risk_check");
+    expect(activeTools).not.toContain("create_trade_ticket");
   });
 
   it("blocks ticket creation after rejected risk", () => {
-    expect(selectActiveTools([
+    const activeTools = selectActiveTools([
       step("classify_intent", { intent: "trade" }),
       step("interpret_signal", {}),
       step("extract_thesis", {}),
       step("research_thesis", {}),
-      step("plan_trade_expression", {
-        decision: "route_to_market_router",
-        candidates: [{ tradableNow: true }],
-      }),
-      step("select_market", {}),
+      step("plan_trade_expression", tradeExpression),
+      step("select_market", { selectedMarket: { symbol: "SOL" }, noTradeReason: null }),
       step("risk_check", { decision: "reject", reason: "No." }),
-    ])).toEqual(["finalize_run"]);
+    ]);
+
+    expect(activeTools).toContain("finalize_run");
+    expect(activeTools).not.toContain("create_trade_ticket");
   });
 
   it("exposes no tools after finalization", () => {
@@ -165,7 +141,7 @@ describe("supervisor step policy", () => {
   it("does not advance past failed required tools", () => {
     expect(selectActiveTools([
       step("classify_intent"),
-    ])).toEqual(["classify_intent"]);
+    ])).toEqual(["classify_intent", "interpret_signal", "extract_thesis", "finalize_run"]);
 
     expect(() => prepareCassieSupervisorStep({
       steps: [
