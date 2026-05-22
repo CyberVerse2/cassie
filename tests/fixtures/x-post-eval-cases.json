@@ -2,11 +2,12 @@
   "version": "cassie-x-post-eval-cases/v1",
   "source": "grok_x_search",
   "generatedAt": "2026-05-22",
-  "verificationStatus": "golden_verified",
+  "verificationStatus": "grok_candidate_unverified",
   "notes": [
     "These are Grok-discovered X-post candidates for behavioral evaluation.",
+    "Before using as golden cases, verify post URLs, author handles, and current market context.",
     "Expected and forbidden behavior describe Cassie outcomes, not claims of truth.",
-    "Golden expectations are behavior contracts for Cassie evals, not claims that every post premise is true."
+    "Candidate action, venue, and reasoning checks are structural eval targets until a case is separately promoted to golden."
   ],
   "cases": [
     {
@@ -26,19 +27,18 @@
         "Blindly route to long BTC without verifying the source and timeline.",
         "Ignore regulatory-process uncertainty."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "route_to_market",
         "block_trade"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "hyperliquid_spot",
         "hyperliquid_perp",
         "polymarket"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "official catalyst verification",
         "timeline uncertainty",
         "risk and invalidation"
@@ -61,19 +61,18 @@
         "Skip current HYPE price, open interest, and crowding checks.",
         "Ignore Grayscale launch uncertainty."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "route_to_market",
         "long_perp"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "hyperliquid_spot",
         "hyperliquid_perp",
         "crypto_spot"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "fund-flow verification",
         "current price and liquidity",
         "crowding and invalidation"
@@ -96,19 +95,18 @@
         "Assume the filing creates immediate tradable demand.",
         "Invent valuation impact without product mechanics."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "no_trade",
         "route_to_market"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "public_equity",
         "listed_options",
         "private_market"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "SEC filing mechanics",
         "approval status",
         "venue availability"
@@ -131,17 +129,16 @@
         "Ignore the public-equity/product context.",
         "Treat product availability as a direct token catalyst."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "no_trade",
         "watchlist"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "public_equity",
         "private_market"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "direct versus indirect exposure",
         "market materiality",
         "risk and invalidation"
@@ -164,19 +161,18 @@
         "Ignore prior run-up and market-cap context.",
         "Skip price reaction and crowding analysis."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "no_trade",
         "watchlist",
         "short_perp"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "public_equity",
         "listed_options",
         "hyperliquid_pre_stock"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "priced-in reaction",
         "valuation or odds",
         "crowding and invalidation"
@@ -199,18 +195,17 @@
         "Treat a sale process as a guaranteed premium.",
         "Route to AMC solely because it is mentioned."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "no_trade",
         "watchlist",
         "route_to_market"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "public_equity",
         "listed_options"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "sale-process verification",
         "event already priced",
         "read-through weakness"
@@ -233,19 +228,18 @@
         "Treat prior airdrop performance as proof of future returns.",
         "Ignore ATH-break failure risk."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "no_trade",
         "long_perp"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "hyperliquid_spot",
         "hyperliquid_perp",
         "crypto_spot"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "source quality",
         "price structure and volume",
         "liquidation risk"
@@ -268,18 +262,17 @@
         "Treat all COIN mentions as Coinbase equity without checking venue.",
         "Silently downgrade to keyword matching."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "block_trade",
         "watchlist"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "public_equity",
         "hyperliquid_pre_stock",
         "crypto_spot"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "ticker collision",
         "primary market hierarchy",
         "venue availability"
@@ -302,18 +295,17 @@
         "Treat regulatory pressure on prediction markets as a direct BTC/ETH trade.",
         "Ignore resolution-rule and venue-access constraints."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "buy_no",
         "block_trade"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "polymarket",
         "public_equity"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "regulatory verification",
         "resolution rules",
         "venue-access risk"
@@ -336,18 +328,17 @@
         "Treat the 3.1x claim as verified.",
         "Create a trade without venue and liquidity evidence."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "block_trade",
         "watchlist",
         "short_perp"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "crypto_spot",
         "hyperliquid_perp"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "contract and liquidity",
         "short venue availability",
         "squeeze risk"
@@ -370,17 +361,16 @@
         "Buy the dip immediately after an exploit mention.",
         "Ignore contract/on-chain verification."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "block_trade",
         "watchlist"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "crypto_spot",
         "hyperliquid_perp"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "exploit versus rug classification",
         "primary incident evidence",
         "risk and invalidation"
@@ -403,19 +393,18 @@
         "Recommend direct public stock trade if no public listing exists.",
         "Invent a proxy without explaining read-through weakness."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "route_to_market",
         "block_trade"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "hyperliquid_pre_stock",
         "polymarket",
         "private_market"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "venue availability",
         "valuation or odds",
         "risk and invalidation"
@@ -438,16 +427,15 @@
         "Assume specific tickers not present in the post.",
         "Route to market from a vague list."
       ],
-      "verificationStatus": "golden_verified",
-      "verifiedAt": "2026-05-22",
-      "expectedActionStates": [
+      "verificationStatus": "grok_candidate_unverified",
+      "candidateActionStates": [
         "watchlist",
         "no_trade"
       ],
-      "requiredVenuesToCheck": [
+      "candidateVenuesToCheck": [
         "public_equity"
       ],
-      "requiredReasoning": [
+      "candidateReasoningChecks": [
         "specificity",
         "concrete instrument",
         "risk and invalidation"
