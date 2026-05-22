@@ -524,9 +524,10 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
       signal,
-      thesis,
+      thesis: extracted,
       researchAngle: "critic",
     });
     await executeTool(tools.critique_thesis, {
@@ -552,13 +553,78 @@ describe("AI SDK supervisor agent", () => {
       "cassie_critique",
       "cassie_trade_expression",
     ]);
-    expect(cheapAi.calls).toEqual(["cassie_source_profile", "cassie_market_selection"]);
+    expect(cheapAi.calls).toEqual(["cassie_thesis", "cassie_source_profile", "cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
+      { type: "thesis", model: "deepseek/deepseek-v4-flash" },
       { type: "research", model: "gemini-3.5-flash" },
       { type: "critique", model: "gemini-3.5-flash" },
       { type: "trade_expression", model: "gemini-3.5-flash" },
       { type: "market_selection", model: "deepseek/deepseek-v4-flash" },
     ]);
+  });
+
+  it("uses persisted canonical outputs instead of lossy model-copied tool inputs", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie critic this",
+      sourcePost,
+    });
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiQueryJob() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXQueryJob() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+    });
+
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+      signal,
+      thesis: extracted,
+      researchAngle: "critic",
+    });
+    const lossyReport: ResearchReport = {
+      ...report,
+      stance: "supported",
+      evidence: [],
+      warnings: [],
+      publicSummary: "Lossy copied summary.",
+    };
+
+    await executeTool(tools.critique_thesis, {
+      thesis: { ...thesis, claim: "Lossy copied thesis." },
+      researchReport: lossyReport,
+    });
+    await executeTool(tools.plan_trade_expression, {
+      signal,
+      thesis,
+      researchReport: lossyReport,
+    });
+
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.find((step) => step.stepType === "critique")?.input).toMatchObject({
+      thesis: extracted,
+      researchReport: report,
+    });
+    expect(steps.find((step) => step.stepType === "trade_expression")?.input).toMatchObject({
+      thesis: extracted,
+      researchReport: report,
+    });
   });
 });

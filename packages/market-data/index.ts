@@ -1,4 +1,4 @@
-import type { MarketCandidate, ResearchReport, Thesis } from "../core/schemas/index.ts";
+import type { MarketCandidate, ResearchReport, Thesis, TradeExpressionPlan } from "../core/schemas/index.ts";
 import type { MarketDataProvider } from "../ai/tools/market.ts";
 import { readJsonResponse } from "../core/connector-errors.ts";
 
@@ -55,6 +55,7 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
   async findCandidates(input: {
     thesis: Thesis;
     researchReport?: ResearchReport;
+    tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate[]> {
     const results = await Promise.allSettled(
       this.providers.map((provider) => provider.findCandidates(input)),
@@ -67,7 +68,7 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
 export class HyperliquidMarketDataProvider implements MarketDataProvider {
   constructor(private readonly endpoint = "https://api.hyperliquid.xyz/info") {}
 
-  async findCandidates(input: { thesis: Thesis }): Promise<MarketCandidate[]> {
+  async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
     const response = await fetch(this.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -75,9 +76,10 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     });
     const [meta, ctxs] = await readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
 
+    const symbols = candidateSymbols(input.thesis, input.tradeExpression);
     const matches = meta.universe
       .map((asset, index) => ({ asset, index }))
-      .filter(({ asset }) => input.thesis.mentionedAssets.includes(asset.name));
+      .filter(({ asset }) => symbols.has(asset.name));
 
     return Promise.all(
       matches.map(async ({ asset, index }) => {
@@ -124,12 +126,12 @@ export class PolymarketMarketDataProvider implements MarketDataProvider {
     private readonly clobEndpoint = "https://clob.polymarket.com",
   ) {}
 
-  async findCandidates(input: { thesis: Thesis }): Promise<MarketCandidate[]> {
+  async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
     const url = new URL(this.endpoint);
     url.searchParams.set("limit", "10");
     url.searchParams.set("active", "true");
     url.searchParams.set("closed", "false");
-    url.searchParams.set("search", input.thesis.claim);
+    url.searchParams.set("search", polymarketSearchQuery(input.thesis, input.tradeExpression));
 
     const response = await fetch(url);
     const markets = await readJsonResponse<PolymarketMarket[]>("Polymarket market data", response);
@@ -238,4 +240,27 @@ function parseStringArray(value: string | string[] | undefined): string[] {
 
 function parseNumberArray(value: string | string[] | undefined): number[] {
   return parseStringArray(value).map(Number).filter(Number.isFinite);
+}
+
+function candidateSymbols(thesis: Thesis, tradeExpression?: TradeExpressionPlan): Set<string> {
+  const values = [
+    ...thesis.mentionedAssets,
+    tradeExpression?.directAsset,
+    ...(tradeExpression?.candidates.map((candidate) => candidate.instrument) ?? []),
+  ].filter((value): value is string => Boolean(value));
+
+  return new Set(values.flatMap(symbolAliases));
+}
+
+function symbolAliases(value: string): string[] {
+  const trimmed = value.trim();
+  const withoutPair = trimmed.replace(/-USDC$/i, "").replace(/\/USDC$/i, "");
+  const withoutPerp = withoutPair.replace(/\s+perp$/i, "");
+  return Array.from(new Set([trimmed, withoutPair, withoutPerp].filter(Boolean)));
+}
+
+function polymarketSearchQuery(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string {
+  const directAsset = tradeExpression?.directAsset;
+  const instruments = tradeExpression?.candidates.map((candidate) => candidate.instrument).join(" ");
+  return [directAsset, instruments, thesis.claim].filter(Boolean).join(" ");
 }

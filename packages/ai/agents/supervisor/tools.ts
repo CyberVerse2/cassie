@@ -17,6 +17,13 @@ import {
   TradeExpressionPlanSchema,
   type AccountState,
   type ControlRun,
+  type Critique,
+  type MarketSelection,
+  type ResearchReport,
+  type RiskDecision,
+  type SignalInterpretation,
+  type Thesis,
+  type TradeExpressionPlan,
   type RunStepType,
   type UserSettings,
 } from "../../../core/schemas/index.ts";
@@ -198,16 +205,26 @@ export function createCassieSupervisorTools(input: {
         thesis: ThesisSchema,
         researchReport: ResearchReportSchema,
       }),
-      execute: async ({ thesis, researchReport }) => runStepOnce("critique", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "critique",
-        promptName: "cassie_critique",
-        promptVersion,
-        model: importantModel,
-        stepInput: { thesis, researchReport },
-        execute: () => critiqueThesis({ ai: importantAi, thesis, researchReport }),
-      })),
+      execute: async ({ thesis, researchReport }) => runStepOnce("critique", async () => {
+        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
+        const canonicalResearchReport = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "research",
+          ResearchReportSchema,
+          researchReport,
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "critique",
+          promptName: "cassie_critique",
+          promptVersion,
+          model: importantModel,
+          stepInput: { thesis: canonicalThesis, researchReport: canonicalResearchReport },
+          execute: () => critiqueThesis({ ai: importantAi, thesis: canonicalThesis, researchReport: canonicalResearchReport }),
+        });
+      }),
     }),
     plan_trade_expression: tool({
       description: "Decide whether the researched thesis has a clean venue-aware trade expression.",
@@ -216,23 +233,40 @@ export function createCassieSupervisorTools(input: {
         thesis: ThesisSchema,
         researchReport: ResearchReportSchema,
       }),
-      execute: async ({ signal, thesis, researchReport }) => runStepOnce("trade_expression", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "trade_expression",
-        promptName: "cassie_trade_expression",
-        promptVersion,
-        model: importantModel,
-        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost, signal, thesis, researchReport },
-        execute: () => planTradeExpression({
-          ai: importantAi,
-          sourcePost: input.run.sourcePost,
-          userCommand: input.run.userCommand,
-          signal,
-          thesis,
+      execute: async ({ signal, thesis, researchReport }) => runStepOnce("trade_expression", async () => {
+        const canonicalSignal = await getCanonicalStepOutput(input.store, input.run.runId, "signal", SignalInterpretationSchema, signal);
+        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
+        const canonicalResearchReport = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "research",
+          ResearchReportSchema,
           researchReport,
-        }),
-      })),
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "trade_expression",
+          promptName: "cassie_trade_expression",
+          promptVersion,
+          model: importantModel,
+          stepInput: {
+            userCommand: input.run.userCommand,
+            sourcePost: input.run.sourcePost,
+            signal: canonicalSignal,
+            thesis: canonicalThesis,
+            researchReport: canonicalResearchReport,
+          },
+          execute: () => planTradeExpression({
+            ai: importantAi,
+            sourcePost: input.run.sourcePost,
+            userCommand: input.run.userCommand,
+            signal: canonicalSignal,
+            thesis: canonicalThesis,
+            researchReport: canonicalResearchReport,
+          }),
+        });
+      }),
     }),
     select_market: tool({
       description: "Select the best market expression from real market candidates; do not invent markets.",
@@ -241,22 +275,39 @@ export function createCassieSupervisorTools(input: {
         researchReport: ResearchReportSchema.optional(),
         tradeExpression: TradeExpressionPlanSchema.optional(),
       }),
-      execute: async ({ thesis, researchReport, tradeExpression }) => runStepOnce("market_selection", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "market_selection",
-        promptName: "cassie_market_selection",
-        promptVersion,
-        model: cheapModel,
-        stepInput: { thesis, researchReport, tradeExpression },
-        execute: () => selectMarket({
-          ai: cheapAi,
-          marketData: input.deps.marketData,
-          thesis,
+      execute: async ({ thesis, researchReport, tradeExpression }) => runStepOnce("market_selection", async () => {
+        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
+        const canonicalResearchReport = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "research",
+          ResearchReportSchema,
           researchReport,
+        );
+        const canonicalTradeExpression = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "trade_expression",
+          TradeExpressionPlanSchema,
           tradeExpression,
-        }),
-      })),
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "market_selection",
+          promptName: "cassie_market_selection",
+          promptVersion,
+          model: cheapModel,
+          stepInput: { thesis: canonicalThesis, researchReport: canonicalResearchReport, tradeExpression: canonicalTradeExpression },
+          execute: () => selectMarket({
+            ai: cheapAi,
+            marketData: input.deps.marketData,
+            thesis: canonicalThesis,
+            researchReport: canonicalResearchReport,
+            tradeExpression: canonicalTradeExpression,
+          }),
+        });
+      }),
     }),
     risk_check: tool({
       description: "Run deterministic risk checks against user policy and live account state.",
@@ -264,22 +315,31 @@ export function createCassieSupervisorTools(input: {
         marketSelection: MarketSelectionSchema,
         sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ marketSelection, sizeUsd }) => runStepOnce("risk", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "risk",
-        stepInput: { marketSelection, sizeUsd },
-        execute: async () => {
-          const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
-            .getAccountState(input.userSettings);
-          return evaluateRisk({
-            marketSelection,
-            userSettings: input.userSettings,
-            accountState,
-            sizeUsd,
-          });
-        },
-      })),
+      execute: async ({ marketSelection, sizeUsd }) => runStepOnce("risk", async () => {
+        const canonicalMarketSelection = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "market_selection",
+          MarketSelectionSchema,
+          marketSelection,
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "risk",
+          stepInput: { marketSelection: canonicalMarketSelection, sizeUsd },
+          execute: async () => {
+            const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
+              .getAccountState(input.userSettings);
+            return evaluateRisk({
+              marketSelection: canonicalMarketSelection,
+              userSettings: input.userSettings,
+              accountState,
+              sizeUsd,
+            });
+          },
+        });
+      }),
     }),
     create_trade_ticket: tool({
       description: "Create a trade ticket from a non-rejected risk decision. This never executes the order.",
@@ -289,44 +349,62 @@ export function createCassieSupervisorTools(input: {
         riskDecision: NonRejectedRiskDecisionSchema,
         sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ thesis, marketSelection, riskDecision, sizeUsd }) => runStepOnce("ticket", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "ticket",
-        stepInput: { thesis, marketSelection, riskDecision, sizeUsd },
-        execute: async () => {
-          const validatedRiskDecision = RiskDecisionSchema.parse(riskDecision);
-          const ticket = createTradeTicket({
-            runId: input.run.runId,
-            userSettings: input.userSettings,
-            thesis,
-            marketSelection,
-            riskDecision: validatedRiskDecision,
-            sizeUsd,
-          });
-          await input.store.addTradeTicket(ticket);
-          return ticket;
-        },
-      })),
+      execute: async ({ thesis, marketSelection, riskDecision, sizeUsd }) => runStepOnce("ticket", async () => {
+        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
+        const canonicalMarketSelection = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "market_selection",
+          MarketSelectionSchema,
+          marketSelection,
+        );
+        const canonicalRiskDecision = await getCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "risk",
+          RiskDecisionSchema,
+          riskDecision,
+        );
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "ticket",
+          stepInput: { thesis: canonicalThesis, marketSelection: canonicalMarketSelection, riskDecision: canonicalRiskDecision, sizeUsd },
+          execute: async () => {
+            const ticket = createTradeTicket({
+              runId: input.run.runId,
+              userSettings: input.userSettings,
+              thesis: canonicalThesis,
+              marketSelection: canonicalMarketSelection,
+              riskDecision: canonicalRiskDecision,
+              sizeUsd,
+            });
+            await input.store.addTradeTicket(ticket);
+            return ticket;
+          },
+        });
+      }),
     }),
     finalize_run: tool({
       description: "Finalize the Cassie run with the user-facing result after analysis, critique, or trade-ticket creation.",
       inputSchema: FinalizeRunInputSchema,
-      execute: async (finalInput) => runStepOnce("final", () => recordRunStep({
+      execute: async (finalInput) => runStepOnce("final", async () => {
+        const canonicalFinalInput = await canonicalizeFinalInput(input.store, input.run.runId, finalInput);
+        return recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "final",
-        stepInput: finalInput,
+        stepInput: canonicalFinalInput,
         execute: async () => {
           await validateFinalizationPrerequisites({
             store: input.store,
             runId: input.run.runId,
-            input: finalInput,
+            input: canonicalFinalInput,
           });
-          const result = finalizeResult(finalInput);
+          const result = finalizeResult(canonicalFinalInput);
           const updated = {
             ...input.run,
-            status: finalInput.responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
+            status: canonicalFinalInput.responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
             result,
             error: null,
             updatedAt: new Date().toISOString(),
@@ -334,9 +412,101 @@ export function createCassieSupervisorTools(input: {
           await input.store.updateRun(updated);
           return updated.result;
         },
-      })),
+        });
+      }),
     }),
   };
+}
+
+async function getCanonicalStepOutput<T>(
+  store: CassieStore,
+  runId: string,
+  stepType: RunStepType,
+  schema: z.ZodType<T>,
+  fallback: unknown,
+): Promise<T> {
+  const steps = await store.getRunSteps(runId);
+  const persisted = steps
+    .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
+    .at(-1)?.output;
+  return schema.parse(persisted ?? fallback);
+}
+
+async function tryCanonicalStepOutput<T>(
+  store: CassieStore,
+  runId: string,
+  stepType: RunStepType,
+  schema: z.ZodType<T>,
+): Promise<T | undefined> {
+  const steps = await store.getRunSteps(runId);
+  const persisted = steps
+    .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
+    .at(-1)?.output;
+  return persisted == null ? undefined : schema.parse(persisted);
+}
+
+async function canonicalizeFinalInput(
+  store: CassieStore,
+  runId: string,
+  input: FinalizeRunInput,
+): Promise<FinalizeRunInput> {
+  const [thesis, researchReport, critique, tradeExpression, marketSelection] = await Promise.all([
+    tryCanonicalStepOutput<Thesis>(store, runId, "thesis", ThesisSchema),
+    tryCanonicalStepOutput<ResearchReport>(store, runId, "research", ResearchReportSchema),
+    tryCanonicalStepOutput<Critique>(store, runId, "critique", CritiqueSchema),
+    tryCanonicalStepOutput<TradeExpressionPlan>(store, runId, "trade_expression", TradeExpressionPlanSchema),
+    tryCanonicalStepOutput<MarketSelection>(store, runId, "market_selection", MarketSelectionSchema),
+  ]);
+
+  const publicSummary = canonicalPublicSummary(input, {
+    critique,
+    researchReport,
+    tradeExpression,
+    marketSelection,
+  });
+
+  return {
+    ...input,
+    publicSummary,
+    thesis: thesis ?? input.thesis,
+    researchReport: researchReport ?? input.researchReport,
+    critique: critique ?? input.critique,
+    marketSelection: marketSelection ?? input.marketSelection,
+  };
+}
+
+function canonicalPublicSummary(
+  input: FinalizeRunInput,
+  canonical: {
+    critique?: Critique;
+    researchReport?: ResearchReport;
+    tradeExpression?: TradeExpressionPlan;
+    marketSelection?: MarketSelection;
+  },
+): string {
+  if (input.responseType === "critique" && canonical.critique) {
+    return appendTradeExpressionContext(canonical.critique.finalCritique, canonical.tradeExpression, canonical.marketSelection);
+  }
+
+  if (input.responseType === "analysis") {
+    const basis = canonical.tradeExpression?.reason ?? canonical.researchReport?.publicSummary ?? input.publicSummary;
+    return appendTradeExpressionContext(basis, canonical.tradeExpression, canonical.marketSelection);
+  }
+
+  return input.publicSummary;
+}
+
+function appendTradeExpressionContext(
+  summary: string,
+  tradeExpression?: TradeExpressionPlan,
+  marketSelection?: MarketSelection,
+): string {
+  if (!tradeExpression) return summary;
+
+  const selected = marketSelection?.selectedMarket
+    ? ` Selected expression: ${marketSelection.selectedMarket.side} ${marketSelection.selectedMarket.symbol} on ${marketSelection.selectedMarket.venue}.`
+    : "";
+  return `${summary} Trade expression: ${tradeExpression.decision}; ${tradeExpression.highestPurityExpression}.${selected}`;
 }
 
 async function validateFinalizationPrerequisites(input: {
@@ -350,6 +520,10 @@ async function validateFinalizationPrerequisites(input: {
   const hasCompletedCritique = steps.some((step) => step.stepType === "critique" && step.status === "succeeded");
   if (!hasCompletedCritique) {
     throw new Error("finalize_run critique response requires a completed critique_thesis step.");
+  }
+  const hasCompletedTradeExpression = steps.some((step) => step.stepType === "trade_expression" && step.status === "succeeded");
+  if (!hasCompletedTradeExpression) {
+    throw new Error("finalize_run critique response requires a completed plan_trade_expression step.");
   }
 }
 

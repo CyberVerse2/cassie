@@ -114,6 +114,13 @@ Evaluate the thesis after research. Search for weaknesses:
 - Is this a pump?
 - Is the opposite trade cleaner?
 
+Evidence-grounding rules:
+- Treat the supplied researchReport as the source of truth.
+- Do not introduce external facts that contradict resolved researchReport evidence or goal resolutions.
+- If researchReport says a filing, ticker, asset mapping, or financial figure is supported, do not call it false unless researchReport itself contains contrary evidence.
+- Critique the actual weak links: unsupported valuation inputs, unresolved tradability, crowded positioning, poor liquidity, bad payoff shape, source weakness, or missing price discovery.
+- Distinguish "not proven by the filing" from "false."
+
 Return a direct critique. Do not choose order size or execute anything.
 Classify credible but non-tradable signals as watchlist or research_lead when appropriate.
 

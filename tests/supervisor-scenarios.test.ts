@@ -398,9 +398,14 @@ describe("supervisor scenario coverage", () => {
       status: "succeeded",
       result: {
         responseType: "critique",
-        publicSummary: result.finalCritique,
+        publicSummary: expect.stringContaining(result.finalCritique),
         runStatus: "succeeded",
         ticketId: null,
+      },
+    });
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
+        publicSummary: expect.stringContaining("Trade expression: route_to_market_router"),
       },
     });
   });

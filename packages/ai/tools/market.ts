@@ -13,6 +13,7 @@ export interface MarketDataProvider {
   findCandidates(input: {
     thesis: Thesis;
     researchReport?: ResearchReport;
+    tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate[]>;
 }
 
@@ -26,6 +27,7 @@ export async function selectMarket(input: {
   const candidates = await input.marketData.findCandidates({
     thesis: input.thesis,
     researchReport: input.researchReport,
+    tradeExpression: input.tradeExpression,
   });
 
   return input.ai.generateObject({
