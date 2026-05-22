@@ -30,6 +30,14 @@ export async function selectMarket(input: {
     tradeExpression: input.tradeExpression,
   });
 
+  if (candidates.length === 0) {
+    return {
+      selectedMarket: null,
+      rejectedCandidates: [],
+      noTradeReason: "No configured market-data candidate matched the trade expression.",
+    };
+  }
+
   return input.ai.generateObject({
     schema: MarketSelectionSchema,
     name: "cassie_market_selection",
