@@ -115,8 +115,9 @@ function getLatestToolOutput<T>(
 function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string } | null {
   for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
     const step = steps[stepIndex];
-    for (let contentIndex = step.content.length - 1; contentIndex >= 0; contentIndex -= 1) {
-      const part = step.content[contentIndex];
+    const content = Array.isArray(step.content) ? step.content : [];
+    for (let contentIndex = content.length - 1; contentIndex >= 0; contentIndex -= 1) {
+      const part = content[contentIndex];
       if (part.type !== "tool-error") continue;
       return {
         toolName: String(part.toolName),
@@ -171,6 +172,10 @@ function summarizeToolPart(part: unknown, originalChars: number) {
         stance: output?.stance,
         publicSummary: truncate(typeof output?.publicSummary === "string" ? output.publicSummary : null, 220),
         claim: truncate(typeof output?.claim === "string" ? output.claim : null, 220),
+        finalCritique: truncate(typeof output?.finalCritique === "string" ? output.finalCritique : null, 360),
+        strongestObjection: truncate(typeof output?.strongestObjection === "string" ? output.strongestObjection : null, 360),
+        reason: truncate(typeof output?.reason === "string" ? output.reason : null, 220),
+        ticketId: truncate(typeof output?.ticketId === "string" ? output.ticketId : null, 120),
       },
     },
   };

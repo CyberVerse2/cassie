@@ -76,4 +76,32 @@ describe("supervisor step policy", () => {
       ],
     } as never)).toThrow("Supervisor tool classify_intent failed: rate limited");
   });
+
+  it("keeps critique substance when compressing tool messages before finalization", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("classify_intent", { intent: "critic" }),
+        step("interpret_signal", {}),
+        step("extract_thesis", {}),
+        step("research_thesis", {}),
+        step("critique_thesis", {}),
+      ],
+      messages: [{
+        role: "tool",
+        content: [{
+          type: "tool-result",
+          toolCallId: "critique_thesis_call",
+          toolName: "critique_thesis",
+          output: {
+            finalCritique: "The valuation claim is conditional because pricing is not official.",
+            strongestObjection: "The filing has no final IPO price range.",
+            secondaryObjections: Array.from({ length: 80 }, (_, index) => `objection ${index}`),
+          },
+        }],
+      }],
+    } as never) as { messages: unknown[] };
+
+    expect(JSON.stringify(prepared.messages)).toContain("The valuation claim is conditional");
+    expect(JSON.stringify(prepared.messages)).toContain("The filing has no final IPO price range");
+  });
 });

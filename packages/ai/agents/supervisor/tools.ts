@@ -12,6 +12,7 @@ import {
   ResearchReportSchema,
   RiskDecisionSchema,
   SignalInterpretationSchema,
+  SupervisorFinalResultSchema,
   ThesisSchema,
   type AccountState,
   type ControlRun,
@@ -275,6 +276,11 @@ export function createCassieSupervisorTools(input: {
         stepType: "final",
         stepInput: finalInput,
         execute: async () => {
+          await validateFinalizationPrerequisites({
+            store: input.store,
+            runId: input.run.runId,
+            input: finalInput,
+          });
           const result = finalizeResult(finalInput);
           const updated = {
             ...input.run,
@@ -291,38 +297,47 @@ export function createCassieSupervisorTools(input: {
   };
 }
 
+async function validateFinalizationPrerequisites(input: {
+  store: CassieStore;
+  runId: string;
+  input: FinalizeRunInput;
+}) {
+  if (input.input.responseType !== "critique") return;
+
+  const steps = await input.store.getRunSteps(input.runId);
+  const hasCompletedCritique = steps.some((step) => step.stepType === "critique" && step.status === "succeeded");
+  if (!hasCompletedCritique) {
+    throw new Error("finalize_run critique response requires a completed critique_thesis step.");
+  }
+}
+
 function finalizeResult(input: FinalizeRunInput) {
   if (input.responseType === "analysis") {
-    return {
+    return SupervisorFinalResultSchema.parse({
       responseType: input.responseType,
-      result: {
-        publicSummary: input.publicSummary,
-        thesis: input.thesis,
-        marketSelection: input.marketSelection,
-      },
-    };
+      publicSummary: input.publicSummary,
+      runStatus: "succeeded",
+      ticketId: null,
+      warnings: input.researchReport?.warnings ?? [],
+    });
   }
   if (input.responseType === "critique") {
-    if (!input.critique) {
-      throw new Error("finalize_run critique response requires critique.");
-    }
-    return {
+    return SupervisorFinalResultSchema.parse({
       responseType: input.responseType,
-      result: {
-        publicSummary: input.publicSummary,
-        critique: input.critique,
-        researchReport: input.researchReport,
-      },
-    };
+      publicSummary: input.publicSummary,
+      runStatus: "succeeded",
+      ticketId: null,
+      warnings: input.researchReport?.warnings ?? [],
+    });
   }
   if (!input.tradeTicket) {
     throw new Error("finalize_run trade_ticket response requires tradeTicket.");
   }
-  return {
+  return SupervisorFinalResultSchema.parse({
     responseType: input.responseType,
-    result: {
-      publicSummary: input.publicSummary,
-      tradeTicket: input.tradeTicket,
-    },
-  };
+    publicSummary: input.publicSummary,
+    runStatus: "awaiting_approval",
+    ticketId: input.tradeTicket.ticketId,
+    warnings: input.researchReport?.warnings ?? [],
+  });
 }

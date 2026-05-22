@@ -332,6 +332,36 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({ status: "succeeded" });
   });
 
+  it("finalizes critic requests without requiring the model to copy critique JSON", async () => {
+    const { store, run, tools } = await createScenario("critic");
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+      signal: interpreted,
+      thesis: extracted,
+      researchAngle: "critic",
+    });
+    const result = await executeTool<Critique>(tools.critique_thesis, {
+      thesis: extracted,
+      researchReport: report,
+    });
+    await executeTool(tools.finalize_run, {
+      responseType: "critique",
+      publicSummary: result.finalCritique,
+      researchReport: report,
+    });
+
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      status: "succeeded",
+      result: {
+        responseType: "critique",
+        publicSummary: result.finalCritique,
+        runStatus: "succeeded",
+        ticketId: null,
+      },
+    });
+  });
+
   it("handles countertrade requests through inverse thesis before ticket creation", async () => {
     const { store, tools } = await createScenario("countertrade");
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
