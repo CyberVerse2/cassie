@@ -3,7 +3,9 @@ import {
   DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
   CassieStructuredClient,
   MissingAiDependencyError,
+  isRetryableStructuredAiError,
   routeStructuredModel,
+  runStructuredAiWithRetry,
 } from "../packages/ai/client.ts";
 import {
   GEMINI_SEARCH_MAX_OUTPUT_TOKENS,
@@ -83,5 +85,49 @@ describe("structured AI model routing", () => {
     const lane = new GrokXSearchLane("test-key");
 
     expect(lane).toHaveProperty("model", "grok-4.3");
+  });
+
+  it("retries structured calls that generate no output", async () => {
+    const originalAttempts = process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS;
+    process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS = "2";
+    let calls = 0;
+    const noOutput = Object.assign(new Error("No output generated."), {
+      name: "AI_NoOutputGeneratedError",
+    });
+
+    await expect(runStructuredAiWithRetry(async () => {
+      calls += 1;
+      if (calls === 1) throw noOutput;
+      return "ok";
+    })).resolves.toBe("ok");
+
+    expect(calls).toBe(2);
+    if (originalAttempts == null) {
+      delete process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS;
+    } else {
+      process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS = originalAttempts;
+    }
+  });
+
+  it("does not retry non-transient structured validation errors", async () => {
+    const originalAttempts = process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS;
+    process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS = "3";
+    let calls = 0;
+    const validationError = Object.assign(new Error("response did not match schema"), {
+      name: "AI_TypeValidationError",
+    });
+
+    await expect(runStructuredAiWithRetry(async () => {
+      calls += 1;
+      throw validationError;
+    })).rejects.toBe(validationError);
+
+    expect(calls).toBe(1);
+    expect(isRetryableStructuredAiError(validationError)).toBe(false);
+    if (originalAttempts == null) {
+      delete process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS;
+    } else {
+      process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS = originalAttempts;
+    }
   });
 });
