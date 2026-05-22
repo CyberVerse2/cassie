@@ -1177,17 +1177,6 @@ function uniqueNumbers(values: number[]) {
   return [...new Set(values)];
 }
 
-function settledPayload<T>(result: PromiseSettledResult<T>) {
-  if (result.status === "fulfilled") {
-    return { status: "fulfilled", value: result.value };
-  }
-
-  return {
-    status: "rejected",
-    reason: result.reason instanceof Error ? result.reason.message : String(result.reason),
-  };
-}
-
 function stableSlug(value: string) {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 48);
   return slug || "signal";

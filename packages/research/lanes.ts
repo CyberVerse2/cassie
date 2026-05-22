@@ -89,7 +89,6 @@ export class GeminiWebSearchLane {
     private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
     private readonly trace?: TraceRecorder,
     private readonly structuredModel = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL,
-    private readonly maxResults = Number(process.env.CASSIE_WEB_SEARCH_MAX_RESULTS ?? 5),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
@@ -617,14 +616,6 @@ function evidenceFromLedger(sourceLane: "openai_search" | "x_search", ledger: Ev
       ],
     };
   });
-}
-
-function emptyLedger(): EvidenceLedger {
-  return {
-    searchResults: [],
-    evidenceClaims: [],
-    goalEvidenceLinks: [],
-  };
 }
 
 function sourceTypeForResearchEvidence(sourceType: EvidenceLedger["searchResults"][number]["sourceType"]) {

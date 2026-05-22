@@ -24,10 +24,8 @@ import {
   type Critique,
   type IntentResult,
   type MarketSelection,
-  type MarketCandidate,
   type ResearchReport,
   type RiskDecision,
-  type SignalInterpretation,
   type Thesis,
   type TradeTicket,
   type TradeExpressionPlan,
@@ -46,12 +44,6 @@ import { createTradeTicket } from "../../tools/trade.ts";
 import { recordRunStep } from "./steps.ts";
 
 const promptVersion = "2026-05-20";
-
-const NonRejectedRiskDecisionSchema = z.object({
-  decision: z.enum(["approve", "require_approval", "create_ticket_only"]),
-  adjustedSizeUsd: z.number().positive().optional(),
-  reason: z.string().optional(),
-});
 
 const FinalizeRunInputSchema = z.object({
   responseType: z.enum(["analysis", "critique", "trade_ticket"]),

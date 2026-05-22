@@ -17,8 +17,6 @@ import type {
 } from "../core/schemas/index.ts";
 import type {
   ModelCallUsageRecord,
-  ResearchContinuationDecisionRecord,
-  ResearchGoalResolutionRecord,
   ResearchQueryJobRecord,
   ResearchRunRecord,
   TradeabilityDecisionRecord,

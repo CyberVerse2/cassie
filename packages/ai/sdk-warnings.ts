@@ -1,4 +1,4 @@
-import type { LogWarningsFunction, Warning } from "ai";
+import type { Warning } from "ai";
 
 const configuredFlag = Symbol.for("cassie.aiSdkWarningsConfigured");
 
