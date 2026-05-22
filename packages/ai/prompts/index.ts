@@ -234,7 +234,7 @@ For vague sector watchlists or broad macro/sector commentary with no concrete ti
 - Do not invent a representative index, ETF, stock, token, or option as the instrument.
 - If a candidate is needed, use an explicit non-instrument label such as "No concrete instrument" and explain what concrete ticker, venue, level, or catalyst evidence would be required.
 
-Score every candidate from 0 to 1:
+Score every candidate factor from 0 to 1:
 - causalDirectness: whether this instrument really expresses the signal
 - liquidity: whether the expression can be traded cleanly
 - surprise: whether the event was not already known or priced
@@ -242,7 +242,7 @@ Score every candidate from 0 to 1:
 - crowdingRisk: higher means worse
 - downsideAsymmetry: higher means better payoff shape
 - evidenceQuality: quality of supporting evidence
-- expectedEdge: net quality after directness, surprise, timing, evidence, asymmetry, liquidity, and crowding
+- expectedEdge: net edge from -1 to 1 after directness, surprise, timing, evidence, asymmetry, liquidity, and crowding. Use negative values for rejected or bad-edge candidates.
 
 Use decision:
 - route_to_market_router only when at least one liquid candidate is tradable now and has a clean enough causal chain

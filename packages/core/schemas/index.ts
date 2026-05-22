@@ -689,7 +689,7 @@ export const TradeExpressionCandidateSchema = z.object({
   crowdingRisk: z.number().min(0).max(1),
   downsideAsymmetry: z.number().min(0).max(1),
   evidenceQuality: z.number().min(0).max(1),
-  expectedEdge: z.number().min(0).max(1),
+  expectedEdge: z.number().min(-1).max(1),
   tradableNow: z.boolean(),
   rejectionReason: z.string().nullable(),
   invalidation: z.array(z.string()),
