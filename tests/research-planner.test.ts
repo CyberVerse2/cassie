@@ -12,7 +12,7 @@ import type {
   SourceProfile,
   Thesis,
 } from "../packages/core/schemas/index.ts";
-import { normalizeResearchQueryPlan, researchThesis } from "../packages/research/index.ts";
+import { generateResearchQueryPlan, normalizeResearchQueryPlan, researchThesis } from "../packages/research/index.ts";
 
 const vagueSignal: SignalInterpretation = {
   signalType: "endorsement",
@@ -148,6 +148,38 @@ const goalResolution: GoalResolution = {
 };
 
 describe("research query planner policy", () => {
+  it("labels failed research structured-output stages", async () => {
+    const ai: StructuredAiClient = {
+      async generateObject() {
+        const cause = new Error("missing queryBatches");
+        cause.name = "AI_TypeValidationError";
+        throw Object.assign(new Error("No object generated: response did not match schema."), {
+          name: "AI_NoObjectGeneratedError",
+          finishReason: "stop",
+          text: "{\"goals\":[]}",
+          cause,
+        });
+      },
+    };
+
+    await expect(generateResearchQueryPlan({
+      ai,
+      sourcePost,
+      userCommand: "@Cassie critic this",
+      signal: explicitSignal,
+      thesis,
+      researchAngle: "critic",
+    })).rejects.toThrow("Research stage cassie_research_query_plan failed");
+    await expect(generateResearchQueryPlan({
+      ai,
+      sourcePost,
+      userCommand: "@Cassie critic this",
+      signal: explicitSignal,
+      thesis,
+      researchAngle: "critic",
+    })).rejects.toThrow("AI_TypeValidationError");
+  });
+
   it("caps vague non-tradable signals to source and entity research", () => {
     const plan: ResearchQueryPlan = {
       version: "research-query-plan/v1",

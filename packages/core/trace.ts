@@ -1,3 +1,5 @@
+import { formatErrorForLog } from "./error-format.ts";
+
 export type TraceStatus = "running" | "succeeded" | "failed";
 
 export type TraceUsage = {
@@ -64,7 +66,7 @@ export class TraceRecorder {
       event.status = output.error ? "failed" : "succeeded";
       event.output = output.output ?? null;
       event.usage = output.usage ? normalizeUsage(output.usage) : null;
-      event.error = output.error instanceof Error ? output.error.message : output.error ? String(output.error) : null;
+      event.error = output.error ? formatErrorForLog(output.error) : null;
       this.onEvent?.({ ...event });
     };
   }

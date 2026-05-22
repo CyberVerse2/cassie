@@ -15,6 +15,7 @@ import { DrizzleCassieStore } from "../../../db/drizzle-store.ts";
 import type { CassieStore } from "../../../db/store.ts";
 import type { ControlRun } from "../../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../../core/schemas/index.ts";
+import { formatErrorForLog } from "../../../core/error-format.ts";
 import type { CassieDependencies } from "../../../workflows/dependencies.ts";
 import { createCassieSupervisorTools } from "./tools.ts";
 import {
@@ -151,7 +152,7 @@ export async function runCassieSupervisorForRun(input: {
     await store.updateRun({
       ...(latest ?? running),
       status: "failed",
-      error: error instanceof Error ? error.message : String(error),
+      error: formatErrorForLog(error),
       updatedAt: new Date().toISOString(),
     });
     throw error;
@@ -238,7 +239,7 @@ function createAuditTelemetryIntegration(
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  return formatErrorForLog(error);
 }
 
 function usageRecord(usage: unknown) {

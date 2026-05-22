@@ -2,6 +2,7 @@ import type { StructuredAiClient } from "../ai/client.ts";
 import type { CassieStore } from "../db/store.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { formatErrorForLog } from "../core/error-format.ts";
 import {
   AdaptiveQueryRequestSchema,
   type AdaptiveQueryRequest,
@@ -85,30 +86,32 @@ export async function researchThesis(input: {
     const goalResolutions = waveResults.flatMap((wave) => wave.goalResolutions);
     const evidenceLedger = mergeLedgers(waveResults.flatMap((wave) => wave.evidenceLedger));
 
-    const report = normalizeResearchReport(await input.ai.generateObject({
-      schema: ResearchReportSchema,
-      name: "cassie_research_report",
-      prompt: researchSynthesisPrompt({
-        sourcePost: input.sourcePost,
-        userCommand: input.userCommand,
-        extractedThesis: input.thesis,
-        sourceProfile,
-        mode: "deep",
-        researchAngle: input.researchAngle,
-        queryPlan,
-        laneResults: {
-          waves: waveResults.map((wave) => ({
-            wave: wave.wave,
-            openAiResult: settledPayload(wave.openAiResult),
-            xResult: settledPayload(wave.xResult),
-            continuationDecision: wave.continuationDecision,
-            adaptiveDecisions: wave.adaptiveDecisions,
-          })),
-        },
-        evidenceLedger,
-        goalResolutions,
-      }),
-    }));
+    const report = normalizeResearchReport(await runResearchStage("cassie_research_report", () =>
+      input.ai.generateObject({
+        schema: ResearchReportSchema,
+        name: "cassie_research_report",
+        prompt: researchSynthesisPrompt({
+          sourcePost: input.sourcePost,
+          userCommand: input.userCommand,
+          extractedThesis: input.thesis,
+          sourceProfile,
+          mode: "deep",
+          researchAngle: input.researchAngle,
+          queryPlan,
+          laneResults: {
+            waves: waveResults.map((wave) => ({
+              wave: wave.wave,
+              openAiResult: settledPayload(wave.openAiResult),
+              xResult: settledPayload(wave.xResult),
+              continuationDecision: wave.continuationDecision,
+              adaptiveDecisions: wave.adaptiveDecisions,
+            })),
+          },
+          evidenceLedger,
+          goalResolutions,
+        }),
+      })
+    ));
 
     if (researchRun) {
       await input.persistence?.store.updateResearchRun({
@@ -125,7 +128,7 @@ export async function researchThesis(input: {
         researchRunId: researchRun.researchRunId,
         status: "failed",
         completedAt: new Date().toISOString(),
-        error: error instanceof Error ? error.message : String(error),
+        error: formatErrorForLog(error),
       });
     }
     throw error;
@@ -168,7 +171,7 @@ async function resolveSourceProfile(input: {
   const queryPlan = sourceProfileQueryPlan(input.sourcePost, input.thesis);
   const job = sourceProfileQueryJob(queryPlan, input.sourcePost);
   const result = await input.lanes.runGrokXQueryJob(job, queryPlan);
-  return (input.sourceProfileAi ?? input.ai).generateObject({
+  return runResearchStage("cassie_source_profile", () => (input.sourceProfileAi ?? input.ai).generateObject({
     schema: SourceProfileSchema,
     name: "cassie_source_profile",
     prompt: sourceProfilePrompt({
@@ -176,7 +179,7 @@ async function resolveSourceProfile(input: {
       thesis: input.thesis,
       xResult: result,
     }),
-  });
+  }));
 }
 
 function sourceProfileQueryPlan(sourcePost: SourcePost, thesis: Thesis): ResearchQueryPlan {
@@ -482,7 +485,7 @@ async function resolveResearchGoals(input: {
   xResult: PromiseSettledResult<SearchLaneResult>;
   evidenceLedger: EvidenceLedger;
 }): Promise<GoalResolution[]> {
-  const result = await input.ai.generateObject({
+  const result = await runResearchStage("cassie_goal_resolution", () => input.ai.generateObject({
     schema: GoalResolutionEnvelopeSchema,
     name: "cassie_goal_resolution",
     prompt: goalResolutionPrompt({
@@ -495,7 +498,7 @@ async function resolveResearchGoals(input: {
       },
       evidenceLedger: input.evidenceLedger,
     }),
-  });
+  }));
   return asGoalResolutionArray(result);
 }
 
@@ -508,7 +511,7 @@ async function generateAdaptiveQueryRequest(input: {
   continuationDecision: ResearchContinuationDecision;
   evidenceLedger: EvidenceLedger;
 }): Promise<AdaptiveQueryRequest> {
-  return input.ai.generateObject({
+  return runResearchStage("cassie_adaptive_query_request", () => input.ai.generateObject({
     schema: AdaptiveQueryRequestSchema,
     name: "cassie_adaptive_query_request",
     prompt: adaptiveQueryRequestPrompt({
@@ -519,7 +522,7 @@ async function generateAdaptiveQueryRequest(input: {
       continuationDecision: input.continuationDecision,
       evidenceLedger: input.evidenceLedger,
     }),
-  });
+  }));
 }
 
 function compileAdaptiveQueryJobs(input: {
@@ -579,15 +582,16 @@ async function runLaneForWave(input: {
         });
         return result;
       } catch (error) {
+        const formattedError = formatErrorForLog(error);
         await input.persistence?.store.updateResearchQueryJobStatus(job.id, {
           status: "failed",
           completedAt: new Date().toISOString(),
-          error: error instanceof Error ? error.message : String(error),
+          error: formattedError,
         });
         return {
           lane: input.lane === "web" ? "openai_search" as const : "x_search" as const,
           evidence: [],
-          warnings: [error instanceof Error ? error.message : String(error)],
+          warnings: [formattedError],
           ledger: undefined,
         };
       }
@@ -888,7 +892,7 @@ export async function generateResearchQueryPlan(input: {
   sourceProfile?: SourceProfile | null;
   researchAngle: ResearchAngle;
 }): Promise<ResearchQueryPlan> {
-  return input.ai.generateObject({
+  return runResearchStage("cassie_research_query_plan", () => input.ai.generateObject({
     schema: ResearchQueryPlanSchema,
     name: "cassie_research_query_plan",
     prompt: researchQueryPlanPrompt({
@@ -899,7 +903,25 @@ export async function generateResearchQueryPlan(input: {
       sourceProfile: input.sourceProfile,
       researchAngle: input.researchAngle,
     }),
-  });
+  }));
+}
+
+class ResearchStageError extends Error {
+  readonly cause: unknown;
+
+  constructor(stage: string, cause: unknown) {
+    super(`Research stage ${stage} failed: ${formatErrorForLog(cause)}`);
+    this.name = "ResearchStageError";
+    this.cause = cause;
+  }
+}
+
+async function runResearchStage<T>(stage: string, execute: () => Promise<T>): Promise<T> {
+  try {
+    return await execute();
+  } catch (error) {
+    throw new ResearchStageError(stage, error);
+  }
 }
 
 function ensureDisconfirmationGoal(plan: ResearchQueryPlan): ResearchQueryPlan {

@@ -3,6 +3,7 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
+import { formatErrorForLog } from "../core/error-format.ts";
 import { googleThinkingOptions } from "./google-options.ts";
 import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
 
@@ -29,6 +30,23 @@ export interface StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T>;
+}
+
+export class StructuredAiCallError extends Error {
+  readonly cause: unknown;
+
+  constructor(input: {
+    name: string;
+    provider: ModelProvider;
+    model: string;
+    cause: unknown;
+  }) {
+    super(
+      `Structured AI call ${input.name} failed on ${input.provider}/${input.model}: ${formatErrorForLog(input.cause)}`,
+    );
+    this.name = "StructuredAiCallError";
+    this.cause = input.cause;
+  }
 }
 
 export class MissingAiDependencyError extends Error {
@@ -150,8 +168,14 @@ export class CassieStructuredClient implements StructuredAiClient {
 
       return result.output;
     } catch (error) {
-      finishTrace?.({ error });
-      throw error;
+      const wrapped = new StructuredAiCallError({
+        name: input.name,
+        provider: route.provider,
+        model: route.model,
+        cause: error,
+      });
+      finishTrace?.({ error: wrapped });
+      throw wrapped;
     }
   }
 }
@@ -177,17 +201,26 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
       apiKey: process.env.DEEPSEEK_API_KEY,
     });
 
-    const result = await generateText({
-      model: deepseek.chat(this.modelName),
-      output: Output.object({
-        schema: input.schema,
-        name: input.name,
-      }),
-      prompt: input.prompt,
-      maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
-    });
+    try {
+      const result = await generateText({
+        model: deepseek.chat(this.modelName),
+        output: Output.object({
+          schema: input.schema,
+          name: input.name,
+        }),
+        prompt: input.prompt,
+        maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
+      });
 
-    return result.output;
+      return result.output;
+    } catch (error) {
+      throw new StructuredAiCallError({
+        name: input.name,
+        provider: "deepseek",
+        model: this.modelName,
+        cause: error,
+      });
+    }
   }
 }
 
@@ -212,17 +245,26 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
       apiKey: googleApiKey(),
     });
 
-    const result = await generateText({
-      model: google(this.modelName),
-      output: Output.object({
-        schema: input.schema,
-        name: input.name,
-      }),
-      prompt: input.prompt,
-      providerOptions: googleThinkingOptions("medium"),
-    });
+    try {
+      const result = await generateText({
+        model: google(this.modelName),
+        output: Output.object({
+          schema: input.schema,
+          name: input.name,
+        }),
+        prompt: input.prompt,
+        providerOptions: googleThinkingOptions("medium"),
+      });
 
-    return result.output;
+      return result.output;
+    } catch (error) {
+      throw new StructuredAiCallError({
+        name: input.name,
+        provider: "google",
+        model: this.modelName,
+        cause: error,
+      });
+    }
   }
 }
 
