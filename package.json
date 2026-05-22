@@ -11,6 +11,7 @@
     "poll:x": "tsx src/poller.ts",
     "cli": "tsx src/cli.ts",
     "smoke:v4-flash": "tsx scripts/test-v4-flash.ts",
+    "smoke:polymarket-clob": "tsx scripts/test-polymarket-clob.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate"
   },
