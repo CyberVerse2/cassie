@@ -1,4 +1,4 @@
-import type { RunStep, RunStepType } from "../../../core/schemas/index.ts";
+import { RunStepTypeSchema, type RunStep, type RunStepType } from "../../../core/schemas/index.ts";
 import type { CassieStore } from "../../../db/store.ts";
 import { formatErrorForLog } from "../../../core/error-format.ts";
 
@@ -45,17 +45,5 @@ export async function recordRunStep<T>(input: {
 }
 
 export function isStepType(value: string): value is RunStep["stepType"] {
-  return [
-    "intake",
-    "intent",
-    "thesis",
-    "inverse_thesis",
-    "research",
-    "critique",
-    "market_candidates",
-    "market_selection",
-    "risk",
-    "ticket",
-    "final",
-  ].includes(value);
+  return RunStepTypeSchema.safeParse(value).success;
 }
