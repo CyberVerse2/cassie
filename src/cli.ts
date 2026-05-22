@@ -633,23 +633,6 @@ function numberFlag(args: ParsedArgs, name: string, defaultValue: number): numbe
   return parsed;
 }
 
-function booleanFlag(args: ParsedArgs, name: string, defaultValue: boolean): boolean {
-  const value = args.flags[name];
-  if (value == null) {
-    return defaultValue;
-  }
-
-  if (value === true || value === "true") {
-    return true;
-  }
-
-  if (value === "false") {
-    return false;
-  }
-
-  throw new CliError(`--${name} must be true or false.`);
-}
-
 function requiredPositional(args: ParsedArgs, index: number, name: string): string {
   const value = args.positionals[index];
   if (!value) {
