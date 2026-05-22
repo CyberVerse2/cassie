@@ -24,6 +24,42 @@ export const TimeHorizonSchema = z.enum([
   "unclear",
 ]);
 
+export const ResearchDispositionSchema = z.enum([
+  "ignore",
+  "research_lead",
+  "soft_signal",
+  "verified_non_tradeable",
+  "needs_more_research",
+  "needs_market_check",
+  "trade_candidate",
+  "block_trade",
+  "no_trade",
+]);
+
+export const TradeabilityDispositionSchema = z.enum([
+  "no_trade",
+  "private_only",
+  "watchlist_only",
+  "needs_market_check",
+  "prediction_market_candidate",
+  "public_market_candidate",
+  "crypto_market_candidate",
+  "route_to_market_router",
+  "block_trade",
+]);
+
+export const FinalRunDispositionSchema = z.enum([
+  "answered",
+  "critic_only",
+  "watchlist_added",
+  "trade_ticket_created",
+  "trade_rejected",
+  "no_trade",
+  "needs_more_research",
+]);
+
+const LegacyResearchDispositionSchema = z.enum(["watchlist", "tradable_now"]);
+
 export const SourcePostSchema = z.object({
   platform: z.literal("x"),
   postId: z.string().nullable(),
@@ -50,6 +86,8 @@ export const SourceProfileSchema = z.object({
   accountAge: z.string().nullable(),
   locationSignals: z.array(z.string()),
   pinnedPost: z.string().nullable(),
+  claimSpecificRelevance: z.number().min(0).max(1).optional(),
+  profileEvidenceIds: z.array(z.string()).optional(),
   credibility: z.enum(["high", "medium", "low", "unknown"]),
   expertise: z.array(z.string()),
   selfClaims: z.array(z.string()),
@@ -110,13 +148,22 @@ export const SignalInterpretationSchema = z.object({
   affectedSectors: z.array(z.string()),
   directTradability: z.enum(["direct", "indirect", "none", "unknown"]),
   suggestedResearchAngles: z.array(z.string()),
-  leadQuality: z.enum(["ignore", "watchlist", "research_lead", "soft_signal", "tradable_now"]),
+  leadQuality: z.union([ResearchDispositionSchema, LegacyResearchDispositionSchema]),
   summary: z.string(),
   confidence: z.number().min(0).max(1),
 });
 
 export const ThesisSchema = z.object({
   claim: z.string(),
+  literalClaim: z.string().nullable().optional(),
+  impliedResearchQuestion: z.string().nullable().optional(),
+  impliedTradeThesis: z.string().nullable().optional(),
+  sourceOrMetaSignal: z.string().nullable().optional(),
+  hasExplicitTrade: z.boolean().optional(),
+  hasConcreteResearchQuestion: z.boolean().optional(),
+  hasTradableImplication: z.boolean().optional(),
+  thesisStrength: z.enum(["none", "weak_inferred", "moderate_inferred", "explicit"]).optional(),
+  shouldNotInferTradeBecause: z.array(z.string()).optional(),
   direction: DirectionSchema,
   mentionedAssets: z.array(z.string()),
   topics: z.array(z.string()),
@@ -247,7 +294,12 @@ export const ResearchQuerySpecSchema = z.object({
     "code_docs",
     "regulatory_lookup",
   ]),
-  query: z.string(),
+  query: z.string().optional(),
+  queryIntent: z.string().optional(),
+  entities: z.array(z.string()).optional(),
+  requiredTerms: z.array(z.string()).optional(),
+  optionalTerms: z.array(z.string()).optional(),
+  excludeTerms: z.array(z.string()).optional(),
   priority: UnitScoreFromModelSchema,
   maxResults: z.number().int().min(1).max(100),
   expectedEvidence: z.string(),
@@ -425,6 +477,7 @@ export const GoalResolutionSchema = z.object({
 export const ResearchContinuationDecisionSchema = z.object({
   action: z.enum([
     "stop_no_trade",
+    "stop_research_lead",
     "stop_watchlist",
     "continue_planned",
     "continue_with_adaptive_queries",
@@ -457,12 +510,15 @@ export const AdaptiveQueryRequestSchema = z.object({
     proposedQueries: z.array(z.object({
       lane: ResearchLaneSchema,
       queryKind: ResearchQuerySpecSchema.shape.queryKind,
-      query: z.string(),
+      query: z.string().optional(),
+      queryIntent: z.string().optional(),
       expectedEvidence: z.string(),
       maxResults: z.number().int().min(1).max(100),
+      stopAfter: z.string().optional(),
       priority: UnitScoreFromModelSchema,
       rationale: z.string(),
-    })),
+    })).max(3),
+    remainingBudgetJustification: z.string().optional(),
   })),
 });
 
@@ -502,7 +558,7 @@ export const ResearchReportSchema = z.object({
       summary: z.string(),
       notableAccounts: z.array(z.string()),
     }),
-    leadQuality: z.enum(["ignore", "watchlist", "research_lead", "soft_signal", "tradable_now"]),
+    leadQuality: z.union([ResearchDispositionSchema, LegacyResearchDispositionSchema]),
     nextResearchActions: z.array(z.string()),
   }),
   bullCase: z.array(z.string()),
@@ -527,9 +583,40 @@ export const ResearchReportSchema = z.object({
   ]),
   publicSummary: z.string(),
   fullResearchBrief: z.string(),
+  blockedConclusions: z.array(z.string()).optional(),
+  allowedConclusions: z.array(z.string()).optional(),
+  requiredNextActions: z.array(z.string()).optional(),
 });
 
 export const CritiqueSchema = z.object({
+  verdict: z.enum([
+    "thesis_survives",
+    "thesis_weakened",
+    "thesis_contradicted",
+    "not_enough_evidence",
+    "trade_expression_weak",
+    "market_discovery_missing",
+  ]).optional(),
+  strongestObjections: z.array(z.object({
+    category: z.enum([
+      "source",
+      "entity_resolution",
+      "evidence",
+      "valuation",
+      "pricing",
+      "crowding",
+      "liquidity",
+      "causal_directness",
+      "timing",
+      "venue",
+      "risk",
+    ]),
+    objection: z.string(),
+    severity: z.number().min(0).max(1),
+    evidenceIds: z.array(z.string()).default([]),
+  })).optional(),
+  whatWouldChangeMind: z.array(z.string()).optional(),
+  blockedConclusions: z.array(z.string()).optional(),
   strongestObjection: z.string(),
   secondaryObjections: z.array(z.string()),
   thesisTradable: z.boolean(),
@@ -564,7 +651,17 @@ export const TradeVenueDataSchema = z.object({
 });
 
 export const MarketSelectionSchema = z.object({
+  decision: z.enum(["select_market", "no_selection"]).optional(),
   selectedMarket: MarketCandidateSchema.nullable(),
+  selectedCandidateId: z.string().nullable().optional(),
+  rejectionReason: z.string().nullable().optional(),
+  rankedCandidates: z.array(z.object({
+    candidateId: z.string(),
+    thesisFit: z.number().min(0).max(1),
+    liquidityFit: z.number().min(0).max(1),
+    payoffFit: z.number().min(0).max(1),
+    reason: z.string(),
+  })).optional(),
   rejectedCandidates: z.array(
     z.object({
       venue: z.string(),
@@ -795,6 +892,9 @@ export const RunStepSchema = z.object({
 });
 
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
+export type ResearchDisposition = z.infer<typeof ResearchDispositionSchema>;
+export type TradeabilityDisposition = z.infer<typeof TradeabilityDispositionSchema>;
+export type FinalRunDisposition = z.infer<typeof FinalRunDispositionSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
 export type SourceProfile = z.infer<typeof SourceProfileSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;

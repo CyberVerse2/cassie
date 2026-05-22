@@ -98,11 +98,11 @@ export async function researchThesis(input: {
           mode: "deep",
           researchAngle: input.researchAngle,
           queryPlan,
-          laneResults: {
+          researchExecution: {
             waves: waveResults.map((wave) => ({
               wave: wave.wave,
-              openAiResult: settledPayload(wave.openAiResult),
-              xResult: settledPayload(wave.xResult),
+              webStatus: wave.openAiResult.status,
+              xStatus: wave.xResult.status,
               continuationDecision: wave.continuationDecision,
               adaptiveDecisions: wave.adaptiveDecisions,
             })),
@@ -347,9 +347,21 @@ async function executeResearchWaves(input: {
     let adaptiveRound = 0;
 
     while (continuationDecision.action === "continue_with_adaptive_queries") {
+      if (adaptiveRound >= 2) {
+        continuationDecision = stopResearchLeadForUnresolvedAdaptiveGoals(
+          continuationDecision,
+          "Maximum adaptive query rounds reached; remaining required goals stay unresolved.",
+        );
+        await input.persistence?.store.addResearchContinuationDecision({
+          researchRunId: input.researchRunId,
+          wave,
+          decision: continuationDecision,
+        });
+        break;
+      }
       const adaptiveGoalSet = continuationDecision.unresolvedBlockingGoalIds.slice().sort().join("|");
       if (adaptiveGoalSet && attemptedAdaptiveGoalSets.has(adaptiveGoalSet)) {
-        continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
+        continuationDecision = stopResearchLeadForUnresolvedAdaptiveGoals(
           continuationDecision,
           "Adaptive follow-up already ran for the same unresolved required goal set without resolving it.",
         );
@@ -381,7 +393,7 @@ async function executeResearchWaves(input: {
       });
       await input.persistence?.store.addResearchQueryJobs(input.researchRunId, adaptiveJobs);
       if (adaptiveJobs.length === 0) {
-        continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
+        continuationDecision = stopResearchLeadForUnresolvedAdaptiveGoals(
           continuationDecision,
           "No useful adaptive query was generated for the unresolved evidence gap.",
         );
@@ -428,7 +440,7 @@ async function executeResearchWaves(input: {
         adaptiveLedger,
       );
       if (adaptiveLedger.searchResults.length === 0 && adaptiveLedger.evidenceClaims.length === 0) {
-        continuationDecision = stopWatchlistForUnresolvedAdaptiveGoals(
+        continuationDecision = stopResearchLeadForUnresolvedAdaptiveGoals(
           continuationDecision,
           "Adaptive follow-up returned no new evidence, so the required research goal remains unresolved.",
         );
@@ -461,7 +473,11 @@ async function executeResearchWaves(input: {
     }
 
     results.push({ wave, openAiResult, xResult, evidenceLedger, goalResolutions, continuationDecision, adaptiveDecisions });
-    if (continuationDecision.action === "stop_no_trade" || continuationDecision.action === "stop_watchlist") {
+    if (
+      continuationDecision.action === "stop_no_trade" ||
+      continuationDecision.action === "stop_research_lead" ||
+      continuationDecision.action === "stop_watchlist"
+    ) {
       break;
     }
   }
@@ -492,10 +508,6 @@ async function resolveResearchGoals(input: {
       wave: input.wave,
       goals: input.queryPlan.goals.filter((goal) => goal.budget.wave <= input.wave),
       synthesisContract: input.queryPlan.synthesisContract,
-      laneResults: {
-        openAiResult: settledPayload(input.openAiResult),
-        xResult: settledPayload(input.xResult),
-      },
       evidenceLedger: input.evidenceLedger,
     }),
   }));
@@ -533,7 +545,7 @@ function compileAdaptiveQueryJobs(input: {
   researchRunId: string;
 }): QueryJob[] {
   return input.adaptiveRequest.requests.flatMap((request) =>
-    request.proposedQueries.map((query, index): QueryJob => {
+    request.proposedQueries.slice(0, 3).map((query, index): QueryJob => {
       const querySpecId = `q_adaptive_${stableSlug(request.unresolvedGoalId)}_${input.adaptiveRound}_${index + 1}`;
       return {
         id: randomUUID(),
@@ -543,13 +555,18 @@ function compileAdaptiveQueryJobs(input: {
         goalIds: [request.unresolvedGoalId],
         lane: query.lane,
         provider: query.lane === "web" ? "gemini_google_search" : "grok_x_search",
-        query: query.query,
+        query: compileProviderQuery({
+          query: query.query,
+          queryIntent: query.queryIntent,
+          queryKind: query.queryKind,
+          requiredTerms: query.queryIntent ? [query.queryIntent] : [],
+        }),
         queryKind: query.queryKind,
         priority: query.priority,
         maxResults: query.maxResults,
         mustExecuteAtomically: true,
         expectedEvidence: query.expectedEvidence,
-        rationale: `${query.rationale} Evidence gap: ${request.evidenceGap}`,
+        rationale: `${query.rationale} Evidence gap: ${request.evidenceGap}. Stop after: ${query.stopAfter ?? "the targeted gap is answered or remains unavailable"}`,
       };
     })
   );
@@ -627,7 +644,7 @@ function compileQueryJobs(queryPlan: ResearchQueryPlan, wave: number, researchRu
           goalIds: query.goalIds,
           lane: query.lane,
           provider: query.lane === "web" ? "gemini_google_search" : "grok_x_search",
-          query: query.query,
+          query: compileProviderQuery(query),
           queryKind: query.queryKind,
           priority: query.priority,
           maxResults: query.maxResults,
@@ -717,13 +734,13 @@ function decideContinuation(input: {
   };
 }
 
-function stopWatchlistForUnresolvedAdaptiveGoals(
+function stopResearchLeadForUnresolvedAdaptiveGoals(
   decision: ResearchContinuationDecision,
   reason: string,
 ): ResearchContinuationDecision {
   return {
     ...decision,
-    action: "stop_watchlist",
+    action: "stop_research_lead",
     reason,
     allowedNextGoalIds: [],
     maxAdditionalQueries: 0,
@@ -735,6 +752,42 @@ function stopWatchlistForUnresolvedAdaptiveGoals(
       "ticket_creation",
     ])),
   };
+}
+
+function compileProviderQuery(query: {
+  query?: string;
+  queryIntent?: string;
+  queryKind: ResearchQueryPlan["queryBatches"][number]["queries"][number]["queryKind"];
+  entities?: string[];
+  requiredTerms?: string[];
+  optionalTerms?: string[];
+  excludeTerms?: string[];
+}): string {
+  const quoteTerms = (values: string[] = []) => values
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => value.includes(" ") ? `"${value}"` : value);
+  const entities = quoteTerms(query.entities);
+  const requiredTerms = quoteTerms(query.requiredTerms);
+  const optionalTerms = quoteTerms(query.optionalTerms);
+  const excludeTerms = (query.excludeTerms ?? [])
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .map((value) => `-${value.includes(" ") ? `"${value}"` : value}`);
+
+  if (query.queryKind === "primary_source" || query.queryKind === "regulatory_lookup") {
+    const sourceTerms = query.queryKind === "regulatory_lookup"
+      ? ["official", "filing", "sec", "regulator", "exchange"]
+      : ["official", "announcement", "filing", "press release"];
+    return [...entities, ...requiredTerms, `(${sourceTerms.join(" OR ")})`, ...excludeTerms].join(" ").trim();
+  }
+
+  if (query.queryKind === "disconfirming") {
+    return [...entities, ...requiredTerms, `(false OR denied OR refuted OR stale OR "priced in")`, ...excludeTerms].join(" ").trim();
+  }
+
+  const compiled = [...entities, ...requiredTerms, ...optionalTerms, ...excludeTerms].join(" ").trim();
+  return compiled || query.queryIntent || query.query || "";
 }
 
 function planForWave(queryPlan: ResearchQueryPlan, wave: number): ResearchQueryPlan {

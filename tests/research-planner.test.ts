@@ -1280,7 +1280,7 @@ describe("research query planner policy", () => {
           } as T;
         }
         if (input.name === "cassie_research_report") {
-          expect(input.prompt).toContain("stop_watchlist");
+          expect(input.prompt).toContain("stop_research_lead");
           expect(input.prompt).toContain("Adaptive follow-up returned no new evidence");
           return researchReport as T;
         }

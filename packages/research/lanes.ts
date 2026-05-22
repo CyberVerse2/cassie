@@ -254,11 +254,9 @@ Goals this query must serve:
 ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Prefer primary, official, company, regulatory, reputable news, docs, filings, GitHub, contracts, and direct sources.
-Return compact structured search output only:
-- sources are the retrieved sources for this exact query job.
-- findings are atomic source-backed claims extracted from those sources.
-- Keep findings to the most decision-useful claims; max 4 findings and max 6 sources.
-- Every finding sourceUrls entry must match one of the returned source urls.
+Return concise source-backed research notes in plain text.
+Include only notes and source references for this exact query job.
+Keep the notes compact and decision-useful; the downstream evidence classifier will convert them into structured sources, evidence claims, and goal links.
 Do not synthesize a final trade view.`;
 }
 
@@ -280,7 +278,7 @@ ${formatGoalsByIds(queryPlan, job.goalIds)}
 
 Look for origin posts, author/source reputation, smart engagement, direct refutations, recycled claims, coordinated language, image/video evidence, and whether claims are stated or inferred.
 X social momentum is not proof of factual truth.
-Return compact structured search output only:
+Return compact structured search output matching the provided schema:
 - sources are the retrieved posts/results for this exact query job.
 - findings are atomic source-backed claims extracted from those posts/results.
 - Keep findings to the most decision-useful claims; max 4 findings and max 6 sources.
@@ -343,13 +341,21 @@ function buildSearchStructuringPrompt(input: {
   searchText: string;
   sources: SearchSource[];
 }): string {
-  return `You are Cassie's search result structurer.
+  return `You are Cassie's evidence classifier and search result structurer.
 
 Fill the structured result from the raw search notes.
 Do not add claims that are not present in the raw search notes or source list.
 Every finding sourceUrls entry must match a source URL from the source list when URLs are available.
 Use no more than 4 findings and 6 sources.
 Use unresolved for important missing evidence or ambiguity.
+Classify each atomic finding as an EvidenceClaim candidate:
+- sourceType
+- stance against the relevant goals
+- directness
+- reliability
+- source-backed quote when available
+- relevance to the evidence needs
+Do not synthesize a trade view. Do not infer goal support from the lane summary; only classify source-backed claims.
 
 Query job:
 ${JSON.stringify({
