@@ -135,17 +135,20 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
   }
 
   async findPolymarketMarkets(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan; limit?: number }): Promise<MarketCandidate[]> {
-    const url = new URL(this.endpoint);
-    url.searchParams.set("limit", String(input.limit ?? 10));
-    url.searchParams.set("active", "true");
-    url.searchParams.set("closed", "false");
-    url.searchParams.set("search", polymarketSearchQuery(input.thesis, input.tradeExpression));
+    const marketResponses = await Promise.all(polymarketSearchQueries(input.thesis, input.tradeExpression).map(async (query) => {
+      const url = new URL(this.endpoint);
+      url.searchParams.set("limit", String(input.limit ?? 10));
+      url.searchParams.set("active", "true");
+      url.searchParams.set("closed", "false");
+      url.searchParams.set("search", query);
 
-    const response = await fetch(url);
-    const marketsResponse = await readJsonResponse<PolymarketMarketsResponse>("Polymarket market data", response);
-    const markets = Array.isArray(marketsResponse)
-      ? marketsResponse
-      : marketsResponse.data ?? marketsResponse.markets ?? [];
+      const response = await fetch(url);
+      const marketsResponse = await readJsonResponse<PolymarketMarketsResponse>("Polymarket market data", response);
+      return Array.isArray(marketsResponse)
+        ? marketsResponse
+        : marketsResponse.data ?? marketsResponse.markets ?? [];
+    }));
+    const markets = uniquePolymarketMarkets(marketResponses.flat());
 
     const candidates = await Promise.all(markets
       .filter((market) => market.active !== false && market.closed !== true)
@@ -261,7 +264,12 @@ function candidateSymbols(thesis: Thesis, tradeExpression?: TradeExpressionPlan)
   const values = [
     ...thesis.mentionedAssets,
     tradeExpression?.directAsset,
-    ...(tradeExpression?.candidates.map((candidate) => candidate.instrument) ?? []),
+    ...(tradeExpression?.candidates.flatMap((candidate) => [
+      candidate.instrument,
+      candidate.symbol,
+      candidate.venueQuery,
+      ...(candidate.venueChecks ?? []),
+    ]) ?? []),
   ].filter((value): value is string => Boolean(value));
 
   return new Set(values.flatMap(symbolAliases));
@@ -269,10 +277,15 @@ function candidateSymbols(thesis: Thesis, tradeExpression?: TradeExpressionPlan)
 
 function symbolAliases(value: string): string[] {
   const trimmed = value.trim();
-  const withoutPair = trimmed.replace(/-USDC$/i, "").replace(/\/USDC$/i, "");
+  const withoutPair = trimmed.replace(/[-/]USD[CTE]?$/i, "");
   const withoutPerp = withoutPair.replace(/\s+perp$/i, "");
   const normalized = withoutPerp.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const aliases = [trimmed, withoutPair, withoutPerp];
+  const bases = symbolParts(withoutPerp);
+  const aliases = [trimmed, withoutPair, withoutPerp, ...bases];
+
+  for (const base of bases) {
+    aliases.push(`${base}-USDC`, `${base}/USDC`, `${base}-USDE`, `${base}/USDE`, `${base}-USDT`, `${base}/USDT`);
+  }
 
   if (normalized === "SPACEX") {
     aliases.push("SPCX");
@@ -282,6 +295,16 @@ function symbolAliases(value: string): string[] {
   }
 
   return Array.from(new Set(aliases.filter(Boolean)));
+}
+
+function symbolParts(value: string): string[] {
+  const ignored = new Set(["PAIR", "PERP", "SPOT", "MARKET", "USD", "USDC", "USDE", "USDT"]);
+  const parts = value
+    .toUpperCase()
+    .split(/[^A-Z0-9]+/)
+    .filter((part) => /^[A-Z][A-Z0-9]{1,9}$/.test(part) && !ignored.has(part));
+
+  return Array.from(new Set(parts));
 }
 
 function isPreStockPerp(symbol: string, thesis: Thesis, tradeExpression?: TradeExpressionPlan): boolean {
@@ -297,8 +320,80 @@ function isPreStockPerp(symbol: string, thesis: Thesis, tradeExpression?: TradeE
   return context.includes("pre-stock") || context.includes("pre stock") || context.includes("pre-ipo") || context.includes("ipo");
 }
 
-function polymarketSearchQuery(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string {
-  const directAsset = tradeExpression?.directAsset;
-  const instruments = tradeExpression?.candidates.map((candidate) => candidate.instrument).join(" ");
-  return [directAsset, instruments, thesis.claim].filter(Boolean).join(" ");
+function polymarketSearchQueries(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
+  const surfaces = marketSearchSurfaces(thesis, tradeExpression);
+  const modifiers = marketSearchModifiers(thesis, tradeExpression);
+  const queries = surfaces.flatMap((surface) => [
+    surface,
+    ...modifiers.map((modifier) => `${surface} ${modifier}`),
+  ]);
+
+  return Array.from(new Set(queries.map((query) => query.trim()).filter(Boolean))).slice(0, 8);
+}
+
+function marketSearchSurfaces(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
+  const values = [
+    tradeExpression?.directAsset,
+    ...thesis.mentionedAssets,
+    ...thesis.topics,
+    ...(tradeExpression?.candidates.flatMap((candidate) => [
+      candidate.symbol,
+      candidate.venueQuery,
+      ...(candidate.venueChecks ?? []),
+    ]) ?? []),
+  ].filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(values.flatMap((value) => {
+    const phrase = marketSearchPhrase(value);
+    return [
+      phrase,
+      ...symbolParts(value),
+    ].filter((surface) => surface.length >= 2);
+  })));
+}
+
+function marketSearchPhrase(value: string): string {
+  return value
+    .replace(/[-/](?:USD[CTE]?|BTC|ETH)\b/gi, " ")
+    .replace(/\b(?:perp(?:etual)?|spot|pair|market|venue|check|on)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function marketSearchModifiers(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
+  const context = [
+    thesis.claim,
+    ...thesis.topics,
+    tradeExpression?.signal,
+    tradeExpression?.coreInterpretation,
+    tradeExpression?.highestPurityExpression,
+    tradeExpression?.marketRouterInstructions,
+  ].filter(Boolean).join(" ").toLowerCase();
+  const modifiers = ["price"];
+
+  if (context.includes("target") || context.includes("hit") || context.includes("reach")) modifiers.push("target");
+  if (context.includes("market cap") || context.includes("valuation")) modifiers.push("market cap");
+  if (context.includes("approval") || context.includes("approved")) modifiers.push("approval");
+  if (context.includes("etf")) modifiers.push("ETF");
+  if (context.includes("election")) modifiers.push("election");
+
+  for (const year of context.match(/\b20\d{2}\b/g) ?? []) {
+    modifiers.push(year);
+  }
+
+  return Array.from(new Set(modifiers));
+}
+
+function uniquePolymarketMarkets(markets: PolymarketMarket[]): PolymarketMarket[] {
+  const seen = new Set<string>();
+  const unique: PolymarketMarket[] = [];
+
+  for (const market of markets) {
+    const key = market.conditionId ?? market.slug ?? market.id ?? market.question;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    unique.push(market);
+  }
+
+  return unique;
 }

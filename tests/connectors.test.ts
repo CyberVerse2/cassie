@@ -352,33 +352,120 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
-  it("maps Polymarket markets into prediction-market candidates", async () => {
+  it("checks Hyperliquid quoted asset symbols for crypto thesis assets", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify([
-            {
-              id: "1",
-              slug: "solana-etf-approved",
-              question: "Will a Solana ETF be approved?",
-              active: true,
-              closed: false,
-              liquidityNum: 600000,
-              clobTokenIds: JSON.stringify(["123", "456"]),
-              outcomePrices: JSON.stringify(["0.62", "0.38"]),
-              conditionId: "condition_1",
-            },
+            { universe: [{ name: "ZEC-USDC" }, { name: "ZEC/USDC" }] },
+            [{ dayNtlVlm: "230936177" }, { dayNtlVlm: "7006750" }],
           ]),
         ),
       )
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({
-            bids: [{ price: "0.61", size: "100" }],
-            asks: [{ price: "0.63", size: "100" }],
+            levels: [
+              [{ px: "642.9", sz: "100" }],
+              [{ px: "643.1", sz: "100" }],
+            ],
+          }),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            levels: [
+              [{ px: "643.2", sz: "100" }],
+              [{ px: "643.4", sz: "100" }],
+            ],
           }),
         ),
       );
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%.",
+        direction: "bullish",
+        mentionedAssets: ["ZEC"],
+        topics: ["Zcash", "relative value"],
+        timeHorizon: "event_based",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.7,
+      },
+      tradeExpression: {
+        signal: "ZEC to reach 3-5% of BTC market cap",
+        coreInterpretation: "Check direct ZEC venue liquidity instead of requiring a literal ZEC/BTC venue.",
+        directAsset: "ZEC",
+        directAssetTradable: true,
+        highestPurityExpression: "Long ZEC with BTC as the benchmark.",
+        publicMarketReadThrough: "none",
+        candidates: [
+          {
+            instrument: "ZEC/BTC Pair",
+            expression: "pair",
+            thesis: "ZEC should rerate relative to BTC.",
+            causalDirectness: 0.9,
+            liquidity: 0.5,
+            surprise: 0.5,
+            timing: 0.5,
+            crowdingRisk: 0.5,
+            downsideAsymmetry: 0.5,
+            evidenceQuality: 0.5,
+            expectedEdge: 0.2,
+            tradableNow: true,
+            rejectionReason: null,
+            invalidation: [],
+            evidenceNeeded: [],
+            currentMarketPriceOrOdds: null,
+            fairValueOrExpectedValue: null,
+            instrumentType: "perp",
+            symbol: "ZEC/BTC",
+            venue: "hyperliquid",
+            venueChecks: ["ZEC perp on Hyperliquid"],
+            venueQuery: "ZEC perp",
+          },
+        ],
+        decision: "needs_market_check",
+        reason: "Needs venue liquidity check.",
+        marketRouterInstructions: "Check Hyperliquid for direct ZEC perps or spot markets.",
+      },
+    });
+
+    expect(candidates.map((candidate) => candidate.symbol)).toEqual(["ZEC-USDC", "ZEC/USDC"]);
+    fetchMock.mockRestore();
+  });
+
+  it("maps Polymarket markets into prediction-market candidates", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/book") {
+        return new Response(
+          JSON.stringify({
+            bids: [{ price: "0.61", size: "100" }],
+            asks: [{ price: "0.63", size: "100" }],
+          }),
+        );
+      }
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 600000,
+            clobTokenIds: JSON.stringify(["123", "456"]),
+            outcomePrices: JSON.stringify(["0.62", "0.38"]),
+            conditionId: "condition_1",
+          },
+        ]
+        : []));
+    });
 
     const candidates = await new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
       thesis,
@@ -393,26 +480,120 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("searches Polymarket with reusable asset and event queries instead of pair-expression blobs", async () => {
+    const searches: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/book") {
+        return new Response(
+          JSON.stringify({
+            bids: [{ price: "0.53", size: "100" }],
+            asks: [{ price: "0.55", size: "100" }],
+          }),
+        );
+      }
+
+      const search = url.searchParams.get("search") ?? "";
+      searches.push(search);
+
+      return new Response(JSON.stringify(search === "Zcash price"
+        ? [
+          {
+            id: "asset-price-event",
+            slug: "what-price-will-zcash-hit-before-2027",
+            question: "What price will Zcash hit before 2027?",
+            active: true,
+            closed: false,
+            liquidityNum: 700000,
+            clobTokenIds: JSON.stringify(["yes_token", "no_token"]),
+            outcomePrices: JSON.stringify(["0.54", "0.46"]),
+            conditionId: "condition_asset_price",
+          },
+        ]
+        : []));
+    });
+
+    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://example.test").findCandidates({
+      thesis: {
+        claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%, moonshot flippening.",
+        direction: "bullish",
+        mentionedAssets: ["ZEC"],
+        topics: ["Zcash", "relative value"],
+        timeHorizon: "event_based",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.7,
+      },
+      tradeExpression: {
+        signal: "ZEC to reach 3-5% of BTC market cap",
+        coreInterpretation: "Search for direct asset prediction markets rather than a literal pair venue.",
+        directAsset: "ZEC",
+        directAssetTradable: true,
+        highestPurityExpression: "Long ZEC relative to BTC.",
+        publicMarketReadThrough: "none",
+        candidates: [
+          {
+            instrument: "ZEC/BTC Pair",
+            expression: "pair",
+            thesis: "ZEC should rerate relative to BTC.",
+            causalDirectness: 0.9,
+            liquidity: 0.5,
+            surprise: 0.5,
+            timing: 0.5,
+            crowdingRisk: 0.5,
+            downsideAsymmetry: 0.5,
+            evidenceQuality: 0.5,
+            expectedEdge: 0.2,
+            tradableNow: true,
+            rejectionReason: null,
+            invalidation: [],
+            evidenceNeeded: [],
+            currentMarketPriceOrOdds: null,
+            fairValueOrExpectedValue: null,
+            instrumentType: "prediction_market",
+            symbol: "ZEC/BTC",
+            venue: "polymarket",
+            venueChecks: ["Zcash price markets"],
+            venueQuery: "Zcash prediction market",
+          },
+        ],
+        decision: "needs_market_check",
+        reason: "Needs prediction market check.",
+        marketRouterInstructions: "Find direct asset price prediction markets.",
+      },
+    });
+
+    expect(searches).toContain("Zcash price");
+    expect(searches.some((search) => search.includes("ZEC/BTC Pair"))).toBe(false);
+    expect(candidates[0]?.instrument).toBe("what-price-will-zcash-hit-before-2027");
+    fetchMock.mockRestore();
+  });
+
   it("surfaces Polymarket order book failures instead of dropping the venue", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([
-            {
-              id: "1",
-              slug: "solana-etf-approved",
-              question: "Will a Solana ETF be approved?",
-              active: true,
-              closed: false,
-              liquidityNum: 600000,
-              clobTokenIds: JSON.stringify(["123", "456"]),
-              outcomePrices: JSON.stringify(["0.62", "0.38"]),
-              conditionId: "condition_1",
-            },
-          ]),
-        ),
-      )
-      .mockResolvedValueOnce(new Response("upstream unavailable", { status: 503 }));
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/book") {
+        return new Response("upstream unavailable", { status: 503 });
+      }
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 600000,
+            clobTokenIds: JSON.stringify(["123", "456"]),
+            outcomePrices: JSON.stringify(["0.62", "0.38"]),
+            conditionId: "condition_1",
+          },
+        ]
+        : []));
+    });
 
     await expect(new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
       thesis,
