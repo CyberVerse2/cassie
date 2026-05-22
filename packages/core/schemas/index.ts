@@ -600,6 +600,26 @@ export const TradeExpressionCandidateSchema = z.object({
   evidenceNeeded: z.array(z.string()),
 });
 
+export const EvidenceInsufficiencySchema = z.object({
+  score: z.number().min(0).max(1),
+  requiredThreshold: z.number().min(0).max(1),
+  failedDimensions: z.array(z.enum([
+    "source_reliability",
+    "primary_source_access",
+    "entity_resolution",
+    "market_discovery",
+    "venue_confirmation",
+    "price_or_odds",
+    "liquidity",
+    "causal_directness",
+    "timing",
+    "valuation_work",
+    "risk_invalidation",
+  ])).min(1),
+  summary: z.string(),
+  evidenceNeededToClear: z.array(z.string()).min(1),
+});
+
 export const TradeExpressionPlanSchema = z.object({
   signal: z.string(),
   coreInterpretation: z.string(),
@@ -619,6 +639,7 @@ export const TradeExpressionPlanSchema = z.object({
     "no_trade",
   ]),
   reason: z.string(),
+  insufficiency: EvidenceInsufficiencySchema.nullable().optional(),
   marketRouterInstructions: z.string().nullable(),
 });
 

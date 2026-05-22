@@ -577,14 +577,18 @@ function appendTradeExpressionContext(
 ): string {
   if (!tradeExpression) return summary;
 
+  const insufficiency = tradeExpression.insufficiency
+    ? ` Insufficiency: score ${tradeExpression.insufficiency.score.toFixed(2)} < ${tradeExpression.insufficiency.requiredThreshold.toFixed(2)}; failed ${tradeExpression.insufficiency.failedDimensions.join(", ")}.`
+    : "";
+
   if (marketSelection?.noTradeReason) {
-    return `${summary} Market routing: no trade; ${marketSelection.noTradeReason}`;
+    return `${summary} Market routing: no trade; ${marketSelection.noTradeReason}${insufficiency}`;
   }
 
   const selected = marketSelection?.selectedMarket
     ? ` Selected expression: ${marketSelection.selectedMarket.side} ${marketSelection.selectedMarket.symbol} on ${marketSelection.selectedMarket.venue}.`
     : "";
-  return `${summary} Trade expression: ${tradeExpression.decision}; ${tradeExpression.highestPurityExpression}.${selected}`;
+  return `${summary} Trade expression: ${tradeExpression.decision}; ${tradeExpression.highestPurityExpression}.${selected}${insufficiency}`;
 }
 
 async function validateFinalizationPrerequisites(input: {

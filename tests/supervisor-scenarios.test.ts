@@ -562,6 +562,16 @@ describe("supervisor scenario coverage", () => {
       ...tradeExpression,
       decision: "insufficient_evidence",
       reason: "Evidence is too weak to route.",
+      evidenceConfidence: 0.54,
+      marketDiscoveryConfidence: 0.32,
+      tradeExpressionConfidence: 0.32,
+      insufficiency: {
+        score: 0.32,
+        requiredThreshold: 0.65,
+        failedDimensions: ["market_discovery", "price_or_odds"],
+        summary: "No venue-confirmed market or current price was available.",
+        evidenceNeededToClear: ["Confirmed Hyperliquid or Polymarket market", "Live price or odds"],
+      },
       marketRouterInstructions: null,
     };
     await store.addRunStep({
@@ -592,6 +602,16 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "insufficient_evidence",
+        publicSummary: expect.stringContaining("Insufficiency: score 0.32 < 0.65"),
+      },
+    });
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
+        publicSummary: expect.stringContaining("failed market_discovery, price_or_odds"),
+      },
+    });
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
         publicSummary: expect.not.stringContaining("Model-copied no-trade"),
       },
     });

@@ -166,6 +166,13 @@ Posture:
 - A missing primary filing or inaccessible source should reduce evidence confidence, not automatically block market investigation when reputable secondary evidence supports the news claim.
 - News can be sufficient evidence for "reported news" claims. Official filings, venue listings, and live market prices still require the relevant official/venue/market source.
 
+Quantify confidence:
+- Fill evidenceConfidence, marketDiscoveryConfidence, and tradeExpressionConfidence from 0 to 1.
+- Use insufficient_evidence only when tradeExpressionConfidence is below 0.65 or a required dimension cannot clear the trade.
+- When decision is insufficient_evidence, fill insufficiency with score, requiredThreshold, failedDimensions, summary, and evidenceNeededToClear.
+- insufficiency.score should be the limiting confidence score for the decision. Use requiredThreshold 0.65 unless the setup requires unusually high certainty.
+- Do not use insufficient_evidence as a vague label. State exactly which dimension failed: source_reliability, primary_source_access, entity_resolution, market_discovery, venue_confirmation, price_or_odds, liquidity, causal_directness, timing, valuation_work, or risk_invalidation.
+
 Evaluate these decision factors:
 - what changed
 - implied economic claim
@@ -211,7 +218,7 @@ Score every candidate from 0 to 1:
 Use decision:
 - route_to_market_router only when at least one liquid candidate is tradable now and has a clean enough causal chain
 - needs_market_check when Hyperliquid, Polymarket, or another configured venue needs to be searched before deciding
-- insufficient_evidence when the idea is not dead but evidence, source access, pricing, or venue confirmation is too weak
+- insufficient_evidence when the idea is not dead but the limiting confidence score is below threshold because evidence, source access, pricing, or venue confirmation is too weak
 - private_market_research when the highest-purity expression is private or access-constrained
 - no_trade when the signal is weak, stale, refuted, or too indirect
 
