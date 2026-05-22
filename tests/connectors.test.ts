@@ -196,6 +196,62 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("checks Hyperliquid pre-stock aliases for private-company signals", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            { universe: [{ name: "SPCX" }, { name: "COIN" }] },
+            [{ dayNtlVlm: "7500000" }, { dayNtlVlm: "25000000" }],
+          ]),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            levels: [
+              [{ px: "74.5", sz: "10" }],
+              [{ px: "75.5", sz: "10" }],
+            ],
+          }),
+        ),
+      );
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        claim: "SpaceX IPO valuation may be too rich for a clean public trade.",
+        direction: "bearish",
+        mentionedAssets: ["SpaceX"],
+        topics: ["SpaceX IPO", "pre-stock"],
+        timeHorizon: "event_based",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.7,
+      },
+      tradeExpression: {
+        signal: "SpaceX pre-IPO valuation",
+        coreInterpretation: "Check direct pre-stock price discovery before dead-ending.",
+        directAsset: "SpaceX",
+        directAssetTradable: false,
+        highestPurityExpression: "Hyperliquid SpaceX pre-stock perp if available.",
+        publicMarketReadThrough: "weak",
+        candidates: [],
+        decision: "route_to_market_router",
+        reason: "Direct pre-stock venue data determines actionability.",
+        marketRouterInstructions: "Check SPCX/SpaceX pre-stock perps before rejecting tradability.",
+      },
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      venue: "hyperliquid",
+      instrument: "pre_stock_perp",
+      side: "short",
+      symbol: "SPCX",
+    });
+    fetchMock.mockRestore();
+  });
+
   it("maps Polymarket markets into prediction-market candidates", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(

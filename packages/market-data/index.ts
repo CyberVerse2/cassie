@@ -39,6 +39,11 @@ type PolymarketMarket = {
   endDate?: string;
 };
 
+type PolymarketMarketsResponse = PolymarketMarket[] | {
+  data?: PolymarketMarket[];
+  markets?: PolymarketMarket[];
+};
+
 type PolymarketBook = {
   bids?: Array<{ price: string; size: string }>;
   asks?: Array<{ price: string; size: string }>;
@@ -92,9 +97,11 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
           throw new Error(`Hyperliquid l2 book is empty for ${asset.name}.`);
         }
 
+        const isPreStock = isPreStockPerp(asset.name, input.thesis, input.tradeExpression);
+
         return {
           venue: "hyperliquid",
-          instrument: "perp",
+          instrument: isPreStock ? "pre_stock_perp" : "perp",
           side: input.thesis.direction === "bearish" ? "short" : "long",
           symbol: asset.name,
           markPrice: Number(ctx?.markPx ?? ctx?.midPx ?? bookMetrics?.mid ?? 0) || null,
@@ -134,7 +141,10 @@ export class PolymarketMarketDataProvider implements MarketDataProvider {
     url.searchParams.set("search", polymarketSearchQuery(input.thesis, input.tradeExpression));
 
     const response = await fetch(url);
-    const markets = await readJsonResponse<PolymarketMarket[]>("Polymarket market data", response);
+    const marketsResponse = await readJsonResponse<PolymarketMarketsResponse>("Polymarket market data", response);
+    const markets = Array.isArray(marketsResponse)
+      ? marketsResponse
+      : marketsResponse.data ?? marketsResponse.markets ?? [];
 
     const candidates = await Promise.all(markets
       .filter((market) => market.active !== false && market.closed !== true)
@@ -256,7 +266,30 @@ function symbolAliases(value: string): string[] {
   const trimmed = value.trim();
   const withoutPair = trimmed.replace(/-USDC$/i, "").replace(/\/USDC$/i, "");
   const withoutPerp = withoutPair.replace(/\s+perp$/i, "");
-  return Array.from(new Set([trimmed, withoutPair, withoutPerp].filter(Boolean)));
+  const normalized = withoutPerp.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const aliases = [trimmed, withoutPair, withoutPerp];
+
+  if (normalized === "SPACEX") {
+    aliases.push("SPCX");
+  }
+  if (normalized === "COINBASE") {
+    aliases.push("COIN");
+  }
+
+  return Array.from(new Set(aliases.filter(Boolean)));
+}
+
+function isPreStockPerp(symbol: string, thesis: Thesis, tradeExpression?: TradeExpressionPlan): boolean {
+  const context = [
+    symbol,
+    thesis.claim,
+    ...thesis.topics,
+    tradeExpression?.coreInterpretation,
+    tradeExpression?.highestPurityExpression,
+    tradeExpression?.marketRouterInstructions,
+  ].filter(Boolean).join(" ").toLowerCase();
+
+  return context.includes("pre-stock") || context.includes("pre stock") || context.includes("pre-ipo") || context.includes("ipo");
 }
 
 function polymarketSearchQuery(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string {

@@ -197,7 +197,7 @@ Required behavior:
 - For think requests, call research_thesis, plan_trade_expression, select_market when routed, risk_check when a market is selected, then finalize_run without creating a ticket.
 - If risk_check rejects, do not call create_trade_ticket. Finalize with analysis and the rejection reason.
 - Always call finalize_run exactly once after the required tools have completed.
-- finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs.
+- finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs. Include the concrete action state implied by the tool outputs: no trade, watchlist, route to market, long/short perp, buy YES/NO, create ticket, or block trade.
 - After finalize_run succeeds, do not call more tools.
 - Never invent market candidates.
 - Never place orders or enqueue execution.`;

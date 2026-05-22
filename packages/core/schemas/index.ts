@@ -578,6 +578,9 @@ export const TradeExpressionCandidateSchema = z.object({
   instrument: z.string(),
   expression: z.enum(["long", "short", "pair", "basket", "watchlist", "no_trade"]),
   thesis: z.string(),
+  venueChecks: z.array(z.string()).optional(),
+  currentMarketPriceOrOdds: z.string().nullable().optional(),
+  fairValueOrExpectedValue: z.string().nullable().optional(),
   causalDirectness: z.number().min(0).max(1),
   liquidity: z.number().min(0).max(1),
   surprise: z.number().min(0).max(1),
@@ -622,6 +625,18 @@ export const RiskDecisionSchema = z.discriminatedUnion("decision", [
     decision: z.literal("create_ticket_only"),
     reason: z.string(),
   }),
+]);
+
+export const CassieActionStateSchema = z.enum([
+  "no_trade",
+  "watchlist",
+  "route_to_market",
+  "long_perp",
+  "short_perp",
+  "buy_yes",
+  "buy_no",
+  "create_ticket",
+  "block_trade",
 ]);
 
 export const AccountStateSchema = z.object({
@@ -685,6 +700,7 @@ export const ControlRunStatusSchema = z.enum([
 
 export const SupervisorFinalResultSchema = z.object({
   responseType: z.enum(["analysis", "critique", "trade_decision", "trade_ticket"]),
+  actionState: CassieActionStateSchema,
   publicSummary: z.string(),
   runStatus: ControlRunStatusSchema.exclude(["queued", "running"]),
   ticketId: z.string().nullable(),
@@ -768,6 +784,7 @@ export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
 export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSchema>;
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type RiskDecision = z.infer<typeof RiskDecisionSchema>;
+export type CassieActionState = z.infer<typeof CassieActionStateSchema>;
 export type AccountState = z.infer<typeof AccountStateSchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;
 export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;

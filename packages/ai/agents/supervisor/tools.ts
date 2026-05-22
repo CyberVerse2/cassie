@@ -16,6 +16,7 @@ import {
   ThesisSchema,
   TradeExpressionPlanSchema,
   type AccountState,
+  type CassieActionState,
   type ControlRun,
   type Critique,
   type MarketSelection,
@@ -53,6 +54,8 @@ const FinalizeRunInputSchema = z.object({
   marketSelection: MarketSelectionSchema.optional(),
   critique: CritiqueSchema.optional(),
   researchReport: ResearchReportSchema.optional(),
+  tradeExpression: TradeExpressionPlanSchema.optional(),
+  riskDecision: RiskDecisionSchema.optional(),
   tradeTicket: z.object({ ticketId: z.string() }).optional(),
 });
 
@@ -450,12 +453,13 @@ async function canonicalizeFinalInput(
   runId: string,
   input: FinalizeRunInput,
 ): Promise<FinalizeRunInput> {
-  const [thesis, researchReport, critique, tradeExpression, marketSelection] = await Promise.all([
+  const [thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision] = await Promise.all([
     tryCanonicalStepOutput<Thesis>(store, runId, "thesis", ThesisSchema),
     tryCanonicalStepOutput<ResearchReport>(store, runId, "research", ResearchReportSchema),
     tryCanonicalStepOutput<Critique>(store, runId, "critique", CritiqueSchema),
     tryCanonicalStepOutput<TradeExpressionPlan>(store, runId, "trade_expression", TradeExpressionPlanSchema),
     tryCanonicalStepOutput<MarketSelection>(store, runId, "market_selection", MarketSelectionSchema),
+    tryCanonicalStepOutput<RiskDecision>(store, runId, "risk", RiskDecisionSchema),
   ]);
 
   const publicSummary = canonicalPublicSummary(input, {
@@ -463,6 +467,7 @@ async function canonicalizeFinalInput(
     researchReport,
     tradeExpression,
     marketSelection,
+    riskDecision,
   });
 
   return {
@@ -470,8 +475,10 @@ async function canonicalizeFinalInput(
     publicSummary,
     thesis: thesis ?? input.thesis,
     researchReport: researchReport ?? input.researchReport,
+    tradeExpression: tradeExpression ?? input.tradeExpression,
     critique: critique ?? input.critique,
     marketSelection: marketSelection ?? input.marketSelection,
+    riskDecision: riskDecision ?? input.riskDecision,
   };
 }
 
@@ -482,8 +489,13 @@ function canonicalPublicSummary(
     researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     marketSelection?: MarketSelection;
+    riskDecision?: RiskDecision;
   },
 ): string {
+  if (canonical.riskDecision?.decision === "reject") {
+    return appendTradeExpressionContext(canonical.riskDecision.reason, canonical.tradeExpression, canonical.marketSelection);
+  }
+
   if (input.responseType === "critique" && canonical.critique) {
     return appendTradeExpressionContext(canonical.critique.finalCritique, canonical.tradeExpression, canonical.marketSelection);
   }
@@ -528,9 +540,12 @@ async function validateFinalizationPrerequisites(input: {
 }
 
 function finalizeResult(input: FinalizeRunInput) {
+  const actionState = resolveActionState(input);
+
   if (input.responseType === "analysis") {
     return SupervisorFinalResultSchema.parse({
       responseType: input.responseType,
+      actionState,
       publicSummary: input.publicSummary,
       runStatus: "succeeded",
       ticketId: null,
@@ -540,6 +555,7 @@ function finalizeResult(input: FinalizeRunInput) {
   if (input.responseType === "critique") {
     return SupervisorFinalResultSchema.parse({
       responseType: input.responseType,
+      actionState,
       publicSummary: input.publicSummary,
       runStatus: "succeeded",
       ticketId: null,
@@ -551,9 +567,30 @@ function finalizeResult(input: FinalizeRunInput) {
   }
   return SupervisorFinalResultSchema.parse({
     responseType: input.responseType,
+    actionState,
     publicSummary: input.publicSummary,
     runStatus: "awaiting_approval",
     ticketId: input.tradeTicket.ticketId,
     warnings: input.researchReport?.warnings ?? [],
   });
+}
+
+function resolveActionState(input: FinalizeRunInput): CassieActionState {
+  if (input.responseType === "trade_ticket") return "create_ticket";
+  if (input.riskDecision?.decision === "reject") return "block_trade";
+
+  const selectedSide = input.marketSelection?.selectedMarket?.side;
+  if (selectedSide === "long") return "long_perp";
+  if (selectedSide === "short") return "short_perp";
+  if (selectedSide === "buy_yes") return "buy_yes";
+  if (selectedSide === "buy_no") return "buy_no";
+
+  if (input.marketSelection?.noTradeReason) return "no_trade";
+
+  const tradeExpression = input.tradeExpression;
+  if (tradeExpression?.decision === "route_to_market_router") return "route_to_market";
+  if (tradeExpression?.decision === "watchlist" || tradeExpression?.decision === "private_market_research") return "watchlist";
+  if (tradeExpression?.decision === "no_trade") return "no_trade";
+
+  return "watchlist";
 }

@@ -153,6 +153,9 @@ export function tradeExpressionPrompt(input: unknown): string {
 
 Decide whether the researched signal has a clean monetizable expression.
 
+Return a concrete action path, not a generic summary. The downstream final action must be one of:
+no_trade, watchlist, route_to_market, long_perp, short_perp, buy_yes, buy_no, create_ticket, or block_trade.
+
 Evaluate these decision factors:
 - what changed
 - implied economic claim
@@ -162,6 +165,7 @@ Evaluate these decision factors:
 - liquid public, crypto, pre-stock, synthetic perp, or prediction-market instrument
 - read-through strength
 - pricing, crowding, timing, and access constraints
+- relevant venue checks across Hyperliquid spot/perps/pre-stock perps, Polymarket, public equities/options, crypto spot/perps, and private-only exposure when applicable
 
 Valuation discipline:
 - If the signal claims something is overvalued, undervalued, cheap, expensive, mispriced, or priced at a specific market cap or multiple, estimate a fair-value range before deciding the expression.
@@ -170,6 +174,9 @@ Valuation discipline:
 - If a prediction market exists, map the thesis to the exact resolution rule and bracket before choosing YES or NO.
 - Do not stop at "the filing numbers are true." Decide whether the market price implied by available venues is too high, too low, or not actionable.
 - State what would invalidate the valuation view.
+- For each candidate, fill currentMarketPriceOrOdds when known or explicitly state the missing price/odds.
+- For each valuation or probability thesis, fill fairValueOrExpectedValue with the model, range, or expected-value comparison used for the decision.
+- Fill venueChecks with the exact venues inspected or required before routing.
 
 Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
@@ -213,6 +220,7 @@ Synthesis requirements:
 Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
 Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in research/critic/watchlist territory.
+Preserve canonical tool outputs: do not rewrite supported goal resolutions into contradictions, and do not turn a missing venue into "the underlying claim is false" unless evidence actually refutes that claim component.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -322,6 +330,8 @@ Venue and trade-expression planning:
 - Do not assume a venue exists. Query for it when the thesis or signal suggests direct tradability.
 - For prediction markets, map the thesis to the exact market question, outcome side, bracket, and resolution rule.
 - For pre-stock perps, treat the instrument as market-implied price discovery, not actual equity.
+- For private-company IPO, pre-IPO, or ticker-rumor signals, explicitly include Hyperliquid pre-stock/perp and Polymarket venue checks before concluding that no market route exists.
+- For ticker-like strings, add an entity/ticker-collision goal whenever the symbol could refer to a public equity, crypto token, ETF, synthetic perp, or pre-stock instrument.
 
 Valuation discipline:
 - If the signal claims overvalued, undervalued, cheap, expensive, rich, mispriced, or cites market cap, revenue multiple, EBITDA multiple, IPO valuation, pre-market price, or probability, create goals for:

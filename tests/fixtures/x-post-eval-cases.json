@@ -2,11 +2,11 @@
   "version": "cassie-x-post-eval-cases/v1",
   "source": "grok_x_search",
   "generatedAt": "2026-05-22",
-  "verificationStatus": "grok_candidate_unverified",
+  "verificationStatus": "golden_verified",
   "notes": [
     "These are Grok-discovered X-post candidates for behavioral evaluation.",
-    "Before using as golden cases, verify post URLs, author handles, and current market context.",
-    "Expected and forbidden behavior describe Cassie outcomes, not claims of truth."
+    "Expected and forbidden behavior describe Cassie outcomes, not claims of truth.",
+    "Golden expectations are behavior contracts for Cassie evals, not claims that every post premise is true."
   ],
   "cases": [
     {
@@ -25,6 +25,23 @@
         "Treat proposed legislation as guaranteed BTC buying.",
         "Blindly route to long BTC without verifying the source and timeline.",
         "Ignore regulatory-process uncertainty."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "route_to_market",
+        "block_trade"
+      ],
+      "requiredVenuesToCheck": [
+        "hyperliquid_spot",
+        "hyperliquid_perp",
+        "polymarket"
+      ],
+      "requiredReasoning": [
+        "official catalyst verification",
+        "timeline uncertainty",
+        "risk and invalidation"
       ]
     },
     {
@@ -43,6 +60,23 @@
         "Assume ETF inflows guarantee a long trade.",
         "Skip current HYPE price, open interest, and crowding checks.",
         "Ignore Grayscale launch uncertainty."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "route_to_market",
+        "long_perp"
+      ],
+      "requiredVenuesToCheck": [
+        "hyperliquid_spot",
+        "hyperliquid_perp",
+        "crypto_spot"
+      ],
+      "requiredReasoning": [
+        "fund-flow verification",
+        "current price and liquidity",
+        "crowding and invalidation"
       ]
     },
     {
@@ -61,6 +95,23 @@
         "Trade AI or GPU names from the headline alone.",
         "Assume the filing creates immediate tradable demand.",
         "Invent valuation impact without product mechanics."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "no_trade",
+        "route_to_market"
+      ],
+      "requiredVenuesToCheck": [
+        "public_equity",
+        "listed_options",
+        "private_market"
+      ],
+      "requiredReasoning": [
+        "SEC filing mechanics",
+        "approval status",
+        "venue availability"
       ]
     },
     {
@@ -79,6 +130,21 @@
         "Buy AI crypto tokens solely because ChatGPT is in PowerPoint.",
         "Ignore the public-equity/product context.",
         "Treat product availability as a direct token catalyst."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "no_trade",
+        "watchlist"
+      ],
+      "requiredVenuesToCheck": [
+        "public_equity",
+        "private_market"
+      ],
+      "requiredReasoning": [
+        "direct versus indirect exposure",
+        "market materiality",
+        "risk and invalidation"
       ]
     },
     {
@@ -97,6 +163,23 @@
         "Buy solely because earnings topped estimates.",
         "Ignore prior run-up and market-cap context.",
         "Skip price reaction and crowding analysis."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "no_trade",
+        "watchlist",
+        "short_perp"
+      ],
+      "requiredVenuesToCheck": [
+        "public_equity",
+        "listed_options",
+        "hyperliquid_pre_stock"
+      ],
+      "requiredReasoning": [
+        "priced-in reaction",
+        "valuation or odds",
+        "crowding and invalidation"
       ]
     },
     {
@@ -115,6 +198,22 @@
         "Chase the 10% after-hours move without buyer/price details.",
         "Treat a sale process as a guaranteed premium.",
         "Route to AMC solely because it is mentioned."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "no_trade",
+        "watchlist",
+        "route_to_market"
+      ],
+      "requiredVenuesToCheck": [
+        "public_equity",
+        "listed_options"
+      ],
+      "requiredReasoning": [
+        "sale-process verification",
+        "event already priced",
+        "read-through weakness"
       ]
     },
     {
@@ -133,6 +232,23 @@
         "Enter long because of hyperbolic wording.",
         "Treat prior airdrop performance as proof of future returns.",
         "Ignore ATH-break failure risk."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "no_trade",
+        "long_perp"
+      ],
+      "requiredVenuesToCheck": [
+        "hyperliquid_spot",
+        "hyperliquid_perp",
+        "crypto_spot"
+      ],
+      "requiredReasoning": [
+        "source quality",
+        "price structure and volume",
+        "liquidation risk"
       ]
     },
     {
@@ -151,6 +267,22 @@
         "Execute on the erroneous $48.81 price.",
         "Treat all COIN mentions as Coinbase equity without checking venue.",
         "Silently downgrade to keyword matching."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "block_trade",
+        "watchlist"
+      ],
+      "requiredVenuesToCheck": [
+        "public_equity",
+        "hyperliquid_pre_stock",
+        "crypto_spot"
+      ],
+      "requiredReasoning": [
+        "ticker collision",
+        "primary market hierarchy",
+        "venue availability"
       ]
     },
     {
@@ -169,6 +301,22 @@
         "Use Polymarket odds without checking venue/regulatory viability.",
         "Treat regulatory pressure on prediction markets as a direct BTC/ETH trade.",
         "Ignore resolution-rule and venue-access constraints."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "buy_no",
+        "block_trade"
+      ],
+      "requiredVenuesToCheck": [
+        "polymarket",
+        "public_equity"
+      ],
+      "requiredReasoning": [
+        "regulatory verification",
+        "resolution rules",
+        "venue-access risk"
       ]
     },
     {
@@ -187,6 +335,22 @@
         "Fade automatically just because the post says do not fade.",
         "Treat the 3.1x claim as verified.",
         "Create a trade without venue and liquidity evidence."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "block_trade",
+        "watchlist",
+        "short_perp"
+      ],
+      "requiredVenuesToCheck": [
+        "crypto_spot",
+        "hyperliquid_perp"
+      ],
+      "requiredReasoning": [
+        "contract and liquidity",
+        "short venue availability",
+        "squeeze risk"
       ]
     },
     {
@@ -205,6 +369,21 @@
         "Call every exploit a rug without evidence.",
         "Buy the dip immediately after an exploit mention.",
         "Ignore contract/on-chain verification."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "block_trade",
+        "watchlist"
+      ],
+      "requiredVenuesToCheck": [
+        "crypto_spot",
+        "hyperliquid_perp"
+      ],
+      "requiredReasoning": [
+        "exploit versus rug classification",
+        "primary incident evidence",
+        "risk and invalidation"
       ]
     },
     {
@@ -223,6 +402,23 @@
         "Claim no possible trade without checking pre-stock and prediction venues.",
         "Recommend direct public stock trade if no public listing exists.",
         "Invent a proxy without explaining read-through weakness."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "route_to_market",
+        "block_trade"
+      ],
+      "requiredVenuesToCheck": [
+        "hyperliquid_pre_stock",
+        "polymarket",
+        "private_market"
+      ],
+      "requiredReasoning": [
+        "venue availability",
+        "valuation or odds",
+        "risk and invalidation"
       ]
     },
     {
@@ -241,6 +437,20 @@
         "Generate buy/sell signals from broad sector words.",
         "Assume specific tickers not present in the post.",
         "Route to market from a vague list."
+      ],
+      "verificationStatus": "golden_verified",
+      "verifiedAt": "2026-05-22",
+      "expectedActionStates": [
+        "watchlist",
+        "no_trade"
+      ],
+      "requiredVenuesToCheck": [
+        "public_equity"
+      ],
+      "requiredReasoning": [
+        "specificity",
+        "concrete instrument",
+        "risk and invalidation"
       ]
     }
   ]

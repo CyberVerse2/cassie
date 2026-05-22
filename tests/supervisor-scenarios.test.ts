@@ -405,6 +405,7 @@ describe("supervisor scenario coverage", () => {
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
+        actionState: "route_to_market",
         publicSummary: expect.stringContaining("Trade expression: route_to_market_router"),
       },
     });
@@ -495,5 +496,11 @@ describe("supervisor scenario coverage", () => {
     const state = await store.load();
     expect(state.tradeTickets).toHaveLength(0);
     await expect(store.getRun(run.runId)).resolves.toMatchObject({ status: "succeeded" });
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
+        actionState: "block_trade",
+        publicSummary: expect.stringContaining("Spread is wider than user limit"),
+      },
+    });
   });
 });
