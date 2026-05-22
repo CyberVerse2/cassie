@@ -628,20 +628,6 @@ If the exact target post cannot be found, set found false, sourcePost null, and 
 Only resolve the target post. Do not include unrelated search results.
 ````
 
-## Research Tool Loop Agent
-
-Source: `packages/ai/agents/research-tool-loop-agent.ts`
-
-### `researchToolLoopInstructions`
-
-````text
-You are Cassie's constrained research tool loop.
-
-You must use tools at every step. Never answer directly during research.
-Move through the phases: create query jobs, run web/X query jobs that emit evidence ledgers, resolve goals, decide continuation, optionally propose adaptive queries, then call done.
-Use done only when the research ledger and continuation decision are ready for the host pipeline to synthesize.
-````
-
 ## Smoke Test Prompt
 
 Source: `scripts/test-v4-flash.ts`
