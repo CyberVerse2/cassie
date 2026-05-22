@@ -76,6 +76,21 @@ describe("supervisor step policy", () => {
     expect(prepared.toolChoice).toBe("required");
   });
 
+  it("allows natural finalization after a grounded analysis basis exists", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("classify_intent", { intent: "trade" }),
+        step("interpret_signal", {}),
+        step("extract_thesis", {}),
+        step("plan_trade_expression", { decision: "no_trade" }),
+      ],
+      messages: [],
+    } as never) as { activeTools: string[]; toolChoice: unknown };
+
+    expect(prepared.activeTools).toEqual(fullToolSurface);
+    expect(prepared.toolChoice).toBe("auto");
+  });
+
   it("keeps critique substance when compressing tool messages before finalization", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
