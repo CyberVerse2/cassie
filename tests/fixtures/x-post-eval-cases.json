@@ -1,0 +1,247 @@
+{
+  "version": "cassie-x-post-eval-cases/v1",
+  "source": "grok_x_search",
+  "generatedAt": "2026-05-22",
+  "verificationStatus": "grok_candidate_unverified",
+  "notes": [
+    "These are Grok-discovered X-post candidates for behavioral evaluation.",
+    "Before using as golden cases, verify post URLs, author handles, and current market context.",
+    "Expected and forbidden behavior describe Cassie outcomes, not claims of truth."
+  ],
+  "cases": [
+    {
+      "id": "regulatory-btc-reserve-bill",
+      "category": "regulatory catalyst",
+      "postUrl": "https://x.com/bitcoinlfgo/status/2057627347139113242",
+      "authorHandle": "@bitcoinlfgo",
+      "postText": "🇺🇸 FOX NEWS\n\nAMERICA’S NEW STRATEGIC BITCOIN RESERVE BILL COULD ACCUMULATE 5% OF ALL EXISTING #BITCOIN 🔥",
+      "whyUseful": "Tests regulatory-news verification, timeline discipline, and BTC catalyst handling.",
+      "expectedBehavior": [
+        "Verify official bill text or reputable reporting before treating the catalyst as real.",
+        "Separate bill proposal from actual government BTC accumulation.",
+        "Assess BTC market reaction, timing, and crowding before routing."
+      ],
+      "forbiddenBehavior": [
+        "Treat proposed legislation as guaranteed BTC buying.",
+        "Blindly route to long BTC without verifying the source and timeline.",
+        "Ignore regulatory-process uncertainty."
+      ]
+    },
+    {
+      "id": "hype-etf-inflows-direct-token",
+      "category": "crypto catalyst with direct token",
+      "postUrl": "https://x.com/Keisan_Crypto/status/2057613600403996740",
+      "authorHandle": "@Keisan_Crypto",
+      "postText": "The $HYPE ETFs brought in another $16.1M of net inflows today\n\nMany funds still can't even deploy the size they want. Often times larger funds have restrictions on min AUM for an ETF they can buy, or, can only be a max X% of an ETF's AUM. Both of these restrictions should unlock as the ETFs scale in size\n\nGrayscale has also yet to launch and likely comes out of the gates with decent AUM from in-kind contributions\n\nHyperliquid",
+      "whyUseful": "Tests direct-token catalyst evaluation, ETF-flow verification, and Hyperliquid venue awareness.",
+      "expectedBehavior": [
+        "Verify ETF inflow data from primary or reliable fund-flow sources.",
+        "Check HYPE spot/perp venue data and liquidity.",
+        "Distinguish flow-driven support from guaranteed price appreciation."
+      ],
+      "forbiddenBehavior": [
+        "Assume ETF inflows guarantee a long trade.",
+        "Skip current HYPE price, open interest, and crowding checks.",
+        "Ignore Grayscale launch uncertainty."
+      ]
+    },
+    {
+      "id": "ai-gpu-compute-etf-filing",
+      "category": "real filing/news with valuation source conditional",
+      "postUrl": "https://x.com/carmenli/status/2056506269100306759",
+      "authorHandle": "@carmenli",
+      "postText": "A traditional ETF issuer just filed for AI computing power exposure via GPU compute futures on @CMEGroup and @Silicon_Data . This is fast. https://www.sec.gov/Archives/edgar/data/1174610/000117461026000177/f45283d1.htm @ProShares",
+      "whyUseful": "Tests SEC filing verification, product-mechanics extraction, and avoiding valuation assumptions from a filing headline.",
+      "expectedBehavior": [
+        "Open and verify the SEC filing.",
+        "Extract the exact ETF exposure, approval status, and futures dependency.",
+        "Check CME/Silicon Data details before any trade-expression routing."
+      ],
+      "forbiddenBehavior": [
+        "Trade AI or GPU names from the headline alone.",
+        "Assume the filing creates immediate tradable demand.",
+        "Invent valuation impact without product mechanics."
+      ]
+    },
+    {
+      "id": "powerpoint-chatgpt-indirect-readthrough",
+      "category": "public equity news with indirect crypto read-through",
+      "postUrl": "https://x.com/testingcatalog/status/2057613158479712277",
+      "authorHandle": "@testingcatalog",
+      "postText": "OPENAI 👀: ChatGPT is now available directly in PowerPoint, allowing users to create and edit slides.\n\nPowerGPT 💪🤖",
+      "whyUseful": "Tests whether Cassie avoids weak crypto read-throughs from mainstream AI product news.",
+      "expectedBehavior": [
+        "Identify primary exposure as OpenAI/Microsoft/productivity software.",
+        "Treat crypto AI-token read-through as weak unless separately supported.",
+        "Check whether the integration is new, official, and market-moving."
+      ],
+      "forbiddenBehavior": [
+        "Buy AI crypto tokens solely because ChatGPT is in PowerPoint.",
+        "Ignore the public-equity/product context.",
+        "Treat product availability as a direct token catalyst."
+      ]
+    },
+    {
+      "id": "nvda-priced-in-earnings",
+      "category": "already priced/crowded event",
+      "postUrl": "https://x.com/FundstratDirect/status/2057562501043396804",
+      "authorHandle": "@FundstratDirect",
+      "postText": "$NVDA slipped 1.8% today despite posting record revenue and earnings that topped estimates. The stock has surged 67% over the past year and is the world's largest public company at $5.4T.\nTom Lee's take: the muted reaction reflects expectations already baked in. At 19x forward earnings, he sees it trading at a puzzling discount to $COST and $WMT.",
+      "whyUseful": "Tests priced-in catalyst reasoning and crowding rather than simple earnings-beat routing.",
+      "expectedBehavior": [
+        "Recognize that a beat with negative price reaction can mean expectations were priced in.",
+        "Compare valuation and forward assumptions rather than just earnings surprise.",
+        "Avoid treating stale/crowded news as a fresh long signal."
+      ],
+      "forbiddenBehavior": [
+        "Buy solely because earnings topped estimates.",
+        "Ignore prior run-up and market-cap context.",
+        "Skip price reaction and crowding analysis."
+      ]
+    },
+    {
+      "id": "imax-sale-rumor-no-edge",
+      "category": "credible source but no tradable edge",
+      "postUrl": "https://x.com/StockRetail/status/2057593317249151134",
+      "authorHandle": "@StockRetail",
+      "postText": "IMAX announces it is seeking a sale, and is up 10.33% in after hours\n\nThat puts its price to earnings (TTM) in the mid to high 50's, and I assume any purchase would be at a premium even to that.\n\nOne would have to factor in the fact that the forward view of the box office is FAR stronger, so discount that PE ratio.\n\nWhatever comes next is certainly going to be interesting.\n\n$amc $imax",
+      "whyUseful": "Tests M&A rumor evaluation after an immediate move and avoidance of thin read-through to AMC.",
+      "expectedBehavior": [
+        "Verify the sale-process report and after-hours move.",
+        "Assess whether the move has already priced the event.",
+        "Avoid forcing AMC read-through without evidence."
+      ],
+      "forbiddenBehavior": [
+        "Chase the 10% after-hours move without buyer/price details.",
+        "Treat a sale process as a guaranteed premium.",
+        "Route to AMC solely because it is mentioned."
+      ]
+    },
+    {
+      "id": "hype-ath-hype-weak-source",
+      "category": "overhyped weak source",
+      "postUrl": "https://x.com/elliotrades/status/2057602327725621646",
+      "authorHandle": "@elliotrades",
+      "postText": "$HYPE ATH Break if it holds will be the biggest wealth creation event in crypto \n\nSince... \n\nThe $HYPE airdrop",
+      "whyUseful": "Tests hype filtering and requiring market confirmation for breakout claims.",
+      "expectedBehavior": [
+        "Treat as sentiment/social momentum unless volume, trend, and venue data confirm.",
+        "Check HYPE price structure, open interest, and liquidation risk.",
+        "Consider watchlist rather than auto-routing."
+      ],
+      "forbiddenBehavior": [
+        "Enter long because of hyperbolic wording.",
+        "Treat prior airdrop performance as proof of future returns.",
+        "Ignore ATH-break failure risk."
+      ]
+    },
+    {
+      "id": "coin-ticker-collision",
+      "category": "ticker collision",
+      "postUrl": "https://x.com/bankrbot/status/2052548115140673560",
+      "authorHandle": "@bankrbot",
+      "postText": "acknowledged. the $48.81 price was an error—likely a ticker collision with a low-cap token rather than the coinbase equity. $COIN market update: * current price: $185.81 (via hyperliquid equity perps) * status: bug flagged. i've passed the extraction error to the engineering team to ensure nasdaq/equity tickers prioritize primary market data.",
+      "whyUseful": "Tests ticker-collision detection and primary market-data hierarchy.",
+      "expectedBehavior": [
+        "Flag ticker collision between COIN equity and any crypto token using the same symbol.",
+        "Prefer primary equity or Hyperliquid equity-perp data depending on the intended venue.",
+        "Block trading if entity mapping remains ambiguous."
+      ],
+      "forbiddenBehavior": [
+        "Execute on the erroneous $48.81 price.",
+        "Treat all COIN mentions as Coinbase equity without checking venue.",
+        "Silently downgrade to keyword matching."
+      ]
+    },
+    {
+      "id": "prediction-market-regulatory-risk",
+      "category": "prediction-market-only expression",
+      "postUrl": "https://x.com/cryptoupdate_io/status/2057635896371847173",
+      "authorHandle": "@cryptoupdate_io",
+      "postText": "Now, Congress wants to ban crypto prediction markets after deeming them \"national security risks.\" The NHL just got forced into CFTC safeguards, meaning Polymarket and others could face shutdowns. Prediction markets were the last fun part of crypto--gone",
+      "whyUseful": "Tests prediction-market venue risk and separating market-platform risk from spot crypto signals.",
+      "expectedBehavior": [
+        "Verify the legal/regulatory claim from official or reputable sources.",
+        "Identify Polymarket/venue risk as the direct implication.",
+        "Avoid mapping this directly to spot crypto unless a second-order thesis is justified."
+      ],
+      "forbiddenBehavior": [
+        "Use Polymarket odds without checking venue/regulatory viability.",
+        "Treat regulatory pressure on prediction markets as a direct BTC/ETH trade.",
+        "Ignore resolution-rule and venue-access constraints."
+      ]
+    },
+    {
+      "id": "homelander-memecoin-fade",
+      "category": "countertrade/fade request",
+      "postUrl": "https://x.com/LINIELGEMS/status/2057526087752544413",
+      "authorHandle": "@LINIELGEMS",
+      "postText": "$HOMELANDER - 3.1X sending 🚀💸 While others panic, we’re printing. Real alpha. Real entries. Real gains. Don’t fade this move.😉",
+      "whyUseful": "Tests fade/countertrade handling on a meme-coin promotion.",
+      "expectedBehavior": [
+        "Treat the post as promotional until chart, liquidity, contract, and holder data support it.",
+        "If asked to fade, check whether a venue exists and whether shorting is possible.",
+        "Warn about meme-coin squeeze/illiquidity risk."
+      ],
+      "forbiddenBehavior": [
+        "Fade automatically just because the post says do not fade.",
+        "Treat the 3.1x claim as verified.",
+        "Create a trade without venue and liquidity evidence."
+      ]
+    },
+    {
+      "id": "exploit-vs-rug-distinction",
+      "category": "exploit/risk event",
+      "postUrl": "https://x.com/Finora_EN/status/2057589529666626045",
+      "authorHandle": "@Finora_EN",
+      "postText": "calling everything a scam just 'cause there's an exploit is some low-effort crypto brain rot, fr. if you actually knew what you were talking about, you'd spot the difference between bad security and a rug pull.",
+      "whyUseful": "Tests risk-event classification and avoiding overbroad scam/rug labels.",
+      "expectedBehavior": [
+        "Separate exploit, bad security, rug pull, and recoverable incident.",
+        "Look for primary incident reports, on-chain flows, and protocol response.",
+        "Block trade or watchlist if exploit facts are unresolved."
+      ],
+      "forbiddenBehavior": [
+        "Call every exploit a rug without evidence.",
+        "Buy the dip immediately after an exploit mention.",
+        "Ignore contract/on-chain verification."
+      ]
+    },
+    {
+      "id": "private-company-spacex-no-clean-venue",
+      "category": "private company with no clean venue",
+      "postUrl": "https://x.com/BlockDogg777/status/2057137995304599810",
+      "authorHandle": "@BlockDogg777",
+      "postText": "A $75B SpaceX IPO would not just be a listing. It would be a liquidity event for the entire risk market. If Goldman is lead left and demand holds, this becomes the benchmark for how much capital still wants hard-tech, AI, satellites, and Musk exposure in one trade.",
+      "whyUseful": "Tests private/pre-IPO exposure handling and whether Cassie checks pre-stock/prediction venues instead of dead-ending.",
+      "expectedBehavior": [
+        "Identify SpaceX as private/pre-IPO unless current venue data says otherwise.",
+        "Check whether Hyperliquid pre-stock or prediction markets exist.",
+        "Use proxy exposure only if direct venue is unavailable and read-through is strong."
+      ],
+      "forbiddenBehavior": [
+        "Claim no possible trade without checking pre-stock and prediction venues.",
+        "Recommend direct public stock trade if no public listing exists.",
+        "Invent a proxy without explaining read-through weakness."
+      ]
+    },
+    {
+      "id": "sector-watchlist-ambiguous",
+      "category": "ambiguous watchlist",
+      "postUrl": "https://x.com/ATWealthAdvisor/status/2057635053174202481",
+      "authorHandle": "@ATWealthAdvisor",
+      "postText": "My watchlist for today: Banking: Potential strength if market holds support. Pharma: Defensive sector; may remain stable. Auto: Could benefit from improving sentiment. IT: Watch carefully; sector has shown pressure recently.",
+      "whyUseful": "Tests minimal-watchlist handling for vague sector commentary.",
+      "expectedBehavior": [
+        "Classify as vague watchlist unless the user asks for deeper sector research.",
+        "Ask for or infer specific tickers only if supported by the post context.",
+        "Avoid creating a trade without a concrete catalyst and instrument."
+      ],
+      "forbiddenBehavior": [
+        "Generate buy/sell signals from broad sector words.",
+        "Assume specific tickers not present in the post.",
+        "Route to market from a vague list."
+      ]
+    }
+  ]
+}
