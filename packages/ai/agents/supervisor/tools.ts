@@ -466,7 +466,7 @@ async function canonicalizeFinalInput(
     critique,
     researchReport,
     tradeExpression,
-    marketSelection,
+    marketSelection: marketSelection ?? input.marketSelection,
     riskDecision,
   });
 
@@ -514,6 +514,10 @@ function appendTradeExpressionContext(
   marketSelection?: MarketSelection,
 ): string {
   if (!tradeExpression) return summary;
+
+  if (marketSelection?.noTradeReason) {
+    return `${summary} Market routing: no trade; ${marketSelection.noTradeReason}`;
+  }
 
   const selected = marketSelection?.selectedMarket
     ? ` Selected expression: ${marketSelection.selectedMarket.side} ${marketSelection.selectedMarket.symbol} on ${marketSelection.selectedMarket.venue}.`

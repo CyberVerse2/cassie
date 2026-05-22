@@ -503,4 +503,41 @@ describe("supervisor scenario coverage", () => {
       },
     });
   });
+
+  it("finalizes no-trade market routing without preserving stale route language", async () => {
+    const { store, run, tools } = await createScenario("critic");
+    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+      signal: interpreted,
+      thesis: extracted,
+      researchAngle: "critic",
+    });
+    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: extracted,
+      researchReport: report,
+    });
+
+    await executeTool(tools.finalize_run, {
+      responseType: "analysis",
+      publicSummary: "Model wanted to route.",
+      thesis: extracted,
+      researchReport: report,
+      marketSelection: {
+        selectedMarket: null,
+        rejectedCandidates: [],
+        noTradeReason: "No configured venue candidate matched the trade expression.",
+      },
+    });
+
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      result: {
+        actionState: "no_trade",
+        publicSummary: expect.stringContaining("Market routing: no trade"),
+      },
+    });
+    const completed = await store.getRun(run.runId);
+    expect(String(completed?.result)).not.toContain("route_to_market_router");
+  });
 });

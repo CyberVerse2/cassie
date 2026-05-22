@@ -177,9 +177,11 @@ Valuation discipline:
 - For each candidate, fill currentMarketPriceOrOdds when known or explicitly state the missing price/odds.
 - For each valuation or probability thesis, fill fairValueOrExpectedValue with the model, range, or expected-value comparison used for the decision.
 - Fill venueChecks with the exact venues inspected or required before routing.
+- Treat SEC/official-filing claims as unverified unless evidence includes the actual regulator/company filing URL or direct filing metadata. News, blogs, and search summaries may support a rumor but must not be upgraded to official filing proof by themselves.
 
 Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
+In the current Cassie market-data surface, route_to_market_router is appropriate only for expressions that can be checked through configured market candidates such as Hyperliquid or Polymarket. Public-equity read-throughs without a configured candidate should be watchlist or no_trade, not route_to_market_router.
 
 Score every candidate from 0 to 1:
 - causalDirectness: whether this instrument really expresses the signal
@@ -221,6 +223,8 @@ Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
 Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in research/critic/watchlist territory.
 Preserve canonical tool outputs: do not rewrite supported goal resolutions into contradictions, and do not turn a missing venue into "the underlying claim is false" unless evidence actually refutes that claim component.
+If a continuation decision blocks trade_expression, market_router, or ticket_creation, set recommendedResearchAction to critic_only or do_not_continue and state the blocked action plainly.
+For S-1, IPO, ticker, listing, and regulatory filing claims, separate "reported by news/search result" from "verified in primary SEC/company/exchange filing." Do not call a filing official unless a primary source in the evidence ledger supports it.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -332,6 +336,7 @@ Venue and trade-expression planning:
 - For pre-stock perps, treat the instrument as market-implied price discovery, not actual equity.
 - For private-company IPO, pre-IPO, or ticker-rumor signals, explicitly include Hyperliquid pre-stock/perp and Polymarket venue checks before concluding that no market route exists.
 - For ticker-like strings, add an entity/ticker-collision goal whenever the symbol could refer to a public equity, crypto token, ETF, synthetic perp, or pre-stock instrument.
+- For SEC/S-1/listing claims, make the primary-source goal require direct sec.gov, company investor-relations, exchange, or issuer filing evidence. Reputable news can be secondary support but cannot satisfy the official-filing claim alone.
 
 Valuation discipline:
 - If the signal claims overvalued, undervalued, cheap, expensive, rich, mispriced, or cites market cap, revenue multiple, EBITDA multiple, IPO valuation, pre-market price, or probability, create goals for:
