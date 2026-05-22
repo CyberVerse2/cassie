@@ -161,6 +161,39 @@ describe("research connectors", () => {
       sources: [{ sourceName: "Example" }],
     });
   });
+
+  it("rejects overlarge structured source lists", () => {
+    expect(SearchQueryOutputSchema.safeParse({
+      findings: [],
+      sources: [
+        {
+          title: "Source 1",
+          url: "https://example.com/1",
+          sourceName: "Example",
+          sourceType: "news",
+          publishedAt: null,
+          snippet: null,
+        },
+        {
+          title: "Source 2",
+          url: "https://example.com/2",
+          sourceName: "Example",
+          sourceType: "news",
+          publishedAt: null,
+          snippet: null,
+        },
+        {
+          title: "Source 3",
+          url: "https://example.com/3",
+          sourceName: "Example",
+          sourceType: "news",
+          publishedAt: null,
+          snippet: null,
+        },
+      ],
+      unresolved: [],
+    }).success).toBe(false);
+  });
 });
 
 describe("market data connectors", () => {

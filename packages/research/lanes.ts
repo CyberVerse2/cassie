@@ -28,6 +28,7 @@ configureAiSdkWarningLogging();
 const DEFAULT_WEB_SEARCH_MODEL = "gemini-3.1-flash-lite";
 export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
 const SEARCH_TEXT_MAX_OUTPUT_TOKENS = 1_024;
+const MAX_SOURCES_PER_QUERY_JOB = 2;
 
 export const SearchQueryOutputSchema = z.object({
   findings: z.array(z.object({
@@ -47,7 +48,7 @@ export const SearchQueryOutputSchema = z.object({
     sourceType: SearchSourceTypeSchema,
     publishedAt: z.string().nullable(),
     snippet: z.string().nullable(),
-  })).max(6),
+  })).max(MAX_SOURCES_PER_QUERY_JOB),
   unresolved: z.array(z.string()).max(4),
 });
 
@@ -281,7 +282,7 @@ X social momentum is not proof of factual truth.
 Return compact structured search output matching the provided schema:
 - sources are the retrieved posts/results for this exact query job.
 - findings are atomic source-backed claims extracted from those posts/results.
-- Keep findings to the most decision-useful claims; max 4 findings and max 6 sources.
+- Keep findings to the most decision-useful claims; max 4 findings and max 2 sources.
 - Every finding sourceUrls entry must match one of the returned source urls.
 Do not synthesize a final trade view.`;
 }
@@ -346,7 +347,7 @@ function buildSearchStructuringPrompt(input: {
 Fill the structured result from the raw search notes.
 Do not add claims that are not present in the raw search notes or source list.
 Every finding sourceUrls entry must match a source URL from the source list when URLs are available.
-Use no more than 4 findings and 6 sources.
+Use no more than 4 findings and 2 sources.
 Use unresolved for important missing evidence or ambiguity.
 Classify each atomic finding as an EvidenceClaim candidate:
 - sourceType
@@ -355,7 +356,7 @@ Classify each atomic finding as an EvidenceClaim candidate:
 - reliability
 - source-backed quote when available
 - relevance to the evidence needs
-An unfamiliar blog, outlet, or source is not automatically low quality. If the source is unfamiliar but not discredited, classify reliability as unknown and keep evidence strength neutral at 0.5 unless the source content, citations, corroboration, or red flags justify a different score.
+An unfamiliar blog, outlet, or source is not automatically low quality. If the source is unfamiliar but not discredited, classify reliability as medium and keep evidence strength neutral at 0.5 unless the source content, citations, corroboration, or red flags justify a different score.
 Do not synthesize a trade view. Do not infer goal support from the lane summary; only classify source-backed claims.
 
 Query job:
@@ -406,7 +407,7 @@ function ledgerFromSearchOutput(input: {
   output: SearchQueryOutput;
 }): EvidenceLedger {
   const retrievedAt = new Date().toISOString();
-  const sources = input.output.sources.slice(0, input.job.maxResults);
+  const sources = input.output.sources.slice(0, Math.min(input.job.maxResults, MAX_SOURCES_PER_QUERY_JOB));
   const searchResults = sources.map((source, index) => ({
     id: `result_${input.job.id}_${index + 1}`,
     runId: input.job.runId,
@@ -480,7 +481,7 @@ function ledgerFromSearchOutput(input: {
 }
 
 function evidenceStrengthForFinding(finding: SearchQueryOutput["findings"][number]): number {
-  if (finding.reliability === "unknown") {
+  if (finding.reliability === "medium" || finding.reliability === "unknown") {
     return 0.5;
   }
   return finding.relevance;
