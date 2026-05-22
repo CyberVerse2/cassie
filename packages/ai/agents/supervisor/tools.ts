@@ -16,6 +16,7 @@ import {
   ThesisSchema,
   type AccountState,
   type ControlRun,
+  type RunStepType,
   type UserSettings,
 } from "../../../core/schemas/index.ts";
 import { routeIntent } from "../../tools/intent-router.ts";
@@ -66,12 +67,24 @@ export function createCassieSupervisorTools(input: {
   if (!importantAi) {
     throw new Error("Cassie supervisor requires an important AI client.");
   }
+  const stepOutputs = new Map<RunStepType, Promise<unknown>>();
+  const runStepOnce = <T>(stepType: RunStepType, execute: () => Promise<T>): Promise<T> => {
+    const existing = stepOutputs.get(stepType);
+    if (existing) return existing as Promise<T>;
+
+    const promise = execute().catch((error) => {
+      stepOutputs.delete(stepType);
+      throw error;
+    });
+    stepOutputs.set(stepType, promise);
+    return promise;
+  };
 
   return {
     classify_intent: tool({
       description: "Classify the user's Cassie command into think, critic, trade, or countertrade.",
       inputSchema: z.object({}),
-      execute: async () => recordRunStep({
+      execute: async () => runStepOnce("intent", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "intent",
@@ -84,14 +97,14 @@ export function createCassieSupervisorTools(input: {
           userCommand: input.run.userCommand,
           sourcePost: input.run.sourcePost,
         }),
-      }),
+      })),
     }),
     extract_thesis: tool({
       description: "Extract the market thesis from the source post and command.",
       inputSchema: z.object({
         signal: SignalInterpretationSchema,
       }),
-      execute: async ({ signal }) => recordRunStep({
+      execute: async ({ signal }) => runStepOnce("thesis", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "thesis",
@@ -105,12 +118,12 @@ export function createCassieSupervisorTools(input: {
           sourcePost: input.run.sourcePost,
           signal,
         }),
-      }),
+      })),
     }),
     interpret_signal: tool({
       description: "Classify the source post into signal type, lead quality, tradability, and research angles.",
       inputSchema: z.object({}),
-      execute: async () => recordRunStep({
+      execute: async () => runStepOnce("signal", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "signal",
@@ -123,12 +136,12 @@ export function createCassieSupervisorTools(input: {
           userCommand: input.run.userCommand,
           sourcePost: input.run.sourcePost,
         }),
-      }),
+      })),
     }),
     extract_inverse_thesis: tool({
       description: "Create the strongest opposing thesis for a countertrade or fade request.",
       inputSchema: z.object({ thesis: ThesisSchema }),
-      execute: async ({ thesis }) => recordRunStep({
+      execute: async ({ thesis }) => runStepOnce("inverse_thesis", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "inverse_thesis",
@@ -137,7 +150,7 @@ export function createCassieSupervisorTools(input: {
         model: cheapModel,
         stepInput: { thesis },
         execute: () => extractInverseThesis({ ai: cheapAi, thesis }),
-      }),
+      })),
     }),
     research_thesis: tool({
       description: "Run Cassie's research subagent. It verifies evidence but never chooses markets or executes orders.",
@@ -146,7 +159,7 @@ export function createCassieSupervisorTools(input: {
         thesis: ThesisSchema,
         researchAngle: z.enum(["balanced", "critic", "counter"]),
       }),
-      execute: async ({ signal, thesis, researchAngle }) => recordRunStep({
+      execute: async ({ signal, thesis, researchAngle }) => runStepOnce("research", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "research",
@@ -175,7 +188,7 @@ export function createCassieSupervisorTools(input: {
           });
           return report;
         },
-      }),
+      })),
     }),
     critique_thesis: tool({
       description: "Critique a researched thesis and identify weaknesses without creating a trade.",
@@ -183,7 +196,7 @@ export function createCassieSupervisorTools(input: {
         thesis: ThesisSchema,
         researchReport: ResearchReportSchema,
       }),
-      execute: async ({ thesis, researchReport }) => recordRunStep({
+      execute: async ({ thesis, researchReport }) => runStepOnce("critique", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "critique",
@@ -192,7 +205,7 @@ export function createCassieSupervisorTools(input: {
         model: importantModel,
         stepInput: { thesis, researchReport },
         execute: () => critiqueThesis({ ai: importantAi, thesis, researchReport }),
-      }),
+      })),
     }),
     select_market: tool({
       description: "Select the best market expression from real market candidates; do not invent markets.",
@@ -200,7 +213,7 @@ export function createCassieSupervisorTools(input: {
         thesis: ThesisSchema,
         researchReport: ResearchReportSchema.optional(),
       }),
-      execute: async ({ thesis, researchReport }) => recordRunStep({
+      execute: async ({ thesis, researchReport }) => runStepOnce("market_selection", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "market_selection",
@@ -214,7 +227,7 @@ export function createCassieSupervisorTools(input: {
           thesis,
           researchReport,
         }),
-      }),
+      })),
     }),
     risk_check: tool({
       description: "Run deterministic risk checks against user policy and live account state.",
@@ -222,7 +235,7 @@ export function createCassieSupervisorTools(input: {
         marketSelection: MarketSelectionSchema,
         sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ marketSelection, sizeUsd }) => recordRunStep({
+      execute: async ({ marketSelection, sizeUsd }) => runStepOnce("risk", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "risk",
@@ -237,7 +250,7 @@ export function createCassieSupervisorTools(input: {
             sizeUsd,
           });
         },
-      }),
+      })),
     }),
     create_trade_ticket: tool({
       description: "Create a trade ticket from a non-rejected risk decision. This never executes the order.",
@@ -247,7 +260,7 @@ export function createCassieSupervisorTools(input: {
         riskDecision: NonRejectedRiskDecisionSchema,
         sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ thesis, marketSelection, riskDecision, sizeUsd }) => recordRunStep({
+      execute: async ({ thesis, marketSelection, riskDecision, sizeUsd }) => runStepOnce("ticket", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "ticket",
@@ -265,12 +278,12 @@ export function createCassieSupervisorTools(input: {
           await input.store.addTradeTicket(ticket);
           return ticket;
         },
-      }),
+      })),
     }),
     finalize_run: tool({
       description: "Finalize the Cassie run with the user-facing result after analysis, critique, or trade-ticket creation.",
       inputSchema: FinalizeRunInputSchema,
-      execute: async (finalInput) => recordRunStep({
+      execute: async (finalInput) => runStepOnce("final", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "final",
@@ -292,7 +305,7 @@ export function createCassieSupervisorTools(input: {
           await input.store.updateRun(updated);
           return updated.result;
         },
-      }),
+      })),
     }),
   };
 }

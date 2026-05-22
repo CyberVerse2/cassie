@@ -403,6 +403,48 @@ describe("AI SDK supervisor agent", () => {
     })).rejects.toThrow("account state unavailable");
   });
 
+  it("deduplicates duplicate supervisor tool calls for the same step", async () => {
+    const store = new InMemoryCassieStore();
+    const ai = new FakeAi();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie critic this",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiQueryJob() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXQueryJob() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+    });
+
+    const [first, second] = await Promise.all([
+      executeTool<SignalInterpretation>(tools.interpret_signal, {}),
+      executeTool<SignalInterpretation>(tools.interpret_signal, {}),
+    ]);
+
+    expect(first).toEqual(second);
+    expect(ai.calls.filter((call) => call === "cassie_signal")).toHaveLength(1);
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.filter((step) => step.stepType === "signal")).toHaveLength(1);
+  });
+
   it("uses important AI for research synthesis and critique, but cheap AI for market selection", async () => {
     const store = new InMemoryCassieStore();
     const cheapAi = new FakeAi();
