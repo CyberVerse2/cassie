@@ -431,13 +431,15 @@ export function createCassieSupervisorTools(input: {
         sizeUsd: z.number().positive().nullable().optional(),
       }),
       execute: async ({ marketSelection, sizeUsd }) => runStepOnce("risk", async () => {
-        const canonicalMarketSelection = await getCanonicalStepOutput(
+        void marketSelection;
+        const canonicalMarketSelection = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "market_selection",
           MarketSelectionSchema,
-          marketSelection,
+          "Risk check requires a persisted usable market selection.",
         );
+        assertUsableMarketSelection(canonicalMarketSelection);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -465,21 +467,32 @@ export function createCassieSupervisorTools(input: {
         sizeUsd: z.number().positive().nullable().optional(),
       }),
       execute: async ({ thesis, marketSelection, riskDecision, sizeUsd }) => runStepOnce("ticket", async () => {
-        const canonicalThesis = await getCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, thesis);
-        const canonicalMarketSelection = await getCanonicalStepOutput(
+        void thesis;
+        void marketSelection;
+        void riskDecision;
+        const canonicalThesis = await requireCanonicalStepOutput(
+          input.store,
+          input.run.runId,
+          "thesis",
+          ThesisSchema,
+          "Trade ticket creation requires a persisted thesis.",
+        );
+        const canonicalMarketSelection = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "market_selection",
           MarketSelectionSchema,
-          marketSelection,
+          "Trade ticket creation requires a persisted usable market selection.",
         );
-        const canonicalRiskDecision = await getCanonicalStepOutput(
+        assertUsableMarketSelection(canonicalMarketSelection);
+        const canonicalRiskDecision = await requireCanonicalStepOutput(
           input.store,
           input.run.runId,
           "risk",
           RiskDecisionSchema,
-          riskDecision,
+          "Trade ticket creation requires a persisted non-rejected risk decision.",
         );
+        assertNonRejectedRiskDecision(canonicalRiskDecision);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -558,6 +571,32 @@ async function tryCanonicalStepOutput<T>(
     .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
     .at(-1)?.output;
   return persisted == null ? undefined : schema.parse(persisted);
+}
+
+async function requireCanonicalStepOutput<T>(
+  store: CassieStore,
+  runId: string,
+  stepType: RunStepType,
+  schema: z.ZodType<T>,
+  message: string,
+): Promise<T> {
+  const output = await tryCanonicalStepOutput<T>(store, runId, stepType, schema);
+  if (output == null) {
+    throw new Error(message);
+  }
+  return output;
+}
+
+function assertUsableMarketSelection(selection: MarketSelection): void {
+  if (!selection.selectedMarket || selection.noTradeReason) {
+    throw new Error("Risk check requires a persisted usable market selection.");
+  }
+}
+
+function assertNonRejectedRiskDecision(decision: RiskDecision): void {
+  if (decision.decision === "reject") {
+    throw new Error("Trade ticket creation requires a persisted non-rejected risk decision.");
+  }
 }
 
 async function canonicalizeFinalInput(

@@ -436,10 +436,102 @@ describe("AI SDK supervisor agent", () => {
     await expect(executeTool<IntentResult>(tools.classify_intent, {})).resolves.toMatchObject({
       intent: "trade",
     });
+    await executeTool(tools.select_market, {
+      thesis,
+      researchReport,
+      tradeExpression,
+    });
     await expect(executeTool(tools.risk_check, {
       marketSelection,
       sizeUsd: null,
     })).rejects.toThrow("account state unavailable");
+  });
+
+  it("rejects risk checks without a persisted usable market selection", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie get me in",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiQueryJob() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXQueryJob() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.risk_check, {
+      marketSelection,
+      sizeUsd: null,
+    })).rejects.toThrow("Risk check requires a persisted usable market selection.");
+  });
+
+  it("rejects trade ticket creation without a persisted non-rejected risk decision", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie get me in",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiQueryJob() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXQueryJob() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+    });
+
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    await executeTool(tools.select_market, {
+      thesis: extracted,
+      researchReport,
+      tradeExpression,
+    });
+    await expect(executeTool(tools.create_trade_ticket, {
+      thesis: extracted,
+      marketSelection,
+      riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
+      sizeUsd: null,
+    })).rejects.toThrow("Trade ticket creation requires a persisted non-rejected risk decision.");
   });
 
   it("deduplicates duplicate supervisor tool calls for the same step", async () => {
