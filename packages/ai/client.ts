@@ -13,7 +13,7 @@ export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
 export const DEFAULT_CHEAP_MODEL = "deepseek-v4-flash";
 export const DEFAULT_IMPORTANT_MODEL = "gemini-3.5-flash";
 export const DEFAULT_EXPENSIVE_MODEL = DEFAULT_IMPORTANT_MODEL;
-const DEFAULT_STRUCTURED_RETRY_ATTEMPTS = 2;
+const DEFAULT_STRUCTURED_MAX_RETRIES = 2;
 
 export type ModelTier = "cheap" | "expensive";
 export type ModelProvider = "google" | "deepseek";
@@ -62,35 +62,6 @@ export class MissingImportantAiDependencyError extends MissingAiDependencyError 
     super(message);
     this.name = "MissingImportantAiDependencyError";
   }
-}
-
-export async function runStructuredAiWithRetry<T>(run: () => Promise<T>): Promise<T> {
-  const attempts = structuredRetryAttempts();
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= attempts; attempt += 1) {
-    try {
-      return await run();
-    } catch (error) {
-      lastError = error;
-      if (attempt >= attempts || !isRetryableStructuredAiError(error)) {
-        throw error;
-      }
-    }
-  }
-  throw lastError;
-}
-
-export function isRetryableStructuredAiError(error: unknown): boolean {
-  return errorChain(error).some((candidate) => {
-    if (!candidate || typeof candidate !== "object") return false;
-    const record = candidate as Record<string, unknown>;
-    const name = typeof record.name === "string" ? record.name : "";
-    const message = typeof record.message === "string" ? record.message : "";
-    return name === "AI_NoOutputGeneratedError" ||
-      name === "NoOutputGeneratedError" ||
-      message.includes("AI_NoOutputGeneratedError") ||
-      message.includes("No output generated");
-  });
 }
 
 const cheapStructuredSteps = new Set([
@@ -180,7 +151,7 @@ export class CassieStructuredClient implements StructuredAiClient {
           apiKey: googleApiKey(),
         })
         : null;
-      const result = await runStructuredAiWithRetry(() => generateText({
+      const result = await generateText({
         model: route.provider === "deepseek" ? deepseek!.chat(route.model) : google!(route.model),
         output: Output.object({
           schema: input.schema,
@@ -188,8 +159,9 @@ export class CassieStructuredClient implements StructuredAiClient {
         }),
         prompt: input.prompt,
         providerOptions: route.provider === "google" ? googleThinkingOptions("medium") : undefined,
+        maxRetries: structuredMaxRetries(),
         ...(route.provider === "deepseek" ? { maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } : {}),
-      }));
+      });
 
       finishTrace?.({
         output: result.output,
@@ -232,15 +204,16 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
     });
 
     try {
-      const result = await runStructuredAiWithRetry(() => generateText({
+      const result = await generateText({
         model: deepseek.chat(this.modelName),
         output: Output.object({
           schema: input.schema,
           name: input.name,
         }),
         prompt: input.prompt,
+        maxRetries: structuredMaxRetries(),
         maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
-      }));
+      });
 
       return result.output;
     } catch (error) {
@@ -276,7 +249,7 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
     });
 
     try {
-      const result = await runStructuredAiWithRetry(() => generateText({
+      const result = await generateText({
         model: google(this.modelName),
         output: Output.object({
           schema: input.schema,
@@ -284,7 +257,8 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
         }),
         prompt: input.prompt,
         providerOptions: googleThinkingOptions("medium"),
-      }));
+        maxRetries: structuredMaxRetries(),
+      });
 
       return result.output;
     } catch (error) {
@@ -302,20 +276,8 @@ function googleApiKey(): string | undefined {
   return process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY;
 }
 
-function structuredRetryAttempts(): number {
-  const configured = Number(process.env.CASSIE_STRUCTURED_RETRY_ATTEMPTS ?? DEFAULT_STRUCTURED_RETRY_ATTEMPTS);
-  if (!Number.isFinite(configured)) return DEFAULT_STRUCTURED_RETRY_ATTEMPTS;
+function structuredMaxRetries(): number {
+  const configured = Number(process.env.CASSIE_STRUCTURED_MAX_RETRIES ?? DEFAULT_STRUCTURED_MAX_RETRIES);
+  if (!Number.isFinite(configured)) return DEFAULT_STRUCTURED_MAX_RETRIES;
   return Math.max(1, Math.floor(configured));
-}
-
-function errorChain(error: unknown): unknown[] {
-  const chain: unknown[] = [];
-  const seen = new Set<unknown>();
-  let current = error;
-  while (current && !seen.has(current)) {
-    seen.add(current);
-    chain.push(current);
-    current = typeof current === "object" ? (current as { cause?: unknown }).cause : undefined;
-  }
-  return chain;
 }
