@@ -66,10 +66,10 @@ describe("supervisor step policy", () => {
     } as never)).toThrow("Supervisor tool classify_intent failed: rate limited");
   });
 
-  it("lets the model recover from prerequisite guidance errors", () => {
+  it("lets the model recover from prerequisite data errors", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        errorStep("extract_thesis", new SupervisorPrerequisiteError("extract_thesis is not ready yet. Call interpret_signal first.")),
+        errorStep("create_trade_ticket", new SupervisorPrerequisiteError("Trade ticket creation requires a non-rejected risk decision.")),
       ],
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };

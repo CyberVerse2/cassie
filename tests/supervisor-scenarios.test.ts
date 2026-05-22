@@ -353,7 +353,7 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchReport: report,
     });
-    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
       researchReport: report,
@@ -385,7 +385,7 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchReport: report,
     });
-    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
       researchReport: report,
@@ -393,7 +393,9 @@ describe("supervisor scenario coverage", () => {
     await executeTool(tools.finalize_run, {
       responseType: "critique",
       publicSummary: result.finalCritique,
+      critique: result,
       researchReport: report,
+      tradeExpression: expression,
     });
 
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
@@ -415,10 +417,10 @@ describe("supervisor scenario coverage", () => {
 
   it("handles countertrade requests through inverse thesis before ticket creation", async () => {
     const { store, tools } = await createScenario("countertrade");
-    await executeTool<IntentResult>(tools.classify_intent, {});
+    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const inverse = await executeTool<InverseThesis>(tools.extract_inverse_thesis, { thesis: extracted });
+    const inverse = await executeTool<InverseThesis>(tools.extract_inverse_thesis, { intent, thesis: extracted });
     const counterThesis = {
       ...extracted,
       claim: inverse.inverseClaim,
@@ -448,6 +450,7 @@ describe("supervisor scenario coverage", () => {
       sizeUsd: null,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
+      intent,
       thesis: counterThesis,
       marketSelection: selected,
       riskDecision: risk,
@@ -466,7 +469,7 @@ describe("supervisor scenario coverage", () => {
       ...baseSettings,
       maxSpreadBps: 1,
     });
-    await executeTool<IntentResult>(tools.classify_intent, {});
+    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const report = await executeTool<ResearchReport>(tools.research_thesis, {
@@ -493,8 +496,11 @@ describe("supervisor scenario coverage", () => {
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: risk.decision === "reject" ? risk.reason : "Risk check passed.",
+      intent,
       thesis: extracted,
+      tradeExpression: expression,
       marketSelection: selected,
+      riskDecision: risk,
     });
 
     const state = await store.load();
@@ -518,7 +524,7 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchAngle: "critic",
     });
-    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
       researchReport: report,
@@ -546,6 +552,7 @@ describe("supervisor scenario coverage", () => {
       publicSummary: "Model wanted to route.",
       thesis: extracted,
       researchReport: report,
+      tradeExpression: expression,
       marketSelection: noTradeMarketSelection,
     });
 
@@ -598,11 +605,6 @@ describe("supervisor scenario coverage", () => {
       publicSummary: "Evidence is too weak.",
       thesis: extracted,
       tradeExpression: unresolvedExpression,
-      marketSelection: {
-        selectedMarket: null,
-        rejectedCandidates: [],
-        noTradeReason: "Model-copied no-trade reason that was not produced by select_market.",
-      },
     });
 
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
@@ -684,7 +686,7 @@ describe("supervisor scenario coverage", () => {
 
   it("keeps watchlist action state reserved for explicit watch requests", async () => {
     const { store, run, tools } = await createScenario("watch");
-    await executeTool<IntentResult>(tools.classify_intent, {});
+    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const watchExpression: TradeExpressionPlan = {
@@ -709,6 +711,7 @@ describe("supervisor scenario coverage", () => {
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "Explicit watch request.",
+      intent,
       thesis: extracted,
       tradeExpression: watchExpression,
     });

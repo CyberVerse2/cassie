@@ -399,6 +399,7 @@ describe("AI SDK supervisor agent", () => {
       sizeUsd: intent.userSizeOverrideUsd,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
+      intent,
       thesis: extracted,
       marketSelection: selected,
       riskDecision: risk,
@@ -408,6 +409,7 @@ describe("AI SDK supervisor agent", () => {
       responseType: "trade_ticket",
       publicSummary: "Created a trade ticket for review.",
       tradeTicket: { ticketId: ticket.ticketId },
+      riskDecision: risk,
     });
 
     const state = await store.load();
@@ -476,7 +478,7 @@ describe("AI SDK supervisor agent", () => {
     })).rejects.toThrow("account state unavailable");
   });
 
-  it("rejects risk checks without a persisted usable market selection", async () => {
+  it("runs risk checks from the supplied market selection", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -516,10 +518,13 @@ describe("AI SDK supervisor agent", () => {
     await expect(executeTool(tools.risk_check, {
       marketSelection,
       sizeUsd: null,
-    })).rejects.toThrow("risk_check is not ready yet. Call select_market first.");
+    })).resolves.toMatchObject({
+      decision: "require_approval",
+      reason: "Auto-trade is disabled.",
+    });
   });
 
-  it("rejects trade ticket creation without a persisted non-rejected risk decision", async () => {
+  it("rejects trade ticket creation without a supplied non-rejected risk decision", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -568,11 +573,11 @@ describe("AI SDK supervisor agent", () => {
       tradeExpression: expression,
     });
     await expect(executeTool(tools.create_trade_ticket, {
+      intent: { intent: "trade", urgency: "normal", userSizeOverrideUsd: null },
       thesis: extracted,
       marketSelection,
-      riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
       sizeUsd: null,
-    })).rejects.toThrow("create_trade_ticket is not ready yet. Call risk_check first.");
+    })).rejects.toThrow("Trade ticket creation requires a non-rejected risk decision.");
   });
 
   it("allows early grounded analysis finalization without market or risk state", async () => {
@@ -625,7 +630,7 @@ describe("AI SDK supervisor agent", () => {
     });
   });
 
-  it("rejects trade-ticket finalization without a persisted ticket", async () => {
+  it("finalizes a supplied trade ticket without requiring a persisted ticket lookup", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -663,7 +668,11 @@ describe("AI SDK supervisor agent", () => {
       responseType: "trade_ticket",
       publicSummary: "Created a ticket.",
       tradeTicket: { ticketId: "missing_ticket" },
-    })).rejects.toThrow("Trade-ticket finalization requires a persisted trade ticket.");
+      riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
+    })).resolves.toMatchObject({
+      responseType: "trade_ticket",
+      ticketId: "missing_ticket",
+    });
   });
 
   it("deduplicates duplicate supervisor tool calls for the same step", async () => {
@@ -791,7 +800,7 @@ describe("AI SDK supervisor agent", () => {
     ]);
   });
 
-  it("uses persisted canonical outputs instead of lossy model-copied tool inputs", async () => {
+  it("uses supplied tool inputs instead of persisted canonical lookups", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -847,12 +856,12 @@ describe("AI SDK supervisor agent", () => {
 
     const steps = await store.getRunSteps(run.runId);
     expect(steps.find((step) => step.stepType === "critique")?.input).toMatchObject({
-      thesis: extracted,
-      researchReport: report,
+      thesis: { ...thesis, claim: "Lossy copied thesis." },
+      researchReport: lossyReport,
     });
     expect(steps.find((step) => step.stepType === "trade_expression")?.input).toMatchObject({
-      thesis: extracted,
-      researchReport: report,
+      thesis,
+      researchReport: lossyReport,
     });
   });
 });
