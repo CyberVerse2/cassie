@@ -28,9 +28,7 @@ export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTo
     messages: compressSupervisorMessages(messages) as never,
     toolChoice: activeTools.length === 0
       ? "none"
-      : shouldAllowNaturalFinalization(steps)
-        ? "auto"
-        : activeTools.length === 1
+      : activeTools.length === 1
         ? { type: "tool", toolName: activeTools[0] }
         : "required",
   };
@@ -64,22 +62,6 @@ function hasSucceeded(
   toolName: string,
 ): boolean {
   return steps.some((step) => step.toolResults.some((result) => result.toolName === toolName));
-}
-
-function shouldAllowNaturalFinalization(
-  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
-): boolean {
-  return hasSucceeded(steps, "classify_intent") &&
-    hasSucceeded(steps, "interpret_signal") &&
-    hasSucceeded(steps, "extract_thesis") &&
-    [
-      "research_thesis",
-      "critique_thesis",
-      "plan_trade_expression",
-      "select_market",
-      "risk_check",
-      "create_trade_ticket",
-    ].some((toolName) => hasSucceeded(steps, toolName));
 }
 
 function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string; recoverable: boolean } | null {

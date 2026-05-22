@@ -330,6 +330,7 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("Treat ambiguity conservatively");
     expect(instructions).toContain("Never invent market candidates, prices, account state, or risk approvals");
     expect(instructions).toContain("Always use finalize_run");
+    expect(instructions).toContain("Once you have made the grounded decision for this run, call finalize_run next");
     expect(instructions).toContain("Mode policy:");
     expect(instructions).toContain("trade:");
     expect(instructions).toContain("critic:");

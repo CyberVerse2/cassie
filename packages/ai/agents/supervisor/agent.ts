@@ -207,6 +207,7 @@ Tool-use guidance:
 - Use market tools only for real market discovery or selection.
 - Use risk_check only after a real selected market exists.
 - Use create_trade_ticket only after a non-rejected risk_check.
+- Once you have made the grounded decision for this run, call finalize_run next instead of continuing to call exploratory tools.
 - Finalize with analysis or critique when evidence, market fit, or risk does not justify a ticket.
 
 Mode policy:
