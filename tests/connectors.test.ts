@@ -9,7 +9,7 @@ import {
   HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
 } from "../packages/market-data/index.ts";
-import { MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
+import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
 import type { ResearchQueryPlan, Thesis } from "../packages/core/schemas/index.ts";
 
 const thesis: Thesis = {
@@ -290,6 +290,33 @@ describe("market data connectors", () => {
     expect(candidates[0]?.instrument).toBe("solana-etf-approved");
     expect(candidates[0]?.outcomeTokenId).toBe("123");
     expect(candidates[0]?.conditionId).toBe("condition_1");
+    fetchMock.mockRestore();
+  });
+
+  it("surfaces Polymarket order book failures instead of dropping the venue", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            {
+              id: "1",
+              slug: "solana-etf-approved",
+              question: "Will a Solana ETF be approved?",
+              active: true,
+              closed: false,
+              liquidityNum: 600000,
+              clobTokenIds: JSON.stringify(["123", "456"]),
+              outcomePrices: JSON.stringify(["0.62", "0.38"]),
+              conditionId: "condition_1",
+            },
+          ]),
+        ),
+      )
+      .mockResolvedValueOnce(new Response("upstream unavailable", { status: 503 }));
+
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
+      thesis,
+    })).rejects.toBeInstanceOf(ConnectorRequestError);
     fetchMock.mockRestore();
   });
 });

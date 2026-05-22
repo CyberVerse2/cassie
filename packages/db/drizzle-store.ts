@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
@@ -637,6 +637,40 @@ export class DrizzleCassieStore implements CassieStore {
       .where(eq(executionJobs.jobId, job.jobId));
 
     return job;
+  }
+
+  async getExecutionJob(jobId: string): Promise<ExecutionJob | undefined> {
+    const rows = await this.db
+      .select()
+      .from(executionJobs)
+      .where(eq(executionJobs.jobId, jobId))
+      .limit(1);
+
+    return rows[0]?.job;
+  }
+
+  async listAutoApprovedTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
+    const ticketRows = await this.db
+      .select()
+      .from(tradeTickets)
+      .where(and(
+        eq(tradeTickets.runId, runId),
+        eq(tradeTickets.approvalState, "not_required"),
+      ));
+    const tickets = ticketRows.map((row) => row.ticket);
+    const ticketIds = tickets.map((ticket) => ticket.ticketId);
+
+    if (ticketIds.length === 0) {
+      return [];
+    }
+
+    const jobRows = await this.db
+      .select({ ticketId: executionJobs.ticketId })
+      .from(executionJobs)
+      .where(inArray(executionJobs.ticketId, ticketIds));
+    const existingExecutionTicketIds = new Set(jobRows.map((row) => row.ticketId));
+
+    return tickets.filter((ticket) => !existingExecutionTicketIds.has(ticket.ticketId));
   }
 
   async getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined> {

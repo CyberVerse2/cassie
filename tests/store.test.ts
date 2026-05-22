@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import { InMemoryCassieStore } from "../packages/db/store.ts";
 import type {
   EvidenceClaim,
+  ExecutionJob,
   GoalEvidenceLink,
   GoalResolution,
   QueryJob,
   SearchResult,
+  TradeTicket,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
 
@@ -58,6 +60,43 @@ describe("InMemoryCassieStore", () => {
     expect(snapshot.mentions).toHaveLength(1);
     expect(snapshot.controlRuns).toHaveLength(1);
     expect(snapshot.auditEvents.map((event) => event.eventType)).toContain("mention.received");
+  });
+
+  it("finds execution jobs and auto-approved tickets without loading callers into full snapshots", async () => {
+    const store = new InMemoryCassieStore();
+    const ticket: TradeTicket = {
+      ticketId: "ticket_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "SOL may rally.",
+      venue: "hyperliquid",
+      instrument: "SOL",
+      side: "long",
+      sizeUsd: 50,
+      orderType: "marketable_limit",
+      riskDecision: {
+        decision: "approve",
+        adjustedSizeUsd: 50,
+      },
+      approvalState: "not_required",
+      venueData: {},
+    };
+    const job: ExecutionJob = {
+      jobId: "job_1",
+      ticketId: "ticket_2",
+      status: "queued",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      updatedAt: "2026-05-21T00:00:00.000Z",
+      failureReason: null,
+      executionResult: null,
+    };
+
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    expect(await store.getExecutionJob("job_1")).toEqual(job);
+    expect((await store.listAutoApprovedTicketsWithoutExecutionJob("run_1")).map((entry) => entry.ticketId))
+      .toEqual(["ticket_1"]);
   });
 
   it("persists the research evidence ledger as first-class records", async () => {

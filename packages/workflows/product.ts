@@ -10,7 +10,6 @@ import {
   type AccountStateProvider,
 } from "../execution/account-state.ts";
 import {
-  createQueuedExecutionJob,
   type ExecutionClient,
 } from "../execution/index.ts";
 import {
@@ -27,6 +26,7 @@ import { pollXMentions } from "./x-polling.ts";
 import {
   GraphileExecutionJobQueue,
   executeExecutionJob,
+  queueExecutionJob,
   type CassieJobQueue,
 } from "./execution-jobs.ts";
 
@@ -165,16 +165,13 @@ export class CassieProduct {
       throw new Error("Cannot execute a missing ticket.");
     }
 
-    const job = await this.store.addExecutionJob(createQueuedExecutionJob(ticket.ticketId));
-    const queued = await this.jobQueue.enqueueExecution(job);
-    await this.store.audit({
-      entityId: job.jobId,
-      entityType: "execution_job",
-      eventType: "execution_job.queued",
+    return queueExecutionJob({
+      store: this.store,
+      jobQueue: this.jobQueue,
+      ticket,
       message: "Execution job queued.",
-      data: { ticketId: ticket.ticketId, graphileJobId: queued.graphileJobId },
+      data: {},
     });
-    return job;
   }
 
   private dependencies(): CassieDependencies {

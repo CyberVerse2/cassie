@@ -206,6 +206,8 @@ export interface CassieStore {
   getTradeTicket(ticketId: string): Promise<TradeTicket | undefined>;
   addExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
+  getExecutionJob(jobId: string): Promise<ExecutionJob | undefined>;
+  listAutoApprovedTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]>;
   getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined>;
   getRuntimeState<T = unknown>(key: string): Promise<T | undefined>;
   setRuntimeState(key: string, value: unknown): Promise<void>;
@@ -525,6 +527,19 @@ export class InMemoryCassieStore implements CassieStore {
       candidate.jobId === job.jobId ? job : candidate,
     );
     return job;
+  }
+
+  async getExecutionJob(jobId: string): Promise<ExecutionJob | undefined> {
+    return this.snapshot.executionJobs.find((job) => job.jobId === jobId);
+  }
+
+  async listAutoApprovedTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
+    const existingExecutionTicketIds = new Set(this.snapshot.executionJobs.map((job) => job.ticketId));
+    return this.snapshot.tradeTickets.filter((ticket) =>
+      ticket.runId === runId &&
+      ticket.approvalState === "not_required" &&
+      !existingExecutionTicketIds.has(ticket.ticketId)
+    );
   }
 
   async getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined> {

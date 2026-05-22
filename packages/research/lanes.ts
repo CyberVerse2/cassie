@@ -423,10 +423,8 @@ function ledgerFromSearchOutput(input: {
     duplicateOf: null,
     metadata: [],
   }));
-  const fallbackResult = searchResults[0] ?? null;
   const evidenceClaims = input.output.findings.map((finding, index) => {
-    const result = searchResults.find((candidate) => candidate.url && finding.sourceUrls.includes(candidate.url)) ??
-      fallbackResult;
+    const result = searchResults.find((candidate) => candidate.url && finding.sourceUrls.includes(candidate.url));
     return {
       id: `claim_${input.job.id}_${index + 1}`,
       resultId: result?.id ?? `result_${input.job.id}_missing`,

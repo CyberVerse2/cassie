@@ -18,9 +18,15 @@ async function tick() {
   }));
 }
 
-await tick();
-setInterval(() => {
-  tick().catch((error) => {
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+while (true) {
+  try {
+    await tick();
+  } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));
-  });
-}, intervalMs);
+  }
+  await sleep(intervalMs);
+}

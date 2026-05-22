@@ -102,7 +102,7 @@ export async function pollXMentions(input: {
   }
 
   const newestId = payload.meta?.newest_id ?? tweets.at(-1)?.id ?? state?.sinceId;
-  if (newestId) {
+  if (newestId && newestId !== state?.sinceId) {
     await input.store.setRuntimeState(stateKey, { sinceId: newestId });
   }
 

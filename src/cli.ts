@@ -5,9 +5,7 @@ import { CassieStructuredClient, DEFAULT_IMPORTANT_MODEL } from "../packages/ai/
 import { CompositeMarketDataProvider } from "../packages/market-data/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
-import type { ControlRun, ExecutionJob as ControlExecutionJob } from "../packages/core/schemas/index.ts";
 import { CassieProduct } from "../packages/workflows/product.ts";
-import type { CassieJobQueue } from "../packages/workflows/execution-jobs.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/db/drizzle-store.ts";
 import type { CassieStore, CassieStoreSnapshot } from "../packages/db/store.ts";
 import { routeIntent } from "../packages/ai/tools/intent-router.ts";
@@ -27,16 +25,6 @@ type ParsedArgs = {
   flags: CliFlags;
   trace: TraceRecorder;
 };
-
-class CliControlPlaneQueue implements CassieJobQueue {
-  async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: null }> {
-    return { runId: run.runId, graphileJobId: null };
-  }
-
-  async enqueueExecution(job: ControlExecutionJob): Promise<{ executionJobId: string; graphileJobId: null }> {
-    return { executionJobId: job.jobId, graphileJobId: null };
-  }
-}
 
 class CliError extends Error {
   constructor(message: string) {
@@ -280,13 +268,7 @@ async function smokeMarket(args: ParsedArgs) {
 }
 
 function product() {
-  return new CassieProduct(
-    new ControlPlaneStore(),
-    undefined,
-    null,
-    undefined,
-    new CliControlPlaneQueue(),
-  );
+  return new CassieProduct(new ControlPlaneStore());
 }
 
 function summarizeState(snapshot: CassieStoreSnapshot) {

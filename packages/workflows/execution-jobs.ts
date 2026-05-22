@@ -103,8 +103,7 @@ export async function executeExecutionJob(input: {
 }): Promise<ExecutionJob> {
   const store = input.store ?? new DrizzleCassieStore();
   const executionClient = input.executionClient ?? defaultExecutionClient();
-  const snapshot = await store.load();
-  const jobToRun = snapshot.executionJobs.find((job) => job.jobId === input.jobId);
+  const jobToRun = await store.getExecutionJob(input.jobId);
 
   if (!jobToRun) {
     throw new Error(`Execution job ${input.jobId} was not found.`);
@@ -153,33 +152,44 @@ export async function enqueueAutoApprovedTicketsForRun(input: {
 }): Promise<{ enqueued: number; ticketIds: string[] }> {
   const store = input.store ?? new DrizzleCassieStore();
   const jobQueue = input.jobQueue ?? new GraphileExecutionJobQueue();
-  const snapshot = await store.load();
-  const existingExecutionTicketIds = new Set(snapshot.executionJobs.map((job) => job.ticketId));
-  const tickets = snapshot.tradeTickets.filter((ticket) =>
-    ticket.runId === input.runId &&
-    ticket.approvalState === "not_required" &&
-    !existingExecutionTicketIds.has(ticket.ticketId)
-  );
+  const tickets = await store.listAutoApprovedTicketsWithoutExecutionJob(input.runId);
 
   const ticketIds: string[] = [];
   for (const ticket of tickets) {
-    const job = await store.addExecutionJob(createQueuedExecutionJob(ticket.ticketId));
-    const queued = await jobQueue.enqueueExecution(job);
-    await store.audit({
-      entityId: job.jobId,
-      entityType: "execution_job",
-      eventType: "execution_job.queued",
+    await queueExecutionJob({
+      store,
+      jobQueue,
+      ticket,
       message: "Auto-approved trade ticket queued for execution.",
-      data: {
-        runId: input.runId,
-        ticketId: ticket.ticketId,
-        graphileJobId: queued.graphileJobId,
-      },
+      data: { runId: input.runId },
     });
     ticketIds.push(ticket.ticketId);
   }
 
   return { enqueued: ticketIds.length, ticketIds };
+}
+
+export async function queueExecutionJob(input: {
+  store: CassieStore;
+  jobQueue: CassieJobQueue;
+  ticket: TradeTicket;
+  message: string;
+  data?: Record<string, unknown>;
+}): Promise<ExecutionJob> {
+  const job = await input.store.addExecutionJob(createQueuedExecutionJob(input.ticket.ticketId));
+  const queued = await input.jobQueue.enqueueExecution(job);
+  await input.store.audit({
+    entityId: job.jobId,
+    entityType: "execution_job",
+    eventType: "execution_job.queued",
+    message: input.message,
+    data: {
+      ...input.data,
+      ticketId: input.ticket.ticketId,
+      graphileJobId: queued.graphileJobId,
+    },
+  });
+  return job;
 }
 
 async function preflightExecution(input: {

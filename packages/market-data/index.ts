@@ -62,11 +62,8 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
     researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate[]> {
-    const results = await Promise.allSettled(
-      this.providers.map((provider) => provider.findCandidates(input)),
-    );
-
-    return results.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
+    const results = await Promise.all(this.providers.map((provider) => provider.findCandidates(input)));
+    return results.flat();
   }
 }
 
@@ -155,8 +152,16 @@ export class PolymarketMarketDataProvider implements MarketDataProvider {
         const yesPrice = prices[0] ?? null;
         const outcomeTokenId = tokenIds[buyNo ? 1 : 0] ?? null;
         const heldPrice = yesPrice == null ? null : buyNo ? 1 - yesPrice : yesPrice;
-        const book = outcomeTokenId ? await this.getBook(outcomeTokenId) : null;
-        const metrics = book ? orderBookMetrics(book.bids ?? [], book.asks ?? []) : null;
+        if (!outcomeTokenId) {
+          throw new Error(`Polymarket market ${market.slug ?? market.id ?? market.question ?? "unknown"} has no outcome token id.`);
+        }
+
+        const book = await this.getBook(outcomeTokenId);
+        const metrics = orderBookMetrics(book.bids ?? [], book.asks ?? []);
+
+        if (!metrics) {
+          throw new Error(`Polymarket order book is empty for token ${outcomeTokenId}.`);
+        }
 
         return {
           venue: "polymarket",
@@ -165,27 +170,23 @@ export class PolymarketMarketDataProvider implements MarketDataProvider {
           symbol: market.slug ?? market.id ?? market.question ?? "unknown",
           conditionId: market.conditionId ?? null,
           outcomeTokenId,
-          markPrice: metrics?.mid ?? (heldPrice && heldPrice > 0 ? heldPrice : null),
+          markPrice: metrics.mid ?? (heldPrice && heldPrice > 0 ? heldPrice : null),
           liquidityScore: Math.min(1, Number(market.liquidityNum ?? market.volumeNum ?? 0) / 500_000),
-          spreadBps: metrics?.spreadBps ?? 0,
-          estimatedSlippageBps: metrics?.estimatedSlippageBps ?? 0,
+          spreadBps: metrics.spreadBps,
+          estimatedSlippageBps: metrics.estimatedSlippageBps,
           minOrderSizeUsd: 1,
           thesisFit: input.thesis.confidence,
           reason: market.question ?? "Prediction market related to the thesis.",
         };
       }));
 
-    return candidates.filter((candidate) => candidate.outcomeTokenId && candidate.spreadBps > 0);
+    return candidates.filter((candidate) => candidate.spreadBps > 0);
   }
 
-  private async getBook(tokenId: string): Promise<PolymarketBook | null> {
+  private async getBook(tokenId: string): Promise<PolymarketBook> {
     const url = new URL(`/book`, this.clobEndpoint);
     url.searchParams.set("token_id", tokenId);
     const response = await fetch(url);
-
-    if (!response.ok) {
-      return null;
-    }
 
     return readJsonResponse<PolymarketBook>("Polymarket order book", response);
   }
