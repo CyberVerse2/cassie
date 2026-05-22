@@ -38,20 +38,36 @@ describe("supervisor step policy", () => {
       "classify_intent",
       "interpret_signal",
       "extract_thesis",
-      "finalize_run",
     ]);
   });
 
-  it("allows research, trade planning, and finalization after thesis context exists", () => {
+  it("requires core trade context before finalization is available", () => {
+    const afterThesis = selectActiveTools([
+      step("classify_intent", { intent: "trade" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+    ]);
+
+    expect(afterThesis).toEqual(expect.arrayContaining([
+      "research_thesis",
+      "plan_trade_expression",
+    ]));
+    expect(afterThesis).not.toContain("finalize_run");
+
     expect(selectActiveTools([
       step("classify_intent", { intent: "trade" }),
       step("interpret_signal", {}),
       step("extract_thesis", {}),
-    ])).toEqual(expect.arrayContaining([
-      "research_thesis",
-      "plan_trade_expression",
-      "finalize_run",
-    ]));
+      step("research_thesis", {}),
+      step("plan_trade_expression", noTradeExpression),
+    ])).toContain("finalize_run");
+  });
+
+  it("does not allow early finalization after intent and signal only", () => {
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "trade" }),
+      step("interpret_signal", {}),
+    ])).not.toContain("finalize_run");
   });
 
   it("allows critique after research context exists", () => {
@@ -63,12 +79,13 @@ describe("supervisor step policy", () => {
     ])).toEqual(expect.arrayContaining([
       "critique_thesis",
       "plan_trade_expression",
-      "finalize_run",
     ]));
   });
 
   it("unlocks market tools after a tradable expression exists", () => {
     expect(selectActiveTools([
+      step("classify_intent", { intent: "trade" }),
+      step("interpret_signal", {}),
       step("extract_thesis", {}),
       step("research_thesis", {}),
       step("plan_trade_expression", tradeExpression),
@@ -104,6 +121,8 @@ describe("supervisor step policy", () => {
 
   it("keeps finalization available for no-trade analysis without risk or ticket tools", () => {
     const activeTools = selectActiveTools([
+      step("classify_intent", { intent: "trade" }),
+      step("interpret_signal", {}),
       step("extract_thesis", {}),
       step("research_thesis", {}),
       step("plan_trade_expression", noTradeExpression),
@@ -141,7 +160,7 @@ describe("supervisor step policy", () => {
   it("does not advance past failed required tools", () => {
     expect(selectActiveTools([
       step("classify_intent"),
-    ])).toEqual(["classify_intent", "interpret_signal", "extract_thesis", "finalize_run"]);
+    ])).toEqual(["classify_intent", "interpret_signal", "extract_thesis"]);
 
     expect(() => prepareCassieSupervisorStep({
       steps: [

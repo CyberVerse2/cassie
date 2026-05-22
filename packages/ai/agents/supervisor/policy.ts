@@ -83,7 +83,9 @@ export function selectActiveTools(
     active.add("create_trade_ticket");
   }
 
-  active.add("finalize_run");
+  if (canFinalize(steps, intent)) {
+    active.add("finalize_run");
+  }
 
   return orderedTools(active);
 }
@@ -173,6 +175,33 @@ function hasUsableMarketSelection(
 ): boolean {
   const selection = getLatestToolOutput<{ selectedMarket?: unknown; noTradeReason?: unknown }>(steps, "select_market");
   return Boolean(selection?.selectedMarket) && !selection?.noTradeReason;
+}
+
+function canFinalize(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  intent: IntentResult["intent"] | undefined,
+): boolean {
+  if (!hasSucceeded(steps, "classify_intent") || !hasSucceeded(steps, "interpret_signal") || !hasSucceeded(steps, "extract_thesis")) {
+    return false;
+  }
+
+  if (!intent) return false;
+
+  if (intent === "critic") {
+    return hasSucceeded(steps, "critique_thesis") || hasSucceeded(steps, "plan_trade_expression");
+  }
+
+  if (intent === "trade" || intent === "countertrade") {
+    return hasSucceeded(steps, "plan_trade_expression") ||
+      hasSucceeded(steps, "risk_check") ||
+      hasSucceeded(steps, "create_trade_ticket");
+  }
+
+  if (intent === "watch") {
+    return hasSucceeded(steps, "research_thesis") && hasSucceeded(steps, "plan_trade_expression");
+  }
+
+  return hasSucceeded(steps, "research_thesis") || hasSucceeded(steps, "plan_trade_expression");
 }
 
 function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string } | null {

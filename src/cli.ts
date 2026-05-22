@@ -154,7 +154,7 @@ async function mention(args: ParsedArgs) {
 async function runSupervisor(args: ParsedArgs) {
   const runId = requiredPositional(args, 0, "runId");
   const store = new ControlPlaneStore();
-  const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
+  const showTimeline = Boolean(args.flags.timeline) && !args.flags.json && !args.flags["quiet-timeline"];
   const liveTimeline = showTimeline ? startLiveRunTimeline(store, runId) : null;
   let result: unknown;
   try {
@@ -162,11 +162,14 @@ async function runSupervisor(args: ParsedArgs) {
   } finally {
     await liveTimeline?.stop();
   }
-  const timeline = formatRunTimeline(await store.load(), runId);
+  const snapshot = await store.load();
+  const timeline = formatRunTimeline(snapshot, runId);
   if (showTimeline) {
     console.error(timeline);
   }
-  return args.flags.json ? { runId, result, timeline } : { runId, result };
+  if (args.flags.json) return { runId, result, timeline };
+  if (args.flags.full) return { runId, result };
+  return summarizeRun(snapshot, runId);
 }
 
 async function controlRun(args: ParsedArgs) {
@@ -174,10 +177,12 @@ async function controlRun(args: ParsedArgs) {
   const cassie = product();
   const run = await cassie.getRun(runId);
   const timeline = formatRunTimeline(await cassie.state(), runId);
-  if (!args.flags.json && !args.flags["quiet-timeline"]) {
+  if (args.flags.timeline && !args.flags.json && !args.flags["quiet-timeline"]) {
     console.error(timeline);
   }
-  return args.flags.json ? { ...run, timeline } : run;
+  if (args.flags.json) return { ...run, timeline };
+  if (args.flags.full) return run;
+  return summarizeRun(await cassie.state(), runId);
 }
 
 async function state(args: ParsedArgs) {
@@ -285,6 +290,33 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       autoTradeEnabled: settings.autoTradeEnabled,
     })),
+  };
+}
+
+function summarizeRun(snapshot: CassieStoreSnapshot, runId: string) {
+  const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
+  if (!run) return { runId, status: "missing" };
+
+  const steps = snapshot.runSteps
+    .filter((step) => step.runId === runId)
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
+    .map((step) => ({
+      type: step.stepType,
+      status: step.status,
+      model: step.model,
+      output: summarizeLiveOutput(step.output),
+      error: step.error,
+    }));
+  const result = run.result && typeof run.result === "object" ? run.result as Record<string, unknown> : {};
+
+  return {
+    runId: run.runId,
+    status: run.status,
+    actionState: result.actionState ?? null,
+    responseType: result.responseType ?? null,
+    ticketId: result.ticketId ?? null,
+    publicSummary: result.publicSummary ?? null,
+    steps,
   };
 }
 
