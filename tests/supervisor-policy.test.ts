@@ -104,4 +104,29 @@ describe("supervisor step policy", () => {
     expect(JSON.stringify(prepared.messages)).toContain("The valuation claim is conditional");
     expect(JSON.stringify(prepared.messages)).toContain("The filing has no final IPO price range");
   });
+
+  it("preserves every tool result part when compressing large tool messages", () => {
+    const content = Array.from({ length: 12 }, (_, index) => ({
+      type: "tool-result",
+      toolCallId: `call_${index}`,
+      toolName: "interpret_signal",
+      output: {
+        signalType: "generic_opinion",
+        summary: "x".repeat(200),
+      },
+    }));
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("classify_intent", { intent: "trade" }),
+      ],
+      messages: [{
+        role: "tool",
+        content,
+      }],
+    } as never) as { messages: Array<{ content: Array<{ toolCallId: string }> }> };
+
+    expect(prepared.messages[0]?.content.map((part) => part.toolCallId)).toEqual(
+      content.map((part) => part.toolCallId),
+    );
+  });
 });

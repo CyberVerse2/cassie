@@ -148,7 +148,7 @@ function compressSupervisorMessages(messages: unknown[]) {
 
 function summarizeToolMessage(message: Record<string, unknown>, originalChars: number) {
   const content = Array.isArray(message.content) ? message.content : [];
-  return content.map((part) => summarizeToolPart(part, originalChars)).filter(Boolean).slice(0, 8);
+  return content.map((part) => summarizeToolPart(part, originalChars)).filter(Boolean);
 }
 
 function summarizeToolPart(part: unknown, originalChars: number) {
