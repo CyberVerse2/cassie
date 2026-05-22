@@ -30,8 +30,7 @@ export function intentRouterPrompt(input: {
   return `You are Cassie's intent router.
 
 Classify the user command into exactly one supported Cassie intent:
-- think: analysis, opinion, "what do you think", find the idea, or market-read requests without explicit trade-ticket language.
-- critic: critique, tear down, verify, "is this real", weakness, or skepticism requests.
+- critic: analysis, opinion, "what do you think", find the idea, market-read, critique, tear down, verify, "is this real", weakness, or skepticism requests without explicit trade-ticket language.
 - trade: create a trade ticket, "get me in", buy/sell/long/short this, or explicit trading requests.
 - countertrade: fade, inverse, opposite trade, or countertrade requests.
 - watch: explicitly add to watchlist, track this, monitor this, watch this, or follow up later.

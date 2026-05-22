@@ -154,7 +154,7 @@ export function createCassieSupervisorTools(input: {
 
   return {
     classify_intent: tool({
-      description: "Classify the user's Cassie command into think, critic, trade, or countertrade.",
+      description: "Classify the user's Cassie command into critic, trade, countertrade, or watch.",
       inputSchema: z.object({}),
       execute: async () => runStepOnce("intent", () => recordRunStep({
         store: input.store,

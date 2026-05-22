@@ -130,7 +130,7 @@ curl http://localhost:3000/api/state
 
 Implemented:
 
-- AI intent routing for `think`, `critic`, `trade`, and `countertrade`
+- AI intent routing for `critic`, `trade`, `countertrade`, and `watch`
 - AI thesis and inverse-thesis extraction
 - Goal-first research with query jobs, OpenAI web search, Grok X search, evidence ledgers, and goal resolutions
 - Hyperliquid and Polymarket market-data connectors

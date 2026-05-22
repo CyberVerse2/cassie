@@ -882,7 +882,7 @@ describe("research query planner policy", () => {
         },
       },
       sourcePost,
-      userCommand: "@Cassie think this",
+      userCommand: "@Cassie critic this",
       signal: {
         ...explicitSignal,
         signalType: "news",
@@ -1150,7 +1150,7 @@ describe("research query planner policy", () => {
         },
       },
       sourcePost,
-      userCommand: "@Cassie think this",
+      userCommand: "@Cassie critic this",
       signal: {
         ...explicitSignal,
         signalType: "news",

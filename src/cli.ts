@@ -146,7 +146,7 @@ async function settingsSet(args: ParsedArgs) {
 async function mention(args: ParsedArgs) {
   return product().createMentionRun({
     userId: flag(args, "user", "local-user"),
-    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie what do you think?"),
+    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie critic this"),
     sourcePost: await sourcePostFromFlags(args),
   });
 }

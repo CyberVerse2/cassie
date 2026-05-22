@@ -60,7 +60,7 @@ export function selectActiveTools(
     return ["extract_inverse_thesis"];
   }
 
-  if ((intent === "think" || intent === "critic" || intent === "trade" || intent === "countertrade" || intent === "watch") && !hasSucceeded(steps, "research_thesis")) {
+  if ((intent === "critic" || intent === "trade" || intent === "countertrade" || intent === "watch") && !hasSucceeded(steps, "research_thesis")) {
     return ["research_thesis"];
   }
 

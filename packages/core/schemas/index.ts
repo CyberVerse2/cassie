@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 export const CassieIntentSchema = z.enum([
-  "think",
   "critic",
   "trade",
   "countertrade",
