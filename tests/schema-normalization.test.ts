@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ResearchReportSchema } from "../packages/core/schemas/index.ts";
+import { ResearchQueryPlanSchema, ResearchReportSchema } from "../packages/core/schemas/index.ts";
 
 describe("schema normalization", () => {
   it("accepts stale 0-to-10 research evidence relevance scores", () => {
@@ -63,5 +63,75 @@ describe("schema normalization", () => {
     });
 
     expect(report.evidence[0]?.relevance).toBe(1);
+  });
+
+  it("accepts 0-to-10 query-plan priorities from structured models", () => {
+    const plan = ResearchQueryPlanSchema.parse({
+      version: "research-query-plan/v1",
+      normalizedClaim: "SpaceX IPO valuation is actionable.",
+      signalType: "rumor",
+      mode: "standard",
+      assets: ["SpaceX"],
+      topics: ["IPO"],
+      sourceHandle: "example",
+      sourceName: "Example",
+      scores: {
+        specificity: 8,
+        marketLinkage: 7,
+        sourceValue: 3,
+        urgency: 2,
+        risk: 5,
+        novelty: 6,
+        expectedValueOfResearch: 9,
+      },
+      goals: [
+        {
+          id: "g_venue",
+          kind: "trade_expression",
+          question: "Does a SpaceX venue exist?",
+          decisionUse: "identify_trade_expression",
+          priority: 10,
+          mustResolve: true,
+          lanes: ["web"],
+          evidenceNeeds: ["Venue evidence."],
+          disconfirmingQuestions: [],
+          resolutionCriteria: {
+            supportedIf: "Venue exists.",
+            contradictedIf: "No direct venue exists.",
+            unresolvedIf: "Venue status cannot be established.",
+          },
+          budget: { maxQueries: 2, maxResults: 10, wave: 0 },
+          stopWhen: [],
+        },
+      ],
+      queryBatches: [
+        {
+          wave: 0,
+          name: "Venue checks",
+          purpose: "Check venues.",
+          queries: [
+            {
+              id: "q_hl",
+              goalIds: ["g_venue"],
+              lane: "web",
+              queryKind: "market_timeseries",
+              query: "Hyperliquid SpaceX pre-stock SPCX",
+              priority: 9,
+              maxResults: 10,
+              expectedEvidence: "Hyperliquid venue data.",
+              rationale: "Direct venue availability changes routing.",
+            },
+          ],
+        },
+      ],
+      synthesisContract: {
+        requiredGoalIds: ["g_venue"],
+        cannotConcludeIfUnresolved: ["g_venue"],
+      },
+    });
+
+    expect(plan.scores.specificity).toBe(0.8);
+    expect(plan.goals[0]?.priority).toBe(1);
+    expect(plan.queryBatches[0]?.queries[0]?.priority).toBe(0.9);
   });
 });
