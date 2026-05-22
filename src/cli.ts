@@ -154,7 +154,7 @@ async function mention(args: ParsedArgs) {
 async function runSupervisor(args: ParsedArgs) {
   const runId = requiredPositional(args, 0, "runId");
   const store = new ControlPlaneStore();
-  const showTimeline = Boolean(args.flags.timeline) && !args.flags.json && !args.flags["quiet-timeline"];
+  const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
   const liveTimeline = showTimeline ? startLiveRunTimeline(store, runId) : null;
   let result: unknown;
   try {
@@ -177,7 +177,7 @@ async function controlRun(args: ParsedArgs) {
   const cassie = product();
   const run = await cassie.getRun(runId);
   const timeline = formatRunTimeline(await cassie.state(), runId);
-  if (args.flags.timeline && !args.flags.json && !args.flags["quiet-timeline"]) {
+  if (!args.flags.json && !args.flags["quiet-timeline"]) {
     console.error(timeline);
   }
   if (args.flags.json) return { ...run, timeline };
