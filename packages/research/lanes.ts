@@ -355,6 +355,7 @@ Classify each atomic finding as an EvidenceClaim candidate:
 - reliability
 - source-backed quote when available
 - relevance to the evidence needs
+An unfamiliar blog, outlet, or source is not automatically low quality. If the source is unfamiliar but not discredited, classify reliability as unknown and keep evidence strength neutral at 0.5 unless the source content, citations, corroboration, or red flags justify a different score.
 Do not synthesize a trade view. Do not infer goal support from the lane summary; only classify source-backed claims.
 
 Query job:
@@ -463,7 +464,7 @@ function ledgerFromSearchOutput(input: {
         evidenceClaimId: claim.id,
         stance: finding?.stance ?? "context" as const,
         relevance: finding?.relevance ?? claim.extractionConfidence,
-        strength: finding?.relevance ?? claim.extractionConfidence,
+        strength: finding ? evidenceStrengthForFinding(finding) : claim.extractionConfidence,
         reason: `Structured finding from ${input.provider} for query ${input.job.querySpecId}.`,
         satisfiesEvidenceNeeds: finding?.stance === "supports" ? [input.job.expectedEvidence] : [],
         redFlags: [],
@@ -476,6 +477,13 @@ function ledgerFromSearchOutput(input: {
     evidenceClaims,
     goalEvidenceLinks,
   };
+}
+
+function evidenceStrengthForFinding(finding: SearchQueryOutput["findings"][number]): number {
+  if (finding.reliability === "unknown") {
+    return 0.5;
+  }
+  return finding.relevance;
 }
 
 async function wrapConnectorStage<T>(stage: string, run: () => Promise<T>): Promise<T> {

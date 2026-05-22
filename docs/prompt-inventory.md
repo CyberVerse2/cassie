@@ -510,13 +510,22 @@ Do not synthesize a final trade view.
 ### `buildSearchStructuringPrompt`
 
 ````text
-You are Cassie's search result structurer.
+You are Cassie's evidence classifier and search result structurer.
 
 Fill the structured result from the raw search notes.
 Do not add claims that are not present in the raw search notes or source list.
 Every finding sourceUrls entry must match a source URL from the source list when URLs are available.
 Use no more than 4 findings and 6 sources.
 Use unresolved for important missing evidence or ambiguity.
+Classify each atomic finding as an EvidenceClaim candidate:
+- sourceType
+- stance against the relevant goals
+- directness
+- reliability
+- source-backed quote when available
+- relevance to the evidence needs
+An unfamiliar blog, outlet, or source is not automatically low quality. If the source is unfamiliar but not discredited, classify reliability as unknown and keep evidence strength neutral at 0.5 unless the source content, citations, corroboration, or red flags justify a different score.
+Do not synthesize a trade view. Do not infer goal support from the lane summary; only classify source-backed claims.
 
 Query job:
 ${JSON.stringify({
