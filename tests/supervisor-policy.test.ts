@@ -43,6 +43,38 @@ describe("supervisor step policy", () => {
       step("extract_thesis", {}),
       step("research_thesis", {}),
     ])).toEqual(["critique_thesis"]);
+
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "critic" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("critique_thesis", {}),
+    ])).toEqual(["plan_trade_expression"]);
+
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "critic" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("critique_thesis", {}),
+      step("plan_trade_expression", {
+        decision: "watchlist",
+        candidates: [],
+      }),
+    ])).toEqual(["finalize_run"]);
+
+    expect(selectActiveTools([
+      step("classify_intent", { intent: "critic" }),
+      step("interpret_signal", {}),
+      step("extract_thesis", {}),
+      step("research_thesis", {}),
+      step("critique_thesis", {}),
+      step("plan_trade_expression", {
+        decision: "route_to_market_router",
+        candidates: [{ tradableNow: true }],
+      }),
+    ])).toEqual(["select_market"]);
   });
 
   it("blocks ticket creation after rejected risk", () => {
@@ -51,6 +83,10 @@ describe("supervisor step policy", () => {
       step("interpret_signal", {}),
       step("extract_thesis", {}),
       step("research_thesis", {}),
+      step("plan_trade_expression", {
+        decision: "route_to_market_router",
+        candidates: [{ tradableNow: true }],
+      }),
       step("select_market", {}),
       step("risk_check", { decision: "reject", reason: "No." }),
     ])).toEqual(["finalize_run"]);

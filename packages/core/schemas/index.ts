@@ -707,6 +707,7 @@ export const RunStepTypeSchema = z.enum([
   "inverse_thesis",
   "research",
   "critique",
+  "trade_expression",
   "market_candidates",
   "market_selection",
   "risk",

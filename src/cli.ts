@@ -543,6 +543,8 @@ function liveThinking(stepType: string): string {
       return "Run goal-first research with query jobs and evidence resolution.";
     case "critique":
       return "Use evidence to identify the strongest objections.";
+    case "trade_expression":
+      return "Estimate the cleanest venue-aware expression, including fair value when valuation matters.";
     case "market_selection":
       return "Select a real market expression without inventing instruments.";
     case "risk":

@@ -191,10 +191,10 @@ Use the available tools to process this run. Do not execute orders. Create a tra
 
 Required behavior:
 - Start with classify_intent, interpret_signal, and extract_thesis.
-- For critic requests, call research_thesis, critique_thesis, then finalize_run.
-- For trade requests, call research_thesis, select_market, risk_check, create_trade_ticket when allowed, then finalize_run.
+- For critic requests, call research_thesis, critique_thesis, plan_trade_expression, select_market when the trade expression routes to market, then finalize_run. Do not create tickets for critic requests.
+- For trade requests, call research_thesis, plan_trade_expression, select_market, risk_check, create_trade_ticket when allowed, then finalize_run.
 - For countertrade requests, call extract_inverse_thesis before research and market selection.
-- For think requests, call select_market and risk_check, then finalize_run without creating a ticket.
+- For think requests, call research_thesis, plan_trade_expression, select_market when routed, risk_check when a market is selected, then finalize_run without creating a ticket.
 - If risk_check rejects, do not call create_trade_ticket. Finalize with analysis and the rejection reason.
 - Always call finalize_run exactly once after the required tools have completed.
 - finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs.

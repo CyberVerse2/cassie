@@ -5,7 +5,7 @@ import {
   type ToolSet,
   hasToolCall,
 } from "ai";
-import type { IntentResult, RiskDecision } from "../../../core/schemas/index.ts";
+import type { IntentResult, RiskDecision, TradeExpressionPlan } from "../../../core/schemas/index.ts";
 import type { createCassieSupervisorTools } from "./tools.ts";
 
 export type CassieSupervisorTools = ReturnType<typeof createCassieSupervisorTools>;
@@ -60,12 +60,31 @@ export function selectActiveTools(
     return ["extract_inverse_thesis"];
   }
 
-  if ((intent === "critic" || intent === "trade" || intent === "countertrade") && !hasSucceeded(steps, "research_thesis")) {
+  if ((intent === "think" || intent === "critic" || intent === "trade" || intent === "countertrade") && !hasSucceeded(steps, "research_thesis")) {
     return ["research_thesis"];
   }
 
   if (intent === "critic") {
-    return hasSucceeded(steps, "critique_thesis") ? ["finalize_run"] : ["critique_thesis"];
+    if (!hasSucceeded(steps, "critique_thesis")) {
+      return ["critique_thesis"];
+    }
+    const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
+    if (!expression) {
+      return ["plan_trade_expression"];
+    }
+    if (shouldRouteToMarket(expression) && !hasSucceeded(steps, "select_market")) {
+      return ["select_market"];
+    }
+    return ["finalize_run"];
+  }
+
+  const expression = getLatestToolOutput<TradeExpressionPlan>(steps, "plan_trade_expression");
+  if (!expression) {
+    return ["plan_trade_expression"];
+  }
+
+  if (!shouldRouteToMarket(expression)) {
+    return ["finalize_run"];
   }
 
   if (!hasSucceeded(steps, "select_market")) {
@@ -86,6 +105,11 @@ export function selectActiveTools(
   }
 
   return ["finalize_run"];
+}
+
+function shouldRouteToMarket(expression: TradeExpressionPlan): boolean {
+  return expression.decision === "route_to_market_router" &&
+    expression.candidates.some((candidate) => candidate.tradableNow);
 }
 
 function hasCalled(
@@ -170,6 +194,10 @@ function summarizeToolPart(part: unknown, originalChars: number) {
         intent: output?.intent,
         signalType: output?.signalType,
         stance: output?.stance,
+        decision: output?.decision,
+        directAsset: truncate(typeof output?.directAsset === "string" ? output.directAsset : null, 120),
+        highestPurityExpression: truncate(typeof output?.highestPurityExpression === "string" ? output.highestPurityExpression : null, 260),
+        marketRouterInstructions: truncate(typeof output?.marketRouterInstructions === "string" ? output.marketRouterInstructions : null, 260),
         publicSummary: truncate(typeof output?.publicSummary === "string" ? output.publicSummary : null, 220),
         claim: truncate(typeof output?.claim === "string" ? output.claim : null, 220),
         finalCritique: truncate(typeof output?.finalCritique === "string" ? output.finalCritique : null, 360),

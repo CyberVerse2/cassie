@@ -13,6 +13,7 @@ import type {
   SourcePost,
   SourceProfile,
   Thesis,
+  TradeExpressionPlan,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
 
@@ -242,6 +243,37 @@ const marketSelection: MarketSelection = {
   noTradeReason: null,
 };
 
+const tradeExpression: TradeExpressionPlan = {
+  signal: "SOL ETF rumor",
+  coreInterpretation: "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
+  directAsset: "SOL",
+  directAssetTradable: true,
+  highestPurityExpression: "Long SOL perp while the ETF approval catalyst remains unresolved.",
+  publicMarketReadThrough: "strong",
+  candidates: [
+    {
+      instrument: "SOL perp",
+      expression: "long",
+      thesis: "SOL may rally if ETF approval odds are underpriced.",
+      causalDirectness: 0.9,
+      liquidity: 0.9,
+      surprise: 0.5,
+      timing: 0.7,
+      crowdingRisk: 0.4,
+      downsideAsymmetry: 0.6,
+      evidenceQuality: 0.6,
+      expectedEdge: 0.72,
+      tradableNow: true,
+      rejectionReason: null,
+      invalidation: ["Primary sources refute near-term approval."],
+      evidenceNeeded: ["Primary ETF approval timing evidence."],
+    },
+  ],
+  decision: "route_to_market_router",
+  reason: "The asset is liquid and directly maps to the researched catalyst.",
+  marketRouterInstructions: "Prefer direct SOL perps over indirect read-throughs.",
+};
+
 class FakeAi implements StructuredAiClient {
   readonly calls: string[] = [];
 
@@ -263,6 +295,7 @@ class FakeAi implements StructuredAiClient {
       cassie_research_query_plan: queryPlan,
       cassie_goal_resolution: [goalResolution],
       cassie_research_report: researchReport,
+      cassie_trade_expression: tradeExpression,
       cassie_market_selection: marketSelection,
       cassie_critique: {
         strongestObjection: "No primary source confirms approval.",
@@ -334,9 +367,15 @@ describe("AI SDK supervisor agent", () => {
       thesis: extracted,
       researchAngle: "balanced",
     });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: extracted,
+      researchReport: report,
+    });
     const selected = await executeTool<MarketSelection>(tools.select_market, {
       thesis: extracted,
       researchReport: report,
+      tradeExpression: expression,
     });
     const risk = await executeTool(tools.risk_check, {
       marketSelection: selected,
@@ -358,7 +397,7 @@ describe("AI SDK supervisor agent", () => {
     expect(state.tradeTickets[0]?.approvalState).toBe("pending");
     expect(state.researchReports).toHaveLength(1);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["intent", "signal", "thesis", "research", "market_selection", "risk", "ticket", "final"]),
+      expect.arrayContaining(["intent", "signal", "thesis", "research", "trade_expression", "market_selection", "risk", "ticket", "final"]),
     );
     expect(state.executionJobs).toHaveLength(0);
   });
@@ -494,9 +533,15 @@ describe("AI SDK supervisor agent", () => {
       thesis,
       researchReport: report,
     });
+    await executeTool(tools.plan_trade_expression, {
+      signal,
+      thesis,
+      researchReport: report,
+    });
     await executeTool(tools.select_market, {
       thesis,
       researchReport: report,
+      tradeExpression,
     });
 
     expect(importantAi.calls).toEqual([
@@ -505,12 +550,14 @@ describe("AI SDK supervisor agent", () => {
       "cassie_goal_resolution",
       "cassie_research_report",
       "cassie_critique",
+      "cassie_trade_expression",
     ]);
     expect(cheapAi.calls).toEqual(["cassie_source_profile", "cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
       { type: "research", model: "gemini-3.5-flash" },
       { type: "critique", model: "gemini-3.5-flash" },
+      { type: "trade_expression", model: "gemini-3.5-flash" },
       { type: "market_selection", model: "deepseek/deepseek-v4-flash" },
     ]);
   });

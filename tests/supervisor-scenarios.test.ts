@@ -14,6 +14,7 @@ import type {
   SignalInterpretation,
   SourcePost,
   Thesis,
+  TradeExpressionPlan,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
 
@@ -232,6 +233,37 @@ const marketSelection: MarketSelection = {
   noTradeReason: null,
 };
 
+const tradeExpression: TradeExpressionPlan = {
+  signal: "SOL ETF rumor",
+  coreInterpretation: "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
+  directAsset: "SOL",
+  directAssetTradable: true,
+  highestPurityExpression: "Long SOL perp while the ETF approval catalyst remains unresolved.",
+  publicMarketReadThrough: "strong",
+  candidates: [
+    {
+      instrument: "SOL perp",
+      expression: "long",
+      thesis: "SOL may rally if ETF approval odds are underpriced.",
+      causalDirectness: 0.9,
+      liquidity: 0.9,
+      surprise: 0.5,
+      timing: 0.7,
+      crowdingRisk: 0.4,
+      downsideAsymmetry: 0.6,
+      evidenceQuality: 0.6,
+      expectedEdge: 0.72,
+      tradableNow: true,
+      rejectionReason: null,
+      invalidation: ["Primary sources refute near-term approval."],
+      evidenceNeeded: ["Primary ETF approval timing evidence."],
+    },
+  ],
+  decision: "route_to_market_router",
+  reason: "The asset is liquid and directly maps to the researched catalyst.",
+  marketRouterInstructions: "Prefer direct SOL perps over indirect read-throughs.",
+};
+
 class ScenarioAi implements StructuredAiClient {
   constructor(private readonly intent: IntentResult["intent"]) {}
 
@@ -252,6 +284,7 @@ class ScenarioAi implements StructuredAiClient {
       cassie_research_query_plan: queryPlan,
       cassie_goal_resolution: [goalResolution],
       cassie_research_report: researchReport,
+      cassie_trade_expression: tradeExpression,
       cassie_market_selection: marketSelection,
       cassie_critique: critique,
     };
@@ -319,6 +352,11 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchReport: report,
     });
+    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: extracted,
+      researchReport: report,
+    });
     await executeTool(tools.finalize_run, {
       responseType: "critique",
       publicSummary: result.finalCritique,
@@ -342,6 +380,11 @@ describe("supervisor scenario coverage", () => {
       researchAngle: "critic",
     });
     const result = await executeTool<Critique>(tools.critique_thesis, {
+      thesis: extracted,
+      researchReport: report,
+    });
+    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
       thesis: extracted,
       researchReport: report,
     });
@@ -381,9 +424,15 @@ describe("supervisor scenario coverage", () => {
       thesis: counterThesis,
       researchAngle: "counter",
     });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: counterThesis,
+      researchReport: report,
+    });
     const selected = await executeTool<MarketSelection>(tools.select_market, {
       thesis: counterThesis,
       researchReport: report,
+      tradeExpression: expression,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection: selected,
@@ -399,7 +448,7 @@ describe("supervisor scenario coverage", () => {
     const state = await store.load();
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["inverse_thesis", "research", "market_selection", "risk", "ticket"]),
+      expect.arrayContaining(["inverse_thesis", "research", "trade_expression", "market_selection", "risk", "ticket"]),
     );
   });
 
@@ -415,9 +464,15 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchAngle: "balanced",
     });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+      signal: interpreted,
+      thesis: extracted,
+      researchReport: report,
+    });
     const selected = await executeTool<MarketSelection>(tools.select_market, {
       thesis: extracted,
       researchReport: report,
+      tradeExpression: expression,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection: selected,

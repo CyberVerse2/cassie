@@ -275,6 +275,8 @@ function visibleThinkingForStep(step: RunStep): string {
       return "Run goal-first research with query jobs that emit evidence ledgers and goal resolution.";
     case "critique":
       return "Use the research report to identify the strongest objections and weaknesses.";
+    case "trade_expression":
+      return "Estimate the cleanest venue-aware expression, including fair value when valuation matters.";
     case "market_candidates":
       return "Fetch real market candidates from configured venues.";
     case "market_selection":

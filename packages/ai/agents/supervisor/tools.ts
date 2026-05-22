@@ -14,6 +14,7 @@ import {
   SignalInterpretationSchema,
   SupervisorFinalResultSchema,
   ThesisSchema,
+  TradeExpressionPlanSchema,
   type AccountState,
   type ControlRun,
   type RunStepType,
@@ -23,6 +24,7 @@ import { routeIntent } from "../../tools/intent-router.ts";
 import { interpretSignal } from "../../tools/signal.ts";
 import { critiqueThesis } from "../../tools/critique.ts";
 import { selectMarket } from "../../tools/market.ts";
+import { planTradeExpression } from "../../tools/trade-expression.ts";
 import { researchThesis } from "../../../research/index.ts";
 import { evaluateRisk } from "../../../risk/index.ts";
 import { extractInverseThesis, extractThesis } from "../../tools/thesis.ts";
@@ -207,25 +209,52 @@ export function createCassieSupervisorTools(input: {
         execute: () => critiqueThesis({ ai: importantAi, thesis, researchReport }),
       })),
     }),
+    plan_trade_expression: tool({
+      description: "Decide whether the researched thesis has a clean venue-aware trade expression.",
+      inputSchema: z.object({
+        signal: SignalInterpretationSchema,
+        thesis: ThesisSchema,
+        researchReport: ResearchReportSchema,
+      }),
+      execute: async ({ signal, thesis, researchReport }) => runStepOnce("trade_expression", () => recordRunStep({
+        store: input.store,
+        runId: input.run.runId,
+        stepType: "trade_expression",
+        promptName: "cassie_trade_expression",
+        promptVersion,
+        model: importantModel,
+        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost, signal, thesis, researchReport },
+        execute: () => planTradeExpression({
+          ai: importantAi,
+          sourcePost: input.run.sourcePost,
+          userCommand: input.run.userCommand,
+          signal,
+          thesis,
+          researchReport,
+        }),
+      })),
+    }),
     select_market: tool({
       description: "Select the best market expression from real market candidates; do not invent markets.",
       inputSchema: z.object({
         thesis: ThesisSchema,
         researchReport: ResearchReportSchema.optional(),
+        tradeExpression: TradeExpressionPlanSchema.optional(),
       }),
-      execute: async ({ thesis, researchReport }) => runStepOnce("market_selection", () => recordRunStep({
+      execute: async ({ thesis, researchReport, tradeExpression }) => runStepOnce("market_selection", () => recordRunStep({
         store: input.store,
         runId: input.run.runId,
         stepType: "market_selection",
         promptName: "cassie_market_selection",
         promptVersion,
         model: cheapModel,
-        stepInput: { thesis, researchReport },
+        stepInput: { thesis, researchReport, tradeExpression },
         execute: () => selectMarket({
           ai: cheapAi,
           marketData: input.deps.marketData,
           thesis,
           researchReport,
+          tradeExpression,
         }),
       })),
     }),

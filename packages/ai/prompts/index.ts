@@ -132,6 +132,8 @@ export function marketSelectionPrompt(input: {
 Choose the best market expression for the thesis from the provided candidates.
 Rank semantically: thesis fit, directness, liquidity, spread, venue suitability, and the prior trade-expression plan.
 Only choose a market if it matches a tradable-now expression from the trade-expression plan.
+If the trade-expression plan contains valuation work, compare each candidate's current price or probability against that fair-value range before selecting.
+For pre-stock perps and prediction markets, respect the actual payoff definition: perps express market-implied price discovery, while prediction markets resolve by their stated rules.
 Do not create a candidate that was not provided.
 Do not size the trade. Do not approve execution.
 
@@ -147,11 +149,20 @@ Decide whether the researched signal has a clean monetizable expression.
 Evaluate these decision factors:
 - what changed
 - implied economic claim
+- implied valuation, fair value, and market-implied mispricing when the thesis is about valuation, multiples, IPO pricing, market cap, pre-market price, or prediction-market odds
 - beneficiaries and losers
 - most direct asset or exposure
-- liquid public, crypto, or prediction-market instrument
+- liquid public, crypto, pre-stock, synthetic perp, or prediction-market instrument
 - read-through strength
 - pricing, crowding, timing, and access constraints
+
+Valuation discipline:
+- If the signal claims something is overvalued, undervalued, cheap, expensive, mispriced, or priced at a specific market cap or multiple, estimate a fair-value range before deciding the expression.
+- Compare fair value to the current or claimed market-implied valuation, price, multiple, or probability.
+- If a direct pre-stock perp exists, treat it as the cleanest expression of market-implied price, not as actual equity.
+- If a prediction market exists, map the thesis to the exact resolution rule and bracket before choosing YES or NO.
+- Do not stop at "the filing numbers are true." Decide whether the market price implied by available venues is too high, too low, or not actionable.
+- State what would invalidate the valuation view.
 
 Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
