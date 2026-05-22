@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
-import { ClobClient, Chain, OrderType, Side, type ClobSigner } from "@polymarket/clob-client";
+import { Chain, ClobClient, OrderType, Side, type ApiKeyCreds, type ClobClientOptions } from "@polymarket/clob-client-v2";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+import { createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 export interface ExecutionClient {
   execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]>;
@@ -124,15 +126,58 @@ export class HyperliquidExecutionClient implements ExecutionClient {
   }
 }
 
+export interface PolymarketClobClientLike {
+  createAndPostMarketOrder(
+    order: {
+      tokenID: string;
+      amount: number;
+      side: Side;
+      orderType: OrderType.FAK;
+    },
+    options: Record<string, never>,
+    orderType: OrderType.FAK,
+  ): Promise<{ orderID?: string | null; id?: string | null; [key: string]: unknown }>;
+}
+
+export type PolymarketClobClientFactory = (options: ClobClientOptions) => PolymarketClobClientLike;
+
+export type PolymarketExecutionClientOptions = {
+  privateKey?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  apiPassphrase?: string;
+  host?: string;
+  rpcUrl?: string;
+  factory?: PolymarketClobClientFactory;
+};
+
 export class PolymarketExecutionClient implements ExecutionClient {
-  constructor(
-    private readonly privateKey = process.env.POLYMARKET_PRIVATE_KEY,
-    private readonly host = process.env.POLYMARKET_CLOB_HOST ?? "https://clob.polymarket.com",
-  ) {}
+  private readonly privateKey?: string;
+  private readonly creds?: ApiKeyCreds;
+  private readonly host: string;
+  private readonly rpcUrl: string;
+  private readonly factory: PolymarketClobClientFactory;
+
+  constructor(options: PolymarketExecutionClientOptions = {}) {
+    this.privateKey = options.privateKey ?? process.env.POLYMARKET_PRIVATE_KEY;
+    this.host = options.host ?? process.env.POLYMARKET_CLOB_HOST ?? "https://clob.polymarket.com";
+    this.rpcUrl = options.rpcUrl ?? process.env.POLYMARKET_RPC_URL ?? "https://polygon-rpc.com";
+    this.factory = options.factory ?? ((clientOptions) => new ClobClient(clientOptions));
+
+    const key = options.apiKey ?? process.env.POLYMARKET_CLOB_API_KEY;
+    const secret = options.apiSecret ?? process.env.POLYMARKET_CLOB_SECRET;
+    const passphrase = options.apiPassphrase ?? process.env.POLYMARKET_CLOB_PASS_PHRASE;
+    this.creds = key && secret && passphrase
+      ? { key, secret, passphrase }
+      : undefined;
+  }
 
   async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
     if (!this.privateKey) {
       throw new MissingConnectorConfigError("Polymarket execution", "POLYMARKET_PRIVATE_KEY");
+    }
+    if (!this.creds) {
+      throw new MissingConnectorConfigError("Polymarket execution", "POLYMARKET_CLOB_API_KEY, POLYMARKET_CLOB_SECRET, POLYMARKET_CLOB_PASS_PHRASE");
     }
 
     const tokenId = ticket.venueData?.outcomeTokenId;
@@ -140,12 +185,14 @@ export class PolymarketExecutionClient implements ExecutionClient {
       throw new Error("Polymarket execution requires venueData.outcomeTokenId.");
     }
 
-    const wallet = new EthersWallet(this.privateKey);
-    const signer: ClobSigner = {
-      getAddress: () => wallet.getAddress(),
-      _signTypedData: (domain, types, value) => wallet.signTypedData(domain, types, value),
-    };
-    const client = new ClobClient(this.host, Chain.POLYGON, signer);
+    const account = privateKeyToAccount(normalizePrivateKey(this.privateKey));
+    const signer = createWalletClient({ account, transport: http(this.rpcUrl) });
+    const client = this.factory({
+      host: this.host,
+      chain: Chain.POLYGON,
+      signer,
+      creds: this.creds,
+    });
     const side = ticket.side === "buy_no" || ticket.side === "buy_yes" || ticket.side === "buy"
       ? Side.BUY
       : Side.SELL;
@@ -154,6 +201,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
         tokenID: tokenId,
         amount: ticket.sizeUsd,
         side,
+        orderType: OrderType.FAK,
       },
       {},
       OrderType.FAK,
@@ -166,6 +214,10 @@ export class PolymarketExecutionClient implements ExecutionClient {
       raw: response,
     };
   }
+}
+
+function normalizePrivateKey(privateKey: string): `0x${string}` {
+  return privateKey.startsWith("0x") ? privateKey as `0x${string}` : `0x${privateKey}` as `0x${string}`;
 }
 
 function formatDecimal(value: number, decimals: number): string {
