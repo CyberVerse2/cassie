@@ -546,6 +546,7 @@ describe("AI SDK supervisor agent", () => {
     });
 
     expect(importantAi.calls).toEqual([
+      "cassie_source_profile",
       "cassie_research_query_plan",
       "cassie_goal_resolution",
       "cassie_goal_resolution",
@@ -553,7 +554,7 @@ describe("AI SDK supervisor agent", () => {
       "cassie_critique",
       "cassie_trade_expression",
     ]);
-    expect(cheapAi.calls).toEqual(["cassie_thesis", "cassie_source_profile", "cassie_market_selection"]);
+    expect(cheapAi.calls).toEqual(["cassie_thesis", "cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
       { type: "thesis", model: "deepseek/deepseek-v4-flash" },

@@ -182,7 +182,7 @@ export function createCassieSupervisorTools(input: {
         execute: async () => {
           const report = await researchThesis({
             ai: importantAi,
-            sourceProfileAi: cheapAi,
+            sourceProfileAi: importantAi,
             lanes: input.deps.researchLanes,
             sourcePost: input.run.sourcePost,
             userCommand: input.run.userCommand,
