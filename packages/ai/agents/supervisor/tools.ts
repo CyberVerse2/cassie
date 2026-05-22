@@ -555,40 +555,77 @@ function canonicalPublicSummary(
   },
 ): string {
   if (canonical.riskDecision?.decision === "reject") {
-    return appendTradeExpressionContext(canonical.riskDecision.reason, canonical.tradeExpression, canonical.marketSelection);
+    return withDecisionContext(canonical.riskDecision.reason, canonical.tradeExpression, canonical.marketSelection);
   }
 
   if (input.responseType === "critique" && canonical.critique) {
-    return appendTradeExpressionContext(canonical.critique.finalCritique, canonical.tradeExpression, canonical.marketSelection);
+    return withDecisionContext(canonical.critique.finalCritique, canonical.tradeExpression, canonical.marketSelection);
   }
 
   if (input.responseType === "analysis") {
     const basis = canonical.tradeExpression?.reason ?? canonical.researchReport?.publicSummary ?? input.publicSummary;
-    return appendTradeExpressionContext(basis, canonical.tradeExpression, canonical.marketSelection);
+    return withDecisionContext(basis, canonical.tradeExpression, canonical.marketSelection);
   }
 
   return input.publicSummary;
 }
 
-function appendTradeExpressionContext(
+function withDecisionContext(
   summary: string,
   tradeExpression?: TradeExpressionPlan,
   marketSelection?: MarketSelection,
 ): string {
   if (!tradeExpression) return summary;
 
-  const insufficiency = tradeExpression.insufficiency
-    ? ` Insufficiency: score ${tradeExpression.insufficiency.score.toFixed(2)} < ${tradeExpression.insufficiency.requiredThreshold.toFixed(2)}; failed ${tradeExpression.insufficiency.failedDimensions.join(", ")}.`
-    : "";
-
   if (marketSelection?.noTradeReason) {
-    return `${summary} Market routing: no trade; ${marketSelection.noTradeReason}${insufficiency}`;
+    return joinSentences(summary, `Market check came back no-trade: ${marketSelection.noTradeReason}`, insufficiencySentence(tradeExpression));
   }
 
   const selected = marketSelection?.selectedMarket
-    ? ` Selected expression: ${marketSelection.selectedMarket.side} ${marketSelection.selectedMarket.symbol} on ${marketSelection.selectedMarket.venue}.`
+    ? `Cleanest expression: ${marketSideLabel(marketSelection.selectedMarket.side)} ${marketSelection.selectedMarket.symbol} on ${marketSelection.selectedMarket.venue}.`
     : "";
-  return `${summary} Trade expression: ${tradeExpression.decision}; ${tradeExpression.highestPurityExpression}.${selected}${insufficiency}`;
+  return joinSentences(summary, decisionSentence(tradeExpression), selected, insufficiencySentence(tradeExpression));
+}
+
+function decisionSentence(tradeExpression: TradeExpressionPlan): string {
+  if (tradeExpression.decision === "no_trade") {
+    return `Trade read: no clean trade. ${tradeExpression.highestPurityExpression}`;
+  }
+  if (tradeExpression.decision === "needs_market_check") {
+    return `Next step: check the matching venue or market before treating this as tradable. ${tradeExpression.highestPurityExpression}`;
+  }
+  return `Next step: route the cleanest candidate to market selection. ${tradeExpression.highestPurityExpression}`;
+}
+
+function insufficiencySentence(tradeExpression: TradeExpressionPlan): string {
+  if (!tradeExpression.insufficiency || tradeExpression.insufficiency.score >= tradeExpression.insufficiency.requiredThreshold) {
+    return "";
+  }
+  const dimensions = tradeExpression.insufficiency.failedDimensions.map(formatDimension).join(", ");
+  return `Evidence is still below Cassie's bar because of ${dimensions}; needed: ${tradeExpression.insufficiency.evidenceNeededToClear.join("; ")}.`;
+}
+
+function formatDimension(dimension: string): string {
+  return dimension.replaceAll("_", " ");
+}
+
+function marketSideLabel(side: string): string {
+  switch (side) {
+    case "buy_yes":
+      return "buy YES";
+    case "buy_no":
+      return "buy NO";
+    default:
+      return side;
+  }
+}
+
+function joinSentences(...parts: string[]): string {
+  return parts
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => part.endsWith(".") || part.endsWith("!") || part.endsWith("?") ? part : `${part}.`)
+    .join(" ");
 }
 
 async function validateFinalizationPrerequisites(input: {

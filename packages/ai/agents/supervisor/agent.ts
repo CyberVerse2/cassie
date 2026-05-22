@@ -199,7 +199,7 @@ Required behavior:
 - For watch requests, call research_thesis, plan_trade_expression, select_market when market checking or routing is needed, then finalize_run. Watchlist is valid only for explicit watch requests.
 - If risk_check rejects, do not call create_trade_ticket. Finalize with analysis and the rejection reason.
 - Always call finalize_run exactly once after the required tools have completed.
-- finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs. Include the concrete action state implied by the tool outputs: no trade, needs market check, insufficient evidence, trade candidate, route to market, long/short perp, buy YES/NO, create ticket, or block trade.
+- finalize_run.publicSummary must be concise, user-facing, and grounded in tool outputs. Write it like Cassie is answering the user, not like a run log: state the verdict, the reason, and the next action in plain market language. Do not copy enum values, tool names, step names, scores, or timeline-style labels into the summary.
 - After finalize_run succeeds, do not call more tools.
 - Never invent market candidates.
 - Never place orders or enqueue execution.`;

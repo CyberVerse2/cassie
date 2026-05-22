@@ -406,7 +406,7 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "route_to_market",
-        publicSummary: expect.stringContaining("Trade expression: route_to_market_router"),
+        publicSummary: expect.stringContaining("Next step: route the cleanest candidate to market selection"),
       },
     });
   });
@@ -547,7 +547,7 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "no_trade",
-        publicSummary: expect.stringContaining("Market routing: no trade"),
+        publicSummary: expect.stringContaining("Market check came back no-trade"),
       },
     });
     const completed = await store.getRun(run.runId);
@@ -602,12 +602,12 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "insufficient_evidence",
-        publicSummary: expect.stringContaining("Insufficiency: score 0.32 < 0.65"),
+        publicSummary: expect.stringContaining("Evidence is still below Cassie's bar"),
       },
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
-        publicSummary: expect.stringContaining("failed market_discovery, price_or_odds"),
+        publicSummary: expect.stringContaining("market discovery, price or odds"),
       },
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
@@ -664,7 +664,7 @@ describe("supervisor scenario coverage", () => {
     expect(final).toMatchObject({
       actionState: "insufficient_evidence",
       responseType: "analysis",
-      publicSummary: expect.stringContaining("Trade expression: needs_market_check"),
+      publicSummary: expect.stringContaining("Next step: check the matching venue or market"),
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       status: "succeeded",
@@ -709,7 +709,7 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "watchlist",
-        publicSummary: expect.stringContaining("Trade expression: needs_market_check"),
+        publicSummary: expect.stringContaining("Next step: check the matching venue or market"),
       },
     });
   });
