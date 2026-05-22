@@ -83,11 +83,6 @@ export async function planTradeExpression(input: {
   throw new Error("Trade expression planner exhausted its tool loop without finish_trade_expression.");
 }
 
-export function shouldRouteToMarket(expression: TradeExpressionPlan): boolean {
-  return expression.decision === "route_to_market_router" &&
-    expression.candidates.some((candidate) => candidate.tradableNow);
-}
-
 async function executeTradeExpressionAction(
   input: {
     marketData: MarketDataProvider;

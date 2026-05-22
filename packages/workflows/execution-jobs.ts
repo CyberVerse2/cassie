@@ -36,18 +36,10 @@ export interface CassieJobQueue {
   enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }>;
 }
 
-export interface ExecutionJobQueue {
-  enqueue(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }>;
-}
-
 export class GraphileExecutionJobQueue implements CassieJobQueue {
   private workerUtils: Promise<WorkerUtils> | null = null;
 
   constructor(private readonly databaseUrl = process.env.DATABASE_URL) {}
-
-  async enqueue(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
-    return this.enqueueExecution(job);
-  }
 
   async enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
     const workerUtils = await this.getWorkerUtils();

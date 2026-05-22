@@ -35,11 +35,3 @@ export class HyperliquidAccountStateProvider implements AccountStateProvider {
     };
   }
 }
-
-export class StaticAccountStateProvider implements AccountStateProvider {
-  constructor(private readonly state: AccountState) {}
-
-  async getAccountState(): Promise<AccountState> {
-    return this.state;
-  }
-}
