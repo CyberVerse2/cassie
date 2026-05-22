@@ -200,6 +200,35 @@ describe("research connectors", () => {
     }).findings.map((finding) => finding.directness)).toEqual(["primary", "primary"]);
   });
 
+  it("defaults omitted directness to conservative context", () => {
+    const parsed = SearchQueryOutputSchema.parse({
+      findings: [
+        {
+          claim: "The origin post exists and contains the quoted ZEC target.",
+          sourceUrls: ["https://x.com/QwQiao/status/2057429323607314794"],
+          relevance: 1,
+          stance: "supports",
+          sourceType: "social",
+          reliability: "high",
+          quote: "a conservative target for zec is to reach ~3-5% of btc",
+        },
+      ],
+      sources: [
+        {
+          title: "Origin post",
+          url: "https://x.com/QwQiao/status/2057429323607314794",
+          sourceName: "X",
+          sourceType: "social",
+          publishedAt: null,
+          snippet: "a conservative target for zec...",
+        },
+      ],
+      unresolved: [],
+    });
+
+    expect(parsed.findings[0]?.directness).toBe("context");
+  });
+
   it("rejects overlarge structured source lists", () => {
     expect(SearchQueryOutputSchema.safeParse({
       findings: [],

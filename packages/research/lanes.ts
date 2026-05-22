@@ -30,6 +30,7 @@ export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
 const SEARCH_TEXT_MAX_OUTPUT_TOKENS = 1_024;
 const MAX_SOURCES_PER_QUERY_JOB = 2;
 const EvidenceDirectnessFromSearchSchema = z.preprocess((value) => {
+  if (value == null) return "context";
   if (typeof value !== "string") return value;
   const normalized = value.trim().toLowerCase().replaceAll("-", "_").replaceAll(" ", "_");
   switch (normalized) {
@@ -306,6 +307,7 @@ Return compact structured search output matching the provided schema:
 - findings are atomic source-backed claims extracted from those posts/results.
 - Keep findings to the most decision-useful claims; max 4 findings and max 2 sources.
 - Every finding sourceUrls entry must match one of the returned source urls.
+- Every finding must include directness exactly as one of: primary, direct_secondary, indirect, rumor, context. If unsure, use context.
 Do not synthesize a final trade view.`;
 }
 
@@ -374,7 +376,7 @@ Use unresolved for important missing evidence or ambiguity.
 Classify each atomic finding as an EvidenceClaim candidate:
 - sourceType
 - stance against the relevant goals
-- directness: use exactly one of primary, direct_secondary, indirect, rumor, or context
+- directness: use exactly one of primary, direct_secondary, indirect, rumor, or context. If unsure, use context.
 - reliability
 - source-backed quote when available
 - relevance to the evidence needs
