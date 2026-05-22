@@ -724,6 +724,28 @@ async function validateFinalizationPrerequisites(input: {
   runId: string;
   input: FinalizeRunInput;
 }) {
+  if (input.input.responseType === "trade_ticket") {
+    const persistedTicket = await tryCanonicalStepOutput<TradeTicket>(
+      input.store,
+      input.runId,
+      "ticket",
+      TradeTicketSchema,
+    );
+    if (!persistedTicket || input.input.tradeTicket?.ticketId !== persistedTicket.ticketId) {
+      throw new Error("Trade-ticket finalization requires a persisted trade ticket.");
+    }
+
+    const riskDecision = await requireCanonicalStepOutput(
+      input.store,
+      input.runId,
+      "risk",
+      RiskDecisionSchema,
+      "Trade-ticket finalization requires a persisted non-rejected risk decision.",
+    );
+    assertNonRejectedRiskDecision(riskDecision);
+    return;
+  }
+
   if (input.input.responseType !== "critique") return;
 
   const steps = await input.store.getRunSteps(input.runId);

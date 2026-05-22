@@ -534,6 +534,91 @@ describe("AI SDK supervisor agent", () => {
     })).rejects.toThrow("Trade ticket creation requires a persisted non-rejected risk decision.");
   });
 
+  it("allows early grounded analysis finalization without market or risk state", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie analyze this",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiQueryJob() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXQueryJob() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+    });
+
+    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal });
+    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+      signal,
+      thesis: extracted,
+      researchAngle: "balanced",
+    });
+
+    await expect(executeTool(tools.finalize_run, {
+      responseType: "analysis",
+      publicSummary: "No clean trade yet; evidence remains capped.",
+      thesis: extracted,
+      researchReport: report,
+    })).resolves.toMatchObject({
+      responseType: "analysis",
+      publicSummary: expect.stringContaining("Plausible but unconfirmed"),
+    });
+  });
+
+  it("rejects trade-ticket finalization without a persisted ticket", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie get me in",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        researchLanes: {
+          async runOpenAiQueryJob() {
+            return { lane: "openai_search" as const, evidence: [], warnings: [] };
+          },
+          async runGrokXQueryJob() {
+            return { lane: "x_search" as const, evidence: [], warnings: [] };
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.finalize_run, {
+      responseType: "trade_ticket",
+      publicSummary: "Created a ticket.",
+      tradeTicket: { ticketId: "missing_ticket" },
+    })).rejects.toThrow("Trade-ticket finalization requires a persisted trade ticket.");
+  });
+
   it("deduplicates duplicate supervisor tool calls for the same step", async () => {
     const store = new InMemoryCassieStore();
     const ai = new FakeAi();
