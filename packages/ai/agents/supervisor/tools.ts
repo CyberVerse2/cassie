@@ -323,6 +323,8 @@ export function createCassieSupervisorTools(input: {
           },
           execute: () => planTradeExpression({
             ai: importantAi,
+            marketData: input.deps.marketData,
+            polymarketMarketFinder: input.deps.polymarketMarketFinder,
             sourcePost: input.run.sourcePost,
             userCommand: input.run.userCommand,
             signal,

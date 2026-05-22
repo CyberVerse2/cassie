@@ -273,6 +273,52 @@ Input:
 ${JSON.stringify(input, null, 2)}`;
 }
 
+export function tradeExpressionLoopPrompt(input: {
+  sourcePost: unknown;
+  userCommand: string;
+  signal: unknown;
+  thesis: unknown;
+  researchReport: unknown;
+  observations: unknown[];
+  stepNumber: number;
+  maxSteps: number;
+}): string {
+  return `You are Cassie's trade-expression planner running a bounded market-aware tool loop.
+
+${decisionTaxonomyBlock}
+
+Mission:
+Decide what the trade is, but do not pretend venue availability is known before searching. Form expression hypotheses, call market tools when useful, inspect grounded results, rank the candidates, then finish with a TradeExpressionPlan.
+
+Available actions:
+- resolve_asset_mapping: use when the entity, project, company, coin, ticker, pair, pre-stock symbol, or proxy surface is unclear.
+- search_hyperliquid: search configured Hyperliquid spot/perp/pre-stock surfaces for concrete asset hypotheses.
+- search_polymarket: search configured Polymarket event, probability, and target-price markets for concrete event hypotheses.
+- finish_trade_expression: return the final TradeExpressionPlan after enough market evidence exists or after searches show no clean expression.
+
+Tool-use policy:
+- Use semantic reasoning. Do not reduce asset discovery to keyword overlap.
+- Prefer direct venue-confirmed instruments over indirect read-throughs.
+- Multiple searches are allowed when the thesis can appear as a coin, pair, quoted perp, pre-stock perp, prediction market, public ticker, or proxy.
+- A clean expression can still have negative expectedEdge; keep expressionConfidence separate from expectedEdge.
+- Do not invent markets, prices, condition IDs, token IDs, order books, or venue availability.
+- If a venue must still be searched, call the relevant search action instead of finishing as route_to_market_router.
+- If searched venues do not support the thesis cleanly, finish with needs_market_check or no_trade and explain the missing surface.
+
+Ranking requirements for finish_trade_expression:
+- Fill candidates with scored trade-expression candidates.
+- Fill rankedCandidates ordered best to worst.
+- For each ranked candidate include expressionConfidence, thesisFit, causalDirectness, liquidity, venueConfirmation, priceOrOddsConfidence, timingFit, expectedEdge, tradableNow, reason, and invalidation.
+- Use route_to_market_router only when at least one venue-confirmed candidate is tradable now and has a clean enough causal chain.
+- Use needs_market_check when the best hypothesis still lacks venue, price/odds, liquidity, or endpoint confirmation.
+- Use no_trade when the signal is weak, stale, refuted, too indirect, inaccessible, or has no positive tradable edge.
+
+Return exactly one structured action. Step ${input.stepNumber} of ${input.maxSteps}.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
 export function researchSynthesisPrompt(input: unknown): string {
   return `You are Cassie's Research Subagent synthesis step.
 

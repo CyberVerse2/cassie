@@ -296,7 +296,11 @@ class FakeAi implements StructuredAiClient {
       cassie_research_query_plan: queryPlan,
       cassie_goal_resolution: [goalResolution],
       cassie_research_report: researchReport,
-      cassie_trade_expression: tradeExpression,
+      cassie_trade_expression_step: {
+        action: "finish_trade_expression",
+        reason: "Fixture completes the trade-expression loop.",
+        final: tradeExpression,
+      },
       cassie_market_selection: marketSelection,
       cassie_critique: {
         strongestObjection: "No primary source confirms approval.",
@@ -786,7 +790,7 @@ describe("AI SDK supervisor agent", () => {
       "cassie_goal_resolution",
       "cassie_research_report",
       "cassie_critique",
-      "cassie_trade_expression",
+      "cassie_trade_expression_step",
     ]);
     expect(cheapAi.calls).toEqual(["cassie_signal", "cassie_thesis", "cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);

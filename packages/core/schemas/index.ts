@@ -739,6 +739,25 @@ export const TradeExpressionCandidateSchema = z.object({
   evidenceNeeded: z.array(z.string()),
 });
 
+export const RankedTradeExpressionCandidateSchema = z.object({
+  rank: z.number().int().positive(),
+  candidateId: z.string(),
+  venue: z.string(),
+  symbol: z.string(),
+  side: z.enum(["long", "short", "buy_yes", "buy_no", "buy", "sell"]),
+  expressionConfidence: z.number().min(0).max(1),
+  thesisFit: z.number().min(0).max(1),
+  causalDirectness: z.number().min(0).max(1),
+  liquidity: z.number().min(0).max(1),
+  venueConfirmation: z.number().min(0).max(1),
+  priceOrOddsConfidence: z.number().min(0).max(1),
+  timingFit: z.number().min(0).max(1),
+  expectedEdge: z.number().min(-1).max(1),
+  tradableNow: z.boolean(),
+  reason: z.string(),
+  invalidation: z.array(z.string()),
+});
+
 export const EvidenceInsufficiencySchema = z.object({
   score: z.number().min(0).max(1),
   requiredThreshold: z.number().min(0).max(1),
@@ -770,6 +789,7 @@ export const TradeExpressionPlanSchema = z.object({
   highestPurityExpression: z.string(),
   publicMarketReadThrough: z.enum(["none", "weak", "moderate", "strong"]),
   candidates: z.array(TradeExpressionCandidateSchema),
+  rankedCandidates: z.array(RankedTradeExpressionCandidateSchema).optional(),
   decision: z.enum([
     "route_to_market_router",
     "needs_market_check",
