@@ -560,7 +560,7 @@ describe("supervisor scenario coverage", () => {
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const unresolvedExpression: TradeExpressionPlan = {
       ...tradeExpression,
-      decision: "insufficient_evidence",
+      decision: "needs_market_check",
       reason: "Evidence is too weak to route.",
       evidenceConfidence: 0.54,
       marketDiscoveryConfidence: 0.32,
@@ -640,7 +640,15 @@ describe("supervisor scenario coverage", () => {
       input: null,
       output: {
         ...tradeExpression,
-        decision: "insufficient_evidence",
+        decision: "needs_market_check",
+        tradeExpressionConfidence: 0.32,
+        insufficiency: {
+          score: 0.32,
+          requiredThreshold: 0.65,
+          failedDimensions: ["market_discovery"],
+          summary: "No venue-confirmed market.",
+          evidenceNeededToClear: ["Venue market confirmation"],
+        },
         reason: "Wait for the catalyst to resolve before routing.",
         marketRouterInstructions: null,
       },
@@ -656,7 +664,7 @@ describe("supervisor scenario coverage", () => {
     expect(final).toMatchObject({
       actionState: "insufficient_evidence",
       responseType: "analysis",
-      publicSummary: expect.stringContaining("Trade expression: insufficient_evidence"),
+      publicSummary: expect.stringContaining("Trade expression: needs_market_check"),
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       status: "succeeded",
@@ -674,7 +682,7 @@ describe("supervisor scenario coverage", () => {
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
     const watchExpression: TradeExpressionPlan = {
       ...tradeExpression,
-      decision: "insufficient_evidence",
+      decision: "needs_market_check",
       reason: "User explicitly asked Cassie to watch this setup.",
       marketRouterInstructions: null,
     };
@@ -701,7 +709,7 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "watchlist",
-        publicSummary: expect.stringContaining("Trade expression: insufficient_evidence"),
+        publicSummary: expect.stringContaining("Trade expression: needs_market_check"),
       },
     });
   });

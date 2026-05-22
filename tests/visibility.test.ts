@@ -37,7 +37,7 @@ const tradeExpression: TradeExpressionPlan = {
       evidenceNeeded: ["Revenue and valuation work."],
     },
   ],
-  decision: "insufficient_evidence",
+  decision: "needs_market_check",
   reason: "No clean public expression.",
   marketRouterInstructions: null,
 };
@@ -186,7 +186,7 @@ describe("visibility report", () => {
     });
 
     expect(report.decisionLedger.responseType).toBe("trade_decision");
-    expect(report.decisionLedger.tradeDecision).toBe("insufficient_evidence");
+    expect(report.decisionLedger.tradeDecision).toBe("needs_market_check");
     expect(report.researchGoals[0]).toMatchObject({
       id: "g_verify",
       kind: "event_validation",

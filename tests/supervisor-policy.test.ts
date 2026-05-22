@@ -59,10 +59,18 @@ describe("supervisor step policy", () => {
       step("research_thesis", {}),
       step("critique_thesis", {}),
       step("plan_trade_expression", {
-        decision: "insufficient_evidence",
+        decision: "needs_market_check",
+        tradeExpressionConfidence: 0.32,
+        insufficiency: {
+          score: 0.32,
+          requiredThreshold: 0.65,
+          failedDimensions: ["market_discovery"],
+          summary: "No venue-confirmed market.",
+          evidenceNeededToClear: ["Venue market confirmation"],
+        },
         candidates: [],
       }),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual(["select_market"]);
 
     expect(selectActiveTools([
       step("classify_intent", { intent: "critic" }),
@@ -102,10 +110,11 @@ describe("supervisor step policy", () => {
       step("extract_thesis", {}),
       step("research_thesis", {}),
       step("plan_trade_expression", {
-        decision: "insufficient_evidence",
+        decision: "needs_market_check",
+        tradeExpressionConfidence: 0.32,
         candidates: [],
       }),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual(["select_market"]);
   });
 
   it("blocks ticket creation after rejected risk", () => {

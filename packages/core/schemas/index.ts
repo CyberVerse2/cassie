@@ -634,8 +634,6 @@ export const TradeExpressionPlanSchema = z.object({
   decision: z.enum([
     "route_to_market_router",
     "needs_market_check",
-    "insufficient_evidence",
-    "private_market_research",
     "no_trade",
   ]),
   reason: z.string(),

@@ -659,10 +659,18 @@ function resolveActionState(input: FinalizeRunInput): CassieActionState {
   if (input.marketSelection?.noTradeReason) return "no_trade";
 
   const tradeExpression = input.tradeExpression;
+  if (isInsufficientEvidence(tradeExpression)) return "insufficient_evidence";
   if (tradeExpression?.decision === "route_to_market_router") return "route_to_market";
   if (tradeExpression?.decision === "needs_market_check") return "needs_market_check";
-  if (tradeExpression?.decision === "insufficient_evidence" || tradeExpression?.decision === "private_market_research") return "insufficient_evidence";
   if (tradeExpression?.decision === "no_trade") return "no_trade";
 
   return "insufficient_evidence";
+}
+
+function isInsufficientEvidence(tradeExpression?: TradeExpressionPlan): boolean {
+  if (!tradeExpression) return true;
+  if (tradeExpression.insufficiency && tradeExpression.insufficiency.score < tradeExpression.insufficiency.requiredThreshold) {
+    return true;
+  }
+  return typeof tradeExpression.tradeExpressionConfidence === "number" && tradeExpression.tradeExpressionConfidence < 0.65;
 }

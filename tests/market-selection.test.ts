@@ -22,7 +22,7 @@ const tradeExpression: TradeExpressionPlan = {
   highestPurityExpression: "SpaceX private equity",
   publicMarketReadThrough: "weak",
   candidates: [],
-  decision: "insufficient_evidence",
+  decision: "needs_market_check",
   reason: "No configured venue candidate exists.",
   marketRouterInstructions: null,
 };

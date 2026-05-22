@@ -125,7 +125,7 @@ Evidence-grounding rules:
 
 Return a direct critique. Do not choose order size or execute anything.
 Do not treat ambiguity as user error. The user selected the post because it may contain a market idea. Identify the strongest plausible trade interpretation, then attack that interpretation with evidence, market availability, pricing, liquidity, and invalidation.
-Classify credible but non-routable signals as insufficient_evidence, needs_market_check, private_market_research, or no_trade. Do not output watchlist from this tool.
+Classify credible but non-routable signals as needs_market_check or no_trade. Do not output watchlist, insufficient_evidence, or private_market_research from this tool.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;
@@ -156,8 +156,8 @@ export function tradeExpressionPrompt(input: unknown): string {
 
 Decide whether the researched signal has a clean monetizable expression.
 
-Return a concrete action path, not a generic summary. The downstream final action must be one of:
-no_trade, needs_market_check, insufficient_evidence, trade_candidate, route_to_market, long_perp, short_perp, buy_yes, buy_no, create_ticket, or block_trade. Do not output watchlist from this tool.
+Return a concrete action path, not a generic summary. The downstream policy will convert low scores into insufficient_evidence. The decision field you output must be one of:
+no_trade, needs_market_check, or route_to_market_router. Do not output watchlist, insufficient_evidence, or private_market_research from this tool.
 
 Posture:
 - Assume the user selected this post because it may contain an implicit market idea, not because they need protection from ambiguity.
@@ -166,12 +166,12 @@ Posture:
 - A missing primary filing or inaccessible source should reduce evidence confidence, not automatically block market investigation when reputable secondary evidence supports the news claim.
 - News can be sufficient evidence for "reported news" claims. Official filings, venue listings, and live market prices still require the relevant official/venue/market source.
 
-Quantify confidence:
+Quantify confidence; policy makes the insufficiency decision:
 - Fill evidenceConfidence, marketDiscoveryConfidence, and tradeExpressionConfidence from 0 to 1.
-- Use insufficient_evidence only when tradeExpressionConfidence is below 0.65 or a required dimension cannot clear the trade.
-- When decision is insufficient_evidence, fill insufficiency with score, requiredThreshold, failedDimensions, summary, and evidenceNeededToClear.
-- insufficiency.score should be the limiting confidence score for the decision. Use requiredThreshold 0.65 unless the setup requires unusually high certainty.
-- Do not use insufficient_evidence as a vague label. State exactly which dimension failed: source_reliability, primary_source_access, entity_resolution, market_discovery, venue_confirmation, price_or_odds, liquidity, causal_directness, timing, valuation_work, or risk_invalidation.
+- Fill insufficiency whenever the limiting confidence score is below 0.65 or a required dimension cannot clear the trade.
+- insufficiency.score must be the limiting confidence score. Use requiredThreshold 0.65 unless the setup requires unusually high certainty.
+- The application, not the prompt, decides whether that score becomes insufficient_evidence.
+- Do not use insufficiency as a vague label. State exactly which dimension failed: source_reliability, primary_source_access, entity_resolution, market_discovery, venue_confirmation, price_or_odds, liquidity, causal_directness, timing, valuation_work, or risk_invalidation.
 
 Evaluate these decision factors:
 - what changed
@@ -196,12 +196,12 @@ Valuation discipline:
 - Fill venueChecks with the exact venues inspected or required before routing.
 - Treat SEC/official-filing claims as officially verified only when evidence includes the actual regulator/company filing URL or direct filing metadata. News, blogs, and search summaries can still be sufficient secondary validation for reported-news claims and can justify market discovery.
 
-Treat no-trade, insufficient_evidence, needs_market_check, and private-market research as successful disciplined decisions when the causal chain is weak, evidence is incomplete, or the cleanest exposure is inaccessible.
+Treat no-trade, needs_market_check, and private-market research as successful disciplined decisions when the causal chain is weak, evidence is incomplete, or the cleanest exposure is inaccessible.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
-In the current Cassie market-data surface, needs_market_check is appropriate when Hyperliquid or Polymarket should be searched before deciding. route_to_market_router is appropriate only after a clean, liquid, tradable-now candidate is known or strongly expected. Public-equity read-throughs without a configured candidate should be insufficient_evidence, private_market_research, or no_trade, not route_to_market_router.
+In the current Cassie market-data surface, needs_market_check is appropriate when Hyperliquid or Polymarket should be searched before deciding. route_to_market_router is appropriate only after a clean, liquid, tradable-now candidate is known or strongly expected. Public-equity, private, or access-constrained read-throughs without a configured candidate should be needs_market_check or no_trade, not route_to_market_router.
 For vague sector watchlists or broad macro/sector commentary with no concrete ticker, instrument, catalyst, entry trigger, or venue:
 - Set directAsset to null and directAssetTradable to false.
-- Use no_trade or insufficient_evidence unless the user explicitly asked to watch it.
+- Use no_trade or needs_market_check unless the user explicitly asked to watch it.
 - Do not invent a representative index, ETF, stock, token, or option as the instrument.
 - If a candidate is needed, use an explicit non-instrument label such as "No concrete instrument" and explain what concrete ticker, venue, level, or catalyst evidence would be required.
 
@@ -218,8 +218,6 @@ Score every candidate from 0 to 1:
 Use decision:
 - route_to_market_router only when at least one liquid candidate is tradable now and has a clean enough causal chain
 - needs_market_check when Hyperliquid, Polymarket, or another configured venue needs to be searched before deciding
-- insufficient_evidence when the idea is not dead but the limiting confidence score is below threshold because evidence, source access, pricing, or venue confirmation is too weak
-- private_market_research when the highest-purity expression is private or access-constrained
 - no_trade when the signal is weak, stale, refuted, or too indirect
 
 Input:
@@ -244,7 +242,7 @@ Synthesis requirements:
 
 Use recommendedResearchAction, not recommendedTradeAction.
 Do not choose markets, size trades, approve orders, or execute anything.
-Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in insufficient_evidence, needs_market_check, private_market_research, or no_trade territory.
+Respect goalResolutions. If a required goal is unresolved or contradicted, do not write as if it is resolved. If the trade-expression or market implication goal is unresolved, cap conviction and keep the recommendation in needs_market_check or no_trade territory.
 Preserve canonical tool outputs: do not rewrite supported goal resolutions into contradictions, and do not turn a missing venue into "the underlying claim is false" unless evidence actually refutes that claim component.
 If a continuation decision blocks trade_expression, market_router, or ticket_creation, set recommendedResearchAction to critic_only or do_not_continue and state the blocked action plainly.
 For S-1, IPO, ticker, listing, and regulatory filing claims, separate "reported by news/search result" from "verified in primary SEC/company/exchange filing." Do not call a filing official unless a primary source in the evidence ledger supports it.
