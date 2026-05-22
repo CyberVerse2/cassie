@@ -279,6 +279,10 @@ function visibleThinkingForStep(step: RunStep): string {
       return "Estimate the cleanest venue-aware expression, including fair value when valuation matters.";
     case "market_candidates":
       return "Fetch real market candidates from configured venues.";
+    case "market_assessment":
+      return "Assess whether a prediction market directly expresses the thesis.";
+    case "market_quote":
+      return "Refresh prediction-market outcome pricing before selection or ticketing.";
     case "market_selection":
       return "Select the best real market expression without inventing instruments.";
     case "risk":

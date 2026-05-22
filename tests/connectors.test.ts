@@ -98,6 +98,12 @@ const queryPlan: ResearchQueryPlan = {
   },
 };
 
+const staticPolymarketQueryPlanner = {
+  async planPolymarketSearchQueries() {
+    return ["Solana ETF", "Zcash price"];
+  },
+};
+
 describe("research connectors", () => {
   it("requires Gemini configuration for web search", async () => {
     await expect(new GeminiWebSearchLane(undefined).runQueryJob({} as never, queryPlan)).rejects.toBeInstanceOf(
@@ -467,7 +473,7 @@ describe("market data connectors", () => {
         : []));
     });
 
-    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
+    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     });
 
@@ -478,6 +484,12 @@ describe("market data connectors", () => {
     expect(candidates[0]?.outcomeTokenId).toBe("123");
     expect(candidates[0]?.conditionId).toBe("condition_1");
     fetchMock.mockRestore();
+  });
+
+  it("requires an AI query planner for Polymarket semantic discovery", async () => {
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
+      thesis,
+    })).rejects.toBeInstanceOf(MissingConnectorConfigError);
   });
 
   it("searches Polymarket with reusable asset and event queries instead of pair-expression blobs", async () => {
@@ -514,7 +526,7 @@ describe("market data connectors", () => {
         : []));
     });
 
-    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://example.test").findCandidates({
+    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://example.test", staticPolymarketQueryPlanner).findCandidates({
       thesis: {
         claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%, moonshot flippening.",
         direction: "bullish",
@@ -595,9 +607,99 @@ describe("market data connectors", () => {
         : []));
     });
 
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toBeInstanceOf(ConnectorRequestError);
+    fetchMock.mockRestore();
+  });
+
+  it("rejects Polymarket markets without condition IDs", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/book") {
+        return new Response(
+          JSON.stringify({
+            bids: [{ price: "0.53", size: "100" }],
+            asks: [{ price: "0.55", size: "100" }],
+          }),
+        );
+      }
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 600000,
+            clobTokenIds: JSON.stringify(["123", "456"]),
+            outcomePrices: JSON.stringify(["0.62", "0.38"]),
+          },
+        ]
+        : []));
+    });
+
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+      thesis,
+    })).rejects.toThrow("condition_id");
+    fetchMock.mockRestore();
+  });
+
+  it("normalizes Polymarket NO-side quotes to held-side prices", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      if (url.pathname === "/book") {
+        return new Response(
+          JSON.stringify({
+            bids: [{ price: "0.63", size: "100" }],
+            asks: [{ price: "0.65", size: "100" }],
+          }),
+        );
+      }
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 9000,
+            volumeNum: 12000,
+            clobTokenIds: JSON.stringify(["yes-token", "no-token"]),
+            outcomePrices: JSON.stringify(["0.37", "0.63"]),
+            conditionId: "condition_1",
+            endDate: "2026-09-01T00:00:00Z",
+          },
+        ]
+        : []));
+    });
+
+    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://example.test", staticPolymarketQueryPlanner).findPolymarketMarkets({
+      thesis: {
+        ...thesis,
+        direction: "bearish",
+      },
+    });
+
+    expect(candidates[0]).toMatchObject({
+      side: "buy_no",
+      outcome: "no",
+      conditionId: "condition_1",
+      outcomeTokenId: "no-token",
+      yesPrice: 0.37,
+      noPrice: 0.63,
+      heldSidePrice: 0.64,
+      marketQuestion: "Will a Solana ETF be approved?",
+      marketSlug: "solana-etf-approved",
+      endDate: "2026-09-01T00:00:00Z",
+      warnings: ["liquidity_under_10000"],
+    });
     fetchMock.mockRestore();
   });
 });

@@ -29,6 +29,8 @@ describe("supervisor step policy", () => {
     "critique_thesis",
     "plan_trade_expression",
     "find_polymarket_markets",
+    "assess_polymarket_market",
+    "quote_polymarket_market",
     "select_market",
     "risk_check",
     "create_trade_ticket",

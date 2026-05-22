@@ -630,6 +630,18 @@ export const MarketCandidateSchema = z.object({
   symbol: z.string(),
   conditionId: z.string().nullable().optional(),
   outcomeTokenId: z.string().nullable().optional(),
+  yesOutcomeTokenId: z.string().nullable().optional(),
+  noOutcomeTokenId: z.string().nullable().optional(),
+  marketQuestion: z.string().nullable().optional(),
+  marketSlug: z.string().nullable().optional(),
+  outcome: z.enum(["yes", "no"]).nullable().optional(),
+  yesPrice: z.number().positive().max(1).nullable().optional(),
+  noPrice: z.number().positive().max(1).nullable().optional(),
+  heldSidePrice: z.number().positive().max(1).nullable().optional(),
+  volumeUsd: z.number().nonnegative().nullable().optional(),
+  liquidityUsd: z.number().nonnegative().nullable().optional(),
+  endDate: z.string().nullable().optional(),
+  warnings: z.array(z.string()).optional(),
   markPrice: z.number().positive().nullable().optional(),
   liquidityScore: z.number().min(0).max(1),
   spreadBps: z.number().nonnegative(),
@@ -637,6 +649,37 @@ export const MarketCandidateSchema = z.object({
   minOrderSizeUsd: z.number().nonnegative().default(0),
   thesisFit: z.number().min(0).max(1),
   reason: z.string(),
+});
+
+export const PolymarketMarketAssessmentSchema = z.object({
+  fit: z.enum(["strong", "weak", "no_fit"]),
+  fitReason: z.string(),
+  warnings: z.array(z.string()),
+  trade: MarketCandidateSchema.extend({
+    venue: z.literal("polymarket"),
+    conditionId: z.string().min(1),
+    outcomeTokenId: z.string().min(1),
+    marketQuestion: z.string().min(1),
+    marketSlug: z.string().min(1),
+    outcome: z.enum(["yes", "no"]),
+    yesPrice: z.number().positive().max(1),
+    noPrice: z.number().positive().max(1),
+    heldSidePrice: z.number().positive().max(1),
+  }),
+});
+
+export const PolymarketQuoteSchema = z.object({
+  conditionId: z.string().nullable().optional(),
+  outcomeTokenId: z.string().min(1),
+  outcome: z.enum(["yes", "no"]),
+  yesPrice: z.number().positive().max(1).nullable(),
+  noPrice: z.number().positive().max(1).nullable(),
+  heldSidePrice: z.number().positive().max(1),
+  bid: z.number().positive().max(1),
+  ask: z.number().positive().max(1),
+  midPrice: z.number().positive().max(1),
+  spreadBps: z.number().nonnegative(),
+  timestamp: z.string(),
 });
 
 export const TradeVenueDataSchema = z.object({
@@ -857,6 +900,8 @@ export const RunStepTypeSchema = z.enum([
   "critique",
   "trade_expression",
   "market_candidates",
+  "market_assessment",
+  "market_quote",
   "market_selection",
   "risk",
   "ticket",
@@ -915,6 +960,8 @@ export type ResearchContinuationDecision = z.infer<typeof ResearchContinuationDe
 export type AdaptiveQueryRequest = z.infer<typeof AdaptiveQueryRequestSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
+export type PolymarketMarketAssessment = z.infer<typeof PolymarketMarketAssessmentSchema>;
+export type PolymarketQuote = z.infer<typeof PolymarketQuoteSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
 export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSchema>;
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;

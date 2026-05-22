@@ -176,6 +176,26 @@ Input:
 ${JSON.stringify(input, null, 2)}`;
 }
 
+export function polymarketDiscoveryQueryPrompt(input: {
+  thesis: Thesis;
+  researchReport?: unknown;
+  tradeExpression?: unknown;
+  limit: number;
+}): string {
+  return `You are Cassie's Polymarket discovery query planner.
+
+Return search queries for real Polymarket markets that could directly express the thesis.
+Use semantic understanding of the event, catalyst, asset, horizon, and resolution condition.
+Prefer event nouns and resolution language over ticker symbols when the claim is about a binary event.
+Do not output generic single-token ticker queries unless the thesis is specifically about a price-target market for that asset.
+Do not invent market slugs, condition IDs, token IDs, prices, or availability.
+If the thesis is structural, untimed, or directional rather than binary/date-bounded, return an empty list unless there is a plausible explicit event or target-market search.
+Return at most ${input.limit} unique queries.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
 export function tradeExpressionPrompt(input: unknown): string {
   return `You are Cassie's trade-expression planner.
 

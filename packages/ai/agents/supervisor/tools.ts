@@ -37,7 +37,7 @@ import {
 import { routeIntent } from "../../tools/intent-router.ts";
 import { interpretSignal } from "../../tools/signal.ts";
 import { critiqueThesis } from "../../tools/critique.ts";
-import { findPolymarketMarkets, selectMarket } from "../../tools/market.ts";
+import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../../tools/market.ts";
 import { planTradeExpression } from "../../tools/trade-expression.ts";
 import { researchThesis } from "../../../research/index.ts";
 import { evaluateRisk } from "../../../risk/index.ts";
@@ -461,7 +461,7 @@ export function createCassieSupervisorTools(input: {
       }),
     }),
     find_polymarket_markets: tool({
-      description: "Find real Polymarket markets related to the researched thesis and trade expression.",
+      description: "Use AI-planned semantic search to find real Polymarket markets related to the researched thesis and trade expression.",
       inputSchema: z.object({
         limit: z.number().int().positive().max(25).optional(),
       }),
@@ -518,6 +518,79 @@ export function createCassieSupervisorTools(input: {
             researchReport: canonicalResearchReport,
             tradeExpression: canonicalTradeExpression,
             limit,
+          }),
+        });
+      }),
+    }),
+    assess_polymarket_market: tool({
+      description: "Assess whether a discovered Polymarket contract directly expresses the thesis and normalize its YES/NO trade object.",
+      inputSchema: z.object({
+        conditionId: z.string().optional(),
+        marketSlug: z.string().optional(),
+        question: z.string().optional(),
+        side: z.enum(["yes", "no"]),
+      }),
+      execute: async ({ conditionId, marketSlug, question, side }) => runStepOnce("market_assessment", async () => {
+        await requirePriorSteps({
+          store: input.store,
+          runId: input.run.runId,
+          toolName: "assess_polymarket_market",
+          required: [
+            { stepType: "thesis", toolName: "extract_thesis", reason: "Polymarket assessment must use Cassie's persisted thesis." },
+            { stepType: "research", toolName: "research_thesis", reason: "Polymarket assessment must use the persisted research report." },
+            { stepType: "trade_expression", toolName: "plan_trade_expression", reason: "Polymarket assessment must use the persisted trade-expression plan." },
+            { stepType: "market_candidates", toolName: "find_polymarket_markets", reason: "Polymarket assessment must start from discovered real markets." },
+          ],
+        });
+        const canonicalThesis = await requireCanonicalStepOutput(input.store, input.run.runId, "thesis", ThesisSchema, "assess_polymarket_market requires a persisted thesis. Call extract_thesis first.");
+        const canonicalResearchReport = await requireCanonicalStepOutput(input.store, input.run.runId, "research", ResearchReportSchema, "assess_polymarket_market requires a persisted research report. Call research_thesis first.");
+        const canonicalTradeExpression = await requireCanonicalStepOutput(input.store, input.run.runId, "trade_expression", TradeExpressionPlanSchema, "assess_polymarket_market requires a persisted trade-expression plan. Call plan_trade_expression first.");
+        const polymarket = input.deps.polymarketMarketFinder;
+        if (!polymarket) {
+          throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
+        }
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "market_assessment",
+          stepInput: { thesis: canonicalThesis, researchReport: canonicalResearchReport, tradeExpression: canonicalTradeExpression, market: { conditionId, marketSlug, question }, side },
+          execute: () => assessPolymarketMarket({
+            polymarket,
+            thesis: canonicalThesis,
+            researchReport: canonicalResearchReport,
+            tradeExpression: canonicalTradeExpression,
+            market: { conditionId, marketSlug, question },
+            side,
+          }),
+        });
+      }),
+    }),
+    quote_polymarket_market: tool({
+      description: "Refresh a Polymarket outcome-token quote and return YES, NO, and held-side price semantics.",
+      inputSchema: z.object({
+        conditionId: z.string().optional(),
+        outcomeTokenId: z.string(),
+        side: z.enum(["yes", "no"]),
+        yesPrice: z.number().positive().max(1).optional(),
+        noPrice: z.number().positive().max(1).optional(),
+      }),
+      execute: async ({ conditionId, outcomeTokenId, side, yesPrice, noPrice }) => runStepOnce("market_quote", async () => {
+        const polymarket = input.deps.polymarketMarketFinder;
+        if (!polymarket) {
+          throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
+        }
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "market_quote",
+          stepInput: { conditionId, outcomeTokenId, side, yesPrice, noPrice },
+          execute: () => quotePolymarketMarket({
+            polymarket,
+            conditionId,
+            outcomeTokenId,
+            side,
+            yesPrice,
+            noPrice,
           }),
         });
       }),

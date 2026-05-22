@@ -17,6 +17,7 @@ import type { ControlRun } from "../../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../../core/schemas/index.ts";
 import { formatErrorForLog } from "../../../core/error-format.ts";
 import type { CassieDependencies } from "../../../workflows/dependencies.ts";
+import { AiPolymarketDiscoveryQueryPlanner } from "../../tools/market.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
 import {
   createCassieStopConditions,
@@ -181,7 +182,11 @@ function defaultDependencies(): CassieDependencies {
     cheapAi,
     importantAi,
     marketData: new CompositeMarketDataProvider(),
-    polymarketMarketFinder: new PolymarketMarketDataProvider(),
+    polymarketMarketFinder: new PolymarketMarketDataProvider(
+      "https://gamma-api.polymarket.com/markets",
+      "https://clob.polymarket.com",
+      new AiPolymarketDiscoveryQueryPlanner(importantAi),
+    ),
     researchLanes: new LiveResearchSearchLanes(),
   };
 }
