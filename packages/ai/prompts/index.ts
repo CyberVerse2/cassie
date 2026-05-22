@@ -182,6 +182,11 @@ Valuation discipline:
 Treat no-trade, watchlist, and private-market research as successful disciplined decisions when the causal chain is weak or the cleanest exposure is inaccessible.
 Do not force public tickers, crypto tokens, or prediction markets from indirect read-through.
 In the current Cassie market-data surface, route_to_market_router is appropriate only for expressions that can be checked through configured market candidates such as Hyperliquid or Polymarket. Public-equity read-throughs without a configured candidate should be watchlist or no_trade, not route_to_market_router.
+For vague sector watchlists or broad macro/sector commentary with no concrete ticker, instrument, catalyst, entry trigger, or venue:
+- Set directAsset to null and directAssetTradable to false.
+- Use no_trade or watchlist.
+- Do not invent a representative index, ETF, stock, token, or option as the instrument.
+- If a candidate is needed, use an explicit non-instrument label such as "No concrete instrument" and explain what concrete ticker, venue, level, or catalyst evidence would be required.
 
 Score every candidate from 0 to 1:
 - causalDirectness: whether this instrument really expresses the signal
