@@ -324,15 +324,6 @@ function durationText(startedAt: string | null, completedAt: string | null): str
   return `${(ms / 1_000).toFixed(1)}s`;
 }
 
-function statusWord(status: string): string {
-  if (status === "succeeded") return "ok";
-  if (status === "running") return "running";
-  if (status === "failed") return "failed";
-  if (status === "queued" || status === "pending") return "pending";
-  if (status === "skipped") return "skipped";
-  return status;
-}
-
 function statusBadge(status: string, theme: TerminalTheme): string {
   return statusTag(status, theme);
 }

@@ -357,7 +357,7 @@ describe("supervisor scenario coverage", () => {
       thesis: extracted,
       researchReport: report,
     });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
+    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
       researchReport: report,

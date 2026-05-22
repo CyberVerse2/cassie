@@ -1,11 +1,5 @@
 import { z } from "zod";
 import {
-  GoogleImportantStructuredClient,
-  DirectDeepSeekStructuredClient,
-} from "../ai/client.ts";
-import { CompositeMarketDataProvider } from "../market-data/index.ts";
-import { LiveResearchSearchLanes } from "../research/lanes.ts";
-import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
 } from "../execution/account-state.ts";
@@ -39,21 +33,9 @@ export const MentionRequestSchema = z.object({
 export const SettingsRequestSchema = UserSettingsSchema;
 
 export class CassieProduct {
-  private static defaultDependencies(): CassieDependencies {
-    const cheapAi = new DirectDeepSeekStructuredClient();
-    const importantAi = new GoogleImportantStructuredClient();
-    return {
-      ai: cheapAi,
-      cheapAi,
-      importantAi,
-      marketData: new CompositeMarketDataProvider(),
-      researchLanes: new LiveResearchSearchLanes(),
-    };
-  }
-
   constructor(
     private readonly store: CassieStore = new DrizzleCassieStore(),
-    private readonly deps: CassieDependencies | undefined = CassieProduct.defaultDependencies(),
+    _deps?: CassieDependencies,
     private readonly executionClient: ExecutionClient | null = null,
     private readonly accountStateProvider: AccountStateProvider | undefined = new HyperliquidAccountStateProvider(),
     private readonly jobQueue: CassieJobQueue = new GraphileExecutionJobQueue(),
@@ -172,10 +154,6 @@ export class CassieProduct {
       message: "Execution job queued.",
       data: {},
     });
-  }
-
-  private dependencies(): CassieDependencies {
-    return this.deps ?? CassieProduct.defaultDependencies();
   }
 
   private accountProvider(): AccountStateProvider {
