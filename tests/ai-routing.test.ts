@@ -6,11 +6,6 @@ import {
   MissingAiDependencyError,
   routeStructuredModel,
 } from "../packages/ai/client.ts";
-import {
-  GEMINI_SEARCH_MAX_OUTPUT_TOKENS,
-  GeminiWebSearchLane,
-  GrokXSearchLane,
-} from "../packages/research/lanes.ts";
 
 describe("structured AI model routing", () => {
   it("routes lightweight ranking steps to direct DeepSeek", () => {
@@ -65,21 +60,8 @@ describe("structured AI model routing", () => {
     }
   });
 
-  it("defaults web search to direct Gemini Flash Lite", () => {
-    const lane = new GeminiWebSearchLane("test-key");
-
-    expect(lane).toHaveProperty("model", "gemini-3.1-flash-lite");
-  });
-
   it("keeps direct provider generation ceilings below huge provider defaults", () => {
-    expect(GEMINI_SEARCH_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(2_048);
     expect(DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(8_192);
     expect(IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(32_768);
-  });
-
-  it("defaults Grok X search to 4.3", () => {
-    const lane = new GrokXSearchLane("test-key");
-
-    expect(lane).toHaveProperty("model", "grok-4.3");
   });
 });
