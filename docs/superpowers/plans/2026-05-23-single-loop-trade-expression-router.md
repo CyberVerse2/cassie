@@ -18,7 +18,7 @@
 - Modify: `packages/agent/tools/trade-expression.ts`
 - Test: `tests/supervisor-agent.test.ts`
 
-- [x] **Step 1:** Add a failing supervisor test that expects `frame_opportunity`, `generate_trade_expressions`, `search_venues`, and `rank_expressions`, and expects `plan_trade_expression` to be absent.
+- [x] **Step 1:** Add a failing supervisor test that expects `frame_opportunity`, `generate_trade_expressions`, `search_venues`, and `rank_expressions`, and expects the legacy nested tool to be absent.
 - [x] **Step 2:** Add `OpportunityFrameSchema` and prompt builders for opportunity framing and single-step expression generation.
 - [x] **Step 3:** Replace the nested trade-expression loop with single-call helpers.
 - [x] **Step 4:** Run `npm test -- tests/supervisor-agent.test.ts`.

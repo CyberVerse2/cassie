@@ -63,17 +63,15 @@ The supervisor job loads the run, user settings, account state, and tool depende
 The supervisor uses `ToolLoopAgent` with constrained tools:
 
 ```text
-load_context
-classify_intent
-interpret_signal
-extract_thesis
-extract_inverse_thesis
-critique_thesis
-plan_trade_expression
-select_market
-evaluate_risk
+frame_opportunity
+generate_trade_expressions
+search_venues
+assess_expression_fit
+quote_expression
+rank_expressions
+risk_check
 create_trade_ticket
-finalize_response
+finalize_run
 ```
 
 The supervisor never receives a direct order-placement tool. It can create a trade ticket only after market selection and deterministic risk evaluation.
@@ -95,9 +93,11 @@ Cheap models handle extraction and tagging. DeepSeek v4 Pro handles critique, tr
 The trading path is intentionally split.
 
 ```text
-signal + thesis
--> trade-expression planner
--> market selector
+untrusted post
+-> opportunity frame
+-> trade-expression candidates
+-> real venue search
+-> expression ranking
 -> deterministic risk check
 -> trade ticket
 -> approval state
