@@ -5,7 +5,6 @@ import {
   MarketCandidateSchema,
   TradeExpressionPlanSchema,
   type MarketCandidate,
-  type ResearchReport,
   type SignalInterpretation,
   type SourcePost,
   type Thesis,
@@ -52,7 +51,6 @@ export async function planTradeExpression(input: {
   userCommand: string;
   signal: SignalInterpretation;
   thesis: Thesis;
-  researchReport: ResearchReport;
 }): Promise<TradeExpressionPlan> {
   const observations: unknown[] = [];
   const maxSteps = 8;
@@ -66,7 +64,6 @@ export async function planTradeExpression(input: {
         userCommand: input.userCommand,
         signal: input.signal,
         thesis: input.thesis,
-        researchReport: input.researchReport,
         observations,
         stepNumber,
         maxSteps,
@@ -88,7 +85,6 @@ async function executeTradeExpressionAction(
     marketData: MarketDataProvider;
     polymarketMarketFinder?: PolymarketMarketFinder;
     thesis: Thesis;
-    researchReport: ResearchReport;
   },
   action: Exclude<TradeExpressionLoopAction, { action: "finish_trade_expression" }>,
 ) {
@@ -113,7 +109,6 @@ async function executeTradeExpressionAction(
   if (action.action === "search_hyperliquid") {
     const candidates = await input.marketData.findCandidates({
       thesis: input.thesis,
-      researchReport: input.researchReport,
       tradeExpression: draft,
     });
     return {
@@ -130,7 +125,6 @@ async function executeTradeExpressionAction(
 
   const candidates = await input.polymarketMarketFinder.findPolymarketMarkets({
     thesis: input.thesis,
-    researchReport: input.researchReport,
     tradeExpression: draft,
     limit: action.limit,
   });

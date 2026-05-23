@@ -46,7 +46,6 @@ export function selectActiveTools(
     "interpret_signal",
     "extract_thesis",
     "extract_inverse_thesis",
-    "research_thesis",
     "critique_thesis",
     "plan_trade_expression",
     "find_polymarket_markets",

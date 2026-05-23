@@ -8,5 +8,5 @@ export interface CassieDependencies {
   importantAi?: StructuredAiClient;
   marketData: MarketDataProvider;
   polymarketMarketFinder?: PolymarketMarketFinder;
-  researchLanes: ResearchSearchLanes;
+  researchLanes?: ResearchSearchLanes;
 }

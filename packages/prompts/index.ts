@@ -120,13 +120,12 @@ ${JSON.stringify(input.thesis, null, 2)}`;
 
 export function critiquePrompt(input: {
   thesis: Thesis;
-  researchReport: unknown;
 }): string {
   return `You are Cassie's critique tool.
 
 ${decisionTaxonomyBlock}
 
-Evaluate the thesis after research. Search for weaknesses:
+Evaluate the thesis. Search for weaknesses:
 - Source credibility, provenance, reputation, and engagement quality
 - Entity resolution and remaining inferred assumptions
 - Verification from relevant ecosystem surfaces, docs, contracts, filings, social profiles, GitHub, or prior products
@@ -138,9 +137,8 @@ Evaluate the thesis after research. Search for weaknesses:
 - Is the opposite trade cleaner?
 
 Evidence-grounding rules:
-- Treat the supplied researchReport as the source of truth.
-- Do not introduce external facts that contradict resolved researchReport evidence or goal resolutions.
-- If researchReport says a filing, ticker, asset mapping, or financial figure is supported, do not call it false unless researchReport itself contains contrary evidence.
+- Treat the supplied thesis and source-post context as the available evidence.
+- Do not introduce external facts that were not supplied by prior tool outputs.
 - Critique the actual weak links: unsupported valuation inputs, unresolved tradability, crowded positioning, poor liquidity, bad payoff shape, source weakness, or missing price discovery.
 - Distinguish "not proven by the filing" from "false."
 
@@ -201,7 +199,7 @@ export function tradeExpressionPrompt(input: unknown): string {
 
 ${decisionTaxonomyBlock}
 
-Decide whether the researched signal has a clean monetizable expression using the supplied research report, goal resolutions, market candidates, and valuation work when present.
+Decide whether the signal has a clean monetizable expression using the supplied thesis, source post, market candidates, and valuation work when present.
 
 Return a concrete action path, not a generic summary. The downstream policy will convert low scores into insufficient_evidence. The decision field you output must be one of:
 no_trade, needs_market_check, or route_to_market_router. Do not output watchlist, insufficient_evidence, or private_market_research from this tool.
@@ -211,7 +209,7 @@ Posture:
 - Do not require the post to contain literal buy/sell language.
 - Extract the strongest plausible trade interpretation, test whether it survives, then decide whether venue search, routing, no-trade, or insufficient-evidence is appropriate.
 - Score only allowed expressions and supplied candidates.
-- Do not override blocked conclusions from goal resolutions, critique, valuation work, or research synthesis.
+- Do not override blocked conclusions from critique, valuation work, market results, or supplied tool outputs.
 - A missing primary filing or inaccessible source should reduce evidence confidence, not automatically block market investigation when reputable secondary evidence supports the news claim.
 - News can be sufficient evidence for "reported news" claims. Official filings, venue listings, and live market prices still require the relevant official/venue/market source.
 
@@ -278,7 +276,6 @@ export function tradeExpressionLoopPrompt(input: {
   userCommand: string;
   signal: unknown;
   thesis: unknown;
-  researchReport: unknown;
   observations: unknown[];
   stepNumber: number;
   maxSteps: number;

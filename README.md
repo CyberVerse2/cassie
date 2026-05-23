@@ -132,7 +132,6 @@ Implemented:
 
 - AI intent routing for `critic`, `trade`, `countertrade`, and `watch`
 - AI thesis and inverse-thesis extraction
-- Goal-first research with query jobs, OpenAI web search, Grok X search, evidence ledgers, and goal resolutions
 - Polymarket market discovery using the documented market/search surfaces indexed in `docs/llms/`
 - Hyperliquid and Polymarket market-data connectors
 - AI market selection from real connector candidates
@@ -140,7 +139,7 @@ Implemented:
 - Trade-ticket creation
 - Approval endpoint
 - Graphile Worker supervisor and execution jobs
-- Drizzle/Postgres persistence for mentions, control runs, run steps, research reports, tickets, execution jobs, and audit events
+- Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events
 - Dashboard for pending tickets, runs, and audit trail
 
 Not included:

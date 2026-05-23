@@ -274,7 +274,7 @@ function visibleThinkingForStep(step: RunStep): string {
     case "research":
       return "Run goal-first research with query jobs that emit evidence ledgers and goal resolution.";
     case "critique":
-      return "Use the research report to identify the strongest objections and weaknesses.";
+      return "Use the thesis and source context to identify the strongest objections and weaknesses.";
     case "trade_expression":
       return "Estimate the cleanest venue-aware expression, including fair value when valuation matters.";
     case "market_candidates":
@@ -288,7 +288,7 @@ function visibleThinkingForStep(step: RunStep): string {
     case "risk":
       return "Evaluate deterministic risk limits against settings and account state.";
     case "ticket":
-      return "Create a ticket only after research, market selection, and risk checks allow it.";
+      return "Create a ticket only after market selection and risk checks allow it.";
     case "final":
       return "Persist the user-facing final result and run status.";
   }

@@ -6,10 +6,7 @@ import { createCassieSupervisorTools } from "../packages/agent/supervisor/tools.
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   IntentResult,
-  GoalResolution,
   MarketSelection,
-  ResearchQueryPlan,
-  ResearchReport,
   SignalInterpretation,
   SourcePost,
   SourceProfile,
@@ -95,138 +92,6 @@ const signal: SignalInterpretation = {
   confidence: 0.9,
 };
 
-const queryPlan: ResearchQueryPlan = {
-  version: "research-query-plan/v1",
-  normalizedClaim: thesis.claim,
-  signalType: "explicit_trade",
-  mode: "standard",
-  assets: ["SOL"],
-  topics: ["Solana ETF"],
-  sourceHandle: "example",
-  sourceName: "Example",
-  scores: {
-    specificity: 0.8,
-    marketLinkage: 0.9,
-    sourceValue: 0.5,
-    urgency: 0.5,
-    risk: 0.4,
-    novelty: 0.5,
-    expectedValueOfResearch: 0.8,
-  },
-  goals: [
-    {
-      id: "g_verify",
-      kind: "event_validation",
-      question: "Is the SOL ETF catalyst real?",
-      decisionUse: "validate_or_kill_thesis",
-      priority: 0.7,
-      mustResolve: false,
-      lanes: ["web", "x"],
-      evidenceNeeds: ["Credible web and X context."],
-      disconfirmingQuestions: [],
-      resolutionCriteria: {
-        supportedIf: "Credible sources support the catalyst.",
-        contradictedIf: "Credible sources refute the catalyst.",
-        unresolvedIf: "Sources are inconclusive.",
-      },
-      budget: { maxQueries: 2, maxResults: 10, wave: 0 },
-      stopWhen: [],
-    },
-  ],
-  queryBatches: [
-    {
-      wave: 0,
-      name: "Verification",
-      purpose: "Verify the catalyst.",
-      queries: [
-        {
-          id: "q_web",
-          goalIds: ["g_verify"],
-          lane: "web",
-          queryKind: "exact_claim",
-          query: "SOL ETF approval odds",
-          priority: 0.7,
-          maxResults: 5,
-          expectedEvidence: "Credible web evidence.",
-          rationale: "Verify the claim.",
-        },
-        {
-          id: "q_x",
-          goalIds: ["g_verify"],
-          lane: "x",
-          queryKind: "social_momentum",
-          query: "SOL ETF approval odds",
-          priority: 0.7,
-          maxResults: 5,
-          expectedEvidence: "X context.",
-          rationale: "Check social context.",
-        },
-      ],
-    },
-  ],
-  synthesisContract: {
-    requiredGoalIds: [],
-    cannotConcludeIfUnresolved: [],
-  },
-};
-
-const goalResolution: GoalResolution = {
-  goalId: "g_verify",
-  status: "partially_resolved",
-  confidence: 0.7,
-  supportingEvidenceIds: [],
-  contradictingEvidenceIds: [],
-  contextualEvidenceIds: [],
-  unresolvedQuestions: [],
-  summary: "The catalyst is plausible but not confirmed.",
-  synthesisImplication: "Keep conviction capped.",
-};
-
-const researchReport: ResearchReport = {
-  claim: thesis.claim,
-  normalizedThesis: thesis.claim,
-  stance: "partially_supported",
-  evidenceQuality: "medium",
-  socialContext: {
-    momentum: "high",
-    crowdingSignal: "medium",
-    manipulationSignal: "medium",
-    summary: "Crowded rumor with enough market relevance to route cautiously.",
-  },
-  socialSignal: {
-    sourceCredibility: "medium",
-    endorserReputation: "Test source.",
-    entityResolution: {
-      resolvedEntity: "Solana",
-      confidence: "high",
-      rationale: "SOL is directly referenced.",
-      unverifiedAssumptions: [],
-    },
-    personProjectDossier: {
-      identifiedPeople: [],
-      evidenceSummary: "No people to resolve.",
-      openQuestions: [],
-    },
-    smartEngagerSignal: {
-      quality: "unknown",
-      summary: "Not evaluated in this fixture.",
-      notableAccounts: [],
-    },
-    leadQuality: "tradable_now",
-    nextResearchActions: [],
-  },
-  bullCase: ["ETF narrative could support SOL demand."],
-  bearCase: ["No primary approval source."],
-  contradictions: ["Approval is not confirmed."],
-  evidence: [],
-  warnings: ["NO_PRIMARY_SOURCE"],
-  confidence: 0.7,
-  researchConclusion: "claim_plausible_but_unconfirmed",
-  recommendedResearchAction: "proceed_with_caution",
-  publicSummary: "Plausible but unconfirmed.",
-  fullResearchBrief: "No primary source confirms approval.",
-};
-
 const marketSelection: MarketSelection = {
   selectedMarket: {
     venue: "hyperliquid",
@@ -271,7 +136,7 @@ const tradeExpression: TradeExpressionPlan = {
     },
   ],
   decision: "route_to_market_router",
-  reason: "The asset is liquid and directly maps to the researched catalyst.",
+  reason: "The asset is liquid and directly maps to the catalyst.",
   marketRouterInstructions: "Prefer direct SOL perps over indirect read-throughs.",
 };
 
@@ -293,9 +158,6 @@ class FakeAi implements StructuredAiClient {
       cassie_signal: signal,
       cassie_thesis: thesis,
       cassie_source_profile: sourceProfile,
-      cassie_research_query_plan: queryPlan,
-      cassie_goal_resolution: [goalResolution],
-      cassie_research_report: researchReport,
       cassie_trade_expression_step: {
         action: "finish_trade_expression",
         reason: "Fixture completes the trade-expression loop.",
@@ -383,19 +245,12 @@ describe("AI SDK supervisor agent", () => {
     const intent = await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "balanced",
-    });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     const selected = await executeTool<MarketSelection>(tools.select_market, {
       thesis: extracted,
-      researchReport: report,
       tradeExpression: expression,
     });
     const risk = await executeTool(tools.risk_check, {
@@ -418,10 +273,11 @@ describe("AI SDK supervisor agent", () => {
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.approvalState).toBe("pending");
-    expect(state.researchReports).toHaveLength(1);
+    expect(state.researchReports).toHaveLength(0);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["intent", "signal", "thesis", "research", "trade_expression", "market_selection", "risk", "ticket", "final"]),
+      expect.arrayContaining(["intent", "signal", "thesis", "trade_expression", "market_selection", "risk", "ticket", "final"]),
     );
+    expect(state.runSteps.map((step) => step.stepType)).not.toContain("research");
     expect(state.executionJobs).toHaveLength(0);
   });
 
@@ -461,19 +317,12 @@ describe("AI SDK supervisor agent", () => {
     });
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "balanced",
-    });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     await executeTool(tools.select_market, {
       thesis: extracted,
-      researchReport: report,
       tradeExpression: expression,
     });
     await expect(executeTool(tools.risk_check, {
@@ -561,19 +410,12 @@ describe("AI SDK supervisor agent", () => {
     await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "balanced",
-    });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     await executeTool(tools.select_market, {
       thesis: extracted,
-      researchReport: report,
       tradeExpression: expression,
     });
     await expect(executeTool(tools.create_trade_ticket, {
@@ -617,20 +459,19 @@ describe("AI SDK supervisor agent", () => {
     await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchAngle: "balanced",
     });
 
     await expect(executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "No clean trade yet; evidence remains capped.",
       thesis: extracted,
-      researchReport: report,
+      tradeExpression: expression,
     })).resolves.toMatchObject({
       responseType: "analysis",
-      publicSummary: expect.stringContaining("Plausible but unconfirmed"),
+      publicSummary: expect.stringContaining("asset is liquid"),
     });
   });
 
@@ -721,7 +562,7 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.filter((step) => step.stepType === "signal")).toHaveLength(1);
   });
 
-  it("uses important AI for research synthesis and critique, but cheap AI for market selection", async () => {
+  it("uses important AI for critique and trade expression, but cheap AI for market selection", async () => {
     const store = new InMemoryCassieStore();
     const cheapAi = new FakeAi();
     const importantAi = new FakeAi();
@@ -763,32 +604,19 @@ describe("AI SDK supervisor agent", () => {
 
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "critic",
-    });
     await executeTool(tools.critique_thesis, {
       thesis,
-      researchReport: report,
     });
     await executeTool(tools.plan_trade_expression, {
       signal: interpreted,
       thesis,
-      researchReport: report,
     });
     await executeTool(tools.select_market, {
       thesis,
-      researchReport: report,
       tradeExpression,
     });
 
     expect(importantAi.calls).toEqual([
-      "cassie_source_profile",
-      "cassie_research_query_plan",
-      "cassie_goal_resolution",
-      "cassie_goal_resolution",
-      "cassie_research_report",
       "cassie_critique",
       "cassie_trade_expression_step",
     ]);
@@ -797,7 +625,6 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
       { type: "signal", model: "deepseek-v4-flash" },
       { type: "thesis", model: "deepseek-v4-flash" },
-      { type: "research", model: "deepseek-v4-pro" },
       { type: "critique", model: "deepseek-v4-pro" },
       { type: "trade_expression", model: "deepseek-v4-pro" },
       { type: "market_selection", model: "deepseek-v4-flash" },
@@ -835,37 +662,20 @@ describe("AI SDK supervisor agent", () => {
 
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "critic",
-    });
-    const lossyReport: ResearchReport = {
-      ...report,
-      stance: "supported",
-      evidence: [],
-      warnings: [],
-      publicSummary: "Lossy copied summary.",
-    };
-
     await executeTool(tools.critique_thesis, {
       thesis: { ...thesis, claim: "Lossy copied thesis." },
-      researchReport: lossyReport,
     });
     await executeTool(tools.plan_trade_expression, {
       signal: interpreted,
       thesis,
-      researchReport: lossyReport,
     });
 
     const steps = await store.getRunSteps(run.runId);
     expect(steps.find((step) => step.stepType === "critique")?.input).toMatchObject({
       thesis: { ...thesis, claim: "Lossy copied thesis." },
-      researchReport: lossyReport,
     });
     expect(steps.find((step) => step.stepType === "trade_expression")?.input).toMatchObject({
       thesis,
-      researchReport: lossyReport,
     });
   });
 });

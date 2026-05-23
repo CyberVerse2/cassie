@@ -3,7 +3,6 @@ import type { StructuredAiClient } from "../packages/ai/client.ts";
 import { planTradeExpression } from "../packages/agent/tools/trade-expression.ts";
 import type {
   MarketCandidate,
-  ResearchReport,
   SignalInterpretation,
   SourcePost,
   Thesis,
@@ -43,51 +42,6 @@ const thesis: Thesis = {
   evidenceQuality: "medium",
   manipulationRisk: "medium",
   confidence: 0.7,
-};
-
-const researchReport: ResearchReport = {
-  claim: thesis.claim,
-  normalizedThesis: thesis.claim,
-  stance: "partially_supported",
-  evidenceQuality: "medium",
-  socialContext: {
-    momentum: "medium",
-    crowdingSignal: "unknown",
-    manipulationSignal: "unknown",
-    summary: "Crypto relative-value chatter is present but not decisive.",
-  },
-  socialSignal: {
-    sourceCredibility: "medium",
-    endorserReputation: "unknown",
-    entityResolution: {
-      resolvedEntity: "Zcash",
-      confidence: "high",
-      rationale: "ZEC is the liquid asset for Zcash.",
-      unverifiedAssumptions: [],
-    },
-    personProjectDossier: {
-      identifiedPeople: [],
-      evidenceSummary: "No person dependency.",
-      openQuestions: [],
-    },
-    smartEngagerSignal: {
-      quality: "unknown",
-      summary: "Not evaluated.",
-      notableAccounts: [],
-    },
-    leadQuality: "trade_candidate",
-    nextResearchActions: [],
-  },
-  bullCase: ["ZEC can express the thesis directly."],
-  bearCase: ["The BTC-relative claim may already be priced."],
-  contradictions: [],
-  evidence: [],
-  warnings: [],
-  confidence: 0.7,
-  researchConclusion: "claim_plausible_but_unconfirmed",
-  recommendedResearchAction: "proceed_with_caution",
-  publicSummary: "ZEC thesis is plausible but needs venue confirmation.",
-  fullResearchBrief: "ZEC is the direct listed asset to check.",
 };
 
 const zecCandidate: MarketCandidate = {
@@ -203,7 +157,6 @@ describe("trade expression planning", () => {
       userCommand: "what's the trade here?",
       signal,
       thesis,
-      researchReport,
     });
 
     expect(result.rankedCandidates?.[0]).toMatchObject({

@@ -25,7 +25,6 @@ describe("supervisor step policy", () => {
     "interpret_signal",
     "extract_thesis",
     "extract_inverse_thesis",
-    "research_thesis",
     "critique_thesis",
     "plan_trade_expression",
     "find_polymarket_markets",
@@ -84,7 +83,6 @@ describe("supervisor step policy", () => {
         step("classify_intent", { intent: "critic" }),
         step("interpret_signal", {}),
         step("extract_thesis", {}),
-        step("research_thesis", {}),
         step("critique_thesis", {}),
       ],
       messages: [{

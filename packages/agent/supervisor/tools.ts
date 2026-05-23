@@ -12,7 +12,6 @@ import {
   IntentResultSchema,
   MarketCandidateSchema,
   MarketSelectionSchema,
-  ResearchReportSchema,
   RiskDecisionSchema,
   SignalInterpretationSchema,
   SupervisorFinalResultSchema,
@@ -25,7 +24,6 @@ import {
   type Critique,
   type IntentResult,
   type MarketSelection,
-  type ResearchReport,
   type RiskDecision,
   type Thesis,
   type TradeTicket,
@@ -38,7 +36,6 @@ import { interpretSignal } from "../tools/signal.ts";
 import { critiqueThesis } from "../tools/critique.ts";
 import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../tools/market.ts";
 import { planTradeExpression } from "../tools/trade-expression.ts";
-import { researchThesis } from "../../research/index.ts";
 import { evaluateRisk } from "../../risk/index.ts";
 import { extractInverseThesis, extractThesis } from "../tools/thesis.ts";
 import { createTradeTicket } from "../tools/trade.ts";
@@ -55,7 +52,6 @@ const FinalizeRunInputSchema = z.object({
   thesis: ThesisSchema.optional(),
   marketSelection: MarketSelectionSchema.optional(),
   critique: CritiqueSchema.optional(),
-  researchReport: ResearchReportSchema.optional(),
   tradeExpression: TradeExpressionPlanSchema.optional(),
   riskDecision: RiskDecisionSchema.optional(),
 });
@@ -74,10 +70,9 @@ export async function finalizeRunFromPersistedSteps(input: {
   store: CassieStore;
   run: ControlRun;
 }) {
-  const [intent, thesis, researchReport, critique, tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
+  const [intent, thesis, critique, tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
     readPersistedStepOutput<IntentResult>(input.store, input.run.runId, "intent", IntentResultSchema),
     readPersistedStepOutput<Thesis>(input.store, input.run.runId, "thesis", ThesisSchema),
-    readPersistedStepOutput<ResearchReport>(input.store, input.run.runId, "research", ResearchReportSchema),
     readPersistedStepOutput<Critique>(input.store, input.run.runId, "critique", CritiqueSchema),
     readPersistedStepOutput<TradeExpressionPlan>(input.store, input.run.runId, "trade_expression", TradeExpressionPlanSchema),
     readPersistedStepOutput<MarketSelection>(input.store, input.run.runId, "market_selection", MarketSelectionSchema),
@@ -89,10 +84,9 @@ export async function finalizeRunFromPersistedSteps(input: {
     responseType: tradeTicket ? "trade_ticket" : critique ? "critique" : "analysis",
     publicSummary: riskDecision?.decision === "reject"
       ? riskDecision.reason
-      : critique?.finalCritique ?? tradeExpression?.reason ?? researchReport?.publicSummary ?? "Cassie run completed.",
+      : critique?.finalCritique ?? tradeExpression?.reason ?? "Cassie run completed.",
     intent,
     thesis,
-    researchReport,
     critique,
     tradeExpression,
     marketSelection,
@@ -220,7 +214,7 @@ export function createCassieSupervisorTools(input: {
       }),
       execute: async ({ intent, thesis }) => runStepOnce("inverse_thesis", async () => {
         if (intent.intent !== "countertrade") {
-          throw new SupervisorPrerequisiteError("extract_inverse_thesis is only for countertrade or fade requests. If this is not countertrade, continue with research, trade expression planning, or finalization.");
+          throw new SupervisorPrerequisiteError("extract_inverse_thesis is only for countertrade or fade requests. If this is not countertrade, continue with trade expression planning, critique, market tools, or finalization.");
         }
         return recordRunStep({
           store: input.store,
@@ -234,53 +228,12 @@ export function createCassieSupervisorTools(input: {
         });
       }),
     }),
-    research_thesis: tool({
-      description: "Run Cassie's research subagent. It verifies evidence but never chooses markets or executes orders.",
-      inputSchema: z.object({
-        signal: SignalInterpretationSchema,
-        thesis: ThesisSchema,
-        researchAngle: z.enum(["balanced", "critic", "counter"]),
-      }),
-      execute: async ({ signal, thesis, researchAngle }) => runStepOnce("research", async () => {
-        return recordRunStep({
-          store: input.store,
-          runId: input.run.runId,
-          stepType: "research",
-          promptName: "cassie_research_report",
-          promptVersion,
-          model: importantModel,
-          stepInput: { signal, thesis, researchAngle },
-          execute: async () => {
-            const report = await researchThesis({
-              ai: importantAi,
-              sourceProfileAi: importantAi,
-              lanes: input.deps.researchLanes,
-              sourcePost: input.run.sourcePost,
-              userCommand: input.run.userCommand,
-              signal,
-              thesis,
-              researchAngle,
-              persistence: {
-                store: input.store,
-                controlRunId: input.run.runId,
-              },
-            });
-            await input.store.addResearchReport({
-              runId: input.run.runId,
-              report,
-            });
-            return report;
-          },
-        });
-      }),
-    }),
     critique_thesis: tool({
-      description: "Critique a researched thesis and identify weaknesses without creating a trade.",
+      description: "Critique the extracted thesis and identify weaknesses without creating a trade.",
       inputSchema: z.object({
         thesis: ThesisSchema,
-        researchReport: ResearchReportSchema,
       }),
-      execute: async ({ thesis, researchReport }) => runStepOnce("critique", async () => {
+      execute: async ({ thesis }) => runStepOnce("critique", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -288,19 +241,18 @@ export function createCassieSupervisorTools(input: {
           promptName: "cassie_critique",
           promptVersion,
           model: importantModel,
-          stepInput: { thesis, researchReport },
-          execute: () => critiqueThesis({ ai: importantAi, thesis, researchReport }),
+          stepInput: { thesis },
+          execute: () => critiqueThesis({ ai: importantAi, thesis }),
         });
       }),
     }),
     plan_trade_expression: tool({
-      description: "Decide whether the researched thesis has a clean venue-aware trade expression.",
+      description: "Decide whether the thesis has a clean venue-aware trade expression.",
       inputSchema: z.object({
         signal: SignalInterpretationSchema,
         thesis: ThesisSchema,
-        researchReport: ResearchReportSchema,
       }),
-      execute: async ({ signal, thesis, researchReport }) => runStepOnce("trade_expression", async () => {
+      execute: async ({ signal, thesis }) => runStepOnce("trade_expression", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -313,7 +265,6 @@ export function createCassieSupervisorTools(input: {
             sourcePost: input.run.sourcePost,
             signal,
             thesis,
-            researchReport,
           },
           execute: () => planTradeExpression({
             ai: importantAi,
@@ -323,20 +274,18 @@ export function createCassieSupervisorTools(input: {
             userCommand: input.run.userCommand,
             signal,
             thesis,
-            researchReport,
           }),
         });
       }),
     }),
     find_polymarket_markets: tool({
-      description: "Use AI-planned semantic search to find real Polymarket markets related to the researched thesis and trade expression.",
+      description: "Use AI-planned semantic search to find real Polymarket markets related to the thesis and trade expression.",
       inputSchema: z.object({
         thesis: ThesisSchema,
-        researchReport: ResearchReportSchema,
         tradeExpression: TradeExpressionPlanSchema,
         limit: z.number().int().positive().max(25).optional(),
       }),
-      execute: async ({ thesis, researchReport, tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
+      execute: async ({ thesis, tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
         const polymarket = input.deps.polymarketMarketFinder;
         if (!polymarket) {
           throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
@@ -345,11 +294,10 @@ export function createCassieSupervisorTools(input: {
           store: input.store,
           runId: input.run.runId,
           stepType: "market_candidates",
-          stepInput: { thesis, researchReport, tradeExpression, limit },
+          stepInput: { thesis, tradeExpression, limit },
           execute: () => findPolymarketMarkets({
             polymarket,
             thesis,
-            researchReport,
             tradeExpression,
             limit,
           }),
@@ -360,14 +308,13 @@ export function createCassieSupervisorTools(input: {
       description: "Assess whether a discovered Polymarket contract directly expresses the thesis and normalize its YES/NO trade object.",
       inputSchema: z.object({
         thesis: ThesisSchema,
-        researchReport: ResearchReportSchema,
         tradeExpression: TradeExpressionPlanSchema,
         conditionId: z.string().optional(),
         marketSlug: z.string().optional(),
         question: z.string().optional(),
         side: z.enum(["yes", "no"]),
       }),
-      execute: async ({ thesis, researchReport, tradeExpression, conditionId, marketSlug, question, side }) => runStepOnce("market_assessment", async () => {
+      execute: async ({ thesis, tradeExpression, conditionId, marketSlug, question, side }) => runStepOnce("market_assessment", async () => {
         const polymarket = input.deps.polymarketMarketFinder;
         if (!polymarket) {
           throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
@@ -376,11 +323,10 @@ export function createCassieSupervisorTools(input: {
           store: input.store,
           runId: input.run.runId,
           stepType: "market_assessment",
-          stepInput: { thesis, researchReport, tradeExpression, market: { conditionId, marketSlug, question }, side },
+          stepInput: { thesis, tradeExpression, market: { conditionId, marketSlug, question }, side },
           execute: () => assessPolymarketMarket({
             polymarket,
             thesis,
-            researchReport,
             tradeExpression,
             market: { conditionId, marketSlug, question },
             side,
@@ -422,11 +368,10 @@ export function createCassieSupervisorTools(input: {
       description: "Select the best market expression from real market candidates; do not invent markets.",
       inputSchema: z.object({
         thesis: ThesisSchema,
-        researchReport: ResearchReportSchema,
         tradeExpression: TradeExpressionPlanSchema,
         candidates: MarketCandidateSchema.array().optional(),
       }),
-      execute: async ({ thesis, researchReport, tradeExpression, candidates }) => runStepOnce("market_selection", async () => {
+      execute: async ({ thesis, tradeExpression, candidates }) => runStepOnce("market_selection", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -434,12 +379,11 @@ export function createCassieSupervisorTools(input: {
           promptName: "cassie_market_selection",
           promptVersion,
           model: cheapModel,
-          stepInput: { thesis, researchReport, tradeExpression, candidates },
+          stepInput: { thesis, tradeExpression, candidates },
           execute: () => selectMarket({
             ai: cheapAi,
             marketData: input.deps.marketData,
             thesis,
-            researchReport,
             tradeExpression,
             candidates,
           }),
@@ -581,8 +525,7 @@ function validateFinalizationPrerequisites(input: PreparedFinalizeRunInput) {
   }
 
   const hasMeaningfulAnalysisBasis = Boolean(
-    input.researchReport ||
-      input.tradeExpression ||
+    input.tradeExpression ||
       input.marketSelection ||
       input.riskDecision ||
       input.critique ||
@@ -603,7 +546,7 @@ function finalizeResult(input: PreparedFinalizeRunInput) {
       publicSummary: input.publicSummary,
       runStatus: "succeeded",
       ticketId: null,
-      warnings: input.researchReport?.warnings ?? [],
+      warnings: [],
     });
   }
   if (input.responseType === "critique") {
@@ -613,7 +556,7 @@ function finalizeResult(input: PreparedFinalizeRunInput) {
       publicSummary: input.publicSummary,
       runStatus: "succeeded",
       ticketId: null,
-      warnings: input.researchReport?.warnings ?? [],
+      warnings: [],
     });
   }
   if (!input.tradeTicket) {
@@ -625,7 +568,7 @@ function finalizeResult(input: PreparedFinalizeRunInput) {
     publicSummary: input.publicSummary,
     runStatus: "awaiting_approval",
     ticketId: input.tradeTicket.ticketId,
-    warnings: input.researchReport?.warnings ?? [],
+    warnings: [],
   });
 }
 

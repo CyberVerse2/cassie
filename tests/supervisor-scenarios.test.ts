@@ -4,12 +4,9 @@ import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../p
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   Critique,
-  GoalResolution,
   IntentResult,
   InverseThesis,
   MarketSelection,
-  ResearchQueryPlan,
-  ResearchReport,
   RiskDecision,
   SignalInterpretation,
   SourcePost,
@@ -66,93 +63,6 @@ const signal: SignalInterpretation = {
   confidence: 0.88,
 };
 
-const queryPlan: ResearchQueryPlan = {
-  version: "research-query-plan/v1",
-  normalizedClaim: thesis.claim,
-  signalType: "explicit_trade",
-  mode: "standard",
-  assets: ["SOL"],
-  topics: ["Solana ETF"],
-  sourceHandle: "example",
-  sourceName: "Example",
-  scores: {
-    specificity: 0.8,
-    marketLinkage: 0.9,
-    sourceValue: 0.5,
-    urgency: 0.5,
-    risk: 0.4,
-    novelty: 0.5,
-    expectedValueOfResearch: 0.8,
-  },
-  goals: [
-    {
-      id: "g_verify",
-      kind: "event_validation",
-      question: "Is the SOL ETF catalyst real?",
-      decisionUse: "validate_or_kill_thesis",
-      priority: 0.7,
-      mustResolve: false,
-      lanes: ["web", "x"],
-      evidenceNeeds: ["Credible web and X context."],
-      disconfirmingQuestions: [],
-      resolutionCriteria: {
-        supportedIf: "Credible sources support the catalyst.",
-        contradictedIf: "Credible sources refute the catalyst.",
-        unresolvedIf: "Sources are inconclusive.",
-      },
-      budget: { maxQueries: 2, maxResults: 10, wave: 0 },
-      stopWhen: [],
-    },
-  ],
-  queryBatches: [
-    {
-      wave: 0,
-      name: "Verification",
-      purpose: "Verify the catalyst.",
-      queries: [
-        {
-          id: "q_web",
-          goalIds: ["g_verify"],
-          lane: "web",
-          queryKind: "exact_claim",
-          query: "SOL ETF approval odds",
-          priority: 0.7,
-          maxResults: 5,
-          expectedEvidence: "Credible web evidence.",
-          rationale: "Verify the claim.",
-        },
-        {
-          id: "q_x",
-          goalIds: ["g_verify"],
-          lane: "x",
-          queryKind: "social_momentum",
-          query: "SOL ETF approval odds",
-          priority: 0.7,
-          maxResults: 5,
-          expectedEvidence: "X context.",
-          rationale: "Check social context.",
-        },
-      ],
-    },
-  ],
-  synthesisContract: {
-    requiredGoalIds: [],
-    cannotConcludeIfUnresolved: [],
-  },
-};
-
-const goalResolution: GoalResolution = {
-  goalId: "g_verify",
-  status: "partially_resolved",
-  confidence: 0.62,
-  supportingEvidenceIds: [],
-  contradictingEvidenceIds: [],
-  contextualEvidenceIds: [],
-  unresolvedQuestions: [],
-  summary: "Plausible but unconfirmed.",
-  synthesisImplication: "Keep conviction capped.",
-};
-
 const inverseThesis: InverseThesis = {
   originalThesis: thesis,
   inverseClaim: "SOL may sell off because ETF approval is unconfirmed and crowded.",
@@ -161,51 +71,6 @@ const inverseThesis: InverseThesis = {
   topics: ["Solana ETF"],
   timeHorizon: "event_based",
   confidence: 0.7,
-};
-
-const researchReport: ResearchReport = {
-  claim: thesis.claim,
-  normalizedThesis: thesis.claim,
-  stance: "partially_supported",
-  evidenceQuality: "medium",
-  socialContext: {
-    momentum: "high",
-    crowdingSignal: "medium",
-    manipulationSignal: "medium",
-    summary: "Active social discussion, mostly repeating one rumor.",
-  },
-  socialSignal: {
-    sourceCredibility: "medium",
-    endorserReputation: "Test source.",
-    entityResolution: {
-      resolvedEntity: "Solana",
-      confidence: "high",
-      rationale: "SOL is directly referenced.",
-      unverifiedAssumptions: [],
-    },
-    personProjectDossier: {
-      identifiedPeople: [],
-      evidenceSummary: "No people to resolve.",
-      openQuestions: [],
-    },
-    smartEngagerSignal: {
-      quality: "unknown",
-      summary: "Not evaluated in this fixture.",
-      notableAccounts: [],
-    },
-    leadQuality: "tradable_now",
-    nextResearchActions: [],
-  },
-  bullCase: ["ETF filings are being discussed."],
-  bearCase: ["No primary approval source."],
-  contradictions: ["Discussion exists, approval is not confirmed."],
-  evidence: [],
-  warnings: ["NO_PRIMARY_SOURCE", "HIGH_SOCIAL_MOMENTUM"],
-  confidence: 0.62,
-  researchConclusion: "claim_plausible_but_unconfirmed",
-  recommendedResearchAction: "proceed_with_caution",
-  publicSummary: "Plausible but unconfirmed.",
-  fullResearchBrief: "No primary source confirms approval.",
 };
 
 const critique: Critique = {
@@ -260,7 +125,7 @@ const tradeExpression: TradeExpressionPlan = {
     },
   ],
   decision: "route_to_market_router",
-  reason: "The asset is liquid and directly maps to the researched catalyst.",
+  reason: "The asset is liquid and directly maps to the catalyst.",
   marketRouterInstructions: "Prefer direct SOL perps over indirect read-throughs.",
 };
 
@@ -281,9 +146,6 @@ class ScenarioAi implements StructuredAiClient {
       cassie_signal: signal,
       cassie_thesis: thesis,
       cassie_inverse_thesis: inverseThesis,
-      cassie_research_query_plan: queryPlan,
-      cassie_goal_resolution: [goalResolution],
-      cassie_research_report: researchReport,
       cassie_trade_expression_step: {
         action: "finish_trade_expression",
         reason: "Fixture completes the trade-expression loop.",
@@ -323,14 +185,6 @@ async function createScenario(intent: IntentResult["intent"], settings: UserSett
           return [marketSelection.selectedMarket!];
         },
       },
-      researchLanes: {
-        async runOpenAiQueryJob() {
-          return { lane: "openai_search" as const, evidence: [], warnings: [] };
-        },
-        async runGrokXQueryJob() {
-          return { lane: "x_search" as const, evidence: [], warnings: [] };
-        },
-      },
     },
   });
 
@@ -348,30 +202,22 @@ describe("supervisor scenario coverage", () => {
     await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "critic",
-    });
     const result = await executeTool<Critique>(tools.critique_thesis, {
       thesis: extracted,
-      researchReport: report,
     });
     await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     await executeTool(tools.finalize_run, {
       responseType: "critique",
       publicSummary: result.finalCritique,
       critique: result,
-      researchReport: report,
     });
 
     const state = await store.load();
     expect(state.tradeTickets).toHaveLength(0);
-    expect(state.researchReports).toHaveLength(1);
+    expect(state.researchReports).toHaveLength(0);
     await expect(store.getRun(run.runId)).resolves.toMatchObject({ status: "succeeded" });
   });
 
@@ -380,25 +226,17 @@ describe("supervisor scenario coverage", () => {
     await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "critic",
-    });
     const result = await executeTool<Critique>(tools.critique_thesis, {
       thesis: extracted,
-      researchReport: report,
     });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     await executeTool(tools.finalize_run, {
       responseType: "critique",
       publicSummary: result.finalCritique,
       critique: result,
-      researchReport: report,
       tradeExpression: expression,
     });
 
@@ -434,19 +272,12 @@ describe("supervisor scenario coverage", () => {
       timeHorizon: inverse.timeHorizon,
       confidence: inverse.confidence,
     } satisfies Thesis;
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: counterThesis,
-      researchAngle: "counter",
-    });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: counterThesis,
-      researchReport: report,
     });
     const selected = await executeTool<MarketSelection>(tools.select_market, {
       thesis: counterThesis,
-      researchReport: report,
       tradeExpression: expression,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
@@ -464,8 +295,9 @@ describe("supervisor scenario coverage", () => {
     const state = await store.load();
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["inverse_thesis", "research", "trade_expression", "market_selection", "risk", "ticket"]),
+      expect.arrayContaining(["inverse_thesis", "trade_expression", "market_selection", "risk", "ticket"]),
     );
+    expect(state.runSteps.map((step) => step.stepType)).not.toContain("research");
   });
 
   it("finalizes rejected-risk trade requests without creating a ticket", async () => {
@@ -476,19 +308,12 @@ describe("supervisor scenario coverage", () => {
     const intent = await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "balanced",
-    });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     const selected = await executeTool<MarketSelection>(tools.select_market, {
       thesis: extracted,
-      researchReport: report,
       tradeExpression: expression,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
@@ -523,15 +348,9 @@ describe("supervisor scenario coverage", () => {
     await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const report = await executeTool<ResearchReport>(tools.research_thesis, {
-      signal: interpreted,
-      thesis: extracted,
-      researchAngle: "critic",
-    });
     const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
       signal: interpreted,
       thesis: extracted,
-      researchReport: report,
     });
     const noTradeMarketSelection: MarketSelection = {
       selectedMarket: null,
@@ -555,7 +374,6 @@ describe("supervisor scenario coverage", () => {
       responseType: "analysis",
       publicSummary: "Model wanted to route.",
       thesis: extracted,
-      researchReport: report,
       tradeExpression: expression,
       marketSelection: noTradeMarketSelection,
     });
@@ -634,18 +452,6 @@ describe("supervisor scenario coverage", () => {
     await executeTool<IntentResult>(tools.classify_intent, {});
     const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
     const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    await store.addRunStep({
-      runId: run.runId,
-      stepType: "research",
-      status: "succeeded",
-      input: null,
-      output: researchReport,
-      error: null,
-      model: "deepseek-v4-pro",
-      promptName: "cassie_research_report",
-      promptVersion: "test",
-      completedAt: new Date().toISOString(),
-    });
     await store.addRunStep({
       runId: run.runId,
       stepType: "trade_expression",

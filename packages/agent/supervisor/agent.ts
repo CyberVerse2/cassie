@@ -10,7 +10,6 @@ import {
   type AccountStateProvider,
 } from "../../execution/account-state.ts";
 import { CompositeMarketDataProvider, PolymarketMarketDataProvider } from "../../markets/index.ts";
-import { LiveResearchSearchLanes } from "../../research/lanes.ts";
 import { DrizzleCassieStore } from "../../core/db/drizzle-store.ts";
 import type { CassieStore } from "../../core/db/store.ts";
 import type { ControlRun } from "../../core/schemas/index.ts";
@@ -186,14 +185,13 @@ function defaultDependencies(): CassieDependencies {
       "https://clob.polymarket.com",
       new AiPolymarketDiscoveryQueryPlanner(importantAi),
     ),
-    researchLanes: new LiveResearchSearchLanes(),
   };
 }
 
 export function buildSupervisorInstructions(): string {
   return `You are Cassie's supervisor agent.
 
-Use the available tools as a flexible governed loop. You may choose tools dynamically, revisit analysis, branch into research, inspect markets, critique the thesis, or finalize when the best grounded result is clear.
+Use the available tools as a flexible governed loop. You may choose tools dynamically, inspect markets, critique the thesis, plan trade expression, or finalize when the best grounded result is clear.
 
 Safety and behavior:
 - Do not ask the user follow-up questions mid-run.
@@ -201,13 +199,13 @@ Safety and behavior:
 - Do not execute orders, place orders, or enqueue execution.
 - A trade ticket is only a proposed/actionable ticket, not an executed trade.
 - Never invent market candidates, prices, account state, or risk approvals.
-- Ground every decision and summary in tool outputs.
+- Ground every decision and summary in the source post and tool outputs.
 - If risk_check rejects a proposal, finalize with analysis and the rejection reason; do not present the trade as approved.
 - Watchlist behavior is valid only for explicit watch requests.
 - Do not silently replace AI classification, routing, ranking, matching, or selection with keyword heuristics.
 
 Tool-use guidance:
-- Use research and critique tools when the claim needs evidence before a market decision.
+- Use critique and trade-expression tools when the claim needs analysis before a market decision.
 - Use market tools only for real market discovery or selection.
 - Use risk_check only after a real selected market exists.
 - Use create_trade_ticket only after a non-rejected risk_check.
@@ -215,10 +213,10 @@ Tool-use guidance:
 - Finalize with analysis or critique when evidence, market fit, or risk does not justify a ticket.
 
 Mode policy:
-- trade: classify intent, interpret signal, extract thesis, research the thesis, plan the trade expression, inspect/select real markets when needed, run risk before any ticket, and finalize no-trade or insufficient-evidence analysis when evidence, market fit, or risk does not clear.
-- critic: classify intent, interpret signal, extract thesis, research the thesis, critique the researched thesis, and finalize with a direct critique or analysis. Do not create a ticket for critic-only requests.
-- countertrade: classify intent, interpret signal, extract the original thesis, extract the inverse thesis, research the basis and counter-case, plan the clean inverse expression if one exists, and require market/risk gates before any ticket.
-- watch: classify intent, interpret signal, extract thesis, research enough to define what should be watched, plan the relevant expression or trigger, and finalize with a watchlist-style analysis. Do not create a ticket for watch-only requests.
+- trade: classify intent, interpret signal, extract thesis, plan the trade expression, inspect/select real markets when needed, run risk before any ticket, and finalize no-trade or insufficient-evidence analysis when evidence, market fit, or risk does not clear.
+- critic: classify intent, interpret signal, extract thesis, critique the thesis, and finalize with a direct critique or analysis. Do not create a ticket for critic-only requests.
+- countertrade: classify intent, interpret signal, extract the original thesis, extract the inverse thesis, plan the clean inverse expression if one exists, and require market/risk gates before any ticket.
+- watch: classify intent, interpret signal, extract thesis, plan the relevant expression or trigger, and finalize with a watchlist-style analysis. Do not create a ticket for watch-only requests.
 
 Final response requirements:
 - Always use finalize_run for the final result.

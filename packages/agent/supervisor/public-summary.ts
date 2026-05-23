@@ -1,7 +1,6 @@
 import type {
   Critique,
   MarketSelection,
-  ResearchReport,
   RiskDecision,
   TradeExpressionPlan,
 } from "../../core/schemas/index.ts";
@@ -10,7 +9,6 @@ type PublicSummaryFinalizeInput = {
   responseType: "analysis" | "critique" | "trade_ticket";
   publicSummary: string;
   critique?: Critique;
-  researchReport?: ResearchReport;
   tradeExpression?: TradeExpressionPlan;
   marketSelection?: MarketSelection;
   riskDecision?: RiskDecision;
@@ -29,7 +27,6 @@ function finalPublicSummary(
   input: PublicSummaryFinalizeInput,
   outputs: {
     critique?: Critique;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     marketSelection?: MarketSelection;
     riskDecision?: RiskDecision;
@@ -44,7 +41,7 @@ function finalPublicSummary(
   }
 
   if (input.responseType === "analysis") {
-    const basis = outputs.tradeExpression?.reason ?? outputs.researchReport?.publicSummary ?? input.publicSummary;
+    const basis = outputs.tradeExpression?.reason ?? input.publicSummary;
     return withDecisionContext(basis, outputs.tradeExpression, outputs.marketSelection);
   }
 

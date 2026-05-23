@@ -10,7 +10,7 @@ X mention / API request / CLI command
 -> Graphile supervisor job
 -> AI SDK ToolLoopAgent
 -> bounded tools
--> run steps + research ledger
+-> run steps
 -> response / critique / trade ticket
 -> approval + execution worker
 ```
@@ -68,7 +68,6 @@ classify_intent
 interpret_signal
 extract_thesis
 extract_inverse_thesis
-research_thesis
 critique_thesis
 plan_trade_expression
 select_market
@@ -81,41 +80,22 @@ The supervisor never receives a direct order-placement tool. It can create a tra
 
 ## Model Routing
 
-Cassie separates mechanical research bookkeeping from analyst judgment.
+Cassie separates mechanical extraction from analyst judgment.
 
 ```text
 Cheap model: DeepSeek v4 Flash through the DeepSeek AI SDK
-Mini search operator: Gemini 3.1 Flash Lite through the Google AI SDK with Google Search grounding
-Important model: DeepSeek v4 Pro through the DeepSeek AI SDK for judgment, goal resolution, critique, synthesis, and trade expression
+Important model: DeepSeek v4 Pro through the DeepSeek AI SDK for judgment, critique, and trade expression
 X search: Grok 4.3 with image/video understanding
 ```
 
-Cheap models handle extraction, tagging, and structured bookkeeping. Search lanes emit evidence ledgers directly. DeepSeek v4 Pro handles what matters, what would disprove the thesis, whether evidence is enough, whether to stop, and whether a trade is justified.
-
-## Research
-
-Research is goal-first and evidence-ledger based.
-
-```text
-signal + thesis
--> query plan
--> query jobs
--> web/X query execution
--> SearchResult[]
--> EvidenceClaim[]
--> GoalEvidenceLink[]
--> GoalResolution[]
--> ResearchReport
-```
-
-Every query job maps to one or more research goals. Web and X search are mandatory lanes, but X social evidence is not treated as factual proof unless the goal is social provenance or momentum.
+Cheap models handle extraction and tagging. DeepSeek v4 Pro handles critique, trade-expression planning, and whether a trade is justified.
 
 ## Trading
 
 The trading path is intentionally split.
 
 ```text
-research report
+signal + thesis
 -> trade-expression planner
 -> market selector
 -> deterministic risk check
@@ -135,7 +115,6 @@ user settings
 mentions
 control runs
 run steps
-research reports
 trade tickets
 execution jobs
 runtime state
