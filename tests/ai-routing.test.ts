@@ -13,15 +13,11 @@ import {
 } from "../packages/research/lanes.ts";
 
 describe("structured AI model routing", () => {
-  it("routes bookkeeping steps to direct DeepSeek", () => {
-    expect(routeStructuredModel({ name: "cassie_intent" })).toMatchObject({
+  it("routes lightweight ranking steps to direct DeepSeek", () => {
+    expect(routeStructuredModel({ name: "cassie_market_selection" })).toMatchObject({
       provider: "deepseek",
       tier: "cheap",
       model: "deepseek-v4-flash",
-    });
-    expect(routeStructuredModel({ name: "cassie_signal" })).toMatchObject({
-      provider: "deepseek",
-      tier: "cheap",
     });
   });
 
@@ -35,7 +31,7 @@ describe("structured AI model routing", () => {
       provider: "deepseek",
       tier: "expensive",
     });
-    expect(routeStructuredModel({ name: "cassie_trade_expression" })).toMatchObject({
+    expect(routeStructuredModel({ name: "cassie_trade_expressions" })).toMatchObject({
       provider: "deepseek",
       tier: "expensive",
     });
@@ -46,7 +42,7 @@ describe("structured AI model routing", () => {
       provider: "deepseek",
       tier: "cheap",
     });
-    expect(routeStructuredModel({ name: "cassie_signal", tier: "expensive" })).toMatchObject({
+    expect(routeStructuredModel({ name: "cassie_market_selection", tier: "expensive" })).toMatchObject({
       provider: "deepseek",
       tier: "expensive",
     });
@@ -59,7 +55,7 @@ describe("structured AI model routing", () => {
     await expect(
       new CassieStructuredClient().generateObject({
         schema: {} as never,
-        name: "cassie_intent",
+        name: "cassie_market_selection",
         prompt: "test",
       }),
     ).rejects.toBeInstanceOf(MissingAiDependencyError);

@@ -8,9 +8,7 @@ import { runCassieSupervisorForRun } from "../packages/agent/supervisor/agent.ts
 import { CassieProduct } from "../packages/app/product.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
 import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
-import { routeIntent } from "../packages/agent/tools/intent-router.ts";
-import { interpretSignal } from "../packages/agent/tools/signal.ts";
-import { extractThesis } from "../packages/agent/tools/thesis.ts";
+import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools/trade-expression.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
   config,
@@ -110,7 +108,7 @@ App flow:
   execute-next --yes        Execute the next queued execution job.
 
 Smoke checks:
-  smoke:ai                  Test intent and thesis extraction.
+  smoke:ai                  Test opportunity framing and trade-expression generation.
   smoke:market              Test market candidate discovery for an asset.
 
 Useful examples:
@@ -246,11 +244,15 @@ async function smokeAi(args: ParsedArgs) {
   const ai = new CassieStructuredClient(undefined, args.trace);
   const userCommand = flag(args, "command", "@Cassie should we trade this?");
   const sourcePost = await sourcePostFromFlags(args);
-  const intent = await routeIntent({ ai, sourcePost, userCommand });
-  const signal = await interpretSignal({ ai, sourcePost, userCommand });
-  const thesis = await extractThesis({ ai, sourcePost, userCommand, signal });
+  const opportunityFrame = await frameOpportunity({ ai, sourcePost, userCommand });
+  const tradeExpression = await generateTradeExpressions({
+    ai,
+    sourcePost,
+    userCommand,
+    opportunityFrame,
+  });
 
-  return { intent, signal, thesis };
+  return { opportunityFrame, tradeExpression };
 }
 
 async function smokeMarket(args: ParsedArgs) {
@@ -548,22 +550,22 @@ function liveThinking(stepType: string): string {
   switch (stepType) {
     case "intake":
       return "Persist the incoming mention before agent work starts.";
-    case "intent":
-      return "Classify the command into Cassie's bounded intent set.";
-    case "signal":
-      return "Classify the post signal, tradability, lead quality, and research angles.";
-    case "thesis":
-      return "Extract the thesis that research should test.";
-    case "inverse_thesis":
-      return "Build the strongest opposing thesis for countertrade analysis.";
+    case "opportunity":
+      return "Frame the untrusted post into a market opportunity.";
     case "research":
       return "Run goal-first research with query jobs and evidence resolution.";
     case "critique":
       return "Use evidence to identify the strongest objections.";
     case "trade_expression":
-      return "Estimate the cleanest venue-aware expression, including fair value when valuation matters.";
+      return "Generate competing trade expressions from the framed opportunity.";
+    case "market_candidates":
+      return "Fetch real candidates from configured venues.";
+    case "market_assessment":
+      return "Assess candidate fit and prediction-market side semantics.";
+    case "market_quote":
+      return "Refresh market quote data.";
     case "market_selection":
-      return "Select a real market expression without inventing instruments.";
+      return "Rank real market expressions without inventing instruments.";
     case "risk":
       return "Evaluate deterministic user and account risk limits.";
     case "ticket":
@@ -578,7 +580,7 @@ function liveThinking(stepType: string): string {
 function summarizeLiveOutput(output: unknown): string | null {
   if (!output || typeof output !== "object") return null;
   const record = output as Record<string, unknown>;
-  const fields = ["intent", "signalType", "claim", "stance", "decision", "responseType", "publicSummary"];
+  const fields = ["userIntent", "literalClaim", "opportunity", "decision", "responseType", "publicSummary"];
   const summary = fields
     .map((fieldName) => {
       const value = record[fieldName];

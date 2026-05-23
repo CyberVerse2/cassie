@@ -239,7 +239,7 @@ describe("InMemoryCassieStore", () => {
       purpose: "evidence_classification",
       provider: "deepseek",
       model: "deepseek-v4-flash",
-      promptName: "cassie_signal",
+      promptName: "cassie_market_selection",
       promptVersion: "2026-05-20",
       inputTokens: 10,
       outputTokens: 20,

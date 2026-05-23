@@ -67,8 +67,7 @@ export class MissingImportantAiDependencyError extends MissingAiDependencyError 
 }
 
 const cheapStructuredSteps = new Set([
-  "cassie_intent",
-  "cassie_signal",
+  "cassie_market_selection",
 ]);
 
 export function routeStructuredModel(input: {

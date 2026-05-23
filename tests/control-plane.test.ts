@@ -52,28 +52,28 @@ describe("control plane run persistence", () => {
 
     const started = await store.addRunStep({
       runId: run.runId,
-      stepType: "intent",
+      stepType: "opportunity",
       status: "running",
       input: { userCommand: "@Cassie get me in" },
       output: null,
       error: null,
       model: "deepseek-v4-pro",
-      promptName: "cassie_intent",
+      promptName: "cassie_opportunity_frame",
       promptVersion: "2026-05-20",
     });
 
     await store.updateRunStep({
       ...started,
       status: "succeeded",
-      output: { intent: "trade" },
+      output: { userIntent: "trade" },
       completedAt: "2026-05-20T12:00:01.000Z",
     });
 
     const state = await store.load();
     expect(state.controlRuns[0]?.status).toBe("queued");
     expect(state.runSteps).toHaveLength(1);
-    expect(state.runSteps[0]?.stepType).toBe("intent");
-    expect(state.runSteps[0]?.output).toEqual({ intent: "trade" });
+    expect(state.runSteps[0]?.stepType).toBe("opportunity");
+    expect(state.runSteps[0]?.output).toEqual({ userIntent: "trade" });
   });
 
   it("mention intake creates a queued run without executing the supervisor synchronously", async () => {

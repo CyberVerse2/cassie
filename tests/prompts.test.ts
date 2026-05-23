@@ -1,22 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { tradeExpressionPrompt } from "../packages/prompts/index.ts";
+import { singleStepTradeExpressionPrompt } from "../packages/prompts/index.ts";
 
 describe("Cassie prompts", () => {
   it("keeps vague sector watchlists from becoming invented instruments", () => {
-    const prompt = tradeExpressionPrompt({
+    const prompt = singleStepTradeExpressionPrompt({
       sourcePost: {
+        platform: "x",
+        postId: null,
+        url: null,
+        authorHandle: null,
+        authorName: null,
         text: "Banking strong if support holds. Pharma stable. Auto sentiment improving. IT pressured.",
+        createdAt: null,
       },
-      signal: {
-        signalType: "generic_opinion",
-        directTradability: "none",
-        leadQuality: "ignore",
-      },
+      userCommand: "@Cassie should we trade this?",
     });
 
-    expect(prompt).toContain("For vague sector watchlists");
-    expect(prompt).toContain("Set directAsset to null");
-    expect(prompt).toContain("Do not invent a representative index, ETF, stock, token, or option");
-    expect(prompt).toContain("No concrete instrument");
+    expect(prompt).toContain("Do not invent venue availability");
+    expect(prompt).toContain("If no real market candidate is known yet, use needs_market_check");
+    expect(prompt).toContain("Use no_trade when the cleanest expression is unavailable");
   });
 });
