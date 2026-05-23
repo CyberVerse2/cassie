@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { SourcePost } from "../core/schemas/index.ts";
 import type { CassieStore } from "../db/store.ts";
 import { readJsonResponse } from "../core/connector-errors.ts";
+import { xPollingEnv } from "../core/env.ts";
 import type { CassieProduct } from "./product.ts";
 
 const XRecentSearchSchema = z.object({
@@ -33,30 +34,29 @@ type XRecentSearch = z.infer<typeof XRecentSearchSchema>;
 
 export class XPollingClient {
   constructor(
-    private readonly bearerToken = process.env.X_BEARER_TOKEN,
-    private readonly cassieHandle = process.env.CASSIE_X_HANDLE,
+    private readonly config = xPollingEnv(),
   ) {}
 
   async fetchMentions(input: { sinceId?: string | null }): Promise<XRecentSearch> {
-    if (!this.bearerToken) {
+    if (!this.config.bearerToken) {
       throw new Error("X polling requires X_BEARER_TOKEN.");
     }
-    if (!this.cassieHandle) {
+    if (!this.config.cassieHandle) {
       throw new Error("X polling requires CASSIE_X_HANDLE.");
     }
 
     const url = new URL("https://api.x.com/2/tweets/search/recent");
-    url.searchParams.set("query", `@${this.cassieHandle} -is:retweet`);
+    url.searchParams.set("query", `@${this.config.cassieHandle} -is:retweet`);
     url.searchParams.set("tweet.fields", "created_at,author_id,entities");
     url.searchParams.set("expansions", "author_id");
-    url.searchParams.set("max_results", process.env.X_POLL_MAX_RESULTS ?? "25");
+    url.searchParams.set("max_results", String(this.config.maxResults));
     if (input.sinceId) {
       url.searchParams.set("since_id", input.sinceId);
     }
 
     const response = await fetch(url, {
       headers: {
-        Authorization: `Bearer ${this.bearerToken}`,
+        Authorization: `Bearer ${this.config.bearerToken}`,
       },
     });
 

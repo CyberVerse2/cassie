@@ -2,6 +2,7 @@ import { Chalk } from "chalk";
 import Table from "cli-table3";
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
+import { noColor } from "../packages/core/env.ts";
 
 export type TerminalTheme = ReturnType<typeof createTerminalTheme>;
 
@@ -34,7 +35,7 @@ export function createTerminalTheme(input: {
 }
 
 export function shouldUseColor(): boolean {
-  return Boolean(process.stderr.isTTY) && !process.env.NO_COLOR;
+  return Boolean(process.stderr.isTTY) && !noColor();
 }
 
 export function indentWrap(input: {

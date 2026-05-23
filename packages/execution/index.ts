@@ -2,8 +2,13 @@ import { randomUUID } from "node:crypto";
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
 import {
+  assertHyperliquidExecutionEnv,
   assertPolymarketExecutionEnv,
+  optionalEnv,
+  readHyperliquidExecutionEnv,
   readPolymarketExecutionEnv,
+  type HyperliquidExecutionEnv,
+  type HyperliquidExecutionEnvOptions,
   type PolymarketExecutionEnv,
   type PolymarketExecutionEnvOptions,
 } from "../core/env.ts";
@@ -18,7 +23,7 @@ export interface ExecutionClient {
 }
 
 export class WebhookExecutionClient implements ExecutionClient {
-  constructor(private readonly endpoint = process.env.EXECUTION_WEBHOOK_URL) {}
+  constructor(private readonly endpoint = optionalEnv("EXECUTION_WEBHOOK_URL")) {}
 
   async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
     if (!this.endpoint) {
@@ -66,18 +71,18 @@ export class VenueExecutionClient implements ExecutionClient {
   }
 }
 
+export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions;
+
 export class HyperliquidExecutionClient implements ExecutionClient {
-  constructor(
-    private readonly privateKey = process.env.HYPERLIQUID_PRIVATE_KEY,
-    private readonly slippageBps = Number(process.env.HYPERLIQUID_EXECUTION_SLIPPAGE_BPS ?? 100),
-  ) {}
+  private readonly config: HyperliquidExecutionEnv;
+
+  constructor(options: HyperliquidExecutionClientOptions = {}) {
+    this.config = readHyperliquidExecutionEnv(undefined, options);
+  }
 
   async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
-    if (!this.privateKey) {
-      throw new MissingConnectorConfigError("Hyperliquid execution", "HYPERLIQUID_PRIVATE_KEY");
-    }
-
-    const wallet = new EthersWallet(this.privateKey);
+    const config = assertHyperliquidExecutionEnv(this.config);
+    const wallet = new EthersWallet(config.privateKey);
     const transport = new HttpTransport();
     const info = new InfoClient({ transport });
     const exchange = new ExchangeClient({ transport, wallet });
@@ -91,7 +96,7 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     }
 
     const isBuy = ticket.side === "long" || ticket.side === "buy";
-    const slippage = this.slippageBps / 10_000;
+    const slippage = config.slippageBps / 10_000;
     const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
     const size = ticket.sizeUsd / mid;
     const response = await exchange.order({
@@ -99,7 +104,7 @@ export class HyperliquidExecutionClient implements ExecutionClient {
         {
           a: asset.id,
           b: isBuy,
-          p: formatDecimal(price, Number(process.env.HYPERLIQUID_PRICE_DECIMALS ?? 5)),
+          p: formatDecimal(price, config.priceDecimals),
           s: formatDecimal(size, asset.sizeDecimals),
           r: false,
           t: { limit: { tif: "Ioc" } },
@@ -158,7 +163,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
   private readonly factory: PolymarketClobClientFactory;
 
   constructor(options: PolymarketExecutionClientOptions = {}) {
-    this.config = readPolymarketExecutionEnv(process.env, options);
+    this.config = readPolymarketExecutionEnv(undefined, options);
     this.factory = options.factory ?? ((clientOptions) => new ClobClient(clientOptions));
   }
 

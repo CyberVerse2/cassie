@@ -12,10 +12,11 @@ import {
   requireApiToken,
 } from "./security.ts";
 import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "../packages/app/x-webhook.ts";
+import { cassieMaxBodyBytes, serverPort } from "../packages/core/env.ts";
 
 assertRuntimeConfig();
 const product = new CassieProduct();
-const port = Number(process.env.PORT ?? 3000);
+const port = serverPort();
 const rateLimiter = new MemoryRateLimiter();
 
 const server = createServer(async (request, response) => {
@@ -149,7 +150,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 async function readJson(request: IncomingMessage): Promise<unknown> {
   const chunks: Buffer[] = [];
   let total = 0;
-  const maxBytes = Number(process.env.CASSIE_MAX_BODY_BYTES ?? 256_000);
+  const maxBytes = cassieMaxBodyBytes();
   for await (const chunk of request) {
     const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
     total += buffer.byteLength;

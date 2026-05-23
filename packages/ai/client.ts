@@ -4,6 +4,13 @@ import { Output, generateText } from "ai";
 import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { formatErrorForLog } from "../core/error-format.ts";
+import {
+  cassieCheapModel,
+  cassieImportantModel,
+  deepSeekApiKey,
+  googleApiKey,
+  numberEnv,
+} from "../core/env.ts";
 import { googleThinkingOptions } from "./google-options.ts";
 import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
 
@@ -75,13 +82,8 @@ export function routeStructuredModel(input: {
   cheapModel?: string;
   expensiveModel?: string;
 }): ModelRoute {
-  const cheapModel = input.cheapModel ?? process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ??
-    DEFAULT_CHEAP_MODEL;
-  const expensiveModel = input.expensiveModel ??
-    process.env.CASSIE_IMPORTANT_MODEL ??
-    process.env.CASSIE_EXPENSIVE_MODEL ??
-    process.env.CASSIE_MODEL ??
-    DEFAULT_EXPENSIVE_MODEL;
+  const cheapModel = input.cheapModel ?? cassieCheapModel(DEFAULT_CHEAP_MODEL);
+  const expensiveModel = input.expensiveModel ?? cassieImportantModel(DEFAULT_EXPENSIVE_MODEL);
   const tier = input.tier ?? (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
 
   return tier === "cheap"
@@ -94,12 +96,9 @@ export class CassieStructuredClient implements StructuredAiClient {
   private readonly cheapModelName: string;
 
   constructor(
-    modelName = process.env.CASSIE_IMPORTANT_MODEL ??
-      process.env.CASSIE_EXPENSIVE_MODEL ??
-      process.env.CASSIE_MODEL ??
-      DEFAULT_EXPENSIVE_MODEL,
+    modelName = cassieImportantModel(DEFAULT_EXPENSIVE_MODEL),
     private readonly trace?: TraceRecorder,
-    cheapModelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL,
+    cheapModelName = cassieCheapModel(DEFAULT_CHEAP_MODEL),
   ) {
     this.expensiveModelName = modelName;
     this.cheapModelName = cheapModelName;
@@ -118,10 +117,12 @@ export class CassieStructuredClient implements StructuredAiClient {
       expensiveModel: this.expensiveModelName,
     });
 
-    if (route.provider === "google" && !googleApiKey()) {
+    const googleKey = googleApiKey();
+    const deepSeekKey = deepSeekApiKey();
+    if (route.provider === "google" && !googleKey) {
       throw new MissingImportantAiDependencyError("AI dependency unavailable. Set GEMINI_API_KEY to run Cassie's expensive judgment tools.");
     }
-    if (route.provider === "deepseek" && !process.env.DEEPSEEK_API_KEY) {
+    if (route.provider === "deepseek" && !deepSeekKey) {
       throw new MissingAiDependencyError("AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
     }
 
@@ -143,12 +144,12 @@ export class CassieStructuredClient implements StructuredAiClient {
     try {
       const deepseek = route.provider === "deepseek"
         ? createDeepSeek({
-          apiKey: process.env.DEEPSEEK_API_KEY,
+          apiKey: deepSeekKey,
         })
         : null;
       const google = route.provider === "google"
         ? createGoogleGenerativeAI({
-          apiKey: googleApiKey(),
+          apiKey: googleKey,
         })
         : null;
       const result = await generateText({
@@ -185,7 +186,7 @@ export class CassieStructuredClient implements StructuredAiClient {
 export class DirectDeepSeekStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL) {
+  constructor(modelName = cassieCheapModel(DEFAULT_CHEAP_MODEL)) {
     this.modelName = modelName;
   }
 
@@ -195,12 +196,13 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    if (!process.env.DEEPSEEK_API_KEY) {
+    const apiKey = deepSeekApiKey();
+    if (!apiKey) {
       throw new MissingAiDependencyError();
     }
 
     const deepseek = createDeepSeek({
-      apiKey: process.env.DEEPSEEK_API_KEY,
+      apiKey,
     });
 
     try {
@@ -230,7 +232,7 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
 export class GoogleImportantStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = process.env.CASSIE_IMPORTANT_MODEL ?? DEFAULT_IMPORTANT_MODEL) {
+  constructor(modelName = cassieImportantModel(DEFAULT_IMPORTANT_MODEL)) {
     this.modelName = modelName;
   }
 
@@ -240,12 +242,13 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    if (!googleApiKey()) {
+    const apiKey = googleApiKey();
+    if (!apiKey) {
       throw new MissingImportantAiDependencyError();
     }
 
     const google = createGoogleGenerativeAI({
-      apiKey: googleApiKey(),
+      apiKey,
     });
 
     try {
@@ -272,12 +275,9 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
   }
 }
 
-function googleApiKey(): string | undefined {
-  return process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-}
-
 function structuredMaxRetries(): number {
-  const configured = Number(process.env.CASSIE_STRUCTURED_MAX_RETRIES ?? DEFAULT_STRUCTURED_MAX_RETRIES);
-  if (!Number.isFinite(configured)) return DEFAULT_STRUCTURED_MAX_RETRIES;
-  return Math.max(1, Math.floor(configured));
+  return numberEnv("CASSIE_STRUCTURED_MAX_RETRIES", DEFAULT_STRUCTURED_MAX_RETRIES, undefined, {
+    integer: true,
+    min: 1,
+  });
 }

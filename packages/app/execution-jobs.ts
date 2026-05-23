@@ -17,6 +17,14 @@ import {
   type ExecutionClient,
 } from "../execution/index.ts";
 import type { ControlRun, ExecutionJob, MarketCandidate, TradeTicket } from "../core/schemas/index.ts";
+import {
+  databaseUrl as configuredDatabaseUrl,
+  executionWebhookUrl,
+  graphileExecutionMaxAttempts,
+  graphileSupervisorMaxAttempts,
+  graphileWorkerConcurrency,
+  graphileWorkerPollIntervalMs,
+} from "../core/env.ts";
 import type { CassieStore } from "../db/store.ts";
 import { evaluateRisk } from "../risk/index.ts";
 
@@ -39,7 +47,7 @@ export interface CassieJobQueue {
 export class GraphileExecutionJobQueue implements CassieJobQueue {
   private workerUtils: Promise<WorkerUtils> | null = null;
 
-  constructor(private readonly databaseUrl = process.env.DATABASE_URL) {}
+  constructor(private readonly databaseUrl = configuredDatabaseUrl()) {}
 
   async enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
     const workerUtils = await this.getWorkerUtils();
@@ -50,7 +58,7 @@ export class GraphileExecutionJobQueue implements CassieJobQueue {
         jobKey: `cassie:execution:${job.jobId}`,
         jobKeyMode: "unsafe_dedupe",
         queueName: `cassie:ticket:${job.ticketId}`,
-        maxAttempts: Number(process.env.GRAPHILE_EXECUTION_MAX_ATTEMPTS ?? 5),
+        maxAttempts: graphileExecutionMaxAttempts(),
       },
     );
 
@@ -66,7 +74,7 @@ export class GraphileExecutionJobQueue implements CassieJobQueue {
         jobKey: `cassie:run:${run.runId}`,
         jobKeyMode: "unsafe_dedupe",
         queueName: `cassie:run:${run.runId}`,
-        maxAttempts: Number(process.env.GRAPHILE_SUPERVISOR_MAX_ATTEMPTS ?? 3),
+        maxAttempts: graphileSupervisorMaxAttempts(),
       },
     );
 
@@ -271,7 +279,7 @@ export function createExecutionTaskList(): TaskList {
 }
 
 export async function runExecutionWorker() {
-  if (!process.env.DATABASE_URL) {
+  if (!configuredDatabaseUrl()) {
     throw new MissingDatabaseConfigError();
   }
 
@@ -279,13 +287,13 @@ export async function runExecutionWorker() {
   return run({
     pgPool: pool,
     taskList: createExecutionTaskList(),
-    concurrency: Number(process.env.GRAPHILE_WORKER_CONCURRENCY ?? 1),
-    pollInterval: Number(process.env.GRAPHILE_WORKER_POLL_INTERVAL_MS ?? 2_000),
+    concurrency: graphileWorkerConcurrency(),
+    pollInterval: graphileWorkerPollIntervalMs(),
   });
 }
 
 function defaultExecutionClient(): ExecutionClient {
-  return process.env.EXECUTION_WEBHOOK_URL
+  return executionWebhookUrl()
     ? new WebhookExecutionClient()
     : new VenueExecutionClient();
 }

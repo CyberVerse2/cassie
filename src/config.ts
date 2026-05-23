@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { currentEnv, type EnvSource } from "../packages/core/env.ts";
 
 export const RuntimeConfigSchema = z.object({
   DATABASE_URL: z.string().min(1),
@@ -7,7 +8,7 @@ export const RuntimeConfigSchema = z.object({
   XAI_API_KEY: z.string().min(1),
 });
 
-export function assertRuntimeConfig(env = process.env): void {
+export function assertRuntimeConfig(env: EnvSource = currentEnv()): void {
   const result = RuntimeConfigSchema.safeParse(env);
   if (!result.success) {
     const missing = result.error.issues

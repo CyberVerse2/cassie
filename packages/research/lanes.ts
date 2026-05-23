@@ -19,6 +19,16 @@ import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createXai } from "@ai-sdk/xai";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
+import {
+  cassieCheapModel,
+  cassieWebSearchModel,
+  deepSeekApiKey,
+  googleApiKey,
+  grokXSearchModel,
+  numberEnv,
+  requiredConnectorEnv,
+  xAiApiKey,
+} from "../core/env.ts";
 import { configureAiSdkWarningLogging } from "../ai/sdk-warnings.ts";
 import { DEFAULT_CHEAP_MODEL, DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../ai/client.ts";
 import { googleThinkingOptions } from "../ai/google-options.ts";
@@ -85,17 +95,17 @@ type SearchSource = {
 
 export class GeminiWebSearchLane {
   constructor(
-    private readonly apiKey = process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY,
-    private readonly model = process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? DEFAULT_WEB_SEARCH_MODEL,
+    private readonly apiKey = googleApiKey(),
+    private readonly model = cassieWebSearchModel(DEFAULT_WEB_SEARCH_MODEL),
     private readonly trace?: TraceRecorder,
-    private readonly structuredModel = process.env.CASSIE_CHEAP_MODEL ?? process.env.DEEPSEEK_MODEL ?? DEFAULT_CHEAP_MODEL,
+    private readonly structuredModel = cassieCheapModel(DEFAULT_CHEAP_MODEL),
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
     if (!this.apiKey) {
       throw new MissingConnectorConfigError("Gemini Web Search lane", "GEMINI_API_KEY");
     }
-    if (!process.env.DEEPSEEK_API_KEY) {
+    if (!deepSeekApiKey()) {
       throw new MissingConnectorConfigError("Search result structurer", "DEEPSEEK_API_KEY");
     }
 
@@ -172,8 +182,8 @@ export class GeminiWebSearchLane {
 
 export class GrokXSearchLane {
   constructor(
-    private readonly apiKey = process.env.XAI_API_KEY,
-    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
+    private readonly apiKey = xAiApiKey(),
+    private readonly model = grokXSearchModel(),
     private readonly trace?: TraceRecorder,
   ) {}
 
@@ -327,8 +337,7 @@ function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): stri
 }
 
 function connectorCallTimeoutMs() {
-  const value = Number(process.env.CASSIE_CONNECTOR_CALL_TIMEOUT_MS ?? 180_000);
-  return Number.isFinite(value) && value > 0 ? value : 180_000;
+  return numberEnv("CASSIE_CONNECTOR_CALL_TIMEOUT_MS", 180_000, undefined, { min: 1 });
 }
 
 async function structureSearchText(input: {
@@ -339,7 +348,9 @@ async function structureSearchText(input: {
   searchText: string;
   sources: SearchSource[];
 }): Promise<SearchQueryOutput> {
-  const deepseek = createDeepSeek({ apiKey: process.env.DEEPSEEK_API_KEY });
+  const deepseek = createDeepSeek({
+    apiKey: requiredConnectorEnv("Search result structurer", "DEEPSEEK_API_KEY"),
+  });
   const result = await generateText({
     model: deepseek.chat(input.model),
     output: Output.object({

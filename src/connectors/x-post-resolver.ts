@@ -2,6 +2,7 @@ import { createXai } from "@ai-sdk/xai";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 import { MissingConnectorConfigError } from "../../packages/core/connector-errors.ts";
+import { grokXSearchModel, xAiApiKey } from "../../packages/core/env.ts";
 import { SourcePostSchema, type SourcePost } from "../../packages/core/schemas/index.ts";
 import type { TraceRecorder } from "../../packages/core/trace.ts";
 import { configureAiSdkWarningLogging } from "../../packages/ai/sdk-warnings.ts";
@@ -29,8 +30,8 @@ export class XPostResolutionError extends Error {
 
 export class GrokXPostResolver {
   constructor(
-    private readonly apiKey = process.env.XAI_API_KEY,
-    private readonly model = process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
+    private readonly apiKey = xAiApiKey(),
+    private readonly model = grokXSearchModel(),
     private readonly trace?: TraceRecorder,
   ) {}
 
