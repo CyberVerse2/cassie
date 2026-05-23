@@ -2,7 +2,7 @@ import type { StructuredAiClient } from "../ai/client.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
-import { formatErrorForLog } from "../core/error-format.ts";
+import { formatErrorForLog } from "../core/helpers/index.ts";
 import {
   AdaptiveQueryRequestSchema,
   type AdaptiveQueryRequest,

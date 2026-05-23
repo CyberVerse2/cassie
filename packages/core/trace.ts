@@ -1,4 +1,4 @@
-import { formatErrorForLog } from "./error-format.ts";
+import { formatErrorForLog } from "./helpers/index.ts";
 
 export type TraceStatus = "running" | "succeeded" | "failed";
 

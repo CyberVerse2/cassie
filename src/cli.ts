@@ -16,7 +16,7 @@ import {
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
 import { buildCliUserSettings } from "./cli-settings.ts";
-import { createTerminalTheme, indentWrap, normalizeStatus, statusTag, type TerminalTheme } from "./terminal-ui.ts";
+import { createTerminalTheme, indentWrap, normalizeStatus, statusTag, type TerminalTheme } from "./helpers/terminal-ui.ts";
 
 type CliFlags = Record<string, string | boolean>;
 

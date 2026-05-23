@@ -2,7 +2,7 @@ import { Chalk } from "chalk";
 import Table from "cli-table3";
 import stringWidth from "string-width";
 import wrapAnsi from "wrap-ansi";
-import { config } from "../packages/core/config.ts";
+import { config } from "../../packages/core/config.ts";
 
 export type TerminalTheme = ReturnType<typeof createTerminalTheme>;
 

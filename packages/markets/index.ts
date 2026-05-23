@@ -7,7 +7,7 @@ import type {
   TradeExpressionPlan,
 } from "../core/schemas/index.ts";
 import type { MarketDataProvider, PolymarketDiscoveryQueryPlanner, PolymarketMarketFinder } from "../agent/tools/market.ts";
-import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
+import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/index.ts";
 import {
   loadHyperliquidCatalog,
   searchHyperliquidCatalog,

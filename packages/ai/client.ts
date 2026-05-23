@@ -2,11 +2,11 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
-import { formatErrorForLog } from "../core/error-format.ts";
+import { formatErrorForLog } from "../core/helpers/index.ts";
 import {
   config,
 } from "../core/config.ts";
-import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
+import { configureAiSdkWarningLogging } from "./helpers/index.ts";
 
 configureAiSdkWarningLogging();
 

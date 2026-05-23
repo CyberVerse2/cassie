@@ -10,7 +10,7 @@ import { DrizzleCassieStore } from "../../core/db/drizzle-store.ts";
 import type { CassieStore } from "../../core/db/store.ts";
 import type { ControlRun } from "../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../core/schemas/index.ts";
-import { formatErrorForLog } from "../../core/error-format.ts";
+import { formatErrorForLog } from "../../core/helpers/index.ts";
 import type { CassieDependencies } from "./dependencies.ts";
 import { AiPolymarketDiscoveryQueryPlanner } from "../tools/market.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
@@ -18,7 +18,7 @@ import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
-import { configureAiSdkWarningLogging } from "../../ai/sdk-warnings.ts";
+import { configureAiSdkWarningLogging } from "../../ai/helpers/index.ts";
 import { config } from "../../core/config.ts";
 
 configureAiSdkWarningLogging();

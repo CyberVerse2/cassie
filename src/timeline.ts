@@ -17,7 +17,7 @@ import {
   statusTag,
   terminalTable,
   type TerminalTheme,
-} from "./terminal-ui.ts";
+} from "./helpers/terminal-ui.ts";
 
 type RecordValue = Record<string, unknown>;
 

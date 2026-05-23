@@ -9,7 +9,7 @@ import {
   HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
 } from "../packages/markets/index.ts";
-import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
+import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
 import type { ResearchQueryPlan, Thesis } from "../packages/core/schemas/index.ts";
 import type { HyperliquidCatalogAsset } from "../packages/markets/hyperliquid-catalog.ts";
 

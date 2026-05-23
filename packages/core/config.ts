@@ -1,6 +1,6 @@
 import { SignatureTypeV2, type ApiKeyCreds } from "@polymarket/clob-client-v2";
 import { z } from "zod";
-import { MissingConnectorConfigError } from "./connector-errors.ts";
+import { MissingConnectorConfigError } from "./helpers/index.ts";
 
 export type EnvSource = Record<string, string | undefined>;
 

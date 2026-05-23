@@ -1,6 +1,5 @@
-import { randomUUID } from "node:crypto";
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
-import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
+import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/index.ts";
 import {
   assertHyperliquidExecutionEnv,
   assertPolymarketExecutionEnv,
@@ -17,6 +16,9 @@ import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
+import { formatDecimal } from "./helpers/index.ts";
+
+export * from "./helpers/index.ts";
 
 export interface ExecutionClient {
   execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]>;
@@ -208,53 +210,4 @@ export class PolymarketExecutionClient implements ExecutionClient {
       raw: response,
     };
   }
-}
-
-function formatDecimal(value: number, decimals: number): string {
-  const factor = 10 ** decimals;
-  const truncated = Math.floor(value * factor) / factor;
-  return truncated.toFixed(decimals).replace(/\.?0+$/, "");
-}
-
-export function createQueuedExecutionJob(ticketId: string): ExecutionJob {
-  const now = new Date().toISOString();
-
-  return {
-    jobId: randomUUID(),
-    ticketId,
-    status: "queued",
-    createdAt: now,
-    updatedAt: now,
-    failureReason: null,
-    executionResult: null,
-  };
-}
-
-export function markExecutionRunning(job: ExecutionJob): ExecutionJob {
-  return {
-    ...job,
-    status: "running",
-    updatedAt: new Date().toISOString(),
-  };
-}
-
-export function markExecutionSucceeded(
-  job: ExecutionJob,
-  executionResult: ExecutionJob["executionResult"],
-): ExecutionJob {
-  return {
-    ...job,
-    status: "succeeded",
-    updatedAt: new Date().toISOString(),
-    executionResult,
-  };
-}
-
-export function markExecutionFailed(job: ExecutionJob, failureReason: string): ExecutionJob {
-  return {
-    ...job,
-    status: "failed",
-    updatedAt: new Date().toISOString(),
-    failureReason,
-  };
 }

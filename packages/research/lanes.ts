@@ -13,7 +13,7 @@ import {
   type ResearchQueryPlan,
   SearchSourceTypeSchema,
 } from "../core/schemas/index.ts";
-import { MissingConnectorConfigError } from "../core/connector-errors.ts";
+import { MissingConnectorConfigError } from "../core/helpers/index.ts";
 import { Output, generateText } from "ai";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createXai } from "@ai-sdk/xai";
@@ -23,9 +23,8 @@ import {
   config,
   requiredConnectorEnv,
 } from "../core/config.ts";
-import { configureAiSdkWarningLogging } from "../ai/sdk-warnings.ts";
+import { configureAiSdkWarningLogging, googleThinkingOptions } from "../ai/helpers/index.ts";
 import { DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../ai/client.ts";
-import { googleThinkingOptions } from "../ai/google-options.ts";
 import {
   buildSearchStructuringPrompt,
   buildWebQueryJobPrompt,

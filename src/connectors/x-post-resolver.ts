@@ -1,11 +1,11 @@
 import { createXai } from "@ai-sdk/xai";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { MissingConnectorConfigError } from "../../packages/core/connector-errors.ts";
+import { MissingConnectorConfigError } from "../../packages/core/helpers/index.ts";
 import { config } from "../../packages/core/config.ts";
 import { SourcePostSchema, type SourcePost } from "../../packages/core/schemas/index.ts";
 import type { TraceRecorder } from "../../packages/core/trace.ts";
-import { configureAiSdkWarningLogging } from "../../packages/ai/sdk-warnings.ts";
+import { configureAiSdkWarningLogging } from "../../packages/ai/helpers/index.ts";
 
 configureAiSdkWarningLogging();
 
