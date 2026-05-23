@@ -1,5 +1,5 @@
 import type { RunStepType } from "../../core/schemas/index.ts";
-import type { CassieStore } from "../../db/store.ts";
+import type { CassieStore } from "../../core/db/store.ts";
 import { formatErrorForLog } from "../../core/error-format.ts";
 
 export async function recordRunStep<T>(input: {

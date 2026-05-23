@@ -1,6 +1,6 @@
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
-import { databaseUrl as configuredDatabaseUrl } from "../core/env.ts";
+import { config } from "../config.ts";
 import * as schema from "./schema.ts";
 
 export type CassieDb = NodePgDatabase<typeof schema>;
@@ -12,7 +12,7 @@ export class MissingDatabaseConfigError extends Error {
   }
 }
 
-export function createPostgresPool(databaseUrl = configuredDatabaseUrl()): Pool {
+export function createPostgresPool(databaseUrl = config.database.url): Pool {
   if (!databaseUrl) {
     throw new MissingDatabaseConfigError();
   }

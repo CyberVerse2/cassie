@@ -13,8 +13,8 @@ import {
   type SourcePost,
   type UserSettings,
 } from "../core/schemas/index.ts";
-import { DrizzleCassieStore } from "../db/drizzle-store.ts";
-import type { CassieStore } from "../db/store.ts";
+import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
+import type { CassieStore } from "../core/db/store.ts";
 import type { CassieDependencies } from "./dependencies.ts";
 import { pollXMentions } from "./x-polling.ts";
 import {

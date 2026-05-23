@@ -3,7 +3,7 @@ import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type { AccountStateProvider } from "../packages/execution/account-state.ts";
 import { buildSupervisorInstructions } from "../packages/agent/supervisor/agent.ts";
 import { createCassieSupervisorTools } from "../packages/agent/supervisor/tools.ts";
-import { InMemoryCassieStore } from "../packages/db/store.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   IntentResult,
   GoalResolution,

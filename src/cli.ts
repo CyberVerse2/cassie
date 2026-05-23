@@ -1,16 +1,16 @@
 import "dotenv/config";
 import { inspect } from "node:util";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
-import { CassieStructuredClient, DEFAULT_IMPORTANT_MODEL } from "../packages/ai/client.ts";
-import { CompositeMarketDataProvider } from "../packages/market-data/index.ts";
+import { CassieStructuredClient } from "../packages/ai/client.ts";
+import { CompositeMarketDataProvider } from "../packages/markets/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
-import { runCassieSupervisorForRun } from "../packages/ai/agents/supervisor/agent.ts";
-import { CassieProduct } from "../packages/workflows/product.ts";
-import { DrizzleCassieStore as ControlPlaneStore } from "../packages/db/drizzle-store.ts";
-import type { CassieStore, CassieStoreSnapshot } from "../packages/db/store.ts";
-import { routeIntent } from "../packages/ai/tools/intent-router.ts";
-import { interpretSignal } from "../packages/ai/tools/signal.ts";
-import { extractThesis } from "../packages/ai/tools/thesis.ts";
+import { runCassieSupervisorForRun } from "../packages/agent/supervisor/agent.ts";
+import { CassieProduct } from "../packages/app/product.ts";
+import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
+import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
+import { routeIntent } from "../packages/agent/tools/intent-router.ts";
+import { interpretSignal } from "../packages/agent/tools/signal.ts";
+import { extractThesis } from "../packages/agent/tools/thesis.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
   config,

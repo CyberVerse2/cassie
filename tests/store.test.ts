@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InMemoryCassieStore } from "../packages/db/store.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   EvidenceClaim,
   ExecutionJob,

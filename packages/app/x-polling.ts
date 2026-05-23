@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { SourcePost } from "../core/schemas/index.ts";
-import type { CassieStore } from "../db/store.ts";
+import type { CassieStore } from "../core/db/store.ts";
 import { readJsonResponse } from "../core/connector-errors.ts";
 import { config as runtimeConfig } from "../core/config.ts";
 import type { CassieProduct } from "./product.ts";

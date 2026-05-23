@@ -14,7 +14,7 @@ import type {
   SourcePost,
   TradeTicket,
   UserSettings,
-} from "../core/schemas/index.ts";
+} from "../schemas/index.ts";
 import type {
   ModelCallUsageRecord,
   ResearchQueryJobRecord,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CassieProduct } from "../packages/app/product.ts";
-import { InMemoryCassieStore } from "../packages/db/store.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { ControlRun, ExecutionJob, SourcePost, UserSettings } from "../packages/core/schemas/index.ts";
 import type { CassieJobQueue } from "../packages/app/execution-jobs.ts";
 

@@ -1,7 +1,7 @@
 import { makeWorkerUtils, run, type TaskList, type WorkerUtils } from "graphile-worker";
 import { z } from "zod";
-import { createPostgresPool, MissingDatabaseConfigError } from "../db/client.ts";
-import { DrizzleCassieStore } from "../db/drizzle-store.ts";
+import { createPostgresPool, MissingDatabaseConfigError } from "../core/db/client.ts";
+import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import { runCassieSupervisorForRun } from "../agent/supervisor/agent.ts";
 import {
   HyperliquidAccountStateProvider,
@@ -20,7 +20,7 @@ import type { ControlRun, ExecutionJob, MarketCandidate, TradeTicket } from "../
 import {
   config,
 } from "../core/config.ts";
-import type { CassieStore } from "../db/store.ts";
+import type { CassieStore } from "../core/db/store.ts";
 import { evaluateRisk } from "../risk/index.ts";
 
 export const EXECUTE_TRADE_TICKET_TASK = "execute_trade_ticket";

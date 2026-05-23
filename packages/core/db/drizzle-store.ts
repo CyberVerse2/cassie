@@ -13,7 +13,7 @@ import type {
   SourcePost,
   TradeTicket,
   UserSettings,
-} from "../core/schemas/index.ts";
+} from "../schemas/index.ts";
 import {
   auditEvents,
   controlRuns,

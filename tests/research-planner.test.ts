@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { InMemoryCassieStore } from "../packages/db/store.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   GoalResolution,
   QueryJob,

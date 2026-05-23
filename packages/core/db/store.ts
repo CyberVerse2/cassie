@@ -15,7 +15,7 @@ import type {
   SourcePost,
   TradeTicket,
   UserSettings,
-} from "../core/schemas/index.ts";
+} from "../schemas/index.ts";
 
 export interface MentionRecord {
   mentionId: string;

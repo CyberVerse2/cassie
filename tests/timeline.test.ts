@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { CassieStoreSnapshot } from "../packages/db/store.ts";
+import type { CassieStoreSnapshot } from "../packages/core/db/store.ts";
 import { formatRunTimeline } from "../src/timeline.ts";
 
 const snapshot: CassieStoreSnapshot = {

@@ -1,7 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { CassieDependencies } from "../../app/dependencies.ts";
-import type { CassieStore } from "../../db/store.ts";
+import type { CassieStore } from "../../core/db/store.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,

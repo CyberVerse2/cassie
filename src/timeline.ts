@@ -8,7 +8,7 @@ import type {
   ResearchQueryJobRecord,
   ResearchRunRecord,
   ResearchSearchResultRecord,
-} from "../packages/db/store.ts";
+} from "../packages/core/db/store.ts";
 import type { RunStep } from "../packages/core/schemas/index.ts";
 import {
   createTerminalTheme,
