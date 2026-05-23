@@ -1,94 +1,22 @@
-import { makeWorkerUtils, run, type TaskList, type WorkerUtils } from "graphile-worker";
-import { z } from "zod";
-import { createPostgresPool, MissingDatabaseConfigError } from "../core/db/client.ts";
+import { config } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
-import { runCassieSupervisorForRun } from "../agent/supervisor/agent.ts";
+import type { CassieStore } from "../core/db/store.ts";
+import type { ExecutionJob, MarketCandidate, TradeTicket } from "../core/schemas/index.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
 } from "../execution/account-state.ts";
 import {
   createQueuedExecutionJob,
-  VenueExecutionClient,
-  WebhookExecutionClient,
   markExecutionFailed,
   markExecutionRunning,
   markExecutionSucceeded,
+  VenueExecutionClient,
+  WebhookExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
-import type { ControlRun, ExecutionJob, MarketCandidate, TradeTicket } from "../core/schemas/index.ts";
-import {
-  config,
-} from "../core/config.ts";
-import type { CassieStore } from "../core/db/store.ts";
 import { evaluateRisk } from "../risk/index.ts";
-
-export const EXECUTE_TRADE_TICKET_TASK = "execute_trade_ticket";
-export const RUN_CASSIE_SUPERVISOR_TASK = "run_cassie_supervisor";
-
-const ExecuteTradeTicketPayloadSchema = z.object({
-  jobId: z.string(),
-});
-
-const RunCassieSupervisorPayloadSchema = z.object({
-  runId: z.string(),
-});
-
-export interface CassieJobQueue {
-  enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }>;
-  enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }>;
-}
-
-export class GraphileExecutionJobQueue implements CassieJobQueue {
-  private workerUtils: Promise<WorkerUtils> | null = null;
-
-  constructor(private readonly databaseUrl = config.database.url) {}
-
-  async enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
-    const workerUtils = await this.getWorkerUtils();
-    const graphileJob = await workerUtils.addJob(
-      EXECUTE_TRADE_TICKET_TASK,
-      { jobId: job.jobId },
-      {
-        jobKey: `cassie:execution:${job.jobId}`,
-        jobKeyMode: "unsafe_dedupe",
-        queueName: `cassie:ticket:${job.ticketId}`,
-        maxAttempts: config.graphileWorker.executionMaxAttempts,
-      },
-    );
-
-    return { executionJobId: job.jobId, graphileJobId: graphileJob.id };
-  }
-
-  async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }> {
-    const workerUtils = await this.getWorkerUtils();
-    const graphileJob = await workerUtils.addJob(
-      RUN_CASSIE_SUPERVISOR_TASK,
-      { runId: run.runId },
-      {
-        jobKey: `cassie:run:${run.runId}`,
-        jobKeyMode: "unsafe_dedupe",
-        queueName: `cassie:run:${run.runId}`,
-        maxAttempts: config.graphileWorker.supervisorMaxAttempts,
-      },
-    );
-
-    return { runId: run.runId, graphileJobId: graphileJob.id };
-  }
-
-  private async getWorkerUtils(): Promise<WorkerUtils> {
-    if (!this.databaseUrl) {
-      throw new MissingDatabaseConfigError();
-    }
-
-    this.workerUtils ??= makeWorkerUtils({ connectionString: this.databaseUrl }).then(async (utils) => {
-      await utils.migrate();
-      return utils;
-    });
-
-    return this.workerUtils;
-  }
-}
+import { GraphileExecutionJobQueue, type CassieJobQueue } from "./queue.ts";
 
 export async function executeExecutionJob(input: {
   jobId: string;
@@ -257,34 +185,6 @@ function parseMarketSide(side: string): MarketCandidate["side"] {
   }
 
   throw new Error(`Unsupported ticket side for execution preflight: ${side}`);
-}
-
-export function createExecutionTaskList(): TaskList {
-  return {
-    [EXECUTE_TRADE_TICKET_TASK]: async (payload) => {
-      const parsed = ExecuteTradeTicketPayloadSchema.parse(payload);
-      await executeExecutionJob({ jobId: parsed.jobId });
-    },
-    [RUN_CASSIE_SUPERVISOR_TASK]: async (payload) => {
-      const parsed = RunCassieSupervisorPayloadSchema.parse(payload);
-      await runCassieSupervisorForRun({ runId: parsed.runId });
-      await enqueueAutoApprovedTicketsForRun({ runId: parsed.runId });
-    },
-  };
-}
-
-export async function runExecutionWorker() {
-  if (!config.database.url) {
-    throw new MissingDatabaseConfigError();
-  }
-
-  const pool = createPostgresPool();
-  return run({
-    pgPool: pool,
-    taskList: createExecutionTaskList(),
-    concurrency: config.graphileWorker.concurrency,
-    pollInterval: config.graphileWorker.pollIntervalMs,
-  });
 }
 
 function defaultExecutionClient(): ExecutionClient {

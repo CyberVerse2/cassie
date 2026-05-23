@@ -22,7 +22,7 @@ import {
   executeExecutionJob,
   queueExecutionJob,
   type CassieJobQueue,
-} from "./execution-jobs.ts";
+} from "../jobs/index.ts";
 
 export const MentionRequestSchema = z.object({
   userId: z.string(),

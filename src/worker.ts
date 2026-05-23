@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { runExecutionWorker } from "../packages/app/execution-jobs.ts";
+import { runExecutionWorker } from "../packages/jobs/index.ts";
 
 const runner = await runExecutionWorker();
 
