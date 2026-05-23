@@ -6,7 +6,7 @@ import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
 } from "../../execution/account-state.ts";
-import { cassieCheapModel, cassieImportantModel } from "../../core/env.ts";
+import { config } from "../../core/config.ts";
 import {
   CritiqueSchema,
   IntentResultSchema,
@@ -128,8 +128,8 @@ export function createCassieSupervisorTools(input: {
   accountState?: AccountState;
   accountStateProvider?: AccountStateProvider;
 }) {
-  const cheapModel = cassieCheapModel("deepseek/deepseek-v4-flash");
-  const importantModel = cassieImportantModel("gemini-3.5-flash");
+  const cheapModel = config.ai.cheapModel;
+  const importantModel = config.ai.importantModel;
   const cheapAi = input.deps.cheapAi ?? input.deps.ai;
   const importantAi = input.deps.importantAi ?? input.deps.ai;
   if (!cheapAi) {

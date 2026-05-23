@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { currentEnv, type EnvSource } from "../packages/core/env.ts";
+import { currentEnv, type EnvSource } from "../packages/core/config.ts";
 
 export const RuntimeConfigSchema = z.object({
   DATABASE_URL: z.string().min(1),

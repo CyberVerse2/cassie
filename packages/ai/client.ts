@@ -5,12 +5,8 @@ import type { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { formatErrorForLog } from "../core/error-format.ts";
 import {
-  cassieCheapModel,
-  cassieImportantModel,
-  deepSeekApiKey,
-  googleApiKey,
-  numberEnv,
-} from "../core/env.ts";
+  config,
+} from "../core/config.ts";
 import { googleThinkingOptions } from "./google-options.ts";
 import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
 
@@ -82,8 +78,8 @@ export function routeStructuredModel(input: {
   cheapModel?: string;
   expensiveModel?: string;
 }): ModelRoute {
-  const cheapModel = input.cheapModel ?? cassieCheapModel(DEFAULT_CHEAP_MODEL);
-  const expensiveModel = input.expensiveModel ?? cassieImportantModel(DEFAULT_EXPENSIVE_MODEL);
+  const cheapModel = input.cheapModel ?? config.ai.cheapModel;
+  const expensiveModel = input.expensiveModel ?? config.ai.importantModel;
   const tier = input.tier ?? (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
 
   return tier === "cheap"
@@ -96,9 +92,9 @@ export class CassieStructuredClient implements StructuredAiClient {
   private readonly cheapModelName: string;
 
   constructor(
-    modelName = cassieImportantModel(DEFAULT_EXPENSIVE_MODEL),
+    modelName = config.ai.importantModel,
     private readonly trace?: TraceRecorder,
-    cheapModelName = cassieCheapModel(DEFAULT_CHEAP_MODEL),
+    cheapModelName = config.ai.cheapModel,
   ) {
     this.expensiveModelName = modelName;
     this.cheapModelName = cheapModelName;
@@ -117,8 +113,8 @@ export class CassieStructuredClient implements StructuredAiClient {
       expensiveModel: this.expensiveModelName,
     });
 
-    const googleKey = googleApiKey();
-    const deepSeekKey = deepSeekApiKey();
+    const googleKey = config.ai.googleApiKey;
+    const deepSeekKey = config.ai.deepSeekApiKey;
     if (route.provider === "google" && !googleKey) {
       throw new MissingImportantAiDependencyError("AI dependency unavailable. Set GEMINI_API_KEY to run Cassie's expensive judgment tools.");
     }
@@ -186,7 +182,7 @@ export class CassieStructuredClient implements StructuredAiClient {
 export class DirectDeepSeekStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = cassieCheapModel(DEFAULT_CHEAP_MODEL)) {
+  constructor(modelName = config.ai.cheapModel) {
     this.modelName = modelName;
   }
 
@@ -196,7 +192,7 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    const apiKey = deepSeekApiKey();
+    const apiKey = config.ai.deepSeekApiKey;
     if (!apiKey) {
       throw new MissingAiDependencyError();
     }
@@ -232,7 +228,7 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
 export class GoogleImportantStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
-  constructor(modelName = cassieImportantModel(DEFAULT_IMPORTANT_MODEL)) {
+  constructor(modelName = config.ai.importantModel) {
     this.modelName = modelName;
   }
 
@@ -242,7 +238,7 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    const apiKey = googleApiKey();
+    const apiKey = config.ai.googleApiKey;
     if (!apiKey) {
       throw new MissingImportantAiDependencyError();
     }
@@ -276,8 +272,5 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
 }
 
 function structuredMaxRetries(): number {
-  return numberEnv("CASSIE_STRUCTURED_MAX_RETRIES", DEFAULT_STRUCTURED_MAX_RETRIES, undefined, {
-    integer: true,
-    min: 1,
-  });
+  return config.structuredAi.maxRetries;
 }

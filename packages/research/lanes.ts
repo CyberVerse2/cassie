@@ -20,22 +20,15 @@ import { createXai } from "@ai-sdk/xai";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import {
-  cassieCheapModel,
-  cassieWebSearchModel,
-  deepSeekApiKey,
-  googleApiKey,
-  grokXSearchModel,
-  numberEnv,
+  config,
   requiredConnectorEnv,
-  xAiApiKey,
-} from "../core/env.ts";
+} from "../core/config.ts";
 import { configureAiSdkWarningLogging } from "../ai/sdk-warnings.ts";
-import { DEFAULT_CHEAP_MODEL, DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../ai/client.ts";
+import { DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } from "../ai/client.ts";
 import { googleThinkingOptions } from "../ai/google-options.ts";
 
 configureAiSdkWarningLogging();
 
-const DEFAULT_WEB_SEARCH_MODEL = "gemini-3.1-flash-lite";
 export const GEMINI_SEARCH_MAX_OUTPUT_TOKENS = 2_048;
 const SEARCH_TEXT_MAX_OUTPUT_TOKENS = 1_024;
 const MAX_SOURCES_PER_QUERY_JOB = 2;
@@ -95,17 +88,17 @@ type SearchSource = {
 
 export class GeminiWebSearchLane {
   constructor(
-    private readonly apiKey = googleApiKey(),
-    private readonly model = cassieWebSearchModel(DEFAULT_WEB_SEARCH_MODEL),
+    private readonly apiKey = config.ai.googleApiKey,
+    private readonly model = config.ai.webSearchModel,
     private readonly trace?: TraceRecorder,
-    private readonly structuredModel = cassieCheapModel(DEFAULT_CHEAP_MODEL),
+    private readonly structuredModel = config.ai.cheapModel,
   ) {}
 
   async runQueryJob(job: QueryJob, queryPlan: ResearchQueryPlan): Promise<SearchLaneResult> {
     if (!this.apiKey) {
       throw new MissingConnectorConfigError("Gemini Web Search lane", "GEMINI_API_KEY");
     }
-    if (!deepSeekApiKey()) {
+    if (!config.ai.deepSeekApiKey) {
       throw new MissingConnectorConfigError("Search result structurer", "DEEPSEEK_API_KEY");
     }
 
@@ -182,8 +175,8 @@ export class GeminiWebSearchLane {
 
 export class GrokXSearchLane {
   constructor(
-    private readonly apiKey = xAiApiKey(),
-    private readonly model = grokXSearchModel(),
+    private readonly apiKey = config.ai.xAiApiKey,
+    private readonly model = config.ai.grokXSearchModel,
     private readonly trace?: TraceRecorder,
   ) {}
 
@@ -337,7 +330,7 @@ function formatGoalsByIds(queryPlan: ResearchQueryPlan, goalIds: string[]): stri
 }
 
 function connectorCallTimeoutMs() {
-  return numberEnv("CASSIE_CONNECTOR_CALL_TIMEOUT_MS", 180_000, undefined, { min: 1 });
+  return config.research.connectorCallTimeoutMs;
 }
 
 async function structureSearchText(input: {

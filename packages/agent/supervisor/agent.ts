@@ -25,7 +25,7 @@ import {
 } from "./policy.ts";
 import { googleThinkingOptions } from "../../ai/google-options.ts";
 import { configureAiSdkWarningLogging } from "../../ai/sdk-warnings.ts";
-import { cassieImportantModel, googleApiKey, numberEnv } from "../../core/env.ts";
+import { config } from "../../core/config.ts";
 
 configureAiSdkWarningLogging();
 
@@ -59,11 +59,11 @@ export async function runCassieSupervisorForRun(input: {
       accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
     });
     const google = createGoogleGenerativeAI({
-      apiKey: googleApiKey(),
+      apiKey: config.ai.googleApiKey,
     });
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
-      model: google(cassieImportantModel(DEFAULT_IMPORTANT_MODEL)),
+      model: google(config.ai.importantModel),
       providerOptions: googleThinkingOptions("low"),
       stopWhen: createCassieStopConditions(),
       tools,
@@ -131,8 +131,8 @@ export async function runCassieSupervisorForRun(input: {
     const result = await agent.generate({
       prompt: buildSupervisorPrompt(running),
       timeout: {
-        totalMs: numberEnv("CASSIE_SUPERVISOR_TIMEOUT_MS", 1_800_000, undefined, { integer: true, min: 1 }),
-        stepMs: numberEnv("CASSIE_SUPERVISOR_STEP_TIMEOUT_MS", 900_000, undefined, { integer: true, min: 1 }),
+        totalMs: config.supervisor.timeoutMs,
+        stepMs: config.supervisor.stepTimeoutMs,
       },
     });
     const finalResult = extractFinalizeRunOutput(result)

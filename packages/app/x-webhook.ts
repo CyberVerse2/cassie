@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { z } from "zod";
 import type { SourcePost } from "../core/schemas/index.ts";
-import { xConsumerSecret } from "../core/env.ts";
+import { config } from "../core/config.ts";
 
 export const XWebhookPayloadSchema = z.object({
   tweet_create_events: z
@@ -21,7 +21,7 @@ export const XWebhookPayloadSchema = z.object({
     .default([]),
 });
 
-export function crcResponse(crcToken: string, secret = xConsumerSecret()): {
+export function crcResponse(crcToken: string, secret = config.x.consumerSecret): {
   response_token: string;
 } {
   if (!secret) {

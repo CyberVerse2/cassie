@@ -2,24 +2,16 @@ import { describe, expect, it } from "vitest";
 import { SignatureTypeV2 } from "@polymarket/clob-client-v2";
 import {
   assertPolymarketExecutionEnv,
-  cassieCheapModel,
-  cassieImportantModel,
   readAiProviderEnv,
   readCassieConfig,
   readGraphileWorkerEnv,
-  googleApiKey,
-  grokXSearchModel,
   assertHyperliquidExecutionEnv,
-  cassieApiToken,
   normalizePrivateKey,
   numberEnv,
-  polymarketGammaMarketsUrl,
   readHyperliquidExecutionEnv,
   readPolymarketExecutionEnv,
   requiredConnectorEnv,
-  xAiApiKey,
-  xPollingEnv,
-} from "../packages/core/env.ts";
+} from "../packages/core/config.ts";
 import { MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
 
 describe("Polymarket env", () => {
@@ -111,13 +103,6 @@ describe("Polymarket env", () => {
     ).toThrow("POLYMARKET_SIGNATURE_TYPE must be 0, 1, 2, or 3.");
   });
 
-  it("centralizes the Gamma markets URL default", () => {
-    expect(polymarketGammaMarketsUrl({})).toBe("https://gamma-api.polymarket.com/markets");
-    expect(polymarketGammaMarketsUrl({
-      POLYMARKET_GAMMA_MARKETS_URL: "https://gamma.example.com/markets",
-    })).toBe("https://gamma.example.com/markets");
-  });
-
   it("centralizes generic required connector env validation", () => {
     expect(() => requiredConnectorEnv("DeepSeek", "DEEPSEEK_API_KEY", {}))
       .toThrow(MissingConnectorConfigError);
@@ -126,31 +111,10 @@ describe("Polymarket env", () => {
     })).toBe("key");
   });
 
-  it("centralizes common model and provider env resolution", () => {
-    expect(googleApiKey({ GOOGLE_GENERATIVE_AI_API_KEY: "google", GEMINI_API_KEY: "gemini" })).toBe("gemini");
-    expect(xAiApiKey({ XAI_API_KEY: "xai" })).toBe("xai");
-    expect(cassieCheapModel("cheap-default", { DEEPSEEK_MODEL: "deepseek-model" })).toBe("deepseek-model");
-    expect(cassieImportantModel("important-default", { CASSIE_MODEL: "cassie-model" })).toBe("cassie-model");
-    expect(grokXSearchModel({}, "grok-default")).toBe("grok-default");
-  });
-
   it("centralizes numeric env defaults", () => {
     expect(numberEnv("COUNT", 3, { COUNT: "4.8" }, { integer: true, min: 1 })).toBe(4);
     expect(numberEnv("COUNT", 3, { COUNT: "nope" })).toBe(3);
     expect(numberEnv("COUNT", 3, { COUNT: "-1" }, { min: 1 })).toBe(3);
-  });
-
-  it("centralizes app-level env values", () => {
-    expect(cassieApiToken({ CASSIE_API_TOKEN: "token" })).toBe("token");
-    expect(xPollingEnv({
-      X_BEARER_TOKEN: "bearer",
-      CASSIE_X_HANDLE: "cassie",
-      X_POLL_MAX_RESULTS: "30",
-    })).toEqual({
-      bearerToken: "bearer",
-      cassieHandle: "cassie",
-      maxResults: 30,
-    });
   });
 
   it("reads grouped AI provider and Graphile worker config", () => {
@@ -163,6 +127,7 @@ describe("Polymarket env", () => {
       CASSIE_IMPORTANT_MODEL: "important",
       CASSIE_WEB_SEARCH_MODEL: "web-search",
       GROK_X_SEARCH_MODEL: "grok-search",
+      CASSIE_STRUCTURED_MAX_RETRIES: "4",
       GRAPHILE_EXECUTION_MAX_ATTEMPTS: "7",
       GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: "4",
       GRAPHILE_WORKER_CONCURRENCY: "3",
@@ -208,6 +173,11 @@ describe("Polymarket env", () => {
       POLYMARKET_CLOB_API_KEY: "poly-key",
       POLYMARKET_CLOB_SECRET: "poly-secret",
       POLYMARKET_CLOB_PASS_PHRASE: "poly-passphrase",
+      POLYMARKET_GAMMA_MARKETS_URL: "https://gamma.example.com/markets",
+      CASSIE_STRUCTURED_MAX_RETRIES: "4",
+      CASSIE_CONNECTOR_CALL_TIMEOUT_MS: "120000",
+      CASSIE_SUPERVISOR_TIMEOUT_MS: "240000",
+      CASSIE_SUPERVISOR_STEP_TIMEOUT_MS: "60000",
     });
 
     expect(config).toMatchObject({
@@ -222,8 +192,22 @@ describe("Polymarket env", () => {
       http: {
         apiToken: "api-token",
       },
+      structuredAi: {
+        maxRetries: 4,
+      },
       x: {
         pollUserId: "123",
+      },
+      xPolling: {
+        bearerToken: "bearer",
+        cassieHandle: "cassie",
+      },
+      research: {
+        connectorCallTimeoutMs: 120000,
+      },
+      supervisor: {
+        timeoutMs: 240000,
+        stepTimeoutMs: 60000,
       },
       execution: {
         webhookUrl: "https://execution.example.com",
@@ -238,6 +222,9 @@ describe("Polymarket env", () => {
             passphrase: "poly-passphrase",
           },
         },
+      },
+      polymarket: {
+        gammaMarketsUrl: "https://gamma.example.com/markets",
       },
     });
   });

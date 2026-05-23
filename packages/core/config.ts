@@ -49,6 +49,9 @@ export type XPollingEnv = {
 
 export type CassieRuntimeConfig = {
   ai: AiProviderEnv;
+  structuredAi: {
+    maxRetries: number;
+  };
   database: {
     url?: string;
   };
@@ -59,6 +62,13 @@ export type CassieRuntimeConfig = {
     pollUserId?: string;
     pollIntervalMs: number;
     consumerSecret?: string;
+  };
+  research: {
+    connectorCallTimeoutMs: number;
+  };
+  supervisor: {
+    timeoutMs: number;
+    stepTimeoutMs: number;
   };
   execution: {
     webhookUrl?: string;
@@ -134,31 +144,43 @@ export function readCassieConfig(
 ): CassieRuntimeConfig {
   return {
     ai: readAiProviderEnv(env, aiDefaults),
+    structuredAi: {
+      maxRetries: parseNumberEnv(env.CASSIE_STRUCTURED_MAX_RETRIES, 2, { integer: true, min: 1 }),
+    },
     database: {
-      url: databaseUrl(env),
+      url: optionalEnv("DATABASE_URL", env),
     },
     graphileWorker: readGraphileWorkerEnv(env),
     http: readHttpRuntimeEnv(env),
     xPolling: xPollingEnv(env),
     x: {
-      pollUserId: xPollingUserId(env),
-      pollIntervalMs: xPollingIntervalMs(env),
-      consumerSecret: xConsumerSecret(env),
+      pollUserId: optionalEnv("X_POLL_USER_ID", env),
+      pollIntervalMs: parseNumberEnv(env.X_POLL_INTERVAL_MS, 120_000, { integer: true, min: 1 }),
+      consumerSecret: optionalEnv("X_CONSUMER_SECRET", env),
+    },
+    research: {
+      connectorCallTimeoutMs: parseNumberEnv(env.CASSIE_CONNECTOR_CALL_TIMEOUT_MS, 180_000, { min: 1 }),
+    },
+    supervisor: {
+      timeoutMs: parseNumberEnv(env.CASSIE_SUPERVISOR_TIMEOUT_MS, 1_800_000, { integer: true, min: 1 }),
+      stepTimeoutMs: parseNumberEnv(env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS, 900_000, { integer: true, min: 1 }),
     },
     execution: {
-      webhookUrl: executionWebhookUrl(env),
+      webhookUrl: optionalEnv("EXECUTION_WEBHOOK_URL", env),
       hyperliquid: readHyperliquidExecutionEnv(env),
       polymarket: readPolymarketExecutionEnv(env),
     },
     polymarket: {
-      gammaMarketsUrl: polymarketGammaMarketsUrl(env),
+      gammaMarketsUrl: optionalEnv("POLYMARKET_GAMMA_MARKETS_URL", env) ?? "https://gamma-api.polymarket.com/markets",
     },
     terminal: {
-      debug: debugEnabled(env),
-      noColor: noColor(env),
+      debug: optionalEnv("DEBUG", env) != null,
+      noColor: optionalEnv("NO_COLOR", env) != null,
     },
   };
 }
+
+export const config = readCassieConfig();
 
 export function readAiProviderEnv(
   env: EnvSource = process.env,
@@ -177,42 +199,6 @@ export function readAiProviderEnv(
   })).parse(env);
 }
 
-export function googleApiKey(env: EnvSource = process.env): string | undefined {
-  return readAiProviderEnv(env, aiProviderEnvDefaults()).googleApiKey;
-}
-
-export function deepSeekApiKey(env: EnvSource = process.env): string | undefined {
-  return readAiProviderEnv(env, aiProviderEnvDefaults()).deepSeekApiKey;
-}
-
-export function xAiApiKey(env: EnvSource = process.env): string | undefined {
-  return readAiProviderEnv(env, aiProviderEnvDefaults()).xAiApiKey;
-}
-
-export function cassieCheapModel(fallback: string, env: EnvSource = process.env): string {
-  return readAiProviderEnv(env, aiProviderEnvDefaults({ cheapModel: fallback })).cheapModel;
-}
-
-export function cassieImportantModel(fallback: string, env: EnvSource = process.env): string {
-  return readAiProviderEnv(env, aiProviderEnvDefaults({ importantModel: fallback })).importantModel;
-}
-
-export function cassieWebSearchModel(fallback: string, env: EnvSource = process.env): string {
-  return readAiProviderEnv(env, aiProviderEnvDefaults({ webSearchModel: fallback })).webSearchModel;
-}
-
-export function grokXSearchModel(env: EnvSource = process.env, fallback = "grok-4.3"): string {
-  return readAiProviderEnv(env, aiProviderEnvDefaults({ grokXSearchModel: fallback })).grokXSearchModel;
-}
-
-export function databaseUrl(env: EnvSource = process.env): string | undefined {
-  return optionalEnv("DATABASE_URL", env);
-}
-
-export function executionWebhookUrl(env: EnvSource = process.env): string | undefined {
-  return optionalEnv("EXECUTION_WEBHOOK_URL", env);
-}
-
 export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWorkerEnv {
   return z.object({
     GRAPHILE_EXECUTION_MAX_ATTEMPTS: numberSchema(5, { integer: true, min: 1 }),
@@ -225,22 +211,6 @@ export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWor
     concurrency: values.GRAPHILE_WORKER_CONCURRENCY,
     pollIntervalMs: values.GRAPHILE_WORKER_POLL_INTERVAL_MS,
   })).parse(env);
-}
-
-export function graphileExecutionMaxAttempts(env: EnvSource = process.env): number {
-  return readGraphileWorkerEnv(env).executionMaxAttempts;
-}
-
-export function graphileSupervisorMaxAttempts(env: EnvSource = process.env): number {
-  return readGraphileWorkerEnv(env).supervisorMaxAttempts;
-}
-
-export function graphileWorkerConcurrency(env: EnvSource = process.env): number {
-  return readGraphileWorkerEnv(env).concurrency;
-}
-
-export function graphileWorkerPollIntervalMs(env: EnvSource = process.env): number {
-  return readGraphileWorkerEnv(env).pollIntervalMs;
 }
 
 export function readHttpRuntimeEnv(env: EnvSource = process.env): HttpRuntimeEnv {
@@ -259,42 +229,6 @@ export function readHttpRuntimeEnv(env: EnvSource = process.env): HttpRuntimeEnv
   })).parse(env);
 }
 
-export function cassieApiToken(env: EnvSource = process.env): string | undefined {
-  return readHttpRuntimeEnv(env).apiToken;
-}
-
-export function cassieRateLimitMax(env: EnvSource = process.env): number {
-  return readHttpRuntimeEnv(env).rateLimitMax;
-}
-
-export function cassieRateLimitWindowMs(env: EnvSource = process.env): number {
-  return readHttpRuntimeEnv(env).rateLimitWindowMs;
-}
-
-export function serverPort(env: EnvSource = process.env): number {
-  return readHttpRuntimeEnv(env).port;
-}
-
-export function cassieMaxBodyBytes(env: EnvSource = process.env): number {
-  return readHttpRuntimeEnv(env).maxBodyBytes;
-}
-
-export function debugEnabled(env: EnvSource = process.env): boolean {
-  return optionalEnv("DEBUG", env) != null;
-}
-
-export function noColor(env: EnvSource = process.env): boolean {
-  return optionalEnv("NO_COLOR", env) != null;
-}
-
-export function xPollingUserId(env: EnvSource = process.env): string | undefined {
-  return optionalEnv("X_POLL_USER_ID", env);
-}
-
-export function xPollingIntervalMs(env: EnvSource = process.env): number {
-  return numberEnv("X_POLL_INTERVAL_MS", 120_000, env, { integer: true, min: 1 });
-}
-
 export function xPollingEnv(env: EnvSource = process.env): XPollingEnv {
   return z.object({
     X_BEARER_TOKEN: configuredStringSchema,
@@ -305,10 +239,6 @@ export function xPollingEnv(env: EnvSource = process.env): XPollingEnv {
     cassieHandle: values.CASSIE_X_HANDLE,
     maxResults: values.X_POLL_MAX_RESULTS,
   })).parse(env);
-}
-
-export function xConsumerSecret(env: EnvSource = process.env): string | undefined {
-  return optionalEnv("X_CONSUMER_SECRET", env);
 }
 
 export type PolymarketExecutionEnvOptions = {
@@ -431,10 +361,6 @@ export function assertPolymarketExecutionEnv(
   }
 
   return config as RequiredPolymarketExecutionEnv;
-}
-
-export function polymarketGammaMarketsUrl(env: EnvSource = process.env): string {
-  return optionalEnv("POLYMARKET_GAMMA_MARKETS_URL", env) ?? "https://gamma-api.polymarket.com/markets";
 }
 
 export function normalizePrivateKey(privateKey: string, variable = "POLYMARKET_PRIVATE_KEY"): `0x${string}` {

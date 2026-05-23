@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { cassieApiToken, cassieRateLimitMax, cassieRateLimitWindowMs } from "../packages/core/env.ts";
+import { config } from "../packages/core/config.ts";
 
 export class UnauthorizedError extends Error {
   constructor(message = "Unauthorized") {
@@ -30,7 +30,7 @@ export function applySecurityHeaders(response: ServerResponse): void {
 }
 
 export function requireApiToken(request: IncomingMessage): void {
-  const configured = cassieApiToken();
+  const configured = config.http.apiToken;
   if (!configured) {
     throw new UnauthorizedError("CASSIE_API_TOKEN is not configured.");
   }
@@ -52,8 +52,8 @@ export class MemoryRateLimiter {
   private readonly buckets = new Map<string, RateBucket>();
 
   constructor(
-    private readonly maxRequests = cassieRateLimitMax(),
-    private readonly windowMs = cassieRateLimitWindowMs(),
+    private readonly maxRequests = config.http.rateLimitMax,
+    private readonly windowMs = config.http.rateLimitWindowMs,
   ) {}
 
   check(key: string): void {

@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { SourcePost } from "../core/schemas/index.ts";
 import type { CassieStore } from "../db/store.ts";
 import { readJsonResponse } from "../core/connector-errors.ts";
-import { xPollingEnv } from "../core/env.ts";
+import { config as runtimeConfig } from "../core/config.ts";
 import type { CassieProduct } from "./product.ts";
 
 const XRecentSearchSchema = z.object({
@@ -34,7 +34,7 @@ type XRecentSearch = z.infer<typeof XRecentSearchSchema>;
 
 export class XPollingClient {
   constructor(
-    private readonly config = xPollingEnv(),
+    private readonly config = runtimeConfig.xPolling,
   ) {}
 
   async fetchMentions(input: { sinceId?: string | null }): Promise<XRecentSearch> {

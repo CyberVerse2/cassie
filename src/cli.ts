@@ -13,14 +13,7 @@ import { interpretSignal } from "../packages/ai/tools/signal.ts";
 import { extractThesis } from "../packages/ai/tools/thesis.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
-  cassieImportantModel,
-  cassieWebSearchModel,
-  databaseUrl,
-  debugEnabled,
-  googleApiKey,
-  grokXSearchModel,
-  optionalEnv,
-  xAiApiKey,
+  config,
 } from "../packages/core/env.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
@@ -136,13 +129,13 @@ Useful examples:
 
 async function env() {
   return {
-    databaseUrl: maskSecret(databaseUrl()),
-    geminiApiKey: maskSecret(googleApiKey()),
-    xAiApiKey: maskSecret(xAiApiKey()),
-    hyperliquidPrivateKey: maskSecret(optionalEnv("HYPERLIQUID_PRIVATE_KEY")),
-    cassieModel: cassieImportantModel(DEFAULT_IMPORTANT_MODEL),
-    webSearchModel: cassieWebSearchModel("gemini-3.1-flash-lite"),
-    grokSearchModel: grokXSearchModel(),
+    databaseUrl: maskSecret(config.database.url),
+    geminiApiKey: maskSecret(config.ai.googleApiKey),
+    xAiApiKey: maskSecret(config.ai.xAiApiKey),
+    hyperliquidPrivateKey: maskSecret(config.execution.hyperliquid.privateKey),
+    cassieModel: config.ai.importantModel,
+    webSearchModel: config.ai.webSearchModel,
+    grokSearchModel: config.ai.grokXSearchModel,
   };
 }
 
@@ -694,7 +687,7 @@ function printError(error: unknown) {
 
   if (error instanceof Error) {
     console.error(error.message);
-    if (debugEnabled()) {
+    if (config.terminal.debug) {
       console.error(error.stack);
     }
     return;

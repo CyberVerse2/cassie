@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
-import { assertPolymarketExecutionEnv, polymarketGammaMarketsUrl, readPolymarketExecutionEnv } from "../packages/core/env.ts";
+import { assertPolymarketExecutionEnv, config, readPolymarketExecutionEnv } from "../packages/core/config.ts";
 import { Chain, ClobClient, OrderType, Side } from "@polymarket/clob-client-v2";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
@@ -198,7 +198,7 @@ function selectMarket(markets: NormalizedMarket[], args: PolymarketSmokeArgs): N
 }
 
 async function searchPolymarketMarkets(query: string, limit: number): Promise<NormalizedMarket[]> {
-  const url = new URL(polymarketGammaMarketsUrl());
+  const url = new URL(config.polymarket.gammaMarketsUrl);
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("active", "true");
   url.searchParams.set("closed", "false");

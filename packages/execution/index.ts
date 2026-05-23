@@ -4,14 +4,14 @@ import { MissingConnectorConfigError, readJsonResponse } from "../core/connector
 import {
   assertHyperliquidExecutionEnv,
   assertPolymarketExecutionEnv,
-  optionalEnv,
+  config,
   readHyperliquidExecutionEnv,
   readPolymarketExecutionEnv,
   type HyperliquidExecutionEnv,
   type HyperliquidExecutionEnvOptions,
   type PolymarketExecutionEnv,
   type PolymarketExecutionEnvOptions,
-} from "../core/env.ts";
+} from "../core/config.ts";
 import { Chain, ClobClient, OrderType, Side, type ClobClientOptions, type CreateOrderOptions } from "@polymarket/clob-client-v2";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
@@ -23,7 +23,7 @@ export interface ExecutionClient {
 }
 
 export class WebhookExecutionClient implements ExecutionClient {
-  constructor(private readonly endpoint = optionalEnv("EXECUTION_WEBHOOK_URL")) {}
+  constructor(private readonly endpoint = config.execution.webhookUrl) {}
 
   async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
     if (!this.endpoint) {

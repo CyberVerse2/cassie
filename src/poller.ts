@@ -1,14 +1,14 @@
 import "dotenv/config";
 import { CassieProduct } from "../packages/app/product.ts";
-import { xPollingIntervalMs, xPollingUserId } from "../packages/core/env.ts";
+import { config } from "../packages/core/config.ts";
 
-const userId = xPollingUserId();
+const userId = config.x.pollUserId;
 if (!userId) {
   throw new Error("X poller requires X_POLL_USER_ID.");
 }
 
 const product = new CassieProduct();
-const intervalMs = xPollingIntervalMs();
+const intervalMs = config.x.pollIntervalMs;
 
 async function tick() {
   const result = await product.pollXMentions(userId as string);
