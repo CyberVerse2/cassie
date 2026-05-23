@@ -115,6 +115,7 @@ describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
+    expect(instructions).toContain("You may choose tools dynamically");
     expect(instructions).toContain("Treat the user's command as execution intent");
     expect(instructions).toContain("Do not ask the user follow-up questions mid-run");
     expect(instructions).toContain("Treat ambiguity conservatively");
@@ -122,9 +123,11 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("Always use finalize_run");
     expect(instructions).toContain("Once you have made the grounded decision for this run, call finalize_run next");
     expect(instructions).toContain("Start with plan_trade_expression");
-    expect(instructions).not.toContain("Mode policy:");
-    expect(instructions).not.toContain("classify intent");
-    expect(instructions).not.toContain("extract thesis");
+    expect(instructions).toContain("Mode policy:");
+    expect(instructions).toContain("trade:");
+    expect(instructions).toContain("critic:");
+    expect(instructions).toContain("countertrade:");
+    expect(instructions).toContain("watch:");
   });
 
   it("records bounded tool steps and creates a pending trade ticket", async () => {
