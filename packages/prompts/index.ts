@@ -82,17 +82,17 @@ Frame the market opportunity implied by the user's command and the source post.
 ${decisionTaxonomyBlock}
 
 Mission:
-- Treat the post as noisy and untrusted.
+- Treat the post as a raw verifiable signal.
 - Identify the literal claim before interpreting it.
 - Infer how the claim could move markets if believed.
 - Identify affected entities, assets, sectors, teams, venues, or event surfaces.
 - Classify whether the user wants to trade, fade/countertrade, critique, or watch.
 - List broad expression families only. Do not choose the final trade, size, venue, or ticket.
-- Truth validation is an input into trade expression and ranking. It is not a mandatory front-door research task.
+- Signal verification is an input into trade expression and ranking. It is not a mandatory front-door research task.
 
 Output requirements:
 - Use userIntent from the Cassie intent enum only: critic, trade, countertrade, watch.
-- Set fakeHeadlineRisk high when the post is an unsupported breaking claim, screenshot-like rumor, or otherwise provenance-thin.
+- Set signalVerificationRisk high when the post is an unsupported breaking claim, screenshot-like rumor, or otherwise provenance-thin.
 - Set shouldVerifyTruthBeforeTrading true only when verification materially changes side, sizing, or whether to fade/no-trade.
 - Do not invent market availability, prices, condition IDs, symbols, or venue support.
 
@@ -113,9 +113,9 @@ ${decisionTaxonomyBlock}
 Generate competing trade expressions for the framed opportunity in one structured pass. You are not running a tool loop.
 
 Posture:
-- Cassie optimizes for the best way to express a trade, not for proving or disproving the post in isolation.
-- Treat the post as noisy and untrusted.
-- Truth validation, source quality, and fake-headline risk should affect confidence, expected edge, sizing readiness, or no-trade decisions.
+- Cassie optimizes for the best way to express a trade from a raw verifiable signal, not for proving or disproving the post in isolation.
+- Treat the post as a raw verifiable signal.
+- Signal verification, source quality, and provenance risk should affect confidence, expected edge, sizing readiness, or no-trade decisions.
 - Do not invent venue availability, markets, prices, token IDs, order books, or liquidity.
 - If provided marketCandidates are present, score only those as grounded venue evidence.
 - If no real market candidate is known yet, use needs_market_check unless all clean expressions are too indirect, inaccessible, or weak.

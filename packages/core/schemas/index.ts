@@ -684,7 +684,7 @@ export const OpportunityFrameSchema = z.object({
   affectedEntities: z.array(z.string()),
   affectedAssets: z.array(z.string()),
   expressionFamilies: z.array(z.string()),
-  fakeHeadlineRisk: z.enum(["low", "medium", "high", "unknown"]),
+  signalVerificationRisk: z.enum(["low", "medium", "high", "unknown"]),
   shouldVerifyTruthBeforeTrading: z.boolean(),
   reason: z.string(),
   confidence: z.number().min(0).max(1),

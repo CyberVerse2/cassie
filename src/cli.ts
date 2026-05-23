@@ -551,7 +551,7 @@ function liveThinking(stepType: string): string {
     case "intake":
       return "Persist the incoming mention before agent work starts.";
     case "opportunity":
-      return "Frame the untrusted post into a market opportunity.";
+      return "Frame the raw verifiable signal into a market opportunity.";
     case "research":
       return "Run goal-first research with query jobs and evidence resolution.";
     case "critique":

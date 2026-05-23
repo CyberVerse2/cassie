@@ -276,7 +276,7 @@ function visibleThinkingForStep(step: RunStep): string {
     case "critique":
       return "Use the thesis and source context to identify the strongest objections and weaknesses.";
     case "opportunity":
-      return "Frame the untrusted post into a market opportunity before expression generation.";
+      return "Frame the raw verifiable signal into a market opportunity before expression generation.";
     case "trade_expression":
       return "Generate competing trade expressions from the framed opportunity.";
     case "market_candidates":

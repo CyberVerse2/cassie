@@ -236,7 +236,7 @@ describe("run timeline", () => {
     expect(timeline).toContain("[ok] run_1 ok");
     expect(timeline).toContain("|-- [ai] opportunity [ok] 1.0s");
     expect(timeline).toContain("|   |-- model deepseek-v4-pro");
-    expect(timeline).toContain("|   |-- thinking Frame the untrusted post into a market opportunity");
+    expect(timeline).toContain("|   |-- thinking Frame the raw verifiable signal into a market opportunity");
     expect(timeline).toContain("|-- [research] research_1 [ok] critic standard 5.0s");
     expect(timeline).toContain("|   |-- claim Exa raised $250M.");
     expect(timeline).toContain("|   |-- [wave 0]");

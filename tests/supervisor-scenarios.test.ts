@@ -60,7 +60,7 @@ const opportunityFrame: OpportunityFrame = {
   affectedEntities: ["Solana", "SOL"],
   affectedAssets: ["SOL"],
   expressionFamilies: ["long SOL perp", "Solana ETF prediction market", "no trade if venue fit is weak"],
-  fakeHeadlineRisk: "medium",
+  signalVerificationRisk: "medium",
   shouldVerifyTruthBeforeTrading: true,
   reason: "The post is a social ETF approval claim, so Cassie should route the expression while preserving evidence risk.",
   confidence: 0.72,

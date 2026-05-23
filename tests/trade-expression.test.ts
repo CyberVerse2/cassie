@@ -50,7 +50,7 @@ describe("trade expression planning", () => {
             affectedEntities: ["Zcash"],
             affectedAssets: ["ZEC"],
             expressionFamilies: ["long ZEC perp", "no trade if venue or beta fit is weak"],
-            fakeHeadlineRisk: "medium",
+            signalVerificationRisk: "medium",
             shouldVerifyTruthBeforeTrading: false,
             reason: "The post is an opinion thesis, not a specific factual headline.",
             confidence: 0.7,

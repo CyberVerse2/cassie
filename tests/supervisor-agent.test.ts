@@ -61,7 +61,7 @@ const opportunityFrame: OpportunityFrame = {
   affectedEntities: ["Solana", "SOL"],
   affectedAssets: ["SOL"],
   expressionFamilies: ["long SOL perp", "buy YES on Solana ETF prediction market", "no trade if already priced"],
-  fakeHeadlineRisk: "medium",
+  signalVerificationRisk: "medium",
   shouldVerifyTruthBeforeTrading: true,
   reason: "ETF approval claims can move SOL, but the post is social and unverified.",
   confidence: 0.72,
