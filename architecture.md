@@ -30,14 +30,16 @@ src/
     x-post-resolver.ts    Grok-backed X status resolver
 
 packages/
-  ai/                     AI clients, prompts, tools, supervisor agents
+  agent/                  supervisor loop, policy, and AI tool contracts
+  ai/                     model-provider clients and SDK configuration
+  app/                    product facade, Graphile jobs, X polling/webhook helpers
   core/                   shared schemas, ids, trace, connector errors
   db/                     Drizzle schema, durable store, in-memory test store
   execution/              venue/webhook execution clients and account state
-  market-data/            Hyperliquid and Polymarket discovery
+  markets/                Hyperliquid and Polymarket discovery, quotes, venue confirmation
+  prompts/                prompt builders used by agent and research tools
   research/               query planner, evidence ledger, web/X lanes
   risk/                   deterministic risk checks
-  workflows/              product facade, Graphile jobs, X polling/webhook helpers
 ```
 
 `src` is runtime surface. Package-owned implementation lives under `packages`.

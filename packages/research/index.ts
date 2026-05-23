@@ -29,7 +29,7 @@ import {
   researchQueryPlanPrompt,
   researchSynthesisPrompt,
   sourceProfilePrompt,
-} from "../ai/prompts/index.ts";
+} from "../prompts/index.ts";
 
 export type ResearchAngle = "balanced" | "critic" | "counter";
 

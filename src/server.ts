@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "../packages/workflows/product.ts";
+import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "../packages/app/product.ts";
 import { renderDashboard } from "./dashboard.ts";
 import { assertRuntimeConfig } from "./config.ts";
 import {
@@ -11,7 +11,7 @@ import {
   requestKey,
   requireApiToken,
 } from "./security.ts";
-import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "../packages/workflows/x-webhook.ts";
+import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "../packages/app/x-webhook.ts";
 
 assertRuntimeConfig();
 const product = new CassieProduct();

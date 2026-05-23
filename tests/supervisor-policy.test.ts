@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { prepareCassieSupervisorStep, selectActiveTools } from "../packages/ai/agents/supervisor/policy.ts";
-import { SupervisorPrerequisiteError } from "../packages/ai/agents/supervisor/tools.ts";
+import { prepareCassieSupervisorStep, selectActiveTools } from "../packages/agent/supervisor/policy.ts";
+import { SupervisorPrerequisiteError } from "../packages/agent/supervisor/tools.ts";
 
 function step(toolName: string, output?: unknown) {
   return {

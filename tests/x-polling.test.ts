@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { InMemoryCassieStore } from "../packages/db/store.ts";
-import { pollXMentions, type XPollingClient } from "../packages/workflows/x-polling.ts";
-import type { CassieProduct } from "../packages/workflows/product.ts";
+import { pollXMentions, type XPollingClient } from "../packages/app/x-polling.ts";
+import type { CassieProduct } from "../packages/app/product.ts";
 
 describe("X polling", () => {
   it("does not rewrite the runtime cursor when no newer mention arrives", async () => {

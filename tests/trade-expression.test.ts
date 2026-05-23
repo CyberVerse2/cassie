@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { planTradeExpression } from "../packages/ai/tools/trade-expression.ts";
+import { planTradeExpression } from "../packages/agent/tools/trade-expression.ts";
 import type {
   MarketCandidate,
   ResearchReport,

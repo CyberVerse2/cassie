@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { CassieProduct } from "../packages/workflows/product.ts";
+import { CassieProduct } from "../packages/app/product.ts";
 
 const userId = process.env.X_POLL_USER_ID;
 if (!userId) {

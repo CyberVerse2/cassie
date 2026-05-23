@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type { AccountStateProvider } from "../packages/execution/account-state.ts";
-import { buildSupervisorInstructions } from "../packages/ai/agents/supervisor/agent.ts";
-import { createCassieSupervisorTools } from "../packages/ai/agents/supervisor/tools.ts";
+import { buildSupervisorInstructions } from "../packages/agent/supervisor/agent.ts";
+import { createCassieSupervisorTools } from "../packages/agent/supervisor/tools.ts";
 import { InMemoryCassieStore } from "../packages/db/store.ts";
 import type {
   IntentResult,

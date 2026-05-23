@@ -8,7 +8,7 @@ import {
 import {
   HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
-} from "../packages/market-data/index.ts";
+} from "../packages/markets/index.ts";
 import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
 import type { ResearchQueryPlan, Thesis } from "../packages/core/schemas/index.ts";
 

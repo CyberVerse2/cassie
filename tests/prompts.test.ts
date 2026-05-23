@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { tradeExpressionPrompt } from "../packages/ai/prompts/index.ts";
+import { tradeExpressionPrompt } from "../packages/prompts/index.ts";
 
 describe("Cassie prompts", () => {
   it("keeps vague sector watchlists from becoming invented instruments", () => {
