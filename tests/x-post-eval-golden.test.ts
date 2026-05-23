@@ -22,10 +22,6 @@ const VenueCheckSchema = z.enum([
   "hyperliquid_perp",
   "hyperliquid_pre_stock",
   "polymarket",
-  "public_equity",
-  "listed_options",
-  "crypto_spot",
-  "private_market",
 ]);
 
 const CandidateEvalCaseSchema = z.object({
@@ -73,7 +69,7 @@ describe("X post eval fixture", () => {
         expect.objectContaining({
           id: "private-company-spacex-no-clean-venue",
           candidateActionStates: expect.arrayContaining(["needs_market_check", "route_to_market", "block_trade"]),
-          candidateVenuesToCheck: expect.arrayContaining(["hyperliquid_pre_stock", "polymarket", "private_market"]),
+          candidateVenuesToCheck: expect.arrayContaining(["hyperliquid_pre_stock", "polymarket"]),
           candidateReasoningChecks: expect.arrayContaining(["venue availability", "valuation or odds", "risk and invalidation"]),
         }),
         expect.objectContaining({

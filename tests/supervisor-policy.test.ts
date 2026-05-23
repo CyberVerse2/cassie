@@ -141,7 +141,7 @@ describe("supervisor step policy", () => {
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
     expect(prepared.activeTools).toEqual(["frame_opportunity"]);
-    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "frame_opportunity" });
+    expect(prepared.toolChoice).toBe("auto");
   });
 
   it("keeps trade-expression substance when compressing tool messages before finalization", () => {

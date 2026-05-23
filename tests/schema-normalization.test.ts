@@ -13,7 +13,7 @@ describe("schema normalization", () => {
       candidates: [
         {
           instrument: "ZECBTC",
-          venue: "crypto_spot",
+          venue: "hyperliquid",
           symbol: "ZECBTC",
           instrumentType: "spot",
           venueQuery: null,

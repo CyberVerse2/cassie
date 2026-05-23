@@ -69,8 +69,7 @@
       ],
       "candidateVenuesToCheck": [
         "hyperliquid_spot",
-        "hyperliquid_perp",
-        "crypto_spot"
+        "hyperliquid_perp"
       ],
       "candidateReasoningChecks": [
         "fund-flow verification",
@@ -102,9 +101,8 @@
         "route_to_market"
       ],
       "candidateVenuesToCheck": [
-        "public_equity",
-        "listed_options",
-        "private_market"
+        "hyperliquid_pre_stock",
+        "polymarket"
       ],
       "candidateReasoningChecks": [
         "SEC filing mechanics",
@@ -135,8 +133,8 @@
         "needs_market_check"
       ],
       "candidateVenuesToCheck": [
-        "public_equity",
-        "private_market"
+        "hyperliquid_pre_stock",
+        "polymarket"
       ],
       "candidateReasoningChecks": [
         "direct versus indirect exposure",
@@ -168,8 +166,6 @@
         "short_perp"
       ],
       "candidateVenuesToCheck": [
-        "public_equity",
-        "listed_options",
         "hyperliquid_pre_stock"
       ],
       "candidateReasoningChecks": [
@@ -202,8 +198,8 @@
         "route_to_market"
       ],
       "candidateVenuesToCheck": [
-        "public_equity",
-        "listed_options"
+        "hyperliquid_pre_stock",
+        "polymarket"
       ],
       "candidateReasoningChecks": [
         "sale-process verification",
@@ -236,8 +232,7 @@
       ],
       "candidateVenuesToCheck": [
         "hyperliquid_spot",
-        "hyperliquid_perp",
-        "crypto_spot"
+        "hyperliquid_perp"
       ],
       "candidateReasoningChecks": [
         "source quality",
@@ -268,9 +263,8 @@
         "needs_market_check"
       ],
       "candidateVenuesToCheck": [
-        "public_equity",
         "hyperliquid_pre_stock",
-        "crypto_spot"
+        "hyperliquid_spot"
       ],
       "candidateReasoningChecks": [
         "ticker collision",
@@ -302,8 +296,7 @@
         "block_trade"
       ],
       "candidateVenuesToCheck": [
-        "polymarket",
-        "public_equity"
+        "polymarket"
       ],
       "candidateReasoningChecks": [
         "regulatory verification",
@@ -335,7 +328,6 @@
         "short_perp"
       ],
       "candidateVenuesToCheck": [
-        "crypto_spot",
         "hyperliquid_perp"
       ],
       "candidateReasoningChecks": [
@@ -367,7 +359,6 @@
         "needs_market_check"
       ],
       "candidateVenuesToCheck": [
-        "crypto_spot",
         "hyperliquid_perp"
       ],
       "candidateReasoningChecks": [
@@ -401,8 +392,7 @@
       ],
       "candidateVenuesToCheck": [
         "hyperliquid_pre_stock",
-        "polymarket",
-        "private_market"
+        "polymarket"
       ],
       "candidateReasoningChecks": [
         "venue availability",
@@ -433,7 +423,8 @@
         "no_trade"
       ],
       "candidateVenuesToCheck": [
-        "public_equity"
+        "hyperliquid_pre_stock",
+        "polymarket"
       ],
       "candidateReasoningChecks": [
         "specificity",

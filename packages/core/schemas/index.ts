@@ -175,9 +175,9 @@ export const MarketSelectionSchema = z.object({
 
 export const TradeExpressionCandidateSchema = z.object({
   instrument: z.string(),
-  venue: z.enum(["hyperliquid", "polymarket", "public_equity", "listed_options", "crypto_spot", "private_market", "other"]).nullable().optional(),
+  venue: z.enum(["hyperliquid", "polymarket"]).nullable().optional(),
   symbol: z.string().nullable().optional(),
-  instrumentType: z.enum(["spot", "perp", "pre_stock_perp", "prediction_market", "equity", "option", "private", "unknown"]).nullable().optional(),
+  instrumentType: z.enum(["spot", "perp", "pre_stock_perp", "prediction_market", "unknown"]).nullable().optional(),
   venueQuery: z.string().nullable().optional(),
   expression: z.enum(["long", "short", "pair", "basket", "market_check", "no_trade"]),
   thesis: z.string(),
@@ -201,7 +201,7 @@ export const TradeExpressionCandidateSchema = z.object({
 export const RankedTradeExpressionCandidateSchema = z.object({
   rank: z.number().int().positive(),
   candidateId: z.string(),
-  venue: z.string(),
+  venue: z.enum(["hyperliquid", "polymarket"]),
   symbol: z.string(),
   side: z.enum(["long", "short", "buy_yes", "buy_no", "buy", "sell"]),
   expressionConfidence: z.number().min(0).max(1),

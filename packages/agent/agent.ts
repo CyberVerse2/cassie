@@ -51,6 +51,7 @@ export async function runCassieSupervisorForRun(input: {
   const running = {
     ...run,
     status: "running" as const,
+    error: null,
     updatedAt: new Date().toISOString(),
   };
   await store.updateRun(running);

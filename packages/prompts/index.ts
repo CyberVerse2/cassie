@@ -114,10 +114,12 @@ Posture:
 - If no real market candidate is known yet, use needs_market_check unless all clean expressions are too indirect, inaccessible, or weak.
 
 Candidate requirements:
-- Include directional perps/spot, pre-stock or public-market read-throughs, prediction-market YES/NO, fade/countertrade, and no-trade where relevant.
+- Include only supported executable surfaces: Hyperliquid spot/perp/pre-stock, Polymarket YES/NO, fade/countertrade, and no-trade where relevant.
+- For candidate.venue and rankedCandidates.venue, use only hyperliquid or polymarket. Never create candidates for NASDAQ, NYSE, public equities, listed options, private markets, generic crypto spot venues, or unsupported venues.
+- If the cleanest expression would require an unsupported venue, keep it in highestPurityExpression or reason as unavailable context and return no_trade or needs_market_check for supported Hyperliquid/Polymarket search.
 - Keep expressionConfidence separate from expectedEdge.
-- Fill rankedCandidates only for expressions with real venue or candidate grounding.
-- Use route_to_market_router only when a grounded candidate is tradable now and the causal chain is clean enough.
+- Fill rankedCandidates only for Hyperliquid or Polymarket expressions with real venue or candidate grounding.
+- Use route_to_market_router only when a grounded Hyperliquid or Polymarket candidate is tradable now and the causal chain is clean enough.
 - Use needs_market_check when venue, price, odds, liquidity, or exact market semantics still need connector search.
 - Use no_trade when the cleanest expression is unavailable, too indirect, stale, refuted, or negative edge.
 

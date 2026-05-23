@@ -26,11 +26,7 @@ export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTo
   return {
     activeTools,
     messages: compressSupervisorMessages(messages) as never,
-    toolChoice: activeTools.length === 0
-      ? "none"
-      : activeTools.length === 1
-        ? { type: "tool", toolName: activeTools[0] }
-        : "auto",
+    toolChoice: activeTools.length === 0 ? "none" : "auto",
   };
 };
 
