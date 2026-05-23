@@ -2,7 +2,7 @@ import "dotenv/config";
 import { inspect } from "node:util";
 import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
-import { CompositeMarketDataProvider } from "../packages/markets/index.ts";
+import { CompositeMarketDataProvider } from "../packages/adapters/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/agent/supervisor/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";

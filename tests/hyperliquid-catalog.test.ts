@@ -3,7 +3,7 @@ import {
   buildHyperliquidAssetSearchText,
   searchHyperliquidCatalog,
   type HyperliquidCatalogAsset,
-} from "../packages/markets/hyperliquid-catalog.ts";
+} from "../packages/adapters/hyperliquid/catalog.ts";
 
 const catalog: HyperliquidCatalogAsset[] = [
   {

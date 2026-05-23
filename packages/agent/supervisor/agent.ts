@@ -4,18 +4,19 @@ import { CassieStructuredClient, type StructuredAiClient } from "../../ai/client
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
-} from "../../execution/account-state.ts";
-import { CompositeMarketDataProvider, PolymarketMarketDataProvider } from "../../markets/index.ts";
+} from "../../adapters/hyperliquid/account-state.ts";
+import { CompositeMarketDataProvider } from "../../adapters/index.ts";
+import {
+  AiPolymarketDiscoveryQueryPlanner,
+  PolymarketMarketDataProvider,
+  type MarketDataProvider,
+  type PolymarketMarketFinder,
+} from "../../adapters/polymarket/index.ts";
 import { DrizzleCassieStore } from "../../core/db/drizzle-store.ts";
 import type { CassieStore } from "../../core/db/store.ts";
 import type { ControlRun } from "../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../core/schemas/index.ts";
 import { formatErrorForLog } from "../../core/helpers/index.ts";
-import {
-  AiPolymarketDiscoveryQueryPlanner,
-  type MarketDataProvider,
-  type PolymarketMarketFinder,
-} from "../tools/market.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
 import {
   createCassieStopConditions,

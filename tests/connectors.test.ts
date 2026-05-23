@@ -7,11 +7,13 @@ import {
 } from "../packages/research/lanes.ts";
 import {
   HyperliquidMarketDataProvider,
+} from "../packages/adapters/hyperliquid/index.ts";
+import {
   PolymarketMarketDataProvider,
-} from "../packages/markets/index.ts";
+} from "../packages/adapters/polymarket/index.ts";
 import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
 import type { ResearchQueryPlan, Thesis } from "../packages/core/schemas/index.ts";
-import type { HyperliquidCatalogAsset } from "../packages/markets/hyperliquid-catalog.ts";
+import type { HyperliquidCatalogAsset } from "../packages/adapters/hyperliquid/catalog.ts";
 
 const thesis: Thesis = {
   claim: "SOL may rally because Solana ETF approval odds are increasing.",

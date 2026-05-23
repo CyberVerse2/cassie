@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../packages/agent/tools/market.ts";
+import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../packages/adapters/selection.ts";
 import type { MarketCandidate, Thesis, TradeExpressionPlan } from "../packages/core/schemas/index.ts";
 
 const thesis: Thesis = {

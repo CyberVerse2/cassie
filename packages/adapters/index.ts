@@ -6,13 +6,13 @@ import type {
   Thesis,
   TradeExpressionPlan,
 } from "../core/schemas/index.ts";
-import type { MarketDataProvider, PolymarketDiscoveryQueryPlanner, PolymarketMarketFinder } from "../agent/tools/market.ts";
+import type { MarketDataProvider, PolymarketDiscoveryQueryPlanner, PolymarketMarketFinder } from "./selection.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/index.ts";
 import {
   loadHyperliquidCatalog,
   searchHyperliquidCatalog,
   type HyperliquidCatalogAsset,
-} from "./hyperliquid-catalog.ts";
+} from "./hyperliquid/catalog.ts";
 
 type HyperliquidMetaAndCtxs = [
   {

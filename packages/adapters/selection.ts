@@ -1,4 +1,4 @@
-import type { StructuredAiClient } from "../../ai/client.ts";
+import type { StructuredAiClient } from "../ai/client.ts";
 import { z } from "zod";
 import {
   MarketCandidateSchema,
@@ -12,8 +12,8 @@ import {
   type ResearchReport,
   type Thesis,
   type TradeExpressionPlan,
-} from "../../core/schemas/index.ts";
-import { marketSelectionPrompt, polymarketDiscoveryQueryPrompt } from "../../prompts/index.ts";
+} from "../core/schemas/index.ts";
+import { marketSelectionPrompt, polymarketDiscoveryQueryPrompt } from "../prompts/index.ts";
 
 export interface MarketDataProvider {
   findCandidates(input: {

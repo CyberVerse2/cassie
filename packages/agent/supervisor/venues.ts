@@ -13,7 +13,7 @@ import {
   quotePolymarketMarket,
   type MarketDataProvider,
   type PolymarketMarketFinder,
-} from "../tools/market.ts";
+} from "../../adapters/selection.ts";
 import { thesisFromTradeExpression } from "./thesis.ts";
 
 export async function searchVenues(input: {

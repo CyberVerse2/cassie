@@ -30,7 +30,7 @@ export type HyperliquidCatalogAsset = {
 };
 
 export const HYPERLIQUID_CATALOG_PATH = fileURLToPath(
-  new URL("../../data/markets/hyperliquid-catalog.json", import.meta.url),
+  new URL("../../../data/markets/hyperliquid-catalog.json", import.meta.url),
 );
 
 export async function loadHyperliquidCatalog(

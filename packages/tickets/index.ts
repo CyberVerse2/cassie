@@ -5,7 +5,7 @@ import type {
   Thesis,
   TradeTicket,
   UserSettings,
-} from "../../core/schemas/index.ts";
+} from "../core/schemas/index.ts";
 
 export function createTradeTicket(input: {
   runId?: string | null;

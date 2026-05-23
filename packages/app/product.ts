@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
-} from "../execution/account-state.ts";
+} from "../adapters/hyperliquid/account-state.ts";
 import {
   type ExecutionClient,
 } from "../execution/index.ts";
