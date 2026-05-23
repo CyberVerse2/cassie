@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { inspect } from "node:util";
 import { GrokXPostResolver } from "../packages/helpers/x-post-resolver.ts";
+import { selectNextTweetUrl } from "../packages/helpers/tweet-round-robin.ts";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/adapters/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
@@ -117,6 +118,7 @@ Useful examples:
   npm run cli -- settings:set --user local-user
   npm run cli -- settings:set --user local-user --size 50
   npm run cli -- state
+  npm run cli -- run --user local-user
   npm run cli -- run --user local-user --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- run --user local-user --post "SOL looks underpriced into ETF approval."
   npm run cli -- run --user local-user --post "Exa raised $250M" --audit
@@ -319,8 +321,22 @@ async function mentionRequestFromArgs(args: ParsedArgs) {
   return {
     userId: flag(args, "user", "local-user"),
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie trade this"),
-    sourcePost: await sourcePostFromFlags(args),
+    sourcePost: await mentionSourcePostFromArgs(args),
   };
+}
+
+async function mentionSourcePostFromArgs(args: ParsedArgs): Promise<SourcePost> {
+  if (nullableFlag(args, "tweet-url") || typeof args.flags.post === "string") {
+    return sourcePostFromFlags(args);
+  }
+
+  return sourcePostFromFlags({
+    ...args,
+    flags: {
+      ...args.flags,
+      "tweet-url": await selectNextTweetUrl(nullableFlag(args, "tweets-file") ?? undefined),
+    },
+  });
 }
 
 function summarizeState(snapshot: CassieStoreSnapshot) {
