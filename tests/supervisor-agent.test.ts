@@ -172,14 +172,6 @@ describe("AI SDK supervisor agent", () => {
             return [marketSelection.selectedMarket!];
           },
         },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
-          },
-        },
       },
     });
 
@@ -243,14 +235,6 @@ describe("AI SDK supervisor agent", () => {
             return [marketSelection.selectedMarket!];
           },
         },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
-          },
-        },
       },
       accountStateProvider: new ThrowingAccountStateProvider(),
     });
@@ -295,14 +279,6 @@ describe("AI SDK supervisor agent", () => {
             return [marketSelection.selectedMarket!];
           },
         },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
-          },
-        },
       },
     });
 
@@ -332,14 +308,6 @@ describe("AI SDK supervisor agent", () => {
         marketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
-          },
-        },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
           },
         },
       },
@@ -379,14 +347,6 @@ describe("AI SDK supervisor agent", () => {
             return [marketSelection.selectedMarket!];
           },
         },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
-          },
-        },
       },
     });
 
@@ -424,14 +384,6 @@ describe("AI SDK supervisor agent", () => {
             return [marketSelection.selectedMarket!];
           },
         },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
-          },
-        },
       },
     });
 
@@ -464,14 +416,6 @@ describe("AI SDK supervisor agent", () => {
         marketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
-          },
-        },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
           },
         },
       },
@@ -517,14 +461,6 @@ describe("AI SDK supervisor agent", () => {
             return [marketSelection.selectedMarket!];
           },
         },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
-          },
-        },
       },
     });
 
@@ -566,14 +502,6 @@ describe("AI SDK supervisor agent", () => {
         marketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
-          },
-        },
-        researchLanes: {
-          async runOpenAiQueryJob() {
-            return { lane: "openai_search" as const, evidence: [], warnings: [] };
-          },
-          async runGrokXQueryJob() {
-            return { lane: "x_search" as const, evidence: [], warnings: [] };
           },
         },
       },
