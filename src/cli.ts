@@ -12,6 +12,16 @@ import { routeIntent } from "../packages/ai/tools/intent-router.ts";
 import { interpretSignal } from "../packages/ai/tools/signal.ts";
 import { extractThesis } from "../packages/ai/tools/thesis.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
+import {
+  cassieImportantModel,
+  cassieWebSearchModel,
+  databaseUrl,
+  debugEnabled,
+  googleApiKey,
+  grokXSearchModel,
+  optionalEnv,
+  xAiApiKey,
+} from "../packages/core/env.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
 import { buildCliUserSettings } from "./cli-settings.ts";
@@ -126,13 +136,13 @@ Useful examples:
 
 async function env() {
   return {
-    databaseUrl: maskSecret(process.env.DATABASE_URL),
-    geminiApiKey: maskSecret(process.env.GEMINI_API_KEY ?? process.env.GOOGLE_GENERATIVE_AI_API_KEY),
-    xAiApiKey: maskSecret(process.env.XAI_API_KEY),
-    hyperliquidPrivateKey: maskSecret(process.env.HYPERLIQUID_PRIVATE_KEY),
-    cassieModel: process.env.CASSIE_MODEL ?? DEFAULT_IMPORTANT_MODEL,
-    webSearchModel: process.env.CASSIE_WEB_SEARCH_MODEL ?? process.env.GEMINI_WEB_SEARCH_MODEL ?? "gemini-3.1-flash-lite",
-    grokSearchModel: process.env.GROK_X_SEARCH_MODEL ?? "grok-4.3",
+    databaseUrl: maskSecret(databaseUrl()),
+    geminiApiKey: maskSecret(googleApiKey()),
+    xAiApiKey: maskSecret(xAiApiKey()),
+    hyperliquidPrivateKey: maskSecret(optionalEnv("HYPERLIQUID_PRIVATE_KEY")),
+    cassieModel: cassieImportantModel(DEFAULT_IMPORTANT_MODEL),
+    webSearchModel: cassieWebSearchModel("gemini-3.1-flash-lite"),
+    grokSearchModel: grokXSearchModel(),
   };
 }
 
@@ -684,7 +694,7 @@ function printError(error: unknown) {
 
   if (error instanceof Error) {
     console.error(error.message);
-    if (process.env.DEBUG) {
+    if (debugEnabled()) {
       console.error(error.stack);
     }
     return;
