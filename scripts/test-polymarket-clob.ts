@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
-import { Chain, ClobClient, OrderType, Side, SignatureTypeV2, type ApiKeyCreds } from "@polymarket/clob-client-v2";
+import { assertPolymarketExecutionEnv, polymarketGammaMarketsUrl, readPolymarketExecutionEnv } from "../packages/core/env.ts";
+import { Chain, ClobClient, OrderType, Side } from "@polymarket/clob-client-v2";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -197,7 +198,7 @@ function selectMarket(markets: NormalizedMarket[], args: PolymarketSmokeArgs): N
 }
 
 async function searchPolymarketMarkets(query: string, limit: number): Promise<NormalizedMarket[]> {
-  const url = new URL(process.env.POLYMARKET_GAMMA_MARKETS_URL ?? "https://gamma-api.polymarket.com/markets");
+  const url = new URL(polymarketGammaMarketsUrl());
   url.searchParams.set("limit", String(limit));
   url.searchParams.set("active", "true");
   url.searchParams.set("closed", "false");
@@ -235,63 +236,29 @@ function normalizeMarket(market: PolymarketGammaMarket): NormalizedMarket {
 }
 
 function authenticatedClient(): ClobClient {
-  const privateKey = requiredEnv("POLYMARKET_PRIVATE_KEY");
-  const account = privateKeyToAccount(normalizePrivateKey(privateKey));
+  const config = assertPolymarketExecutionEnv(readPolymarketExecutionEnv());
+  const account = privateKeyToAccount(config.privateKey);
   const signer = createWalletClient({
     account,
-    transport: http(process.env.POLYMARKET_RPC_URL ?? "https://polygon-rpc.com"),
+    transport: http(config.rpcUrl),
   });
 
   return new ClobClient({
-    host: clobHost(),
+    host: config.host,
     chain: Chain.POLYGON,
     signer,
-    creds: clobCreds(),
-    signatureType: parseSignatureType(process.env.POLYMARKET_SIGNATURE_TYPE),
-    funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS,
-    builderConfig: process.env.POLYMARKET_BUILDER_CODE
-      ? { builderCode: process.env.POLYMARKET_BUILDER_CODE }
+    creds: config.creds,
+    signatureType: config.signatureType,
+    funderAddress: config.funderAddress,
+    builderConfig: config.builderCode
+      ? { builderCode: config.builderCode }
       : undefined,
     throwOnError: true,
   });
 }
 
-function clobCreds(): ApiKeyCreds {
-  return {
-    key: requiredEnv("POLYMARKET_CLOB_API_KEY"),
-    secret: requiredEnv("POLYMARKET_CLOB_SECRET"),
-    passphrase: requiredEnv("POLYMARKET_CLOB_PASS_PHRASE"),
-  };
-}
-
 function clobHost(): string {
-  return process.env.POLYMARKET_CLOB_HOST ?? "https://clob.polymarket.com";
-}
-
-function requiredEnv(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing required env var: ${name}`);
-  }
-  return value;
-}
-
-function normalizePrivateKey(privateKey: string): `0x${string}` {
-  return privateKey.startsWith("0x") ? privateKey as `0x${string}` : `0x${privateKey}` as `0x${string}`;
-}
-
-function parseSignatureType(value: string | undefined): SignatureTypeV2 | undefined {
-  if (value == null || value.trim() === "") return undefined;
-  const parsed = Number(value);
-  if (
-    parsed === SignatureTypeV2.EOA ||
-    parsed === SignatureTypeV2.POLY_PROXY ||
-    parsed === SignatureTypeV2.POLY_GNOSIS_SAFE ||
-    parsed === SignatureTypeV2.POLY_1271
-  ) {
-    return parsed;
-  }
-  throw new Error("POLYMARKET_SIGNATURE_TYPE must be 0, 1, 2, or 3.");
+  return readPolymarketExecutionEnv().host;
 }
 
 function parseStringArray(value: string | string[] | undefined): string[] {
