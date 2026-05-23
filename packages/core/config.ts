@@ -390,7 +390,7 @@ function aiProviderEnvDefaults(overrides: Partial<AiProviderEnvDefaults> = {}): 
   return {
     cheapModel: overrides.cheapModel ?? "deepseek-v4-flash",
     importantModel: overrides.importantModel ?? "gemini-3.5-flash",
-    webSearchModel: overrides.webSearchModel ?? "gemini-3.5-flash",
+    webSearchModel: overrides.webSearchModel ?? "gemini-3.1-flash-lite",
     grokXSearchModel: "grok-4.3",
     ...overrides,
   };
