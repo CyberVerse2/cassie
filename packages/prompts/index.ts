@@ -274,8 +274,6 @@ ${JSON.stringify(input, null, 2)}`;
 export function tradeExpressionLoopPrompt(input: {
   sourcePost: unknown;
   userCommand: string;
-  signal: unknown;
-  thesis: unknown;
   observations: unknown[];
   stepNumber: number;
   maxSteps: number;
@@ -285,7 +283,7 @@ export function tradeExpressionLoopPrompt(input: {
 ${decisionTaxonomyBlock}
 
 Mission:
-Decide what the trade is, but do not pretend venue availability is known before searching. Form expression hypotheses, call market tools when useful, inspect grounded results, rank the candidates, then finish with a TradeExpressionPlan.
+Treat the user's command as execution intent. Decide what trade object the user is asking Cassie to create from the source post context, but do not pretend venue availability is known before searching. Form expression hypotheses, call market tools when useful, inspect grounded results, rank the candidates, then finish with a TradeExpressionPlan.
 
 Available actions:
 - resolve_asset_mapping: use when the entity, project, company, coin, ticker, pair, pre-stock symbol, or proxy surface is unclear.
@@ -295,6 +293,7 @@ Available actions:
 
 Tool-use policy:
 - Use semantic reasoning. Do not reduce asset discovery to keyword overlap.
+- Do not verify whether the source post is true unless venue matching requires resolving the event or asset being referenced.
 - Prefer direct venue-confirmed instruments over indirect read-throughs.
 - Multiple searches are allowed when the thesis can appear as a coin, pair, quoted perp, pre-stock perp, prediction market, public ticker, or proxy.
 - A clean expression can still have negative expectedEdge; keep expressionConfidence separate from expectedEdge.

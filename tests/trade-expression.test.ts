@@ -149,14 +149,12 @@ describe("trade expression planning", () => {
       ai,
       marketData: {
         async findCandidates(input) {
-          expect(input.thesis).toBe(thesis);
+          expect(input.thesis.claim).toContain(sourcePost.text);
           return [zecCandidate];
         },
       },
       sourcePost,
       userCommand: "what's the trade here?",
-      signal,
-      thesis,
     });
 
     expect(result.rankedCandidates?.[0]).toMatchObject({

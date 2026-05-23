@@ -5,7 +5,6 @@ import {
   MarketCandidateSchema,
   TradeExpressionPlanSchema,
   type MarketCandidate,
-  type SignalInterpretation,
   type SourcePost,
   type Thesis,
   type TradeExpressionPlan,
@@ -49,9 +48,8 @@ export async function planTradeExpression(input: {
   polymarketMarketFinder?: PolymarketMarketFinder;
   sourcePost: SourcePost;
   userCommand: string;
-  signal: SignalInterpretation;
-  thesis: Thesis;
 }): Promise<TradeExpressionPlan> {
+  const searchThesis = thesisFromSource(input.sourcePost, input.userCommand);
   const observations: unknown[] = [];
   const maxSteps = 8;
 
@@ -62,8 +60,6 @@ export async function planTradeExpression(input: {
       prompt: tradeExpressionLoopPrompt({
         sourcePost: input.sourcePost,
         userCommand: input.userCommand,
-        signal: input.signal,
-        thesis: input.thesis,
         observations,
         stepNumber,
         maxSteps,
@@ -74,10 +70,35 @@ export async function planTradeExpression(input: {
       return TradeExpressionPlanSchema.parse(action.final);
     }
 
-    observations.push(await executeTradeExpressionAction(input, action));
+    observations.push(await executeTradeExpressionAction({ ...input, thesis: searchThesis }, action));
   }
 
   throw new Error("Trade expression planner exhausted its tool loop without finish_trade_expression.");
+}
+
+function thesisFromSource(sourcePost: SourcePost, userCommand: string): Thesis {
+  const sourceText = sourcePost.quotedPostText
+    ? `${sourcePost.text}\n\nQuoted post: ${sourcePost.quotedPostText}`
+    : sourcePost.text;
+  return {
+    claim: `User requested a trade from this source context: ${sourceText}`,
+    literalClaim: sourceText,
+    impliedResearchQuestion: null,
+    impliedTradeThesis: userCommand,
+    sourceOrMetaSignal: null,
+    hasExplicitTrade: true,
+    hasConcreteResearchQuestion: false,
+    hasTradableImplication: true,
+    thesisStrength: "explicit",
+    shouldNotInferTradeBecause: [],
+    direction: "unclear",
+    mentionedAssets: [],
+    topics: [],
+    timeHorizon: "unclear",
+    evidenceQuality: "unknown",
+    manipulationRisk: "unknown",
+    confidence: 0.5,
+  };
 }
 
 async function executeTradeExpressionAction(

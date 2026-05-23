@@ -8,36 +8,25 @@ import {
 } from "../../execution/account-state.ts";
 import { config } from "../../core/config.ts";
 import {
-  CritiqueSchema,
-  IntentResultSchema,
   MarketCandidateSchema,
   MarketSelectionSchema,
   RiskDecisionSchema,
-  SignalInterpretationSchema,
   SupervisorFinalResultSchema,
-  ThesisSchema,
   TradeTicketSchema,
   TradeExpressionPlanSchema,
   type AccountState,
   type CassieActionState,
   type ControlRun,
-  type Critique,
-  type IntentResult,
   type MarketSelection,
   type RiskDecision,
-  type Thesis,
   type TradeTicket,
   type TradeExpressionPlan,
   type RunStepType,
   type UserSettings,
 } from "../../core/schemas/index.ts";
-import { routeIntent } from "../tools/intent-router.ts";
-import { interpretSignal } from "../tools/signal.ts";
-import { critiqueThesis } from "../tools/critique.ts";
 import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../tools/market.ts";
 import { planTradeExpression } from "../tools/trade-expression.ts";
 import { evaluateRisk } from "../../risk/index.ts";
-import { extractInverseThesis, extractThesis } from "../tools/thesis.ts";
 import { createTradeTicket } from "../tools/trade.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
@@ -45,13 +34,10 @@ import { prepareFinalInput } from "./public-summary.ts";
 const promptVersion = "2026-05-20";
 
 const FinalizeRunInputSchema = z.object({
-  responseType: z.enum(["analysis", "critique", "trade_ticket"]),
+  responseType: z.enum(["analysis", "trade_ticket"]),
   publicSummary: z.string(),
   tradeTicket: z.object({ ticketId: z.string() }).optional(),
-  intent: IntentResultSchema.optional(),
-  thesis: ThesisSchema.optional(),
   marketSelection: MarketSelectionSchema.optional(),
-  critique: CritiqueSchema.optional(),
   tradeExpression: TradeExpressionPlanSchema.optional(),
   riskDecision: RiskDecisionSchema.optional(),
 });
@@ -70,10 +56,7 @@ export async function finalizeRunFromPersistedSteps(input: {
   store: CassieStore;
   run: ControlRun;
 }) {
-  const [intent, thesis, critique, tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
-    readPersistedStepOutput<IntentResult>(input.store, input.run.runId, "intent", IntentResultSchema),
-    readPersistedStepOutput<Thesis>(input.store, input.run.runId, "thesis", ThesisSchema),
-    readPersistedStepOutput<Critique>(input.store, input.run.runId, "critique", CritiqueSchema),
+  const [tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
     readPersistedStepOutput<TradeExpressionPlan>(input.store, input.run.runId, "trade_expression", TradeExpressionPlanSchema),
     readPersistedStepOutput<MarketSelection>(input.store, input.run.runId, "market_selection", MarketSelectionSchema),
     readPersistedStepOutput<RiskDecision>(input.store, input.run.runId, "risk", RiskDecisionSchema),
@@ -81,13 +64,10 @@ export async function finalizeRunFromPersistedSteps(input: {
   ]);
 
   const finalInput: PreparedFinalizeRunInput = {
-    responseType: tradeTicket ? "trade_ticket" : critique ? "critique" : "analysis",
+    responseType: tradeTicket ? "trade_ticket" : "analysis",
     publicSummary: riskDecision?.decision === "reject"
       ? riskDecision.reason
-      : critique?.finalCritique ?? tradeExpression?.reason ?? "Cassie run completed.",
-    intent,
-    thesis,
-    critique,
+      : tradeExpression?.reason ?? "Cassie run completed.",
     tradeExpression,
     marketSelection,
     riskDecision,
@@ -147,112 +127,10 @@ export function createCassieSupervisorTools(input: {
   };
 
   return {
-    classify_intent: tool({
-      description: "Classify the user's Cassie command into critic, trade, countertrade, or watch.",
-      inputSchema: z.object({}),
-      execute: async () => runStepOnce("intent", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "intent",
-        promptName: "cassie_intent",
-        promptVersion,
-        model: cheapModel,
-        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost },
-        execute: () => routeIntent({
-          ai: cheapAi,
-          userCommand: input.run.userCommand,
-          sourcePost: input.run.sourcePost,
-        }),
-      })),
-    }),
-    extract_thesis: tool({
-      description: "Extract the market thesis from the source post and command.",
-      inputSchema: z.object({
-        signal: SignalInterpretationSchema,
-      }),
-      execute: async ({ signal }) => runStepOnce("thesis", async () => {
-        return recordRunStep({
-          store: input.store,
-          runId: input.run.runId,
-          stepType: "thesis",
-          promptName: "cassie_thesis",
-          promptVersion,
-          model: cheapModel,
-          stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost, signal },
-          execute: () => extractThesis({
-            ai: cheapAi,
-            userCommand: input.run.userCommand,
-            sourcePost: input.run.sourcePost,
-            signal,
-          }),
-        });
-      }),
-    }),
-    interpret_signal: tool({
-      description: "Classify the source post into signal type, lead quality, tradability, and research angles.",
-      inputSchema: z.object({}),
-      execute: async () => runStepOnce("signal", () => recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "signal",
-        promptName: "cassie_signal",
-        promptVersion,
-        model: cheapModel,
-        stepInput: { userCommand: input.run.userCommand, sourcePost: input.run.sourcePost },
-        execute: () => interpretSignal({
-          ai: cheapAi,
-          userCommand: input.run.userCommand,
-          sourcePost: input.run.sourcePost,
-        }),
-      })),
-    }),
-    extract_inverse_thesis: tool({
-      description: "Create the strongest opposing thesis for a countertrade or fade request.",
-      inputSchema: z.object({
-        intent: IntentResultSchema,
-        thesis: ThesisSchema,
-      }),
-      execute: async ({ intent, thesis }) => runStepOnce("inverse_thesis", async () => {
-        if (intent.intent !== "countertrade") {
-          throw new SupervisorPrerequisiteError("extract_inverse_thesis is only for countertrade or fade requests. If this is not countertrade, continue with trade expression planning, critique, market tools, or finalization.");
-        }
-        return recordRunStep({
-          store: input.store,
-          runId: input.run.runId,
-          stepType: "inverse_thesis",
-          promptName: "cassie_inverse_thesis",
-          promptVersion,
-          model: cheapModel,
-          stepInput: { thesis },
-          execute: () => extractInverseThesis({ ai: cheapAi, thesis }),
-        });
-      }),
-    }),
-    critique_thesis: tool({
-      description: "Critique the extracted thesis and identify weaknesses without creating a trade.",
-      inputSchema: z.object({
-        thesis: ThesisSchema,
-      }),
-      execute: async ({ thesis }) => runStepOnce("critique", async () => {
-        return recordRunStep({
-          store: input.store,
-          runId: input.run.runId,
-          stepType: "critique",
-          promptName: "cassie_critique",
-          promptVersion,
-          model: importantModel,
-          stepInput: { thesis },
-          execute: () => critiqueThesis({ ai: importantAi, thesis }),
-        });
-      }),
-    }),
     plan_trade_expression: tool({
-      description: "Decide whether the thesis has a clean venue-aware trade expression.",
-      inputSchema: z.object({
-        signal: SignalInterpretationSchema,
-        thesis: ThesisSchema,
-      }),
-      execute: async ({ signal, thesis }) => runStepOnce("trade_expression", async () => {
+      description: "Translate the user's command and source post into the cleanest venue-aware trade expression.",
+      inputSchema: z.object({}),
+      execute: async () => runStepOnce("trade_expression", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -263,8 +141,6 @@ export function createCassieSupervisorTools(input: {
           stepInput: {
             userCommand: input.run.userCommand,
             sourcePost: input.run.sourcePost,
-            signal,
-            thesis,
           },
           execute: () => planTradeExpression({
             ai: importantAi,
@@ -272,29 +148,27 @@ export function createCassieSupervisorTools(input: {
             polymarketMarketFinder: input.deps.polymarketMarketFinder,
             sourcePost: input.run.sourcePost,
             userCommand: input.run.userCommand,
-            signal,
-            thesis,
           }),
         });
       }),
     }),
     find_polymarket_markets: tool({
-      description: "Use AI-planned semantic search to find real Polymarket markets related to the thesis and trade expression.",
+      description: "Use AI-planned semantic search to find real Polymarket markets related to the trade expression.",
       inputSchema: z.object({
-        thesis: ThesisSchema,
         tradeExpression: TradeExpressionPlanSchema,
         limit: z.number().int().positive().max(25).optional(),
       }),
-      execute: async ({ thesis, tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
+      execute: async ({ tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
         const polymarket = input.deps.polymarketMarketFinder;
         if (!polymarket) {
           throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
         }
+        const thesis = thesisFromTradeExpression(tradeExpression);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "market_candidates",
-          stepInput: { thesis, tradeExpression, limit },
+          stepInput: { tradeExpression, limit },
           execute: () => findPolymarketMarkets({
             polymarket,
             thesis,
@@ -305,25 +179,25 @@ export function createCassieSupervisorTools(input: {
       }),
     }),
     assess_polymarket_market: tool({
-      description: "Assess whether a discovered Polymarket contract directly expresses the thesis and normalize its YES/NO trade object.",
+      description: "Assess whether a discovered Polymarket contract directly expresses the trade expression and normalize its YES/NO trade object.",
       inputSchema: z.object({
-        thesis: ThesisSchema,
         tradeExpression: TradeExpressionPlanSchema,
         conditionId: z.string().optional(),
         marketSlug: z.string().optional(),
         question: z.string().optional(),
         side: z.enum(["yes", "no"]),
       }),
-      execute: async ({ thesis, tradeExpression, conditionId, marketSlug, question, side }) => runStepOnce("market_assessment", async () => {
+      execute: async ({ tradeExpression, conditionId, marketSlug, question, side }) => runStepOnce("market_assessment", async () => {
         const polymarket = input.deps.polymarketMarketFinder;
         if (!polymarket) {
           throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
         }
+        const thesis = thesisFromTradeExpression(tradeExpression);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "market_assessment",
-          stepInput: { thesis, tradeExpression, market: { conditionId, marketSlug, question }, side },
+          stepInput: { tradeExpression, market: { conditionId, marketSlug, question }, side },
           execute: () => assessPolymarketMarket({
             polymarket,
             thesis,
@@ -367,11 +241,11 @@ export function createCassieSupervisorTools(input: {
     select_market: tool({
       description: "Select the best market expression from real market candidates; do not invent markets.",
       inputSchema: z.object({
-        thesis: ThesisSchema,
         tradeExpression: TradeExpressionPlanSchema,
         candidates: MarketCandidateSchema.array().optional(),
       }),
-      execute: async ({ thesis, tradeExpression, candidates }) => runStepOnce("market_selection", async () => {
+      execute: async ({ tradeExpression, candidates }) => runStepOnce("market_selection", async () => {
+        const thesis = thesisFromTradeExpression(tradeExpression);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -379,7 +253,7 @@ export function createCassieSupervisorTools(input: {
           promptName: "cassie_market_selection",
           promptVersion,
           model: cheapModel,
-          stepInput: { thesis, tradeExpression, candidates },
+          stepInput: { tradeExpression, candidates },
           execute: () => selectMarket({
             ai: cheapAi,
             marketData: input.deps.marketData,
@@ -419,23 +293,20 @@ export function createCassieSupervisorTools(input: {
     create_trade_ticket: tool({
       description: "Create a trade ticket from a non-rejected risk decision. This never executes the order.",
       inputSchema: z.object({
-        intent: IntentResultSchema,
-        thesis: ThesisSchema,
+        tradeExpression: TradeExpressionPlanSchema,
         marketSelection: MarketSelectionSchema,
         riskDecision: RiskDecisionSchema,
         sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ intent, thesis, marketSelection, riskDecision, sizeUsd }) => runStepOnce("ticket", async () => {
-        if (intent.intent !== "trade" && intent.intent !== "countertrade") {
-          throw new SupervisorPrerequisiteError("create_trade_ticket is only allowed for trade or countertrade intent. For critic/watch requests, call finalize_run with analysis or critique.");
-        }
+      execute: async ({ tradeExpression, marketSelection, riskDecision, sizeUsd }) => runStepOnce("ticket", async () => {
         assertUsableMarketSelection(marketSelection);
         assertNonRejectedRiskDecision(riskDecision);
+        const thesis = thesisFromTradeExpression(tradeExpression);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "ticket",
-          stepInput: { thesis, marketSelection, riskDecision, sizeUsd },
+          stepInput: { tradeExpression, marketSelection, riskDecision, sizeUsd },
           execute: async () => {
             const ticket = createTradeTicket({
               runId: input.run.runId,
@@ -517,18 +388,10 @@ function validateFinalizationPrerequisites(input: PreparedFinalizeRunInput) {
     return;
   }
 
-  if (input.responseType === "critique") {
-    if (!input.critique) {
-      throw new SupervisorPrerequisiteError("finalize_run critique response requires critique analysis.");
-    }
-    return;
-  }
-
   const hasMeaningfulAnalysisBasis = Boolean(
     input.tradeExpression ||
       input.marketSelection ||
       input.riskDecision ||
-      input.critique ||
       input.tradeTicket,
   );
   if (!hasMeaningfulAnalysisBasis) {
@@ -540,16 +403,6 @@ function finalizeResult(input: PreparedFinalizeRunInput) {
   const actionState = resolveActionState(input);
 
   if (input.responseType === "analysis") {
-    return SupervisorFinalResultSchema.parse({
-      responseType: input.responseType,
-      actionState,
-      publicSummary: input.publicSummary,
-      runStatus: "succeeded",
-      ticketId: null,
-      warnings: [],
-    });
-  }
-  if (input.responseType === "critique") {
     return SupervisorFinalResultSchema.parse({
       responseType: input.responseType,
       actionState,
@@ -574,7 +427,6 @@ function finalizeResult(input: PreparedFinalizeRunInput) {
 
 function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState {
   if (input.responseType === "trade_ticket") return "create_ticket";
-  if (input.intent?.intent === "watch") return "watchlist";
   if (input.riskDecision?.decision === "reject") return "block_trade";
 
   const selectedSide = input.marketSelection?.selectedMarket?.side;
@@ -592,6 +444,35 @@ function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState 
   if (tradeExpression?.decision === "no_trade") return "no_trade";
 
   return "insufficient_evidence";
+}
+
+function thesisFromTradeExpression(tradeExpression: TradeExpressionPlan) {
+  return {
+    claim: tradeExpression.coreInterpretation || tradeExpression.signal,
+    literalClaim: tradeExpression.signal,
+    impliedResearchQuestion: null,
+    impliedTradeThesis: tradeExpression.highestPurityExpression,
+    sourceOrMetaSignal: null,
+    hasExplicitTrade: true,
+    hasConcreteResearchQuestion: false,
+    hasTradableImplication: tradeExpression.decision !== "no_trade",
+    thesisStrength: "explicit" as const,
+    shouldNotInferTradeBecause: [],
+    direction: directionFromTradeExpression(tradeExpression),
+    mentionedAssets: tradeExpression.directAsset ? [tradeExpression.directAsset] : [],
+    topics: [],
+    timeHorizon: "unclear" as const,
+    evidenceQuality: "unknown" as const,
+    manipulationRisk: "unknown" as const,
+    confidence: tradeExpression.tradeExpressionConfidence ?? 0.5,
+  };
+}
+
+function directionFromTradeExpression(tradeExpression: TradeExpressionPlan) {
+  const expression = tradeExpression.highestPurityExpression.toLowerCase();
+  if (expression.includes("short") || expression.includes("buy no")) return "bearish" as const;
+  if (expression.includes("long") || expression.includes("buy yes")) return "bullish" as const;
+  return "unclear" as const;
 }
 
 function isInsufficientEvidence(tradeExpression?: TradeExpressionPlan): boolean {

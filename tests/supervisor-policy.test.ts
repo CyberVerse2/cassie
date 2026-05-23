@@ -21,11 +21,6 @@ function errorStep(toolName: string, error: Error) {
 
 describe("supervisor step policy", () => {
   const fullToolSurface = [
-    "classify_intent",
-    "interpret_signal",
-    "extract_thesis",
-    "extract_inverse_thesis",
-    "critique_thesis",
     "plan_trade_expression",
     "find_polymarket_markets",
     "assess_polymarket_market",
@@ -42,17 +37,13 @@ describe("supervisor step policy", () => {
     ]);
 
     expect(selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
+      step("plan_trade_expression", {}),
     ])).toEqual(fullToolSurface);
   });
 
   it("exposes no tools after finalization", () => {
     expect(selectActiveTools([
-      step("classify_intent", { intent: "trade" }),
-      step("interpret_signal", {}),
-      step("extract_thesis", {}),
+      step("plan_trade_expression", {}),
       step("finalize_run", {}),
     ])).toEqual([]);
   });
@@ -60,9 +51,9 @@ describe("supervisor step policy", () => {
   it("still aborts the loop on hard tool errors", () => {
     expect(() => prepareCassieSupervisorStep({
       steps: [
-        errorStep("classify_intent", new Error("rate limited")),
+        errorStep("plan_trade_expression", new Error("rate limited")),
       ],
-    } as never)).toThrow("Supervisor tool classify_intent failed: rate limited");
+    } as never)).toThrow("Supervisor tool plan_trade_expression failed: rate limited");
   });
 
   it("lets the model recover from prerequisite data errors", () => {
@@ -77,46 +68,43 @@ describe("supervisor step policy", () => {
     expect(prepared.toolChoice).toBe("auto");
   });
 
-  it("keeps critique substance when compressing tool messages before finalization", () => {
+  it("keeps trade-expression substance when compressing tool messages before finalization", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        step("classify_intent", { intent: "critic" }),
-        step("interpret_signal", {}),
-        step("extract_thesis", {}),
-        step("critique_thesis", {}),
+        step("plan_trade_expression", {}),
       ],
       messages: [{
         role: "tool",
         content: [{
           type: "tool-result",
-          toolCallId: "critique_thesis_call",
-          toolName: "critique_thesis",
+          toolCallId: "plan_trade_expression_call",
+          toolName: "plan_trade_expression",
           output: {
-            finalCritique: "The valuation claim is conditional because pricing is not official.",
-            strongestObjection: "The filing has no final IPO price range.",
-            secondaryObjections: Array.from({ length: 80 }, (_, index) => `objection ${index}`),
+            reason: "The cleanest route is the prediction market because it directly tracks the event.",
+            highestPurityExpression: "Buy YES on the listed event market.",
+            candidates: Array.from({ length: 80 }, (_, index) => ({ instrument: `candidate ${index}` })),
           },
         }],
       }],
     } as never) as { messages: unknown[] };
 
-    expect(JSON.stringify(prepared.messages)).toContain("The valuation claim is conditional");
-    expect(JSON.stringify(prepared.messages)).toContain("The filing has no final IPO price range");
+    expect(JSON.stringify(prepared.messages)).toContain("The cleanest route is the prediction market");
+    expect(JSON.stringify(prepared.messages)).toContain("Buy YES on the listed event market");
   });
 
   it("preserves every tool result part when compressing large tool messages", () => {
     const content = Array.from({ length: 12 }, (_, index) => ({
       type: "tool-result",
       toolCallId: `call_${index}`,
-      toolName: "interpret_signal",
+      toolName: "plan_trade_expression",
       output: {
-        signalType: "generic_opinion",
-        summary: "x".repeat(200),
+        decision: "needs_market_check",
+        reason: "x".repeat(200),
       },
     }));
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        step("classify_intent", { intent: "trade" }),
+        step("plan_trade_expression", {}),
       ],
       messages: [{
         role: "tool",

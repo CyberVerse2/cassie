@@ -42,11 +42,6 @@ export function selectActiveTools(
   }
 
   return [
-    "classify_intent",
-    "interpret_signal",
-    "extract_thesis",
-    "extract_inverse_thesis",
-    "critique_thesis",
     "plan_trade_expression",
     "find_polymarket_markets",
     "assess_polymarket_market",

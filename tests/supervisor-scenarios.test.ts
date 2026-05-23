@@ -3,14 +3,9 @@ import type { StructuredAiClient } from "../packages/ai/client.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../packages/agent/supervisor/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
-  Critique,
-  IntentResult,
-  InverseThesis,
   MarketSelection,
   RiskDecision,
-  SignalInterpretation,
   SourcePost,
-  Thesis,
   TradeExpressionPlan,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
@@ -37,48 +32,6 @@ const baseSettings: UserSettings = {
   maxSlippageBps: 100,
   maxPositionUsd: 1_000,
   autoTradeEnabled: false,
-};
-
-const thesis: Thesis = {
-  claim: "SOL may rally because ETF approval odds are increasing.",
-  direction: "bullish",
-  mentionedAssets: ["SOL"],
-  topics: ["Solana ETF"],
-  timeHorizon: "event_based",
-  evidenceQuality: "weak",
-  manipulationRisk: "medium",
-  confidence: 0.66,
-};
-
-const signal: SignalInterpretation = {
-  signalType: "explicit_trade",
-  containsExplicitThesis: true,
-  impliedTheses: ["SOL ETF approval odds may be underpriced."],
-  affectedEntities: ["Solana"],
-  affectedSectors: ["crypto"],
-  directTradability: "direct",
-  suggestedResearchAngles: ["Verify catalyst and check disconfirmation."],
-  leadQuality: "tradable_now",
-  summary: "Explicit SOL catalyst signal.",
-  confidence: 0.88,
-};
-
-const inverseThesis: InverseThesis = {
-  originalThesis: thesis,
-  inverseClaim: "SOL may sell off because ETF approval is unconfirmed and crowded.",
-  inverseDirection: "bearish",
-  mentionedAssets: ["SOL"],
-  topics: ["Solana ETF"],
-  timeHorizon: "event_based",
-  confidence: 0.7,
-};
-
-const critique: Critique = {
-  strongestObjection: "No primary source confirms approval.",
-  secondaryObjections: ["Narrative is crowded.", "The trade may already be priced."],
-  thesisTradable: true,
-  fadeIsCleaner: false,
-  finalCritique: "Treat this as rumor-driven until a primary source appears.",
 };
 
 const marketSelection: MarketSelection = {
@@ -130,41 +83,26 @@ const tradeExpression: TradeExpressionPlan = {
 };
 
 class ScenarioAi implements StructuredAiClient {
-  constructor(private readonly intent: IntentResult["intent"]) {}
-
   async generateObject<T>(input: { name: string }): Promise<T> {
     const outputs: Record<string, unknown> = {
-      cassie_intent: {
-        intent: this.intent,
-        executionRequested: this.intent === "trade" || this.intent === "countertrade",
-        counterThesis: this.intent === "countertrade",
-        specificAsset: null,
-        specificVenue: null,
-        userSizeOverrideUsd: null,
-        confidence: 0.92,
-      } satisfies IntentResult,
-      cassie_signal: signal,
-      cassie_thesis: thesis,
-      cassie_inverse_thesis: inverseThesis,
       cassie_trade_expression_step: {
         action: "finish_trade_expression",
         reason: "Fixture completes the trade-expression loop.",
         final: tradeExpression,
       },
       cassie_market_selection: marketSelection,
-      cassie_critique: critique,
     };
 
     return outputs[input.name] as T;
   }
 }
 
-async function createScenario(intent: IntentResult["intent"], settings: UserSettings = baseSettings) {
+async function createScenario(command: string, settings: UserSettings = baseSettings) {
   const store = new InMemoryCassieStore();
   await store.upsertUserSettings(settings);
   const run = await store.createRun({
     userId: settings.userId,
-    userCommand: `@Cassie ${intent}`,
+    userCommand: command,
     sourcePost,
   });
   const tools = createCassieSupervisorTools({
@@ -179,7 +117,7 @@ async function createScenario(intent: IntentResult["intent"], settings: UserSett
       openOrdersUsd: 0,
     },
     deps: {
-      ai: new ScenarioAi(intent),
+      ai: new ScenarioAi(),
       marketData: {
         async findCandidates() {
           return [marketSelection.selectedMarket!];
@@ -197,87 +135,10 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 }
 
 describe("supervisor scenario coverage", () => {
-  it("handles critic requests without creating trade tickets", async () => {
-    const { store, run, tools } = await createScenario("critic");
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const result = await executeTool<Critique>(tools.critique_thesis, {
-      thesis: extracted,
-    });
-    await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
-    await executeTool(tools.finalize_run, {
-      responseType: "critique",
-      publicSummary: result.finalCritique,
-      critique: result,
-    });
-
-    const state = await store.load();
-    expect(state.tradeTickets).toHaveLength(0);
-    expect(state.researchReports).toHaveLength(0);
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({ status: "succeeded" });
-  });
-
-  it("finalizes critic requests without requiring the model to copy critique JSON", async () => {
-    const { store, run, tools } = await createScenario("critic");
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const result = await executeTool<Critique>(tools.critique_thesis, {
-      thesis: extracted,
-    });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
-    await executeTool(tools.finalize_run, {
-      responseType: "critique",
-      publicSummary: result.finalCritique,
-      critique: result,
-      tradeExpression: expression,
-    });
-
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({
-      status: "succeeded",
-      result: {
-        responseType: "critique",
-        publicSummary: expect.stringContaining(result.finalCritique),
-        runStatus: "succeeded",
-        ticketId: null,
-      },
-    });
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({
-      result: {
-        actionState: "route_to_market",
-        publicSummary: expect.stringContaining("Next step: route the cleanest candidate to market selection"),
-      },
-    });
-  });
-
-  it("handles countertrade requests through inverse thesis before ticket creation", async () => {
-    const { store, tools } = await createScenario("countertrade");
-    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const inverse = await executeTool<InverseThesis>(tools.extract_inverse_thesis, { intent, thesis: extracted });
-    const counterThesis = {
-      ...extracted,
-      claim: inverse.inverseClaim,
-      direction: inverse.inverseDirection,
-      mentionedAssets: inverse.mentionedAssets,
-      topics: inverse.topics,
-      timeHorizon: inverse.timeHorizon,
-      confidence: inverse.confidence,
-    } satisfies Thesis;
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: counterThesis,
-    });
+  it("creates a ticket from execution intent without intent, signal, or thesis steps", async () => {
+    const { store, tools } = await createScenario("@Cassie get me in");
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
     const selected = await executeTool<MarketSelection>(tools.select_market, {
-      thesis: counterThesis,
       tradeExpression: expression,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
@@ -285,8 +146,7 @@ describe("supervisor scenario coverage", () => {
       sizeUsd: null,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
-      intent,
-      thesis: counterThesis,
+      tradeExpression: expression,
       marketSelection: selected,
       riskDecision: risk,
       sizeUsd: null,
@@ -295,25 +155,20 @@ describe("supervisor scenario coverage", () => {
     const state = await store.load();
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["inverse_thesis", "trade_expression", "market_selection", "risk", "ticket"]),
+      expect.arrayContaining(["trade_expression", "market_selection", "risk", "ticket"]),
     );
-    expect(state.runSteps.map((step) => step.stepType)).not.toContain("research");
+    expect(state.runSteps.map((step) => step.stepType)).not.toEqual(
+      expect.arrayContaining(["intent", "signal", "thesis", "inverse_thesis", "critique"]),
+    );
   });
 
   it("finalizes rejected-risk trade requests without creating a ticket", async () => {
-    const { store, run, tools } = await createScenario("trade", {
+    const { store, run, tools } = await createScenario("@Cassie get me in", {
       ...baseSettings,
       maxSpreadBps: 1,
     });
-    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
     const selected = await executeTool<MarketSelection>(tools.select_market, {
-      thesis: extracted,
       tradeExpression: expression,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
@@ -325,8 +180,6 @@ describe("supervisor scenario coverage", () => {
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: risk.decision === "reject" ? risk.reason : "Risk check passed.",
-      intent,
-      thesis: extracted,
       tradeExpression: expression,
       marketSelection: selected,
       riskDecision: risk,
@@ -344,36 +197,17 @@ describe("supervisor scenario coverage", () => {
   });
 
   it("finalizes no-trade market routing without preserving stale route language", async () => {
-    const { store, run, tools } = await createScenario("critic");
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
+    const { store, run, tools } = await createScenario("@Cassie get me in");
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
     const noTradeMarketSelection: MarketSelection = {
       selectedMarket: null,
       rejectedCandidates: [],
       noTradeReason: "No configured venue candidate matched the trade expression.",
     };
-    await store.addRunStep({
-      runId: run.runId,
-      stepType: "market_selection",
-      status: "succeeded",
-      input: null,
-      output: noTradeMarketSelection,
-      error: null,
-      model: "deepseek/deepseek-v4-flash",
-      promptName: "cassie_market_selection",
-      promptVersion: "test",
-      completedAt: new Date().toISOString(),
-    });
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "Model wanted to route.",
-      thesis: extracted,
       tradeExpression: expression,
       marketSelection: noTradeMarketSelection,
     });
@@ -388,11 +222,8 @@ describe("supervisor scenario coverage", () => {
     expect(String(completed?.result)).not.toContain("route_to_market_router");
   });
 
-  it("maps non-watch unresolved expressions to insufficient evidence", async () => {
-    const { store, run, tools } = await createScenario("critic");
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+  it("maps unresolved expressions to insufficient evidence", async () => {
+    const { store, run, tools } = await createScenario("@Cassie get me in");
     const unresolvedExpression: TradeExpressionPlan = {
       ...tradeExpression,
       decision: "needs_market_check",
@@ -409,23 +240,10 @@ describe("supervisor scenario coverage", () => {
       },
       marketRouterInstructions: null,
     };
-    await store.addRunStep({
-      runId: run.runId,
-      stepType: "trade_expression",
-      status: "succeeded",
-      input: null,
-      output: unresolvedExpression,
-      error: null,
-      model: "deepseek-v4-pro",
-      promptName: "cassie_trade_expression",
-      promptVersion: "test",
-      completedAt: new Date().toISOString(),
-    });
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "Evidence is too weak.",
-      thesis: extracted,
       tradeExpression: unresolvedExpression,
     });
 
@@ -440,18 +258,10 @@ describe("supervisor scenario coverage", () => {
         publicSummary: expect.stringContaining("market discovery, price or odds"),
       },
     });
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({
-      result: {
-        publicSummary: expect.not.stringContaining("Model-copied no-trade"),
-      },
-    });
   });
 
   it("finalizes from persisted canonical steps when the agent loop does not call finalize_run", async () => {
-    const { store, run, tools } = await createScenario("trade");
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
+    const { store, run } = await createScenario("@Cassie get me in");
     await store.addRunStep({
       runId: run.runId,
       stepType: "trade_expression",
@@ -489,47 +299,6 @@ describe("supervisor scenario coverage", () => {
       status: "succeeded",
       result: {
         actionState: "insufficient_evidence",
-      },
-    });
-    expect(extracted.claim).toBeTruthy();
-  });
-
-  it("keeps watchlist action state reserved for explicit watch requests", async () => {
-    const { store, run, tools } = await createScenario("watch");
-    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const watchExpression: TradeExpressionPlan = {
-      ...tradeExpression,
-      decision: "needs_market_check",
-      reason: "User explicitly asked Cassie to watch this setup.",
-      marketRouterInstructions: null,
-    };
-    await store.addRunStep({
-      runId: run.runId,
-      stepType: "trade_expression",
-      status: "succeeded",
-      input: null,
-      output: watchExpression,
-      error: null,
-      model: "deepseek-v4-pro",
-      promptName: "cassie_trade_expression",
-      promptVersion: "test",
-      completedAt: new Date().toISOString(),
-    });
-
-    await executeTool(tools.finalize_run, {
-      responseType: "analysis",
-      publicSummary: "Explicit watch request.",
-      intent,
-      thesis: extracted,
-      tradeExpression: watchExpression,
-    });
-
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({
-      result: {
-        actionState: "watchlist",
-        publicSummary: expect.stringContaining("Next step: check the matching venue or market"),
       },
     });
   });

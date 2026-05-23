@@ -5,12 +5,8 @@ import { buildSupervisorInstructions } from "../packages/agent/supervisor/agent.
 import { createCassieSupervisorTools } from "../packages/agent/supervisor/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
-  IntentResult,
   MarketSelection,
-  SignalInterpretation,
   SourcePost,
-  SourceProfile,
-  Thesis,
   TradeExpressionPlan,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
@@ -37,59 +33,6 @@ const settings: UserSettings = {
   maxSlippageBps: 100,
   maxPositionUsd: 1_000,
   autoTradeEnabled: false,
-};
-
-const thesis: Thesis = {
-  claim: "SOL may rally because ETF approval odds are increasing.",
-  direction: "bullish",
-  mentionedAssets: ["SOL"],
-  topics: ["Solana ETF"],
-  timeHorizon: "event_based",
-  evidenceQuality: "medium",
-  manipulationRisk: "medium",
-  confidence: 0.82,
-};
-
-const sourceProfile: SourceProfile = {
-  handle: "example",
-  displayName: "Example",
-  profileUrl: "https://x.com/example",
-  bio: null,
-  bioLinks: [],
-  accountType: "analyst",
-  verificationStatus: null,
-  followerCount: null,
-  followingCount: null,
-  accountAge: null,
-  locationSignals: [],
-  pinnedPost: null,
-  credibility: "medium",
-  expertise: ["markets"],
-  selfClaims: [],
-  provenOutput: [],
-  trackRecord: "Test source profile.",
-  networkContext: "Test network context.",
-  engagementQuality: "unknown",
-  recentRelevantActivity: [],
-  redFlags: [],
-  unresolvedQuestions: [],
-  lowDataReasons: [],
-  confidenceImpact: "none",
-  confidenceImpactReason: "No additional confidence impact in the fixture.",
-  confidence: 0.5,
-};
-
-const signal: SignalInterpretation = {
-  signalType: "explicit_trade",
-  containsExplicitThesis: true,
-  impliedTheses: ["SOL may rally on ETF approval odds."],
-  affectedEntities: ["Solana"],
-  affectedSectors: ["crypto"],
-  directTradability: "direct",
-  suggestedResearchAngles: ["Verify the catalyst and check whether it is priced."],
-  leadQuality: "tradable_now",
-  summary: "Explicit SOL trade signal.",
-  confidence: 0.9,
 };
 
 const marketSelection: MarketSelection = {
@@ -146,31 +89,12 @@ class FakeAi implements StructuredAiClient {
   async generateObject<T>(input: { name: string }): Promise<T> {
     this.calls.push(input.name);
     const outputs: Record<string, unknown> = {
-      cassie_intent: {
-        intent: "trade",
-        executionRequested: true,
-        counterThesis: false,
-        specificAsset: "SOL",
-        specificVenue: "hyperliquid",
-        userSizeOverrideUsd: null,
-        confidence: 0.95,
-      } satisfies IntentResult,
-      cassie_signal: signal,
-      cassie_thesis: thesis,
-      cassie_source_profile: sourceProfile,
       cassie_trade_expression_step: {
         action: "finish_trade_expression",
         reason: "Fixture completes the trade-expression loop.",
         final: tradeExpression,
       },
       cassie_market_selection: marketSelection,
-      cassie_critique: {
-        strongestObjection: "No primary source confirms approval.",
-        secondaryObjections: ["Social momentum can be reflexive but not factual."],
-        thesisTradable: true,
-        fadeIsCleaner: false,
-        finalCritique: "Treat this as rumor-driven until primary confirmation appears.",
-      },
     };
     return outputs[input.name] as T;
   }
@@ -191,17 +115,16 @@ describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
-    expect(instructions).toContain("You may choose tools dynamically");
+    expect(instructions).toContain("Treat the user's command as execution intent");
     expect(instructions).toContain("Do not ask the user follow-up questions mid-run");
     expect(instructions).toContain("Treat ambiguity conservatively");
     expect(instructions).toContain("Never invent market candidates, prices, account state, or risk approvals");
     expect(instructions).toContain("Always use finalize_run");
     expect(instructions).toContain("Once you have made the grounded decision for this run, call finalize_run next");
-    expect(instructions).toContain("Mode policy:");
-    expect(instructions).toContain("trade:");
-    expect(instructions).toContain("critic:");
-    expect(instructions).toContain("countertrade:");
-    expect(instructions).toContain("watch:");
+    expect(instructions).toContain("Start with plan_trade_expression");
+    expect(instructions).not.toContain("Mode policy:");
+    expect(instructions).not.toContain("classify intent");
+    expect(instructions).not.toContain("extract thesis");
   });
 
   it("records bounded tool steps and creates a pending trade ticket", async () => {
@@ -242,27 +165,19 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const intent = await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
     const selected = await executeTool<MarketSelection>(tools.select_market, {
-      thesis: extracted,
       tradeExpression: expression,
     });
     const risk = await executeTool(tools.risk_check, {
       marketSelection: selected,
-      sizeUsd: intent.userSizeOverrideUsd,
+      sizeUsd: null,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
-      intent,
-      thesis: extracted,
+      tradeExpression: expression,
       marketSelection: selected,
       riskDecision: risk,
-      sizeUsd: intent.userSizeOverrideUsd,
+      sizeUsd: null,
     });
     await executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
@@ -275,7 +190,10 @@ describe("AI SDK supervisor agent", () => {
     expect(state.tradeTickets[0]?.approvalState).toBe("pending");
     expect(state.researchReports).toHaveLength(0);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["intent", "signal", "thesis", "trade_expression", "market_selection", "risk", "ticket", "final"]),
+      expect.arrayContaining(["trade_expression", "market_selection", "risk", "ticket", "final"]),
+    );
+    expect(state.runSteps.map((step) => step.stepType)).not.toEqual(
+      expect.arrayContaining(["intent", "signal", "thesis"]),
     );
     expect(state.runSteps.map((step) => step.stepType)).not.toContain("research");
     expect(state.executionJobs).toHaveLength(0);
@@ -312,17 +230,8 @@ describe("AI SDK supervisor agent", () => {
       accountStateProvider: new ThrowingAccountStateProvider(),
     });
 
-    await expect(executeTool<IntentResult>(tools.classify_intent, {})).resolves.toMatchObject({
-      intent: "trade",
-    });
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
     await executeTool(tools.select_market, {
-      thesis: extracted,
       tradeExpression: expression,
     });
     await expect(executeTool(tools.risk_check, {
@@ -407,20 +316,12 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
     await executeTool(tools.select_market, {
-      thesis: extracted,
       tradeExpression: expression,
     });
     await expect(executeTool(tools.create_trade_ticket, {
-      intent: { intent: "trade", urgency: "normal", userSizeOverrideUsd: null },
-      thesis: extracted,
+      tradeExpression: expression,
       marketSelection,
       sizeUsd: null,
     })).rejects.toThrow("Trade ticket creation requires a non-rejected risk decision.");
@@ -456,18 +357,11 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis: extracted,
-    });
+    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
 
     await expect(executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "No clean trade yet; evidence remains capped.",
-      thesis: extracted,
       tradeExpression: expression,
     })).resolves.toMatchObject({
       responseType: "analysis",
@@ -504,10 +398,6 @@ describe("AI SDK supervisor agent", () => {
         },
       },
     });
-
-    await executeTool<IntentResult>(tools.classify_intent, {});
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
 
     await expect(executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
@@ -552,17 +442,17 @@ describe("AI SDK supervisor agent", () => {
     });
 
     const [first, second] = await Promise.all([
-      executeTool<SignalInterpretation>(tools.interpret_signal, {}),
-      executeTool<SignalInterpretation>(tools.interpret_signal, {}),
+      executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {}),
+      executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {}),
     ]);
 
     expect(first).toEqual(second);
-    expect(ai.calls.filter((call) => call === "cassie_signal")).toHaveLength(1);
+    expect(ai.calls.filter((call) => call === "cassie_trade_expression_step")).toHaveLength(1);
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.filter((step) => step.stepType === "signal")).toHaveLength(1);
+    expect(steps.filter((step) => step.stepType === "trade_expression")).toHaveLength(1);
   });
 
-  it("uses important AI for critique and trade expression, but cheap AI for market selection", async () => {
+  it("uses important AI for trade expression, but cheap AI for market selection", async () => {
     const store = new InMemoryCassieStore();
     const cheapAi = new FakeAi();
     const importantAi = new FakeAi();
@@ -602,36 +492,23 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    await executeTool(tools.critique_thesis, {
-      thesis,
-    });
-    await executeTool(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis,
-    });
+    await executeTool(tools.plan_trade_expression, {});
     await executeTool(tools.select_market, {
-      thesis,
       tradeExpression,
     });
 
     expect(importantAi.calls).toEqual([
-      "cassie_critique",
       "cassie_trade_expression_step",
     ]);
-    expect(cheapAi.calls).toEqual(["cassie_signal", "cassie_thesis", "cassie_market_selection"]);
+    expect(cheapAi.calls).toEqual(["cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
-      { type: "signal", model: "deepseek-v4-flash" },
-      { type: "thesis", model: "deepseek-v4-flash" },
-      { type: "critique", model: "deepseek-v4-pro" },
       { type: "trade_expression", model: "deepseek-v4-pro" },
       { type: "market_selection", model: "deepseek-v4-flash" },
     ]);
   });
 
-  it("uses supplied tool inputs instead of persisted canonical lookups", async () => {
+  it("uses the source post and command directly for trade expression", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -660,22 +537,12 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const interpreted = await executeTool<SignalInterpretation>(tools.interpret_signal, {});
-    const extracted = await executeTool<Thesis>(tools.extract_thesis, { signal: interpreted });
-    await executeTool(tools.critique_thesis, {
-      thesis: { ...thesis, claim: "Lossy copied thesis." },
-    });
-    await executeTool(tools.plan_trade_expression, {
-      signal: interpreted,
-      thesis,
-    });
+    await executeTool(tools.plan_trade_expression, {});
 
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "critique")?.input).toMatchObject({
-      thesis: { ...thesis, claim: "Lossy copied thesis." },
-    });
     expect(steps.find((step) => step.stepType === "trade_expression")?.input).toMatchObject({
-      thesis,
+      userCommand: "@Cassie critic this",
+      sourcePost,
     });
   });
 });

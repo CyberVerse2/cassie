@@ -1,14 +1,12 @@
 import type {
-  Critique,
   MarketSelection,
   RiskDecision,
   TradeExpressionPlan,
 } from "../../core/schemas/index.ts";
 
 type PublicSummaryFinalizeInput = {
-  responseType: "analysis" | "critique" | "trade_ticket";
+  responseType: "analysis" | "trade_ticket";
   publicSummary: string;
-  critique?: Critique;
   tradeExpression?: TradeExpressionPlan;
   marketSelection?: MarketSelection;
   riskDecision?: RiskDecision;
@@ -26,7 +24,6 @@ export function prepareFinalInput<T extends PublicSummaryFinalizeInput>(input: T
 function finalPublicSummary(
   input: PublicSummaryFinalizeInput,
   outputs: {
-    critique?: Critique;
     tradeExpression?: TradeExpressionPlan;
     marketSelection?: MarketSelection;
     riskDecision?: RiskDecision;
@@ -34,10 +31,6 @@ function finalPublicSummary(
 ): string {
   if (outputs.riskDecision?.decision === "reject") {
     return withDecisionContext(outputs.riskDecision.reason, outputs.tradeExpression, outputs.marketSelection);
-  }
-
-  if (input.responseType === "critique" && outputs.critique) {
-    return withDecisionContext(outputs.critique.finalCritique, outputs.tradeExpression, outputs.marketSelection);
   }
 
   if (input.responseType === "analysis") {
