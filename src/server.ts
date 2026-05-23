@@ -11,7 +11,6 @@ import {
   requestKey,
   requireApiToken,
 } from "./security.ts";
-import { XWebhookPayloadSchema, crcResponse, xEventToMention } from "../packages/app/x-webhook.ts";
 import { config } from "../packages/core/config.ts";
 
 assertRuntimeConfig();
@@ -56,16 +55,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/x/webhook") {
-    const crcToken = url.searchParams.get("crc_token");
-    if (!crcToken) {
-      sendJson(response, 400, { error: "Missing crc_token" });
-      return;
-    }
-    sendJson(response, 200, crcResponse(crcToken));
-    return;
-  }
-
   if (request.method === "GET" && url.pathname === "/dashboard") {
     requireApiToken(request);
     const state = await product.state();
@@ -91,23 +80,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     requireApiToken(request);
     const body = MentionRequestSchema.parse(await readJson(request));
     sendJson(response, 202, await product.createMentionRun(body));
-    return;
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/x/webhook") {
-    requireApiToken(request);
-    const userId = url.searchParams.get("userId");
-    if (!userId) {
-      sendJson(response, 400, { error: "Missing userId" });
-      return;
-    }
-
-    const body = XWebhookPayloadSchema.parse(await readJson(request));
-    const results = [];
-    for (const event of body.tweet_create_events) {
-      results.push(await product.createMentionRun(xEventToMention(event, userId)));
-    }
-    sendJson(response, 202, { queued: results.length, results });
     return;
   }
 
