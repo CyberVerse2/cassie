@@ -19,6 +19,7 @@ export type AiProviderEnvDefaults = {
 export type AiProviderEnv = {
   googleApiKey?: string;
   deepSeekApiKey?: string;
+  openAiApiKey?: string;
   xAiApiKey?: string;
   cheapModel: string;
   importantModel: string;
@@ -95,6 +96,7 @@ const aiProviderEnvSchema = z.object({
   GEMINI_API_KEY: configuredStringSchema,
   GOOGLE_GENERATIVE_AI_API_KEY: configuredStringSchema,
   DEEPSEEK_API_KEY: configuredStringSchema,
+  OPENAI_API_KEY: configuredStringSchema,
   XAI_API_KEY: configuredStringSchema,
   CASSIE_CHEAP_MODEL: configuredStringSchema,
   DEEPSEEK_MODEL: configuredStringSchema,
@@ -183,6 +185,7 @@ export function readAiProviderEnv(
   return aiProviderEnvSchema.transform((values) => ({
     googleApiKey: firstConfigured(values.GEMINI_API_KEY, values.GOOGLE_GENERATIVE_AI_API_KEY),
     deepSeekApiKey: values.DEEPSEEK_API_KEY,
+    openAiApiKey: values.OPENAI_API_KEY,
     xAiApiKey: values.XAI_API_KEY,
     cheapModel: firstConfigured(values.CASSIE_CHEAP_MODEL, values.DEEPSEEK_MODEL) ?? defaults.cheapModel,
     importantModel: firstConfigured(values.CASSIE_IMPORTANT_MODEL, values.CASSIE_EXPENSIVE_MODEL, values.CASSIE_MODEL)
@@ -383,7 +386,7 @@ export function parsePolymarketSignatureType(value: string | undefined): Signatu
 function aiProviderEnvDefaults(overrides: Partial<AiProviderEnvDefaults> = {}): AiProviderEnvDefaults {
   return {
     cheapModel: overrides.cheapModel ?? "deepseek-v4-flash",
-    importantModel: overrides.importantModel ?? "deepseek-v4-pro",
+    importantModel: overrides.importantModel ?? "gpt-5.4-mini",
     webSearchModel: overrides.webSearchModel ?? "gemini-3.1-flash-lite",
     grokXSearchModel: "grok-4.3",
     ...overrides,

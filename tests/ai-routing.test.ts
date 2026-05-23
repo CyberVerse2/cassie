@@ -16,11 +16,11 @@ describe("structured AI model routing", () => {
     });
   });
 
-  it("routes judgment steps to DeepSeek v4 Pro", () => {
+  it("routes judgment steps to GPT 5.4 mini", () => {
     expect(routeStructuredModel({ name: "cassie_trade_expressions" })).toMatchObject({
-      provider: "deepseek",
+      provider: "openai",
       tier: "expensive",
-      model: "deepseek-v4-pro",
+      model: "gpt-5.4-mini",
     });
   });
 
@@ -30,7 +30,7 @@ describe("structured AI model routing", () => {
       tier: "cheap",
     });
     expect(routeStructuredModel({ name: "cassie_market_selection", tier: "expensive" })).toMatchObject({
-      provider: "deepseek",
+      provider: "openai",
       tier: "expensive",
     });
   });

@@ -1,4 +1,5 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createOpenAI } from "@ai-sdk/openai";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
@@ -15,7 +16,7 @@ export const IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS = 32_768;
 const DEFAULT_STRUCTURED_MAX_RETRIES = 2;
 
 export type ModelTier = "cheap" | "expensive";
-export type ModelProvider = "deepseek";
+export type ModelProvider = "deepseek" | "openai";
 
 export type ModelRoute = {
   tier: ModelTier;
@@ -57,7 +58,7 @@ export class MissingAiDependencyError extends Error {
 }
 
 export class MissingImportantAiDependencyError extends MissingAiDependencyError {
-  constructor(message = "AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's important DeepSeek judgment tools.") {
+  constructor(message = "AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.") {
     super(message);
     this.name = "MissingImportantAiDependencyError";
   }
@@ -79,7 +80,7 @@ export function routeStructuredModel(input: {
 
   return tier === "cheap"
     ? { tier, provider: "deepseek", model: cheapModel }
-    : { tier, provider: "deepseek", model: expensiveModel };
+    : { tier, provider: "openai", model: expensiveModel };
 }
 
 export class CassieStructuredClient implements StructuredAiClient {
@@ -110,10 +111,11 @@ export class CassieStructuredClient implements StructuredAiClient {
 
     const deepSeekKey = config.ai.deepSeekApiKey;
     if (route.provider === "deepseek" && !deepSeekKey) {
-      if (route.tier === "expensive") {
-        throw new MissingImportantAiDependencyError();
-      }
       throw new MissingAiDependencyError("AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
+    }
+    const openAiKey = config.ai.openAiApiKey;
+    if (route.provider === "openai" && !openAiKey) {
+      throw new MissingImportantAiDependencyError("AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.");
     }
 
     const finishTrace = this.trace?.start({
@@ -135,8 +137,13 @@ export class CassieStructuredClient implements StructuredAiClient {
       const deepseek = createDeepSeek({
         apiKey: deepSeekKey,
       });
+      const openai = createOpenAI({
+        apiKey: openAiKey,
+      });
       const result = await generateText({
-        model: deepseek.chat(route.model),
+        model: route.provider === "openai"
+          ? openai.chat(route.model)
+          : deepseek.chat(route.model),
         output: Output.object({
           schema: input.schema,
           name: input.name,

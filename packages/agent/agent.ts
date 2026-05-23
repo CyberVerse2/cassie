@@ -1,5 +1,5 @@
 import { ToolLoopAgent, type TelemetryIntegration } from "ai";
-import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createOpenAI } from "@ai-sdk/openai";
 import { CassieStructuredClient, type StructuredAiClient } from "../ai/client.ts";
 import {
   HyperliquidAccountStateProvider,
@@ -65,12 +65,12 @@ export async function runCassieSupervisorForRun(input: {
       userSettings,
       accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
     });
-    const deepseek = createDeepSeek({
-      apiKey: config.ai.deepSeekApiKey,
+    const openai = createOpenAI({
+      apiKey: config.ai.openAiApiKey,
     });
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
-      model: deepseek.chat(config.ai.importantModel),
+      model: openai.chat(config.ai.importantModel),
       stopWhen: createCassieStopConditions(),
       tools,
       prepareStep: prepareCassieSupervisorStep,

@@ -128,6 +128,7 @@ describe("Polymarket env", () => {
       GEMINI_API_KEY: "gemini",
       GOOGLE_GENERATIVE_AI_API_KEY: "google",
       DEEPSEEK_API_KEY: "deepseek",
+      OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
       CASSIE_CHEAP_MODEL: "cheap",
       CASSIE_IMPORTANT_MODEL: "important",
@@ -148,6 +149,7 @@ describe("Polymarket env", () => {
     })).toEqual({
       googleApiKey: "gemini",
       deepSeekApiKey: "deepseek",
+      openAiApiKey: "openai",
       xAiApiKey: "xai",
       cheapModel: "cheap",
       importantModel: "important",
@@ -168,6 +170,7 @@ describe("Polymarket env", () => {
       DATABASE_URL: "postgres://cassie",
       GEMINI_API_KEY: "gemini",
       DEEPSEEK_API_KEY: "deepseek",
+      OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
       CASSIE_API_TOKEN: "api-token",
       X_BEARER_TOKEN: "bearer",
@@ -190,6 +193,7 @@ describe("Polymarket env", () => {
       ai: {
         googleApiKey: "gemini",
         deepSeekApiKey: "deepseek",
+        openAiApiKey: "openai",
         xAiApiKey: "xai",
       },
       database: {
