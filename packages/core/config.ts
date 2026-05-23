@@ -135,7 +135,7 @@ export function numberEnv(
   env: EnvSource = process.env,
   options: NumberEnvOptions = {},
 ): number {
-  return parseNumberEnv(env[name], fallback, options);
+  return parseNumberEnv(name, env, fallback, options);
 }
 
 export function readCassieConfig(
@@ -145,7 +145,7 @@ export function readCassieConfig(
   return {
     ai: readAiProviderEnv(env, aiDefaults),
     structuredAi: {
-      maxRetries: parseNumberEnv(env.CASSIE_STRUCTURED_MAX_RETRIES, 2, { integer: true, min: 1 }),
+      maxRetries: numberEnv("CASSIE_STRUCTURED_MAX_RETRIES", 2, env, { integer: true, min: 1 }),
     },
     database: {
       url: optionalEnv("DATABASE_URL", env),
@@ -155,15 +155,15 @@ export function readCassieConfig(
     xPolling: xPollingEnv(env),
     x: {
       pollUserId: optionalEnv("X_POLL_USER_ID", env),
-      pollIntervalMs: parseNumberEnv(env.X_POLL_INTERVAL_MS, 120_000, { integer: true, min: 1 }),
+      pollIntervalMs: numberEnv("X_POLL_INTERVAL_MS", 120_000, env, { integer: true, min: 1 }),
       consumerSecret: optionalEnv("X_CONSUMER_SECRET", env),
     },
     research: {
-      connectorCallTimeoutMs: parseNumberEnv(env.CASSIE_CONNECTOR_CALL_TIMEOUT_MS, 180_000, { min: 1 }),
+      connectorCallTimeoutMs: numberEnv("CASSIE_CONNECTOR_CALL_TIMEOUT_MS", 180_000, env, { min: 1 }),
     },
     supervisor: {
-      timeoutMs: parseNumberEnv(env.CASSIE_SUPERVISOR_TIMEOUT_MS, 1_800_000, { integer: true, min: 1 }),
-      stepTimeoutMs: parseNumberEnv(env.CASSIE_SUPERVISOR_STEP_TIMEOUT_MS, 900_000, { integer: true, min: 1 }),
+      timeoutMs: numberEnv("CASSIE_SUPERVISOR_TIMEOUT_MS", 1_800_000, env, { integer: true, min: 1 }),
+      stepTimeoutMs: numberEnv("CASSIE_SUPERVISOR_STEP_TIMEOUT_MS", 900_000, env, { integer: true, min: 1 }),
     },
     execution: {
       webhookUrl: optionalEnv("EXECUTION_WEBHOOK_URL", env),
@@ -201,10 +201,10 @@ export function readAiProviderEnv(
 
 export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWorkerEnv {
   return z.object({
-    GRAPHILE_EXECUTION_MAX_ATTEMPTS: numberSchema(5, { integer: true, min: 1 }),
-    GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: numberSchema(3, { integer: true, min: 1 }),
-    GRAPHILE_WORKER_CONCURRENCY: numberSchema(1, { integer: true, min: 1 }),
-    GRAPHILE_WORKER_POLL_INTERVAL_MS: numberSchema(2_000, { integer: true, min: 1 }),
+    GRAPHILE_EXECUTION_MAX_ATTEMPTS: numberSchema("GRAPHILE_EXECUTION_MAX_ATTEMPTS", 5, { integer: true, min: 1 }),
+    GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: numberSchema("GRAPHILE_SUPERVISOR_MAX_ATTEMPTS", 3, { integer: true, min: 1 }),
+    GRAPHILE_WORKER_CONCURRENCY: numberSchema("GRAPHILE_WORKER_CONCURRENCY", 1, { integer: true, min: 1 }),
+    GRAPHILE_WORKER_POLL_INTERVAL_MS: numberSchema("GRAPHILE_WORKER_POLL_INTERVAL_MS", 2_000, { integer: true, min: 1 }),
   }).transform((values) => ({
     executionMaxAttempts: values.GRAPHILE_EXECUTION_MAX_ATTEMPTS,
     supervisorMaxAttempts: values.GRAPHILE_SUPERVISOR_MAX_ATTEMPTS,
@@ -216,10 +216,10 @@ export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWor
 export function readHttpRuntimeEnv(env: EnvSource = process.env): HttpRuntimeEnv {
   return z.object({
     CASSIE_API_TOKEN: configuredStringSchema,
-    CASSIE_MAX_BODY_BYTES: numberSchema(256_000, { integer: true, min: 1 }),
-    PORT: numberSchema(3000, { integer: true, min: 1 }),
-    CASSIE_RATE_LIMIT_MAX: numberSchema(60, { integer: true, min: 1 }),
-    CASSIE_RATE_LIMIT_WINDOW_MS: numberSchema(60_000, { integer: true, min: 1 }),
+    CASSIE_MAX_BODY_BYTES: numberSchema("CASSIE_MAX_BODY_BYTES", 256_000, { integer: true, min: 1 }),
+    PORT: numberSchema("PORT", 3000, { integer: true, min: 1 }),
+    CASSIE_RATE_LIMIT_MAX: numberSchema("CASSIE_RATE_LIMIT_MAX", 60, { integer: true, min: 1 }),
+    CASSIE_RATE_LIMIT_WINDOW_MS: numberSchema("CASSIE_RATE_LIMIT_WINDOW_MS", 60_000, { integer: true, min: 1 }),
   }).transform((values) => ({
     apiToken: values.CASSIE_API_TOKEN,
     maxBodyBytes: values.CASSIE_MAX_BODY_BYTES,
@@ -233,7 +233,7 @@ export function xPollingEnv(env: EnvSource = process.env): XPollingEnv {
   return z.object({
     X_BEARER_TOKEN: configuredStringSchema,
     CASSIE_X_HANDLE: configuredStringSchema,
-    X_POLL_MAX_RESULTS: numberSchema(25, { integer: true, min: 10 }),
+    X_POLL_MAX_RESULTS: numberSchema("X_POLL_MAX_RESULTS", 25, { integer: true, min: 10 }),
   }).transform((values) => ({
     bearerToken: values.X_BEARER_TOKEN,
     cassieHandle: values.CASSIE_X_HANDLE,
@@ -275,8 +275,8 @@ export function readHyperliquidExecutionEnv(
 ): HyperliquidExecutionEnv {
   const schema = z.object({
     HYPERLIQUID_PRIVATE_KEY: configuredStringSchema,
-    HYPERLIQUID_EXECUTION_SLIPPAGE_BPS: numberSchema(100, { min: 0 }),
-    HYPERLIQUID_PRICE_DECIMALS: numberSchema(5, { integer: true, min: 0 }),
+    HYPERLIQUID_EXECUTION_SLIPPAGE_BPS: numberSchema("HYPERLIQUID_EXECUTION_SLIPPAGE_BPS", 100, { min: 0 }),
+    HYPERLIQUID_PRICE_DECIMALS: numberSchema("HYPERLIQUID_PRICE_DECIMALS", 5, { integer: true, min: 0 }),
   }).transform((values) => {
     const privateKey = firstConfigured(options.privateKey, values.HYPERLIQUID_PRIVATE_KEY);
 
@@ -396,26 +396,40 @@ function aiProviderEnvDefaults(overrides: Partial<AiProviderEnvDefaults> = {}): 
   };
 }
 
-function numberSchema(fallback: number, options: NumberEnvOptions = {}): z.ZodType<number> {
+function numberSchema(name: string, fallback: number, options: NumberEnvOptions = {}): z.ZodType<number> {
   return z.preprocess((value) => {
-    const configured = configuredStringSchema.parse(value);
-    if (configured == null) return fallback;
-
-    const parsed = Number(configured);
-    if (!Number.isFinite(parsed)) return fallback;
-
-    const normalized = options.integer ? Math.floor(parsed) : parsed;
-    if (options.min != null && normalized < options.min) return fallback;
-    return normalized;
+    return parseConfiguredNumber(name, value, fallback, options);
   }, z.number());
 }
 
 function parseNumberEnv(
-  value: string | undefined,
+  name: string,
+  env: EnvSource,
   fallback: number,
   options: NumberEnvOptions,
 ): number {
-  return numberSchema(fallback, options).parse(value);
+  return numberSchema(name, fallback, options).parse(env[name]);
+}
+
+function parseConfiguredNumber(
+  name: string,
+  value: unknown,
+  fallback: number,
+  options: NumberEnvOptions,
+): number {
+  const configured = configuredStringSchema.parse(value);
+  if (configured == null) return fallback;
+
+  const parsed = Number(configured);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`${name} must be a number.`);
+  }
+
+  const normalized = options.integer ? Math.floor(parsed) : parsed;
+  if (options.min != null && normalized < options.min) {
+    throw new Error(`${name} must be at least ${options.min}.`);
+  }
+  return normalized;
 }
 
 function firstConfigured(...values: Array<string | undefined>): string | undefined {

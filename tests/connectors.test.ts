@@ -648,6 +648,87 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("rejects malformed Polymarket token ID arrays with provider-field context", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 600000,
+            clobTokenIds: "[\"123\",",
+            outcomePrices: JSON.stringify(["0.62", "0.38"]),
+            conditionId: "condition_1",
+          },
+        ]
+        : []));
+    });
+
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+      thesis,
+    })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
+    fetchMock.mockRestore();
+  });
+
+  it("rejects malformed Polymarket outcome price arrays with provider-field context", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 600000,
+            clobTokenIds: JSON.stringify(["123", "456"]),
+            outcomePrices: "[\"0.62\",",
+            conditionId: "condition_1",
+          },
+        ]
+        : []));
+    });
+
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+      thesis,
+    })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
+    fetchMock.mockRestore();
+  });
+
+  it("rejects parsed Polymarket arrays containing non-string values", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(String(input));
+
+      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
+        ? [
+          {
+            id: "1",
+            slug: "solana-etf-approved",
+            question: "Will a Solana ETF be approved?",
+            active: true,
+            closed: false,
+            liquidityNum: 600000,
+            clobTokenIds: ["123", 456],
+            outcomePrices: JSON.stringify(["0.62", "0.38"]),
+            conditionId: "condition_1",
+          },
+        ]
+        : []));
+    });
+
+    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+      thesis,
+    })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
+    fetchMock.mockRestore();
+  });
+
   it("normalizes Polymarket NO-side quotes to held-side prices", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = new URL(String(input));

@@ -113,8 +113,14 @@ describe("Polymarket env", () => {
 
   it("centralizes numeric env defaults", () => {
     expect(numberEnv("COUNT", 3, { COUNT: "4.8" }, { integer: true, min: 1 })).toBe(4);
-    expect(numberEnv("COUNT", 3, { COUNT: "nope" })).toBe(3);
-    expect(numberEnv("COUNT", 3, { COUNT: "-1" }, { min: 1 })).toBe(3);
+    expect(numberEnv("COUNT", 3, {})).toBe(3);
+    expect(numberEnv("COUNT", 3, { COUNT: "" })).toBe(3);
+    expect(() => numberEnv("COUNT", 3, { COUNT: "nope" }))
+      .toThrow("COUNT must be a number.");
+    expect(() => numberEnv("COUNT", 3, { COUNT: "-1" }, { min: 1 }))
+      .toThrow("COUNT must be at least 1.");
+    expect(() => readCassieConfig({ CASSIE_STRUCTURED_MAX_RETRIES: "0" }))
+      .toThrow("CASSIE_STRUCTURED_MAX_RETRIES must be at least 1.");
   });
 
   it("reads grouped AI provider and Graphile worker config", () => {

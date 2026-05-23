@@ -69,6 +69,9 @@ type PolymarketBook = {
   asks?: Array<{ price: string; size: string }>;
 };
 
+const POLYMARKET_LIQUIDITY_SCORE_FULL_USD = 500_000;
+const POLYMARKET_LOW_LIQUIDITY_WARNING_USD = 10_000;
+
 export class CompositeMarketDataProvider implements MarketDataProvider {
   constructor(
     private readonly providers: MarketDataProvider[] = [
@@ -215,7 +218,7 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
           liquidityUsd: normalized.liquidityUsd,
           endDate: normalized.endDate,
           markPrice: metrics.mid ?? (heldPrice && heldPrice > 0 ? heldPrice : null),
-          liquidityScore: Math.min(1, Math.max(normalized.liquidityUsd, normalized.volumeUsd) / 500_000),
+          liquidityScore: Math.min(1, Math.max(normalized.liquidityUsd, normalized.volumeUsd) / POLYMARKET_LIQUIDITY_SCORE_FULL_USD),
           spreadBps: metrics.spreadBps,
           estimatedSlippageBps: metrics.estimatedSlippageBps,
           minOrderSizeUsd: 1,
@@ -400,19 +403,36 @@ function estimateBuySlippageBps(
   return Math.max(0, Math.round(((averagePrice - bestAsk) / bestAsk) * 10_000));
 }
 
-function parseStringArray(value: string | string[] | undefined): string[] {
-  if (Array.isArray(value)) return value;
-  if (!value) return [];
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
-  } catch {
-    return [];
+function parseStringArray(value: string | string[] | undefined, context: { field: string; market: string }): string[] {
+  if (Array.isArray(value)) {
+    if (value.some((item) => typeof item !== "string")) {
+      throw malformedPolymarketStringArrayError(context);
+    }
+    return value;
   }
+  if (!value) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch (error) {
+    throw malformedPolymarketStringArrayError(context, error);
+  }
+
+  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
+    throw malformedPolymarketStringArrayError(context);
+  }
+
+  return parsed;
 }
 
-function parseNumberArray(value: string | string[] | undefined): number[] {
-  return parseStringArray(value).map(Number).filter(Number.isFinite);
+function parseNumberArray(value: string | string[] | undefined, context: { field: string; market: string }): number[] {
+  return parseStringArray(value, context).map(Number).filter(Number.isFinite);
+}
+
+function malformedPolymarketStringArrayError(context: { field: string; market: string }, cause?: unknown): Error {
+  const causeMessage = cause instanceof Error ? ` ${cause.message}` : "";
+  return new Error(`Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of strings or string[].${causeMessage}`);
 }
 
 function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymarketMarket {
@@ -424,8 +444,8 @@ function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymark
     throw new Error(`Polymarket market ${slug} is missing condition_id.`);
   }
 
-  const tokenIds = parseStringArray(market.clobTokenIds);
-  const prices = parseNumberArray(market.outcomePrices);
+  const tokenIds = parseStringArray(market.clobTokenIds, { field: "clobTokenIds", market: slug });
+  const prices = parseNumberArray(market.outcomePrices, { field: "outcomePrices", market: slug });
   const yesPrice = prices[0] ?? null;
   const noPrice = prices[1] ?? (yesPrice == null ? null : 1 - yesPrice);
 
@@ -445,7 +465,7 @@ function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymark
 
 function polymarketWarnings(market: NormalizedPolymarketMarket): string[] {
   const warnings: string[] = [];
-  if (market.liquidityUsd < 10_000) {
+  if (market.liquidityUsd < POLYMARKET_LOW_LIQUIDITY_WARNING_USD) {
     warnings.push("liquidity_under_10000");
   }
   if (!market.endDate) {
