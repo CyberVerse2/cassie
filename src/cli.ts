@@ -9,6 +9,8 @@ import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
 import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
+import type { CassieJobQueue } from "../packages/jobs/index.ts";
+import type { ControlRun, ExecutionJob } from "../packages/core/schemas/index.ts";
 import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
@@ -17,7 +19,7 @@ import {
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
 import { buildCliUserSettings } from "./cli-settings.ts";
-import { createTerminalTheme, indentWrap, normalizeStatus, statusTag, type TerminalTheme } from "./helpers/terminal-ui.ts";
+import { createTerminalTheme, indentWrap, normalizeStatus, statusTag, terminalTable, type TerminalTheme } from "./helpers/terminal-ui.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -32,6 +34,16 @@ class CliError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CliError";
+  }
+}
+
+class InlineCliJobQueue implements CassieJobQueue {
+  async enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
+    return { executionJobId: job.jobId, graphileJobId: null };
+  }
+
+  async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }> {
+    return { runId: run.runId, graphileJobId: null };
   }
 }
 
@@ -100,7 +112,7 @@ Setup:
   env                       Show required runtime dependencies, with secrets masked.
 
 App flow:
-  run                       Create a run, enqueue Cassie, and show the live timeline.
+  run                       Create a run, execute Cassie once inline, and show the live timeline.
   mention                   Create a durable queued run without executing it.
   run-supervisor <runId>    Execute an existing queued run.
   control-run <runId>       Show a durable run, recorded steps, and timeline.
@@ -150,26 +162,14 @@ async function settingsSet(args: ParsedArgs) {
 
 async function run(args: ParsedArgs) {
   const store = new ControlPlaneStore();
-  const queued = await new CassieProduct(store)
+  const queued = await new CassieProduct(store, null, undefined, new InlineCliJobQueue())
     .createMentionRun(await mentionRequestFromArgs(args));
-  const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
-  const liveTimeline = showTimeline ? startLiveRunTimeline(store, queued.runId) : null;
-  try {
-    if (showTimeline) {
-      await waitForRunToStop(store, queued.runId);
-    }
-  } finally {
-    await liveTimeline?.stop();
-  }
-
-  const snapshot = await store.load();
-  const timeline = formatRunTimeline(snapshot, queued.runId);
-  if (showTimeline) {
-    console.error(timeline);
-  }
-  if (args.flags.json) return { runId: queued.runId, queued, timeline };
-  if (args.flags.full) return { runId: queued.runId, queued };
-  return summarizeRun(snapshot, queued.runId);
+  return executeRunWithTimeline({
+    args,
+    store,
+    runId: queued.runId,
+    queued,
+  });
 }
 
 async function mention(args: ParsedArgs) {
@@ -189,8 +189,9 @@ async function executeRunWithTimeline(input: {
   args: ParsedArgs;
   store: ControlPlaneStore;
   runId: string;
+  queued?: unknown;
 }) {
-  const { args, store, runId } = input;
+  const { args, store, runId, queued } = input;
   const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
   const liveTimeline = showTimeline ? startLiveRunTimeline(store, runId) : null;
   let result: unknown;
@@ -204,8 +205,8 @@ async function executeRunWithTimeline(input: {
   if (showTimeline) {
     console.error(timeline);
   }
-  if (args.flags.json) return { runId, result, timeline };
-  if (args.flags.full) return { runId, result };
+  if (args.flags.json) return { runId, queued, result, timeline };
+  if (args.flags.full) return { runId, queued, result };
   return summarizeRun(snapshot, runId);
 }
 
@@ -357,8 +358,9 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
 }
 
 function summarizeRun(snapshot: CassieStoreSnapshot, runId: string) {
+  const theme = createTerminalTheme();
   const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
-  if (!run) return { runId, status: "missing" };
+  if (!run) return `${theme.title("CASSIE RUN")}\n${statusTag("missing", theme)} ${runId}`;
 
   const steps = snapshot.runSteps
     .filter((step) => step.runId === runId)
@@ -371,16 +373,66 @@ function summarizeRun(snapshot: CassieStoreSnapshot, runId: string) {
       error: step.error,
     }));
   const result = run.result && typeof run.result === "object" ? run.result as Record<string, unknown> : {};
+  const actionState = stringOrNull(result.actionState) ?? "unknown";
+  const responseType = stringOrNull(result.responseType) ?? "unknown";
+  const ticketId = stringOrNull(result.ticketId) ?? "none";
+  const publicSummary = stringOrNull(result.publicSummary);
 
-  return {
-    runId: run.runId,
-    status: run.status,
-    actionState: result.actionState ?? null,
-    responseType: result.responseType ?? null,
-    ticketId: result.ticketId ?? null,
-    publicSummary: result.publicSummary ?? null,
-    steps,
-  };
+  const lines = [
+    theme.title("CASSIE RUN"),
+    `${statusTag(run.status, theme)} ${theme.section(run.runId)}`,
+    "",
+    ...terminalTable({
+      head: ["field", "value"],
+      rows: [
+        ["status", run.status],
+        ["action", actionState],
+        ["response", responseType],
+        ["ticket", ticketId],
+      ],
+      theme,
+    }),
+  ];
+
+  if (publicSummary) {
+    lines.push(
+      "",
+      theme.section("Verdict"),
+      ...indentWrap({ text: publicSummary, indent: "|-- ", theme }),
+    );
+  }
+
+  lines.push(
+    "",
+    theme.section("Workflow"),
+    ...terminalTable({
+      head: ["step", "status", "model", "output"],
+      rows: steps.map((step) => [
+        formatStepType(step.type),
+        normalizeStatus(step.status),
+        step.model ?? "none",
+        truncateTerminal(step.error ? `error: ${step.error}` : step.output ?? "done", 96),
+      ]),
+      theme,
+    }),
+  );
+
+  return lines.join("\n");
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function formatStepType(value: string): string {
+  return value
+    .split("_")
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function truncateTerminal(value: string, maxLength: number): string {
+  return value.length > maxLength ? `${value.slice(0, Math.max(0, maxLength - 3))}...` : value;
 }
 
 async function sourcePostFromFlags(args: ParsedArgs): Promise<SourcePost> {
@@ -510,17 +562,6 @@ function startLiveRunTimeline(store: CassieStore, runId: string) {
   };
 }
 
-async function waitForRunToStop(store: CassieStore, runId: string) {
-  while (true) {
-    const snapshot = await store.load();
-    const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
-    if (run && run.status !== "queued" && run.status !== "running") {
-      return;
-    }
-    await sleep(1_000);
-  }
-}
-
 function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: TerminalTheme) {
   const events: Array<{ key: string; signature: string; lines: string[] }> = [];
   const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
@@ -617,10 +658,6 @@ function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
 }
 
-function sleep(ms: number) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 function flag(args: ParsedArgs, name: string, defaultValue: string): string {
   const value = args.flags[name];
   return typeof value === "string" ? value : defaultValue;
@@ -686,6 +723,11 @@ function maskSecret(value: string | undefined) {
 function print(value: unknown, json: boolean) {
   if (json) {
     console.log(JSON.stringify(value, null, 2));
+    return;
+  }
+
+  if (typeof value === "string") {
+    console.log(value);
     return;
   }
 

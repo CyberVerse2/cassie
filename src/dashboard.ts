@@ -183,6 +183,7 @@ export function renderDashboard(state: CassieStoreSnapshot): string {
       border-bottom: 1px solid var(--line-soft);
       padding: 12px 0;
     }
+    .row > div:first-child { min-width: 0; }
     .row:last-child { border-bottom: 0; padding-bottom: 0; }
     .status {
       display: inline-flex;
@@ -266,8 +267,18 @@ export function renderDashboard(state: CassieStoreSnapshot): string {
       border-radius: 8px;
       padding: 12px;
       min-width: 0;
+      overflow: hidden;
     }
     .mini-panel h3 { margin-bottom: 8px; }
+    .step-error {
+      margin-top: 6px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: pre-wrap;
+      max-height: 9.5rem;
+      overflow: auto;
+    }
     .empty {
       color: var(--muted);
       padding: 12px 0 0;
@@ -555,7 +566,7 @@ function renderStepRow(step: RunStep): string {
     <div>
       <strong>${escapeHtml(step.stepType)}</strong>
       <div class="muted">${escapeHtml(step.model ?? "no model")} ${step.promptName ? `/ ${escapeHtml(step.promptName)}` : ""}</div>
-      ${step.error ? `<div class="muted">Error: ${escapeHtml(step.error)}</div>` : ""}
+      ${step.error ? `<div class="step-error">Error: ${escapeHtml(step.error)}</div>` : ""}
     </div>
     <div>${statusBadge(step.status)}<div class="quiet">${duration === null ? "open" : formatDuration(duration)}</div></div>
   </div>`;

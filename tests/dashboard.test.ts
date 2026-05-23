@@ -127,4 +127,20 @@ describe("dashboard", () => {
     expect(html).toContain("market_selection");
     expect(html).toContain("cassie_market_selection");
   });
+
+  it("wraps long step errors in a bounded error block", () => {
+    const html = renderDashboard({
+      ...snapshot,
+      runSteps: [
+        {
+          ...snapshot.runSteps[0]!,
+          status: "failed",
+          error: `Structured AI failed: ${"schema mismatch ".repeat(80)}`,
+        },
+      ],
+    });
+
+    expect(html).toContain('class="step-error"');
+    expect(html).toContain("Structured AI failed:");
+  });
 });

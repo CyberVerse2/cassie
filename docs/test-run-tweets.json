@@ -2,7 +2,7 @@
   "tweets": [
     {
       "url": "https://x.com/maxrumpf/status/2057171304978293039?s=20",
-      "current": true
+      "current": false
     },
     {
       "url": "https://x.com/bridgemindai/status/2057096555924947392?s=20",
@@ -10,7 +10,7 @@
     },
     {
       "url": "https://x.com/MTSlive/status/2057575001499599007?s=20",
-      "current": false
+      "current": true
     },
     {
       "url": "https://x.com/0xJeff/status/2057426384969236808?s=20",
