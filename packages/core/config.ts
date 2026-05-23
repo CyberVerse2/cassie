@@ -389,7 +389,7 @@ export function parsePolymarketSignatureType(value: string | undefined): Signatu
 function aiProviderEnvDefaults(overrides: Partial<AiProviderEnvDefaults> = {}): AiProviderEnvDefaults {
   return {
     cheapModel: overrides.cheapModel ?? "deepseek-v4-flash",
-    importantModel: overrides.importantModel ?? "gemini-3.5-flash",
+    importantModel: overrides.importantModel ?? "deepseek-v4-pro",
     webSearchModel: overrides.webSearchModel ?? "gemini-3.1-flash-lite",
     grokXSearchModel: "grok-4.3",
     ...overrides,

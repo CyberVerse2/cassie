@@ -797,9 +797,9 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
       { type: "signal", model: "deepseek-v4-flash" },
       { type: "thesis", model: "deepseek-v4-flash" },
-      { type: "research", model: "gemini-3.5-flash" },
-      { type: "critique", model: "gemini-3.5-flash" },
-      { type: "trade_expression", model: "gemini-3.5-flash" },
+      { type: "research", model: "deepseek-v4-pro" },
+      { type: "critique", model: "deepseek-v4-pro" },
+      { type: "trade_expression", model: "deepseek-v4-pro" },
       { type: "market_selection", model: "deepseek-v4-flash" },
     ]);
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
+  IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS,
   CassieStructuredClient,
   MissingAiDependencyError,
   routeStructuredModel,
@@ -24,18 +25,18 @@ describe("structured AI model routing", () => {
     });
   });
 
-  it("routes judgment steps to Gemini 3.5 Flash through Google", () => {
+  it("routes judgment steps to DeepSeek v4 Pro", () => {
     expect(routeStructuredModel({ name: "cassie_goal_resolution" })).toMatchObject({
-      provider: "google",
+      provider: "deepseek",
       tier: "expensive",
-      model: "gemini-3.5-flash",
+      model: "deepseek-v4-pro",
     });
     expect(routeStructuredModel({ name: "cassie_research_report" })).toMatchObject({
-      provider: "google",
+      provider: "deepseek",
       tier: "expensive",
     });
     expect(routeStructuredModel({ name: "cassie_trade_expression" })).toMatchObject({
-      provider: "google",
+      provider: "deepseek",
       tier: "expensive",
     });
   });
@@ -46,7 +47,7 @@ describe("structured AI model routing", () => {
       tier: "cheap",
     });
     expect(routeStructuredModel({ name: "cassie_signal", tier: "expensive" })).toMatchObject({
-      provider: "google",
+      provider: "deepseek",
       tier: "expensive",
     });
   });
@@ -77,6 +78,7 @@ describe("structured AI model routing", () => {
   it("keeps direct provider generation ceilings below huge provider defaults", () => {
     expect(GEMINI_SEARCH_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(2_048);
     expect(DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(8_192);
+    expect(IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS).toBeLessThanOrEqual(32_768);
   });
 
   it("defaults Grok X search to 4.3", () => {

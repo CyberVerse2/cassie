@@ -30,7 +30,7 @@ export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTo
       ? "none"
       : activeTools.length === 1
         ? { type: "tool", toolName: activeTools[0] }
-        : "required",
+        : "auto",
   };
 };
 

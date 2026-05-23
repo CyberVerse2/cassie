@@ -75,7 +75,7 @@ describe("supervisor step policy", () => {
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
     expect(prepared.activeTools).toEqual(fullToolSurface);
-    expect(prepared.toolChoice).toBe("required");
+    expect(prepared.toolChoice).toBe("auto");
   });
 
   it("keeps critique substance when compressing tool messages before finalization", () => {

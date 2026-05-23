@@ -1,25 +1,24 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { Output, generateText } from "ai";
-import type { z } from "zod";
+import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { formatErrorForLog } from "../core/error-format.ts";
 import {
   config,
 } from "../core/config.ts";
-import { googleThinkingOptions } from "./google-options.ts";
 import { configureAiSdkWarningLogging } from "./sdk-warnings.ts";
 
 configureAiSdkWarningLogging();
 
 export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
+export const IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS = 32_768;
 export const DEFAULT_CHEAP_MODEL = "deepseek-v4-flash";
-export const DEFAULT_IMPORTANT_MODEL = "gemini-3.5-flash";
+export const DEFAULT_IMPORTANT_MODEL = "deepseek-v4-pro";
 export const DEFAULT_EXPENSIVE_MODEL = DEFAULT_IMPORTANT_MODEL;
 const DEFAULT_STRUCTURED_MAX_RETRIES = 2;
 
 export type ModelTier = "cheap" | "expensive";
-export type ModelProvider = "google" | "deepseek";
+export type ModelProvider = "deepseek";
 
 export type ModelRoute = {
   tier: ModelTier;
@@ -61,7 +60,7 @@ export class MissingAiDependencyError extends Error {
 }
 
 export class MissingImportantAiDependencyError extends MissingAiDependencyError {
-  constructor(message = "AI dependency unavailable. Set GEMINI_API_KEY to run Cassie's important AI tools.") {
+  constructor(message = "AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's important DeepSeek judgment tools.") {
     super(message);
     this.name = "MissingImportantAiDependencyError";
   }
@@ -84,7 +83,7 @@ export function routeStructuredModel(input: {
 
   return tier === "cheap"
     ? { tier, provider: "deepseek", model: cheapModel }
-    : { tier, provider: "google", model: expensiveModel };
+    : { tier, provider: "deepseek", model: expensiveModel };
 }
 
 export class CassieStructuredClient implements StructuredAiClient {
@@ -113,12 +112,11 @@ export class CassieStructuredClient implements StructuredAiClient {
       expensiveModel: this.expensiveModelName,
     });
 
-    const googleKey = config.ai.googleApiKey;
     const deepSeekKey = config.ai.deepSeekApiKey;
-    if (route.provider === "google" && !googleKey) {
-      throw new MissingImportantAiDependencyError("AI dependency unavailable. Set GEMINI_API_KEY to run Cassie's expensive judgment tools.");
-    }
     if (route.provider === "deepseek" && !deepSeekKey) {
+      if (route.tier === "expensive") {
+        throw new MissingImportantAiDependencyError();
+      }
       throw new MissingAiDependencyError("AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
     }
 
@@ -138,27 +136,27 @@ export class CassieStructuredClient implements StructuredAiClient {
     });
 
     try {
-      const deepseek = route.provider === "deepseek"
-        ? createDeepSeek({
-          apiKey: deepSeekKey,
-        })
-        : null;
-      const google = route.provider === "google"
-        ? createGoogleGenerativeAI({
-          apiKey: googleKey,
-        })
-        : null;
-      const result = await generateText({
-        model: route.provider === "deepseek" ? deepseek!.chat(route.model) : google!(route.model),
-        output: Output.object({
+      const deepseek = createDeepSeek({
+        apiKey: deepSeekKey,
+      });
+      const result = route.tier === "expensive"
+        ? await generateDeepSeekJsonText({
+          model: deepseek.chat(route.model),
           schema: input.schema,
           name: input.name,
-        }),
-        prompt: input.prompt,
-        providerOptions: route.provider === "google" ? googleThinkingOptions("medium") : undefined,
-        maxRetries: structuredMaxRetries(),
-        ...(route.provider === "deepseek" ? { maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS } : {}),
-      });
+          prompt: input.prompt,
+          maxOutputTokens: IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS,
+        })
+        : await generateText({
+          model: deepseek.chat(route.model),
+          output: Output.object({
+            schema: input.schema,
+            name: input.name,
+          }),
+          prompt: input.prompt,
+          maxRetries: structuredMaxRetries(),
+          maxOutputTokens: DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
+        });
 
       finishTrace?.({
         output: result.output,
@@ -225,7 +223,7 @@ export class DirectDeepSeekStructuredClient implements StructuredAiClient {
   }
 }
 
-export class GoogleImportantStructuredClient implements StructuredAiClient {
+export class DirectDeepSeekImportantStructuredClient implements StructuredAiClient {
   private readonly modelName: string;
 
   constructor(modelName = config.ai.importantModel) {
@@ -238,32 +236,29 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
     name: string;
     tier?: ModelTier;
   }): Promise<T> {
-    const apiKey = config.ai.googleApiKey;
+    const apiKey = config.ai.deepSeekApiKey;
     if (!apiKey) {
       throw new MissingImportantAiDependencyError();
     }
 
-    const google = createGoogleGenerativeAI({
+    const deepseek = createDeepSeek({
       apiKey,
     });
 
     try {
-      const result = await generateText({
-        model: google(this.modelName),
-        output: Output.object({
-          schema: input.schema,
-          name: input.name,
-        }),
+      const result = await generateDeepSeekJsonText({
+        model: deepseek.chat(this.modelName),
+        schema: input.schema,
+        name: input.name,
         prompt: input.prompt,
-        providerOptions: googleThinkingOptions("medium"),
-        maxRetries: structuredMaxRetries(),
+        maxOutputTokens: IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS,
       });
 
       return result.output;
     } catch (error) {
       throw new StructuredAiCallError({
         name: input.name,
-        provider: "google",
+        provider: "deepseek",
         model: this.modelName,
         cause: error,
       });
@@ -273,4 +268,76 @@ export class GoogleImportantStructuredClient implements StructuredAiClient {
 
 function structuredMaxRetries(): number {
   return config.structuredAi.maxRetries;
+}
+
+async function generateDeepSeekJsonText<T>(input: {
+  model: Parameters<typeof generateText>[0]["model"];
+  schema: z.ZodType<T>;
+  name: string;
+  prompt: string;
+  maxOutputTokens: number;
+}): Promise<{ output: T; totalUsage: unknown }> {
+  const result = await generateText({
+    model: input.model,
+    prompt: buildDeepSeekJsonPrompt(input),
+    maxRetries: structuredMaxRetries(),
+    maxOutputTokens: input.maxOutputTokens,
+  });
+  return {
+    output: input.schema.parse(parseJsonFromText(result.text)),
+    totalUsage: result.totalUsage,
+  };
+}
+
+function buildDeepSeekJsonPrompt<T>(input: {
+  schema: z.ZodType<T>;
+  name: string;
+  prompt: string;
+}) {
+  return `${input.prompt}
+
+Return the final answer as raw JSON only, with no Markdown fence and no prose outside the JSON.
+The JSON must validate against this schema for ${input.name}:
+${renderJsonSchemaHint(input.schema)}`;
+}
+
+function renderJsonSchemaHint<T>(schema: z.ZodType<T>): string {
+  try {
+    return JSON.stringify(z.toJSONSchema(schema, {
+      io: "input",
+      unrepresentable: "any",
+    }), null, 2);
+  } catch {
+    return "Use the field names, enum values, nullability, and numeric ranges described in the task prompt. The response will be validated before it is accepted.";
+  }
+}
+
+function parseJsonFromText(text: string): unknown {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    throw new Error("DeepSeek returned empty text for a required JSON response.");
+  }
+
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    const start = firstJsonStart(trimmed);
+    const end = lastJsonEnd(trimmed);
+    if (start < 0 || end <= start) {
+      throw new Error(`DeepSeek did not return parseable JSON: ${trimmed.slice(0, 500)}`);
+    }
+    return JSON.parse(trimmed.slice(start, end + 1));
+  }
+}
+
+function firstJsonStart(value: string): number {
+  const objectStart = value.indexOf("{");
+  const arrayStart = value.indexOf("[");
+  if (objectStart < 0) return arrayStart;
+  if (arrayStart < 0) return objectStart;
+  return Math.min(objectStart, arrayStart);
+}
+
+function lastJsonEnd(value: string): number {
+  return Math.max(value.lastIndexOf("}"), value.lastIndexOf("]"));
 }

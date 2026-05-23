@@ -86,11 +86,11 @@ Cassie separates mechanical research bookkeeping from analyst judgment.
 ```text
 Cheap model: DeepSeek v4 Flash through the DeepSeek AI SDK
 Mini search operator: Gemini 3.1 Flash Lite through the Google AI SDK with Google Search grounding
-Important model: Gemini 3.5 Flash through the Google AI SDK for judgment, goal resolution, critique, synthesis, and trade expression
+Important model: DeepSeek v4 Pro through the DeepSeek AI SDK for judgment, goal resolution, critique, synthesis, and trade expression
 X search: Grok 4.3 with image/video understanding
 ```
 
-Cheap models handle extraction, tagging, and structured bookkeeping. Search lanes emit evidence ledgers directly. Gemini 3.5 Flash handles what matters, what would disprove the thesis, whether evidence is enough, whether to stop, and whether a trade is justified.
+Cheap models handle extraction, tagging, and structured bookkeeping. Search lanes emit evidence ledgers directly. DeepSeek v4 Pro handles what matters, what would disprove the thesis, whether evidence is enough, whether to stop, and whether a trade is justified.
 
 ## Research
 

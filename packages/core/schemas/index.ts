@@ -203,18 +203,43 @@ const UnitScoreFromModelSchema = z.number().min(0).max(10).transform((value) =>
   value > 1 ? value / 10 : value
 );
 
+const ResearchEvidenceSourceTypeSchema = z.preprocess((value) => {
+  if (typeof value !== "string") return value;
+  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
+  const aliases: Record<string, string> = {
+    primary_source: "official",
+    official_source: "official",
+    official_document: "official",
+    regulatory_filing: "regulatory",
+    sec_filing: "regulatory",
+    filing: "regulatory",
+    company_announcement: "company",
+    company_statement: "company",
+    issuer_statement: "company",
+    exchange_data: "exchange",
+    market_data: "exchange",
+    news_article: "news",
+    media: "news",
+    x: "social",
+    twitter: "social",
+    social_media: "social",
+    blog_post: "blog",
+  };
+  return aliases[normalized] ?? value;
+}, z.enum([
+  "official",
+  "regulatory",
+  "company",
+  "exchange",
+  "news",
+  "social",
+  "blog",
+  "unknown",
+]));
+
 export const ResearchEvidenceSchema = z.object({
   sourceLane: z.enum(["openai_search", "x_search"]),
-  sourceType: z.enum([
-    "official",
-    "regulatory",
-    "company",
-    "exchange",
-    "news",
-    "social",
-    "blog",
-    "unknown",
-  ]),
+  sourceType: ResearchEvidenceSourceTypeSchema,
   title: z.string().nullable(),
   url: z.string().nullable(),
   author: z.string().nullable(),

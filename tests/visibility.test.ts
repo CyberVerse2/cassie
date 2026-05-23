@@ -51,7 +51,7 @@ const trace: TraceEvent[] = [
     startedAt: "2026-05-21T00:00:00Z",
     completedAt: "2026-05-21T00:00:01Z",
     durationMs: 1000,
-    model: "gemini-3.5-flash",
+    model: "deepseek-v4-pro",
     thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
     input: null,
     output: {
@@ -136,7 +136,7 @@ const trace: TraceEvent[] = [
     startedAt: "2026-05-21T00:00:02Z",
     completedAt: "2026-05-21T00:00:03Z",
     durationMs: 1000,
-    model: "gemini-3.5-flash",
+    model: "deepseek-v4-pro",
     thinkingTrace: "Resolving research goals against wave evidence.",
     input: null,
     output: [
@@ -159,7 +159,7 @@ const trace: TraceEvent[] = [
     startedAt: "2026-05-21T00:00:03Z",
     completedAt: "2026-05-21T00:00:04Z",
     durationMs: 1000,
-    model: "gemini-3.5-flash",
+    model: "deepseek-v4-pro",
     thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
     input: null,
     output: tradeExpression,

@@ -1,8 +1,8 @@
 import { ToolLoopAgent, type TelemetryIntegration } from "ai";
-import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createDeepSeek } from "@ai-sdk/deepseek";
 import {
   DEFAULT_IMPORTANT_MODEL,
-  GoogleImportantStructuredClient,
+  DirectDeepSeekImportantStructuredClient,
   DirectDeepSeekStructuredClient,
 } from "../../ai/client.ts";
 import {
@@ -23,7 +23,6 @@ import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
-import { googleThinkingOptions } from "../../ai/google-options.ts";
 import { configureAiSdkWarningLogging } from "../../ai/sdk-warnings.ts";
 import { config } from "../../core/config.ts";
 
@@ -58,13 +57,12 @@ export async function runCassieSupervisorForRun(input: {
       userSettings,
       accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
     });
-    const google = createGoogleGenerativeAI({
-      apiKey: config.ai.googleApiKey,
+    const deepseek = createDeepSeek({
+      apiKey: config.ai.deepSeekApiKey,
     });
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
-      model: google(config.ai.importantModel),
-      providerOptions: googleThinkingOptions("low"),
+      model: deepseek.chat(config.ai.importantModel),
       stopWhen: createCassieStopConditions(),
       tools,
       prepareStep: prepareCassieSupervisorStep,
@@ -177,7 +175,7 @@ function extractFinalizeRunOutput(result: { toolResults: unknown[]; steps: Array
 
 function defaultDependencies(): CassieDependencies {
   const cheapAi = new DirectDeepSeekStructuredClient();
-  const importantAi = new GoogleImportantStructuredClient();
+  const importantAi = new DirectDeepSeekImportantStructuredClient();
   return {
     ai: cheapAi,
     cheapAi,
@@ -299,5 +297,7 @@ function modelName(model: unknown): string {
 
 function providerFromModel(model: unknown): string {
   const name = modelName(model);
+  if (name.startsWith("deepseek-")) return "deepseek";
+  if (name.startsWith("gemini-")) return "google";
   return name.includes("/") ? name.split("/")[0] ?? "unknown" : "openai";
 }

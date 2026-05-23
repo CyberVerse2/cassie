@@ -65,6 +65,82 @@ describe("schema normalization", () => {
     expect(report.evidence[0]?.relevance).toBe(1);
   });
 
+  it("normalizes common research evidence source type labels from models", () => {
+    const report = ResearchReportSchema.parse({
+      claim: "SPCX is overvalued.",
+      normalizedThesis: "SPCX is overvalued.",
+      stance: "supported",
+      evidenceQuality: "strong",
+      socialContext: {
+        momentum: "unknown",
+        crowdingSignal: "unknown",
+        manipulationSignal: "unknown",
+        summary: "No social context.",
+      },
+      socialSignal: {
+        sourceCredibility: "unknown",
+        endorserReputation: "Unknown.",
+        entityResolution: {
+          resolvedEntity: null,
+          confidence: "unknown",
+          rationale: "Unknown.",
+          unverifiedAssumptions: [],
+        },
+        personProjectDossier: {
+          identifiedPeople: [],
+          evidenceSummary: "Unknown.",
+          openQuestions: [],
+        },
+        smartEngagerSignal: {
+          quality: "unknown",
+          summary: "Unknown.",
+          notableAccounts: [],
+        },
+        leadQuality: "research_lead",
+        nextResearchActions: [],
+      },
+      bullCase: [],
+      bearCase: [],
+      contradictions: [],
+      evidence: [
+        {
+          sourceLane: "openai_search",
+          sourceType: "news_article",
+          title: "Report",
+          url: "https://example.com",
+          author: "Reporter",
+          publishedAt: "2026-05-20",
+          summary: "Report context.",
+          stance: "supports",
+          reliability: "high",
+          relevance: 1,
+          notes: [],
+        },
+        {
+          sourceLane: "x_search",
+          sourceType: "social_media",
+          title: "Post",
+          url: "https://x.com/example/status/1",
+          author: "Example",
+          publishedAt: "2026-05-20",
+          summary: "Social context.",
+          stance: "mixed",
+          reliability: "medium",
+          relevance: 0.7,
+          notes: [],
+        },
+      ],
+      warnings: [],
+      confidence: 0.8,
+      researchConclusion: "claim_likely_true",
+      recommendedResearchAction: "critic_only",
+      publicSummary: "Supported.",
+      fullResearchBrief: "Supported.",
+    });
+
+    expect(report.evidence.map((entry) => entry.sourceType)).toEqual(["news", "social"]);
+  });
+
   it("accepts 0-to-10 query-plan priorities from structured models", () => {
     const plan = ResearchQueryPlanSchema.parse({
       version: "research-query-plan/v1",

@@ -24,7 +24,7 @@ Runtime shape:
 - Intake is durable first: every mention becomes a `control_run` before the supervisor starts.
 - The supervisor is the control plane: it calls bounded tools and writes visible `run_steps`.
 - Research is query-job driven: web and X searches produce an evidence ledger before synthesis.
-- DeepSeek handles cheap extraction and bookkeeping; Gemini handles analyst judgment and trade decisions.
+- DeepSeek handles cheap extraction, bookkeeping, analyst judgment, and trade decisions; Gemini remains the grounded web-search lane.
 - Ticket creation is downstream of research, tradeability checks, approval policy, and deterministic risk.
 - Full supervisor and model-routing details live in `architecture.md`; the research contract lives in `research-subagent.md`.
 
