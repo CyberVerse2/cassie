@@ -19,5 +19,9 @@ describe("Cassie prompts", () => {
     expect(prompt).toContain("Do not invent venue availability");
     expect(prompt).toContain("If no real market candidate is known yet, use needs_market_check");
     expect(prompt).toContain("Use no_trade when the cleanest expression is unavailable");
+    expect(prompt).toContain("First identify the instrument, asset, company, event, team, election, macro release");
+    expect(prompt).toContain("Hyperliquid can express that target only when it exists as a real Hyperliquid spot");
+    expect(prompt).toContain("Polymarket can express that target only when it exists as a real prediction market");
+    expect(prompt).toContain("use only hyperliquid or polymarket");
   });
 });

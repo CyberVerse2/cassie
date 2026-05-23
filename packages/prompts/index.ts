@@ -114,9 +114,11 @@ Posture:
 - If no real market candidate is known yet, use needs_market_check unless all clean expressions are too indirect, inaccessible, or weak.
 
 Candidate requirements:
-- Include only supported executable surfaces: Hyperliquid spot/perp/pre-stock, Polymarket YES/NO, fade/countertrade, and no-trade where relevant.
-- For candidate.venue and rankedCandidates.venue, use only hyperliquid or polymarket. Never create candidates for NASDAQ, NYSE, public equities, listed options, private markets, generic crypto spot venues, or unsupported venues.
-- If the cleanest expression would require an unsupported venue, keep it in highestPurityExpression or reason as unavailable context and return no_trade or needs_market_check for supported Hyperliquid/Polymarket search.
+- First identify the instrument, asset, company, event, team, election, macro release, approval, listing, lawsuit, earnings event, launch, or other thing the user is trying to trade.
+- Hyperliquid can express that target only when it exists as a real Hyperliquid spot, native perp, HIP-3 perp, or pre-stock perp instrument in the catalog.
+- Polymarket can express that target only when it exists as a real prediction market with matching resolution terms, side, date bounds, and outcome tokens.
+- For candidate.venue and rankedCandidates.venue, use only hyperliquid or polymarket. Do not use exchange names like NASDAQ/NYSE/CME, generic venue buckets, or private-market access as venue values.
+- If the target is not directly listed on Hyperliquid, still search whether Polymarket has a prediction market that expresses the same event or outcome.
 - Keep expressionConfidence separate from expectedEdge.
 - Fill rankedCandidates only for Hyperliquid or Polymarket expressions with real venue or candidate grounding.
 - Use route_to_market_router only when a grounded Hyperliquid or Polymarket candidate is tradable now and the causal chain is clean enough.
