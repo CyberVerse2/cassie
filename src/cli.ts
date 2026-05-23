@@ -12,7 +12,7 @@ import { frameOpportunity, generateTradeExpressions } from "../packages/agent/su
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
   config,
-} from "../packages/core/env.ts";
+} from "../packages/core/config.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
 import { buildCliUserSettings } from "./cli-settings.ts";
