@@ -41,17 +41,43 @@ export function selectActiveTools(
     return [];
   }
 
-  return [
-    "frame_opportunity",
-    "generate_trade_expressions",
-    "search_venues",
-    "assess_expression_fit",
-    "quote_expression",
-    "rank_expressions",
-    "risk_check",
-    "create_trade_ticket",
-    "finalize_run",
-  ];
+  if (latestToolOutput(steps, "create_trade_ticket")) {
+    return ["finalize_run"];
+  }
+
+  const riskDecision = objectRecord(latestToolOutput(steps, "risk_check"));
+  if (riskDecision.decision) {
+    return riskDecision.decision === "reject"
+      ? ["finalize_run"]
+      : ["create_trade_ticket"];
+  }
+
+  const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
+  if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
+    return marketSelection.selectedMarket && !marketSelection.noTradeReason
+      ? ["risk_check"]
+      : ["finalize_run"];
+  }
+
+  const marketCandidates = latestToolOutput(steps, "search_venues");
+  if (marketCandidates) {
+    return Array.isArray(marketCandidates) && marketCandidates.length > 0
+      ? ["rank_expressions"]
+      : ["finalize_run"];
+  }
+
+  const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
+  if (tradeExpression.decision) {
+    return tradeExpression.decision === "no_trade"
+      ? ["finalize_run"]
+      : ["search_venues"];
+  }
+
+  if (latestToolOutput(steps, "frame_opportunity")) {
+    return ["generate_trade_expressions"];
+  }
+
+  return ["frame_opportunity"];
 }
 
 function hasSucceeded(
@@ -59,6 +85,22 @@ function hasSucceeded(
   toolName: string,
 ): boolean {
   return steps.some((step) => step.toolResults.some((result) => result.toolName === toolName));
+}
+
+function latestToolOutput(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  toolName: string,
+): unknown {
+  for (let stepIndex = steps.length - 1; stepIndex >= 0; stepIndex -= 1) {
+    const toolResults = steps[stepIndex]?.toolResults ?? [];
+    for (let resultIndex = toolResults.length - 1; resultIndex >= 0; resultIndex -= 1) {
+      const result = toolResults[resultIndex];
+      if (result.toolName === toolName) {
+        return result.output;
+      }
+    }
+  }
+  return undefined;
 }
 
 function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string; recoverable: boolean } | null {
@@ -145,6 +187,14 @@ function summarizeToolPart(part: unknown, originalChars: number) {
 
 function truncate(value: string | null, length: number) {
   return value && value.length > length ? `${value.slice(0, length)}...` : value;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
+}
+
+function hasOwn(value: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(value, key);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

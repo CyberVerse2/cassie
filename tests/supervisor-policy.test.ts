@@ -20,26 +20,69 @@ function errorStep(toolName: string, error: Error) {
 }
 
 describe("supervisor step policy", () => {
-  const fullToolSurface = [
-    "frame_opportunity",
-    "generate_trade_expressions",
-    "search_venues",
-    "assess_expression_fit",
-    "quote_expression",
-    "rank_expressions",
-    "risk_check",
-    "create_trade_ticket",
-    "finalize_run",
-  ];
+  it("exposes only the next executable tool before terminal states", () => {
+    const opportunity = step("frame_opportunity", { userIntent: "trade" });
+    const expression = step("generate_trade_expressions", {
+      decision: "needs_market_check",
+      highestPurityExpression: "Long SOL perps.",
+    });
+    const candidates = step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]);
+    const selection = step("rank_expressions", {
+      selectedMarket: { venue: "hyperliquid", symbol: "SOL" },
+      noTradeReason: null,
+    });
+    const risk = step("risk_check", { decision: "approve", adjustedSizeUsd: 50 });
 
-  it("exposes the full supervisor tool surface until finalization", () => {
-    expect(selectActiveTools([])).toEqual([
-      ...fullToolSurface,
-    ]);
+    expect(selectActiveTools([])).toEqual(["frame_opportunity"]);
+    expect(selectActiveTools([opportunity])).toEqual(["generate_trade_expressions"]);
+    expect(selectActiveTools([opportunity, expression])).toEqual(["search_venues"]);
+    expect(selectActiveTools([opportunity, expression, candidates])).toEqual(["rank_expressions"]);
+    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["risk_check"]);
+    expect(selectActiveTools([opportunity, expression, candidates, selection, risk])).toEqual(["create_trade_ticket"]);
+  });
+
+  it("exposes finalization only for no-trade and ticket terminal states", () => {
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", { decision: "no_trade" }),
+    ])).toEqual(["finalize_run"]);
 
     expect(selectActiveTools([
-      step("generate_trade_expressions", {}),
-    ])).toEqual(fullToolSurface);
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", { decision: "needs_market_check" }),
+      step("search_venues", []),
+    ])).toEqual(["finalize_run"]);
+
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", { decision: "route_to_market_router" }),
+      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+      step("rank_expressions", { decision: "no_selection", selectedMarket: null, noTradeReason: null }),
+    ])).toEqual(["finalize_run"]);
+
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", { decision: "route_to_market_router" }),
+      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+      step("rank_expressions", { selectedMarket: null, noTradeReason: "No clean market." }),
+    ])).toEqual(["finalize_run"]);
+
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", { decision: "route_to_market_router" }),
+      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+      step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
+      step("risk_check", { decision: "reject", reason: "Too large." }),
+    ])).toEqual(["finalize_run"]);
+
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", { decision: "route_to_market_router" }),
+      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+      step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
+      step("risk_check", { decision: "approve", adjustedSizeUsd: 50 }),
+      step("create_trade_ticket", { ticketId: "ticket_1" }),
+    ])).toEqual(["finalize_run"]);
   });
 
   it("exposes no tools after finalization", () => {
@@ -65,8 +108,8 @@ describe("supervisor step policy", () => {
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
-    expect(prepared.activeTools).toEqual(fullToolSurface);
-    expect(prepared.toolChoice).toBe("auto");
+    expect(prepared.activeTools).toEqual(["frame_opportunity"]);
+    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "frame_opportunity" });
   });
 
   it("keeps trade-expression substance when compressing tool messages before finalization", () => {
