@@ -29,6 +29,8 @@ describe("PolymarketExecutionClient", () => {
       orderID: "order_1",
       status: "matched",
     });
+    const getTickSize = vi.fn().mockResolvedValue("0.01");
+    const getNegRisk = vi.fn().mockResolvedValue(false);
     const factory = vi.fn((options: ClobClientOptions): PolymarketClobClientLike => {
       expect(options.host).toBe("https://clob.polymarket.com");
       expect(options.chain).toBe(Chain.POLYGON);
@@ -42,6 +44,8 @@ describe("PolymarketExecutionClient", () => {
       expect(options.signer).toBeDefined();
       return {
         createAndPostMarketOrder: postMarketOrder,
+        getTickSize,
+        getNegRisk,
       };
     });
 
@@ -59,6 +63,8 @@ describe("PolymarketExecutionClient", () => {
     const result = await client.execute(ticket);
 
     expect(factory).toHaveBeenCalledTimes(1);
+    expect(getTickSize).toHaveBeenCalledWith("123");
+    expect(getNegRisk).toHaveBeenCalledWith("123");
     expect(postMarketOrder).toHaveBeenCalledWith(
       {
         tokenID: "123",
@@ -66,7 +72,7 @@ describe("PolymarketExecutionClient", () => {
         side: Side.BUY,
         orderType: OrderType.FAK,
       },
-      {},
+      { tickSize: "0.01", negRisk: false },
       OrderType.FAK,
     );
     expect(result).toMatchObject({

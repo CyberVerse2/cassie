@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
-import { Chain, ClobClient, OrderType, Side, SignatureTypeV2, type ApiKeyCreds, type ClobClientOptions } from "@polymarket/clob-client-v2";
+import { Chain, ClobClient, OrderType, Side, SignatureTypeV2, type ApiKeyCreds, type ClobClientOptions, type CreateOrderOptions } from "@polymarket/clob-client-v2";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { createWalletClient, http } from "viem";
@@ -127,6 +127,8 @@ export class HyperliquidExecutionClient implements ExecutionClient {
 }
 
 export interface PolymarketClobClientLike {
+  getTickSize(tokenId: string): Promise<CreateOrderOptions["tickSize"]>;
+  getNegRisk(tokenId: string): Promise<boolean>;
   createAndPostMarketOrder(
     order: {
       tokenID: string;
@@ -134,7 +136,7 @@ export interface PolymarketClobClientLike {
       side: Side;
       orderType: OrderType.FAK;
     },
-    options: Record<string, never>,
+    options: Partial<CreateOrderOptions>,
     orderType: OrderType.FAK,
   ): Promise<{ orderID?: string | null; id?: string | null; [key: string]: unknown }>;
 }
@@ -204,6 +206,8 @@ export class PolymarketExecutionClient implements ExecutionClient {
     const side = ticket.side === "buy_no" || ticket.side === "buy_yes" || ticket.side === "buy"
       ? Side.BUY
       : Side.SELL;
+    const tickSize = await client.getTickSize(tokenId);
+    const negRisk = await client.getNegRisk(tokenId);
     const response = await client.createAndPostMarketOrder(
       {
         tokenID: tokenId,
@@ -211,7 +215,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
         side,
         orderType: OrderType.FAK,
       },
-      {},
+      { tickSize, negRisk },
       OrderType.FAK,
     );
 
