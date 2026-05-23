@@ -57,6 +57,21 @@ const privateKeySchema = z.custom<`0x${string}`>(
   (value) => typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value),
 );
 
+const aiProviderEnvSchema = z.object({
+  GEMINI_API_KEY: configuredStringSchema,
+  GOOGLE_GENERATIVE_AI_API_KEY: configuredStringSchema,
+  DEEPSEEK_API_KEY: configuredStringSchema,
+  XAI_API_KEY: configuredStringSchema,
+  CASSIE_CHEAP_MODEL: configuredStringSchema,
+  DEEPSEEK_MODEL: configuredStringSchema,
+  CASSIE_IMPORTANT_MODEL: configuredStringSchema,
+  CASSIE_EXPENSIVE_MODEL: configuredStringSchema,
+  CASSIE_MODEL: configuredStringSchema,
+  CASSIE_WEB_SEARCH_MODEL: configuredStringSchema,
+  GEMINI_WEB_SEARCH_MODEL: configuredStringSchema,
+  GROK_X_SEARCH_MODEL: configuredStringSchema,
+});
+
 export function currentEnv(): EnvSource {
   return process.env;
 }
@@ -90,20 +105,7 @@ export function readAiProviderEnv(
   env: EnvSource = process.env,
   defaults: AiProviderEnvDefaults,
 ): AiProviderEnv {
-  const schema = z.object({
-    GEMINI_API_KEY: configuredStringSchema,
-    GOOGLE_GENERATIVE_AI_API_KEY: configuredStringSchema,
-    DEEPSEEK_API_KEY: configuredStringSchema,
-    XAI_API_KEY: configuredStringSchema,
-    CASSIE_CHEAP_MODEL: configuredStringSchema,
-    DEEPSEEK_MODEL: configuredStringSchema,
-    CASSIE_IMPORTANT_MODEL: configuredStringSchema,
-    CASSIE_EXPENSIVE_MODEL: configuredStringSchema,
-    CASSIE_MODEL: configuredStringSchema,
-    CASSIE_WEB_SEARCH_MODEL: configuredStringSchema,
-    GEMINI_WEB_SEARCH_MODEL: configuredStringSchema,
-    GROK_X_SEARCH_MODEL: configuredStringSchema,
-  }).transform((values) => ({
+  return aiProviderEnvSchema.transform((values) => ({
     googleApiKey: firstConfigured(values.GEMINI_API_KEY, values.GOOGLE_GENERATIVE_AI_API_KEY),
     deepSeekApiKey: values.DEEPSEEK_API_KEY,
     xAiApiKey: values.XAI_API_KEY,
@@ -113,37 +115,35 @@ export function readAiProviderEnv(
     webSearchModel: firstConfigured(values.CASSIE_WEB_SEARCH_MODEL, values.GEMINI_WEB_SEARCH_MODEL)
       ?? defaults.webSearchModel,
     grokXSearchModel: values.GROK_X_SEARCH_MODEL ?? defaults.grokXSearchModel ?? "grok-4.3",
-  }));
-
-  return schema.parse(env);
+  })).parse(env);
 }
 
 export function googleApiKey(env: EnvSource = process.env): string | undefined {
-  return readAiProviderEnv(env, defaultAiProviderEnvDefaults()).googleApiKey;
+  return readAiProviderEnv(env, aiProviderEnvDefaults()).googleApiKey;
 }
 
 export function deepSeekApiKey(env: EnvSource = process.env): string | undefined {
-  return readAiProviderEnv(env, defaultAiProviderEnvDefaults()).deepSeekApiKey;
+  return readAiProviderEnv(env, aiProviderEnvDefaults()).deepSeekApiKey;
 }
 
 export function xAiApiKey(env: EnvSource = process.env): string | undefined {
-  return readAiProviderEnv(env, defaultAiProviderEnvDefaults()).xAiApiKey;
+  return readAiProviderEnv(env, aiProviderEnvDefaults()).xAiApiKey;
 }
 
 export function cassieCheapModel(fallback: string, env: EnvSource = process.env): string {
-  return readAiProviderEnv(env, { ...defaultAiProviderEnvDefaults(), cheapModel: fallback }).cheapModel;
+  return readAiProviderEnv(env, aiProviderEnvDefaults({ cheapModel: fallback })).cheapModel;
 }
 
 export function cassieImportantModel(fallback: string, env: EnvSource = process.env): string {
-  return readAiProviderEnv(env, { ...defaultAiProviderEnvDefaults(), importantModel: fallback }).importantModel;
+  return readAiProviderEnv(env, aiProviderEnvDefaults({ importantModel: fallback })).importantModel;
 }
 
 export function cassieWebSearchModel(fallback: string, env: EnvSource = process.env): string {
-  return readAiProviderEnv(env, { ...defaultAiProviderEnvDefaults(), webSearchModel: fallback }).webSearchModel;
+  return readAiProviderEnv(env, aiProviderEnvDefaults({ webSearchModel: fallback })).webSearchModel;
 }
 
 export function grokXSearchModel(env: EnvSource = process.env, fallback = "grok-4.3"): string {
-  return readAiProviderEnv(env, { ...defaultAiProviderEnvDefaults(), grokXSearchModel: fallback }).grokXSearchModel;
+  return readAiProviderEnv(env, aiProviderEnvDefaults({ grokXSearchModel: fallback })).grokXSearchModel;
 }
 
 export function databaseUrl(env: EnvSource = process.env): string | undefined {
@@ -401,12 +401,13 @@ export function parsePolymarketSignatureType(value: string | undefined): Signatu
   throw new Error("POLYMARKET_SIGNATURE_TYPE must be 0, 1, 2, or 3.");
 }
 
-function defaultAiProviderEnvDefaults(): AiProviderEnvDefaults {
+function aiProviderEnvDefaults(overrides: Partial<AiProviderEnvDefaults> = {}): AiProviderEnvDefaults {
   return {
-    cheapModel: "",
-    importantModel: "",
-    webSearchModel: "",
+    cheapModel: overrides.cheapModel ?? "deepseek-v4-flash",
+    importantModel: overrides.importantModel ?? "gemini-3.5-flash",
+    webSearchModel: overrides.webSearchModel ?? "gemini-3.5-flash",
     grokXSearchModel: "grok-4.3",
+    ...overrides,
   };
 }
 

@@ -7,6 +7,7 @@ import {
   readAiProviderEnv,
   readGraphileWorkerEnv,
   googleApiKey,
+  grokXSearchModel,
   assertHyperliquidExecutionEnv,
   cassieApiToken,
   normalizePrivateKey,
@@ -15,6 +16,7 @@ import {
   readHyperliquidExecutionEnv,
   readPolymarketExecutionEnv,
   requiredConnectorEnv,
+  xAiApiKey,
   xPollingEnv,
 } from "../packages/core/env.ts";
 import { MissingConnectorConfigError } from "../packages/core/connector-errors.ts";
@@ -125,8 +127,10 @@ describe("Polymarket env", () => {
 
   it("centralizes common model and provider env resolution", () => {
     expect(googleApiKey({ GOOGLE_GENERATIVE_AI_API_KEY: "google", GEMINI_API_KEY: "gemini" })).toBe("gemini");
+    expect(xAiApiKey({ XAI_API_KEY: "xai" })).toBe("xai");
     expect(cassieCheapModel("cheap-default", { DEEPSEEK_MODEL: "deepseek-model" })).toBe("deepseek-model");
     expect(cassieImportantModel("important-default", { CASSIE_MODEL: "cassie-model" })).toBe("cassie-model");
+    expect(grokXSearchModel({}, "grok-default")).toBe("grok-default");
   });
 
   it("centralizes numeric env defaults", () => {
