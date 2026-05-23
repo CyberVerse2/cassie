@@ -115,6 +115,7 @@ Posture:
 - If no real market candidate is known yet, use needs_market_check unless all clean expressions are too indirect, inaccessible, or weak.
 
 Candidate requirements:
+- Populate every schema field. Use null for unknown nullable scalar fields and [] for empty arrays. Do not omit keys.
 - First identify the instrument, asset, company, event, team, election, macro release, approval, listing, lawsuit, earnings event, launch, or other thing the user is trying to trade.
 - Hyperliquid can express that target only when it exists as a real Hyperliquid spot, native perp, HIP-3 perp, or pre-stock perp instrument in the catalog.
 - Polymarket can express that target only when it exists as a real prediction market with matching resolution terms, side, date bounds, and outcome tokens.

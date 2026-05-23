@@ -8,6 +8,9 @@ describe("schema normalization", () => {
       coreInterpretation: "Signal analysis rejected the speculative ZEC/BTC pair thesis.",
       directAsset: "ZEC",
       directAssetTradable: true,
+      evidenceConfidence: 0.2,
+      marketDiscoveryConfidence: 0.4,
+      tradeExpressionConfidence: 0.3,
       highestPurityExpression: "Long ZEC / short BTC pair",
       publicMarketReadThrough: "none",
       candidates: [
@@ -36,8 +39,10 @@ describe("schema normalization", () => {
           evidenceNeeded: ["Institutional custody adoption."],
         },
       ],
+      rankedCandidates: [],
       decision: "no_trade",
       reason: "The trade thesis is structurally unviable.",
+      insufficiency: null,
       marketRouterInstructions: null,
     });
 

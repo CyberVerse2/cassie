@@ -117,6 +117,7 @@ describe("trade expression planning", () => {
           ],
           decision: "route_to_market_router",
           reason: "The direct asset is confirmed on a configured venue.",
+          insufficiency: null,
           marketRouterInstructions: "Select the confirmed Hyperliquid ZEC-USDC perp if quotes remain liquid.",
         } as TradeExpressionPlan as T;
       },
@@ -152,6 +153,9 @@ describe("trade expression planning", () => {
       coreInterpretation: "Direct ZEC is the clean expression.",
       directAsset: "ZEC",
       directAssetTradable: true,
+      evidenceConfidence: 0.7,
+      marketDiscoveryConfidence: 0.8,
+      tradeExpressionConfidence: 0.9,
       highestPurityExpression: "Long ZEC perp.",
       publicMarketReadThrough: "none",
       candidates: [],
@@ -177,6 +181,7 @@ describe("trade expression planning", () => {
       ],
       decision: "no_trade",
       reason: "Expression is clean but expected edge is negative.",
+      insufficiency: null,
       marketRouterInstructions: null,
     });
 

@@ -19,11 +19,16 @@ const tradeExpression: TradeExpressionPlan = {
   coreInterpretation: "Direct SpaceX is not available through configured venues.",
   directAsset: "SpaceX",
   directAssetTradable: false,
+  evidenceConfidence: 0.7,
+  marketDiscoveryConfidence: 0.2,
+  tradeExpressionConfidence: 0.4,
   highestPurityExpression: "SpaceX private equity",
   publicMarketReadThrough: "weak",
   candidates: [],
+  rankedCandidates: [],
   decision: "needs_market_check",
   reason: "No configured venue candidate exists.",
+  insufficiency: null,
   marketRouterInstructions: null,
 };
 
