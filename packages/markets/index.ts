@@ -8,12 +8,20 @@ import type {
 } from "../core/schemas/index.ts";
 import type { MarketDataProvider, PolymarketDiscoveryQueryPlanner, PolymarketMarketFinder } from "../agent/tools/market.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
+import {
+  loadHyperliquidCatalog,
+  searchHyperliquidCatalog,
+  type HyperliquidCatalogAsset,
+} from "./hyperliquid-catalog.ts";
 
 type HyperliquidMetaAndCtxs = [
   {
     universe: Array<{
       name: string;
       szDecimals?: number;
+      maxLeverage?: number;
+      onlyIsolated?: boolean;
+      marginMode?: string;
     }>;
   },
   Array<{
@@ -23,6 +31,9 @@ type HyperliquidMetaAndCtxs = [
     funding?: string;
   }>,
 ];
+
+type HyperliquidUniverseAsset = HyperliquidMetaAndCtxs[0]["universe"][number];
+type HyperliquidAssetCtx = HyperliquidMetaAndCtxs[1][number];
 
 type HyperliquidL2Book = {
   levels?: [
@@ -90,49 +101,99 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
 }
 
 export class HyperliquidMarketDataProvider implements MarketDataProvider {
-  constructor(private readonly endpoint = "https://api.hyperliquid.xyz/info") {}
+  constructor(
+    private readonly endpoint = "https://api.hyperliquid.xyz/info",
+    private readonly catalog?: HyperliquidCatalogAsset[],
+  ) {}
 
   async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
+    const catalogMatches = await this.findCatalogMatches(input);
+    return this.marketCandidatesFromCatalogAssets(catalogMatches, input.thesis);
+  }
+
+  private async getMetaAndAssetCtxs(dex?: string | null): Promise<HyperliquidMetaAndCtxs> {
     const response = await fetch(this.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "metaAndAssetCtxs" }),
+      body: JSON.stringify({
+        type: "metaAndAssetCtxs",
+        ...(dex ? { dex } : {}),
+      }),
     });
-    const [meta, ctxs] = await readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
 
-    const symbols = candidateSymbols(input.thesis, input.tradeExpression);
-    const matches = meta.universe
-      .map((asset, index) => ({ asset, index }))
-      .filter(({ asset }) => symbols.has(asset.name));
+    return readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
+  }
 
-    return Promise.all(
-      matches.map(async ({ asset, index }) => {
-        const ctx = ctxs[index];
-        const volume = Number(ctx?.dayNtlVlm ?? 0);
-        const book = await this.getL2Book(asset.name);
-        const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
+  private async findCatalogMatches(input: {
+    thesis: Thesis;
+    tradeExpression?: TradeExpressionPlan;
+  }): Promise<HyperliquidCatalogAsset[]> {
+    const catalog = this.catalog ?? await loadHyperliquidCatalog().catch(() => []);
+    const query = hyperliquidCatalogQuery(input.thesis, input.tradeExpression);
 
-        if (!bookMetrics) {
-          throw new Error(`Hyperliquid l2 book is empty for ${asset.name}.`);
+    return searchHyperliquidCatalog(catalog, query, 10)
+      .filter((asset) => asset.surface !== "spot");
+  }
+
+  private async marketCandidatesFromCatalogAssets(
+    catalogAssets: HyperliquidCatalogAsset[],
+    thesis: Thesis,
+  ): Promise<MarketCandidate[]> {
+    const byDex = new Map<string, HyperliquidCatalogAsset[]>();
+    for (const asset of catalogAssets) {
+      const key = asset.dex ?? "";
+      byDex.set(key, [...(byDex.get(key) ?? []), asset]);
+    }
+
+    const candidates: MarketCandidate[] = [];
+    for (const [dexKey, assets] of byDex) {
+      const dex = dexKey || null;
+      const [meta, ctxs] = await this.getMetaAndAssetCtxs(dex);
+      for (const catalogAsset of assets) {
+        const index = meta.universe.findIndex((asset) => asset.name === catalogAsset.symbol);
+        if (index < 0) {
+          throw new Error(`Hyperliquid catalog asset ${catalogAsset.symbol} was not found in live ${catalogAsset.dex ?? "native"} metadata.`);
         }
 
-        const isPreStock = isPreStockPerp(asset.name, input.thesis, input.tradeExpression);
+        candidates.push(await this.marketCandidateFromLiveAsset({
+          asset: meta.universe[index]!,
+          ctx: ctxs[index],
+          instrument: catalogAsset.instrumentType,
+          thesis,
+        }));
+      }
+    }
 
-        return {
-          venue: "hyperliquid",
-          instrument: isPreStock ? "pre_stock_perp" : "perp",
-          side: input.thesis.direction === "bearish" ? "short" : "long",
-          symbol: asset.name,
-          markPrice: Number(ctx?.markPx ?? ctx?.midPx ?? bookMetrics?.mid ?? 0) || null,
-          liquidityScore: Math.min(1, volume / 50_000_000),
-          spreadBps: bookMetrics.spreadBps,
-          estimatedSlippageBps: bookMetrics.estimatedSlippageBps,
-          minOrderSizeUsd: 10,
-          thesisFit: input.thesis.confidence,
-          reason: `${asset.name} perp directly maps to the thesis asset.`,
-        } satisfies MarketCandidate;
-      }),
-    );
+    return candidates;
+  }
+
+  private async marketCandidateFromLiveAsset(input: {
+    asset: HyperliquidUniverseAsset;
+    ctx?: HyperliquidAssetCtx;
+    instrument: string;
+    thesis: Thesis;
+  }): Promise<MarketCandidate> {
+    const volume = Number(input.ctx?.dayNtlVlm ?? 0);
+    const book = await this.getL2Book(input.asset.name);
+    const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
+
+    if (!bookMetrics) {
+      throw new Error(`Hyperliquid l2 book is empty for ${input.asset.name}.`);
+    }
+
+    return {
+      venue: "hyperliquid",
+      instrument: input.instrument,
+      side: input.thesis.direction === "bearish" ? "short" : "long",
+      symbol: input.asset.name,
+      markPrice: Number(input.ctx?.markPx ?? input.ctx?.midPx ?? bookMetrics?.mid ?? 0) || null,
+      liquidityScore: Math.min(1, volume / 50_000_000),
+      spreadBps: bookMetrics.spreadBps,
+      estimatedSlippageBps: bookMetrics.estimatedSlippageBps,
+      minOrderSizeUsd: 10,
+      thesisFit: input.thesis.confidence,
+      reason: `${input.asset.name} ${input.instrument} directly maps to the thesis asset.`,
+    } satisfies MarketCandidate;
   }
 
   private async getL2Book(coin: string): Promise<HyperliquidL2Book> {
@@ -144,6 +205,31 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
 
     return readJsonResponse<HyperliquidL2Book>("Hyperliquid l2 book", response);
   }
+}
+
+function hyperliquidCatalogQuery(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string {
+  return [
+    thesis.claim,
+    thesis.literalClaim,
+    thesis.impliedTradeThesis,
+    thesis.sourceOrMetaSignal,
+    ...thesis.mentionedAssets,
+    ...thesis.topics,
+    tradeExpression?.signal,
+    tradeExpression?.coreInterpretation,
+    tradeExpression?.directAsset,
+    tradeExpression?.highestPurityExpression,
+    tradeExpression?.marketRouterInstructions,
+    ...(tradeExpression?.candidates.flatMap((candidate) => [
+      candidate.instrument,
+      candidate.symbol,
+      candidate.venueQuery,
+      candidate.thesis,
+      ...(candidate.venueChecks ?? []),
+    ]) ?? []),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
 }
 
 export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {
@@ -472,66 +558,6 @@ function polymarketWarnings(market: NormalizedPolymarketMarket): string[] {
     warnings.push("missing_resolution_date");
   }
   return warnings;
-}
-
-function candidateSymbols(thesis: Thesis, tradeExpression?: TradeExpressionPlan): Set<string> {
-  const values = [
-    ...thesis.mentionedAssets,
-    tradeExpression?.directAsset,
-    ...(tradeExpression?.candidates.flatMap((candidate) => [
-      candidate.instrument,
-      candidate.symbol,
-      candidate.venueQuery,
-      ...(candidate.venueChecks ?? []),
-    ]) ?? []),
-  ].filter((value): value is string => Boolean(value));
-
-  return new Set(values.flatMap(symbolAliases));
-}
-
-function symbolAliases(value: string): string[] {
-  const trimmed = value.trim();
-  const withoutPair = trimmed.replace(/[-/]USD[CTE]?$/i, "");
-  const withoutPerp = withoutPair.replace(/\s+perp$/i, "");
-  const normalized = withoutPerp.toUpperCase().replace(/[^A-Z0-9]/g, "");
-  const bases = symbolParts(withoutPerp);
-  const aliases = [trimmed, withoutPair, withoutPerp, ...bases];
-
-  for (const base of bases) {
-    aliases.push(`${base}-USDC`, `${base}/USDC`, `${base}-USDE`, `${base}/USDE`, `${base}-USDT`, `${base}/USDT`);
-  }
-
-  if (normalized === "SPACEX") {
-    aliases.push("SPCX");
-  }
-  if (normalized === "COINBASE") {
-    aliases.push("COIN");
-  }
-
-  return Array.from(new Set(aliases.filter(Boolean)));
-}
-
-function symbolParts(value: string): string[] {
-  const ignored = new Set(["PAIR", "PERP", "SPOT", "MARKET", "USD", "USDC", "USDE", "USDT"]);
-  const parts = value
-    .toUpperCase()
-    .split(/[^A-Z0-9]+/)
-    .filter((part) => /^[A-Z][A-Z0-9]{1,9}$/.test(part) && !ignored.has(part));
-
-  return Array.from(new Set(parts));
-}
-
-function isPreStockPerp(symbol: string, thesis: Thesis, tradeExpression?: TradeExpressionPlan): boolean {
-  const context = [
-    symbol,
-    thesis.claim,
-    ...thesis.topics,
-    tradeExpression?.coreInterpretation,
-    tradeExpression?.highestPurityExpression,
-    tradeExpression?.marketRouterInstructions,
-  ].filter(Boolean).join(" ").toLowerCase();
-
-  return context.includes("pre-stock") || context.includes("pre stock") || context.includes("pre-ipo") || context.includes("ipo");
 }
 
 function uniquePolymarketMarkets(markets: PolymarketMarket[]): PolymarketMarket[] {
