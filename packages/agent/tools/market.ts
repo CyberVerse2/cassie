@@ -97,11 +97,13 @@ export async function selectMarket(input: {
   tradeExpression?: TradeExpressionPlan;
   candidates?: MarketCandidate[];
 }): Promise<MarketSelection> {
-  const providerCandidates = await input.marketData.findCandidates({
-    thesis: input.thesis,
-    researchReport: input.researchReport,
-    tradeExpression: input.tradeExpression,
-  });
+  const providerCandidates = input.candidates === undefined
+    ? await input.marketData.findCandidates({
+      thesis: input.thesis,
+      researchReport: input.researchReport,
+      tradeExpression: input.tradeExpression,
+    })
+    : [];
   const candidates = uniqueMarketCandidates([
     ...(input.candidates ?? []),
     ...providerCandidates,

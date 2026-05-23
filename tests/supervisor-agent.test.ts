@@ -6,6 +6,7 @@ import { createCassieSupervisorTools } from "../packages/agent/supervisor/tools.
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   MarketSelection,
+  OpportunityFrame,
   SourcePost,
   TradeExpressionPlan,
   UserSettings,
@@ -52,6 +53,20 @@ const marketSelection: MarketSelection = {
   noTradeReason: null,
 };
 
+const opportunityFrame: OpportunityFrame = {
+  literalClaim: "Solana ETF approval is basically inevitable now. Market is asleep.",
+  opportunity: "The post implies SOL exposure may be underpriced if ETF approval odds are materially higher than the market believes.",
+  marketImplication: "Bullish SOL and Solana-linked risk if the claim is believed.",
+  userIntent: "trade",
+  affectedEntities: ["Solana", "SOL"],
+  affectedAssets: ["SOL"],
+  expressionFamilies: ["long SOL perp", "buy YES on Solana ETF prediction market", "no trade if already priced"],
+  fakeHeadlineRisk: "medium",
+  shouldVerifyTruthBeforeTrading: true,
+  reason: "ETF approval claims can move SOL, but the post is social and unverified.",
+  confidence: 0.72,
+};
+
 const tradeExpression: TradeExpressionPlan = {
   signal: "SOL ETF rumor",
   coreInterpretation: "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
@@ -89,11 +104,8 @@ class FakeAi implements StructuredAiClient {
   async generateObject<T>(input: { name: string }): Promise<T> {
     this.calls.push(input.name);
     const outputs: Record<string, unknown> = {
-      cassie_trade_expression_step: {
-        action: "finish_trade_expression",
-        reason: "Fixture completes the trade-expression loop.",
-        final: tradeExpression,
-      },
+      cassie_opportunity_frame: opportunityFrame,
+      cassie_trade_expressions: tradeExpression,
       cassie_market_selection: marketSelection,
     };
     return outputs[input.name] as T;
@@ -122,7 +134,10 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("Never invent market candidates, prices, account state, or risk approvals");
     expect(instructions).toContain("Always use finalize_run");
     expect(instructions).toContain("Once you have made the grounded decision for this run, call finalize_run next");
-    expect(instructions).toContain("Start with plan_trade_expression");
+    expect(instructions).toContain("Start with frame_opportunity");
+    expect(instructions).toContain("Use generate_trade_expressions to create competing expression families");
+    expect(instructions).toContain("Use search_venues to find real supported venue candidates");
+    expect(instructions).toContain("Use rank_expressions to choose the best grounded expression");
     expect(instructions).toContain("Mode policy:");
     expect(instructions).toContain("trade:");
     expect(instructions).toContain("critic:");
@@ -168,9 +183,16 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
-    const selected = await executeTool<MarketSelection>(tools.select_market, {
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
+    const candidates = await executeTool(tools.search_venues, {
       tradeExpression: expression,
+    });
+    const selected = await executeTool<MarketSelection>(tools.rank_expressions, {
+      tradeExpression: expression,
+      candidates,
     });
     const risk = await executeTool(tools.risk_check, {
       marketSelection: selected,
@@ -193,7 +215,7 @@ describe("AI SDK supervisor agent", () => {
     expect(state.tradeTickets[0]?.approvalState).toBe("pending");
     expect(state.researchReports).toHaveLength(0);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["trade_expression", "market_selection", "risk", "ticket", "final"]),
+      expect.arrayContaining(["opportunity", "trade_expression", "market_candidates", "market_selection", "risk", "ticket", "final"]),
     );
     expect(state.runSteps.map((step) => step.stepType)).not.toEqual(
       expect.arrayContaining(["intent", "signal", "thesis"]),
@@ -233,9 +255,13 @@ describe("AI SDK supervisor agent", () => {
       accountStateProvider: new ThrowingAccountStateProvider(),
     });
 
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
-    await executeTool(tools.select_market, {
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
+    await executeTool(tools.rank_expressions, {
       tradeExpression: expression,
+      candidates: [marketSelection.selectedMarket!],
     });
     await expect(executeTool(tools.risk_check, {
       marketSelection,
@@ -319,9 +345,13 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
-    await executeTool(tools.select_market, {
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
+    await executeTool(tools.rank_expressions, {
       tradeExpression: expression,
+      candidates: [marketSelection.selectedMarket!],
     });
     await expect(executeTool(tools.create_trade_ticket, {
       tradeExpression: expression,
@@ -360,7 +390,10 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
 
     await expect(executeTool(tools.finalize_run, {
       responseType: "analysis",
@@ -445,14 +478,14 @@ describe("AI SDK supervisor agent", () => {
     });
 
     const [first, second] = await Promise.all([
-      executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {}),
-      executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {}),
+      executeTool<OpportunityFrame>(tools.frame_opportunity, {}),
+      executeTool<OpportunityFrame>(tools.frame_opportunity, {}),
     ]);
 
     expect(first).toEqual(second);
-    expect(ai.calls.filter((call) => call === "cassie_trade_expression_step")).toHaveLength(1);
+    expect(ai.calls.filter((call) => call === "cassie_opportunity_frame")).toHaveLength(1);
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.filter((step) => step.stepType === "trade_expression")).toHaveLength(1);
+    expect(steps.filter((step) => step.stepType === "opportunity")).toHaveLength(1);
   });
 
   it("uses important AI for trade expression, but cheap AI for market selection", async () => {
@@ -495,17 +528,23 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await executeTool(tools.plan_trade_expression, {});
-    await executeTool(tools.select_market, {
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    await executeTool(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
+    await executeTool(tools.rank_expressions, {
       tradeExpression,
+      candidates: [marketSelection.selectedMarket!],
     });
 
     expect(importantAi.calls).toEqual([
-      "cassie_trade_expression_step",
+      "cassie_opportunity_frame",
+      "cassie_trade_expressions",
     ]);
     expect(cheapAi.calls).toEqual(["cassie_market_selection"]);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
+      { type: "opportunity", model: "deepseek-v4-pro" },
       { type: "trade_expression", model: "deepseek-v4-pro" },
       { type: "market_selection", model: "deepseek-v4-flash" },
     ]);
@@ -540,10 +579,10 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await executeTool(tools.plan_trade_expression, {});
+    await executeTool(tools.frame_opportunity, {});
 
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "trade_expression")?.input).toMatchObject({
+    expect(steps.find((step) => step.stepType === "opportunity")?.input).toMatchObject({
       userCommand: "@Cassie critic this",
       sourcePost,
     });

@@ -21,11 +21,12 @@ function errorStep(toolName: string, error: Error) {
 
 describe("supervisor step policy", () => {
   const fullToolSurface = [
-    "plan_trade_expression",
-    "find_polymarket_markets",
-    "assess_polymarket_market",
-    "quote_polymarket_market",
-    "select_market",
+    "frame_opportunity",
+    "generate_trade_expressions",
+    "search_venues",
+    "assess_expression_fit",
+    "quote_expression",
+    "rank_expressions",
     "risk_check",
     "create_trade_ticket",
     "finalize_run",
@@ -37,13 +38,13 @@ describe("supervisor step policy", () => {
     ]);
 
     expect(selectActiveTools([
-      step("plan_trade_expression", {}),
+      step("generate_trade_expressions", {}),
     ])).toEqual(fullToolSurface);
   });
 
   it("exposes no tools after finalization", () => {
     expect(selectActiveTools([
-      step("plan_trade_expression", {}),
+      step("generate_trade_expressions", {}),
       step("finalize_run", {}),
     ])).toEqual([]);
   });
@@ -51,9 +52,9 @@ describe("supervisor step policy", () => {
   it("still aborts the loop on hard tool errors", () => {
     expect(() => prepareCassieSupervisorStep({
       steps: [
-        errorStep("plan_trade_expression", new Error("rate limited")),
+        errorStep("generate_trade_expressions", new Error("rate limited")),
       ],
-    } as never)).toThrow("Supervisor tool plan_trade_expression failed: rate limited");
+    } as never)).toThrow("Supervisor tool generate_trade_expressions failed: rate limited");
   });
 
   it("lets the model recover from prerequisite data errors", () => {
@@ -71,14 +72,14 @@ describe("supervisor step policy", () => {
   it("keeps trade-expression substance when compressing tool messages before finalization", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        step("plan_trade_expression", {}),
+        step("generate_trade_expressions", {}),
       ],
       messages: [{
         role: "tool",
         content: [{
           type: "tool-result",
-          toolCallId: "plan_trade_expression_call",
-          toolName: "plan_trade_expression",
+          toolCallId: "generate_trade_expressions_call",
+          toolName: "generate_trade_expressions",
           output: {
             reason: "The cleanest route is the prediction market because it directly tracks the event.",
             highestPurityExpression: "Buy YES on the listed event market.",
@@ -96,7 +97,7 @@ describe("supervisor step policy", () => {
     const content = Array.from({ length: 12 }, (_, index) => ({
       type: "tool-result",
       toolCallId: `call_${index}`,
-      toolName: "plan_trade_expression",
+      toolName: "generate_trade_expressions",
       output: {
         decision: "needs_market_check",
         reason: "x".repeat(200),
@@ -104,7 +105,7 @@ describe("supervisor step policy", () => {
     }));
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        step("plan_trade_expression", {}),
+        step("generate_trade_expressions", {}),
       ],
       messages: [{
         role: "tool",

@@ -676,6 +676,20 @@ export const MarketCandidateSchema = z.object({
   reason: z.string(),
 });
 
+export const OpportunityFrameSchema = z.object({
+  literalClaim: z.string(),
+  opportunity: z.string(),
+  marketImplication: z.string(),
+  userIntent: CassieIntentSchema,
+  affectedEntities: z.array(z.string()),
+  affectedAssets: z.array(z.string()),
+  expressionFamilies: z.array(z.string()),
+  fakeHeadlineRisk: z.enum(["low", "medium", "high", "unknown"]),
+  shouldVerifyTruthBeforeTrading: z.boolean(),
+  reason: z.string(),
+  confidence: z.number().min(0).max(1),
+});
+
 export const PolymarketMarketAssessmentSchema = z.object({
   fit: z.enum(["strong", "weak", "no_fit"]),
   fitReason: z.string(),
@@ -943,6 +957,7 @@ export const RunStepTypeSchema = z.enum([
   "inverse_thesis",
   "research",
   "critique",
+  "opportunity",
   "trade_expression",
   "market_candidates",
   "market_assessment",
@@ -1005,6 +1020,7 @@ export type ResearchContinuationDecision = z.infer<typeof ResearchContinuationDe
 export type AdaptiveQueryRequest = z.infer<typeof AdaptiveQueryRequestSchema>;
 export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
+export type OpportunityFrame = z.infer<typeof OpportunityFrameSchema>;
 export type PolymarketMarketAssessment = z.infer<typeof PolymarketMarketAssessmentSchema>;
 export type PolymarketQuote = z.infer<typeof PolymarketQuoteSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;

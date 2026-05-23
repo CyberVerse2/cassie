@@ -4,6 +4,7 @@ import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../p
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   MarketSelection,
+  OpportunityFrame,
   RiskDecision,
   SourcePost,
   TradeExpressionPlan,
@@ -51,6 +52,20 @@ const marketSelection: MarketSelection = {
   noTradeReason: null,
 };
 
+const opportunityFrame: OpportunityFrame = {
+  literalClaim: "Solana ETF approval is basically inevitable now. Market is asleep.",
+  opportunity: "SOL exposure may be underpriced if ETF approval odds are higher than reflected in market prices.",
+  marketImplication: "Bullish SOL if the approval signal is credible and not priced.",
+  userIntent: "trade",
+  affectedEntities: ["Solana", "SOL"],
+  affectedAssets: ["SOL"],
+  expressionFamilies: ["long SOL perp", "Solana ETF prediction market", "no trade if venue fit is weak"],
+  fakeHeadlineRisk: "medium",
+  shouldVerifyTruthBeforeTrading: true,
+  reason: "The post is a social ETF approval claim, so Cassie should route the expression while preserving evidence risk.",
+  confidence: 0.72,
+};
+
 const tradeExpression: TradeExpressionPlan = {
   signal: "SOL ETF rumor",
   coreInterpretation: "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
@@ -85,11 +100,8 @@ const tradeExpression: TradeExpressionPlan = {
 class ScenarioAi implements StructuredAiClient {
   async generateObject<T>(input: { name: string }): Promise<T> {
     const outputs: Record<string, unknown> = {
-      cassie_trade_expression_step: {
-        action: "finish_trade_expression",
-        reason: "Fixture completes the trade-expression loop.",
-        final: tradeExpression,
-      },
+      cassie_opportunity_frame: opportunityFrame,
+      cassie_trade_expressions: tradeExpression,
       cassie_market_selection: marketSelection,
     };
 
@@ -137,9 +149,13 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 describe("supervisor scenario coverage", () => {
   it("creates a ticket from execution intent without intent, signal, or thesis steps", async () => {
     const { store, tools } = await createScenario("@Cassie get me in");
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
-    const selected = await executeTool<MarketSelection>(tools.select_market, {
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
+    const selected = await executeTool<MarketSelection>(tools.rank_expressions, {
       tradeExpression: expression,
+      candidates: [marketSelection.selectedMarket!],
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection: selected,
@@ -155,7 +171,7 @@ describe("supervisor scenario coverage", () => {
     const state = await store.load();
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["trade_expression", "market_selection", "risk", "ticket"]),
+      expect.arrayContaining(["opportunity", "trade_expression", "market_selection", "risk", "ticket"]),
     );
     expect(state.runSteps.map((step) => step.stepType)).not.toEqual(
       expect.arrayContaining(["intent", "signal", "thesis", "inverse_thesis", "critique"]),
@@ -167,9 +183,13 @@ describe("supervisor scenario coverage", () => {
       ...baseSettings,
       maxSpreadBps: 1,
     });
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
-    const selected = await executeTool<MarketSelection>(tools.select_market, {
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
+    const selected = await executeTool<MarketSelection>(tools.rank_expressions, {
       tradeExpression: expression,
+      candidates: [marketSelection.selectedMarket!],
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection: selected,
@@ -198,7 +218,10 @@ describe("supervisor scenario coverage", () => {
 
   it("finalizes no-trade market routing without preserving stale route language", async () => {
     const { store, run, tools } = await createScenario("@Cassie get me in");
-    const expression = await executeTool<TradeExpressionPlan>(tools.plan_trade_expression, {});
+    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
+    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
+      opportunityFrame: frame,
+    });
     const noTradeMarketSelection: MarketSelection = {
       selectedMarket: null,
       rejectedCandidates: [],

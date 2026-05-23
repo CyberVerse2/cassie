@@ -42,11 +42,12 @@ export function selectActiveTools(
   }
 
   return [
-    "plan_trade_expression",
-    "find_polymarket_markets",
-    "assess_polymarket_market",
-    "quote_polymarket_market",
-    "select_market",
+    "frame_opportunity",
+    "generate_trade_expressions",
+    "search_venues",
+    "assess_expression_fit",
+    "quote_expression",
+    "rank_expressions",
     "risk_check",
     "create_trade_ticket",
     "finalize_run",

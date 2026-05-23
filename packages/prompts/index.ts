@@ -1,4 +1,10 @@
-import type { SignalInterpretation, SourcePost, Thesis } from "../core/schemas/index.ts";
+import type {
+  MarketCandidate,
+  OpportunityFrame,
+  SignalInterpretation,
+  SourcePost,
+  Thesis,
+} from "../core/schemas/index.ts";
 
 function postContext(sourcePost: SourcePost, userCommand: string): string {
   return JSON.stringify(
@@ -194,6 +200,67 @@ Input:
 ${JSON.stringify(input, null, 2)}`;
 }
 
+export function opportunityFramePrompt(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+}): string {
+  return `You are Cassie's opportunity-framing analyst.
+
+Frame the market opportunity implied by the user's command and the source post.
+
+${decisionTaxonomyBlock}
+
+Mission:
+- Treat the post as noisy and untrusted.
+- Identify the literal claim before interpreting it.
+- Infer how the claim could move markets if believed.
+- Identify affected entities, assets, sectors, teams, venues, or event surfaces.
+- Classify whether the user wants to trade, fade/countertrade, critique, or watch.
+- List broad expression families only. Do not choose the final trade, size, venue, or ticket.
+- Truth validation is an input into trade expression and ranking. It is not a mandatory front-door research task.
+
+Output requirements:
+- Use userIntent from the Cassie intent enum only: critic, trade, countertrade, watch.
+- Set fakeHeadlineRisk high when the post is an unsupported breaking claim, screenshot-like rumor, or otherwise provenance-thin.
+- Set shouldVerifyTruthBeforeTrading true only when verification materially changes side, sizing, or whether to fade/no-trade.
+- Do not invent market availability, prices, condition IDs, symbols, or venue support.
+
+Input:
+${postContext(input.sourcePost, input.userCommand)}`;
+}
+
+export function singleStepTradeExpressionPrompt(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+  opportunityFrame?: OpportunityFrame;
+  marketCandidates?: MarketCandidate[];
+}): string {
+  return `You are Cassie's trade-expression generator.
+
+${decisionTaxonomyBlock}
+
+Generate competing trade expressions for the framed opportunity in one structured pass. You are not running a tool loop.
+
+Posture:
+- Cassie optimizes for the best way to express a trade, not for proving or disproving the post in isolation.
+- Treat the post as noisy and untrusted.
+- Truth validation, source quality, and fake-headline risk should affect confidence, expected edge, sizing readiness, or no-trade decisions.
+- Do not invent venue availability, markets, prices, token IDs, order books, or liquidity.
+- If provided marketCandidates are present, score only those as grounded venue evidence.
+- If no real market candidate is known yet, use needs_market_check unless all clean expressions are too indirect, inaccessible, or weak.
+
+Candidate requirements:
+- Include directional perps/spot, pre-stock or public-market read-throughs, prediction-market YES/NO, fade/countertrade, and no-trade where relevant.
+- Keep expressionConfidence separate from expectedEdge.
+- Fill rankedCandidates only for expressions with real venue or candidate grounding.
+- Use route_to_market_router only when a grounded candidate is tradable now and the causal chain is clean enough.
+- Use needs_market_check when venue, price, odds, liquidity, or exact market semantics still need connector search.
+- Use no_trade when the cleanest expression is unavailable, too indirect, stale, refuted, or negative edge.
+
+Input:
+${JSON.stringify(input, null, 2)}`;
+}
+
 export function tradeExpressionPrompt(input: unknown): string {
   return `You are Cassie's trade-expression planner.
 
@@ -266,50 +333,6 @@ Use decision:
 - route_to_market_router only when at least one liquid candidate is tradable now and has a clean enough causal chain
 - needs_market_check when Hyperliquid, Polymarket, or another configured venue needs to be searched before deciding
 - no_trade when the signal is weak, stale, refuted, or too indirect
-
-Input:
-${JSON.stringify(input, null, 2)}`;
-}
-
-export function tradeExpressionLoopPrompt(input: {
-  sourcePost: unknown;
-  userCommand: string;
-  observations: unknown[];
-  stepNumber: number;
-  maxSteps: number;
-}): string {
-  return `You are Cassie's trade-expression planner running a bounded market-aware tool loop.
-
-${decisionTaxonomyBlock}
-
-Mission:
-Treat the user's command as execution intent. Decide what trade object the user is asking Cassie to create from the source post context, but do not pretend venue availability is known before searching. Form expression hypotheses, call market tools when useful, inspect grounded results, rank the candidates, then finish with a TradeExpressionPlan.
-
-Available actions:
-- resolve_asset_mapping: use when the entity, project, company, coin, ticker, pair, pre-stock symbol, or proxy surface is unclear.
-- search_hyperliquid: search configured Hyperliquid spot/perp/pre-stock surfaces for concrete asset hypotheses.
-- search_polymarket: search configured Polymarket event, probability, and target-price markets for concrete event hypotheses.
-- finish_trade_expression: return the final TradeExpressionPlan after enough market evidence exists or after searches show no clean expression.
-
-Tool-use policy:
-- Use semantic reasoning. Do not reduce asset discovery to keyword overlap.
-- Do not verify whether the source post is true unless venue matching requires resolving the event or asset being referenced.
-- Prefer direct venue-confirmed instruments over indirect read-throughs.
-- Multiple searches are allowed when the thesis can appear as a coin, pair, quoted perp, pre-stock perp, prediction market, public ticker, or proxy.
-- A clean expression can still have negative expectedEdge; keep expressionConfidence separate from expectedEdge.
-- Do not invent markets, prices, condition IDs, token IDs, order books, or venue availability.
-- If a venue must still be searched, call the relevant search action instead of finishing as route_to_market_router.
-- If searched venues do not support the thesis cleanly, finish with needs_market_check or no_trade and explain the missing surface.
-
-Ranking requirements for finish_trade_expression:
-- Fill candidates with scored trade-expression candidates.
-- Fill rankedCandidates ordered best to worst.
-- For each ranked candidate include expressionConfidence, thesisFit, causalDirectness, liquidity, venueConfirmation, priceOrOddsConfidence, timingFit, expectedEdge, tradableNow, reason, and invalidation.
-- Use route_to_market_router only when at least one venue-confirmed candidate is tradable now and has a clean enough causal chain.
-- Use needs_market_check when the best hypothesis still lacks venue, price/odds, liquidity, or endpoint confirmation.
-- Use no_trade when the signal is weak, stale, refuted, too indirect, inaccessible, or has no positive tradable edge.
-
-Return exactly one structured action. Step ${input.stepNumber} of ${input.maxSteps}.
 
 Input:
 ${JSON.stringify(input, null, 2)}`;

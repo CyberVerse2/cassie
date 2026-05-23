@@ -10,6 +10,9 @@ import { config } from "../../core/config.ts";
 import {
   MarketCandidateSchema,
   MarketSelectionSchema,
+  OpportunityFrameSchema,
+  PolymarketMarketAssessmentSchema,
+  PolymarketQuoteSchema,
   RiskDecisionSchema,
   SupervisorFinalResultSchema,
   TradeTicketSchema,
@@ -17,7 +20,10 @@ import {
   type AccountState,
   type CassieActionState,
   type ControlRun,
+  type MarketCandidate,
   type MarketSelection,
+  type PolymarketMarketAssessment,
+  type PolymarketQuote,
   type RiskDecision,
   type TradeTicket,
   type TradeExpressionPlan,
@@ -25,7 +31,8 @@ import {
   type UserSettings,
 } from "../../core/schemas/index.ts";
 import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../tools/market.ts";
-import { planTradeExpression } from "../tools/trade-expression.ts";
+import type { MarketDataProvider, PolymarketMarketFinder } from "../tools/market.ts";
+import { frameOpportunity, generateTradeExpressions } from "../tools/trade-expression.ts";
 import { evaluateRisk } from "../../risk/index.ts";
 import { createTradeTicket } from "../tools/trade.ts";
 import { recordRunStep } from "./steps.ts";
@@ -127,119 +134,128 @@ export function createCassieSupervisorTools(input: {
   };
 
   return {
-    plan_trade_expression: tool({
-      description: "Translate the user's command and source post into the cleanest venue-aware trade expression.",
+    frame_opportunity: tool({
+      description: "Frame the market opportunity implied by the source post without choosing the final trade.",
       inputSchema: z.object({}),
-      execute: async () => runStepOnce("trade_expression", async () => {
+      execute: async () => runStepOnce("opportunity", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
-          stepType: "trade_expression",
-          promptName: "cassie_trade_expression",
+          stepType: "opportunity",
+          promptName: "cassie_opportunity_frame",
           promptVersion,
           model: importantModel,
           stepInput: {
             userCommand: input.run.userCommand,
             sourcePost: input.run.sourcePost,
           },
-          execute: () => planTradeExpression({
+          execute: () => frameOpportunity({
             ai: importantAi,
-            marketData: input.deps.marketData,
-            polymarketMarketFinder: input.deps.polymarketMarketFinder,
             sourcePost: input.run.sourcePost,
             userCommand: input.run.userCommand,
           }),
         });
       }),
     }),
-    find_polymarket_markets: tool({
-      description: "Use AI-planned semantic search to find real Polymarket markets related to the trade expression.",
+    generate_trade_expressions: tool({
+      description: "Generate candidate trade expressions in one AI step; do not search venues or create a ticket.",
+      inputSchema: z.object({
+        opportunityFrame: OpportunityFrameSchema.optional(),
+        marketCandidates: MarketCandidateSchema.array().optional(),
+      }),
+      execute: async ({ opportunityFrame, marketCandidates }) => runStepOnce("trade_expression", async () => {
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "trade_expression",
+          promptName: "cassie_trade_expressions",
+          promptVersion,
+          model: importantModel,
+          stepInput: {
+            userCommand: input.run.userCommand,
+            sourcePost: input.run.sourcePost,
+            opportunityFrame,
+            marketCandidates,
+          },
+          execute: () => generateTradeExpressions({
+            ai: importantAi,
+            sourcePost: input.run.sourcePost,
+            userCommand: input.run.userCommand,
+            opportunityFrame,
+            marketCandidates,
+          }),
+        });
+      }),
+    }),
+    search_venues: tool({
+      description: "Search configured execution and market venues for real candidates matching the trade expression.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema,
+        venues: z.array(z.enum(["hyperliquid", "polymarket"])).optional(),
         limit: z.number().int().positive().max(25).optional(),
       }),
-      execute: async ({ tradeExpression, limit }) => runStepOnce("market_candidates", async () => {
-        const polymarket = input.deps.polymarketMarketFinder;
-        if (!polymarket) {
-          throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
-        }
+      execute: async ({ tradeExpression, venues, limit }) => runStepOnce("market_candidates", async () => {
         const thesis = thesisFromTradeExpression(tradeExpression);
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "market_candidates",
-          stepInput: { tradeExpression, limit },
-          execute: () => findPolymarketMarkets({
-            polymarket,
+          stepInput: { tradeExpression, venues, limit },
+          execute: () => searchVenues({
+            marketData: input.deps.marketData,
+            polymarket: input.deps.polymarketMarketFinder,
             thesis,
             tradeExpression,
+            venues,
             limit,
           }),
         });
       }),
     }),
-    assess_polymarket_market: tool({
-      description: "Assess whether a discovered Polymarket contract directly expresses the trade expression and normalize its YES/NO trade object.",
+    assess_expression_fit: tool({
+      description: "Assess whether a real candidate expresses the intended trade, including prediction-market side semantics.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema,
-        conditionId: z.string().optional(),
-        marketSlug: z.string().optional(),
-        question: z.string().optional(),
-        side: z.enum(["yes", "no"]),
+        candidate: MarketCandidateSchema,
+        side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ tradeExpression, conditionId, marketSlug, question, side }) => runStepOnce("market_assessment", async () => {
-        const polymarket = input.deps.polymarketMarketFinder;
-        if (!polymarket) {
-          throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
-        }
-        const thesis = thesisFromTradeExpression(tradeExpression);
+      execute: async ({ tradeExpression, candidate, side }) => runStepOnce("market_assessment", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "market_assessment",
-          stepInput: { tradeExpression, market: { conditionId, marketSlug, question }, side },
-          execute: () => assessPolymarketMarket({
-            polymarket,
-            thesis,
+          stepInput: { tradeExpression, candidate, side },
+          execute: () => assessExpressionFit({
+            polymarket: input.deps.polymarketMarketFinder,
             tradeExpression,
-            market: { conditionId, marketSlug, question },
+            candidate,
             side,
           }),
         });
       }),
     }),
-    quote_polymarket_market: tool({
-      description: "Refresh a Polymarket outcome-token quote and return YES, NO, and held-side price semantics.",
+    quote_expression: tool({
+      description: "Refresh quote data for a promising real venue candidate.",
       inputSchema: z.object({
-        conditionId: z.string().optional(),
-        outcomeTokenId: z.string(),
-        side: z.enum(["yes", "no"]),
-        yesPrice: z.number().positive().max(1).optional(),
-        noPrice: z.number().positive().max(1).optional(),
+        candidate: MarketCandidateSchema,
+        side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ conditionId, outcomeTokenId, side, yesPrice, noPrice }) => runStepOnce("market_quote", async () => {
-        const polymarket = input.deps.polymarketMarketFinder;
-        if (!polymarket) {
-          throw new Error("Cassie supervisor requires a Polymarket market finder dependency.");
-        }
+      execute: async ({ candidate, side }) => runStepOnce("market_quote", async () => {
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "market_quote",
-          stepInput: { conditionId, outcomeTokenId, side, yesPrice, noPrice },
-          execute: () => quotePolymarketMarket({
-            polymarket,
-            conditionId,
-            outcomeTokenId,
+          stepInput: { candidate, side },
+          execute: () => quoteExpression({
+            polymarket: input.deps.polymarketMarketFinder,
+            candidate,
             side,
-            yesPrice,
-            noPrice,
           }),
         });
       }),
     }),
-    select_market: tool({
-      description: "Select the best market expression from real market candidates; do not invent markets.",
+    rank_expressions: tool({
+      description: "Rank real venue candidates and choose the best grounded trade expression; do not invent markets.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema,
         candidates: MarketCandidateSchema.array().optional(),
@@ -259,7 +275,7 @@ export function createCassieSupervisorTools(input: {
             marketData: input.deps.marketData,
             thesis,
             tradeExpression,
-            candidates,
+            candidates: candidates ?? [],
           }),
         });
       }),
@@ -362,6 +378,113 @@ async function readPersistedStepOutput<T>(
     .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
     .at(-1)?.output;
   return persisted == null ? undefined : schema.parse(persisted);
+}
+
+async function searchVenues(input: {
+  marketData: MarketDataProvider;
+  polymarket?: PolymarketMarketFinder;
+  thesis: ReturnType<typeof thesisFromTradeExpression>;
+  tradeExpression: TradeExpressionPlan;
+  venues?: Array<"hyperliquid" | "polymarket">;
+  limit?: number;
+}): Promise<MarketCandidate[]> {
+  const venues = input.venues ?? [
+    "hyperliquid",
+    ...(input.polymarket ? ["polymarket" as const] : []),
+  ];
+  const candidateBatches: MarketCandidate[][] = [];
+
+  if (venues.includes("hyperliquid")) {
+    candidateBatches.push(await input.marketData.findCandidates({
+      thesis: input.thesis,
+      tradeExpression: input.tradeExpression,
+    }));
+  }
+
+  if (venues.includes("polymarket")) {
+    if (!input.polymarket) {
+      throw new Error("search_venues requires a configured Polymarket market finder dependency.");
+    }
+    candidateBatches.push(await findPolymarketMarkets({
+      polymarket: input.polymarket,
+      thesis: input.thesis,
+      tradeExpression: input.tradeExpression,
+      limit: input.limit,
+    }));
+  }
+
+  return uniqueMarketCandidates(candidateBatches.flat());
+}
+
+async function assessExpressionFit(input: {
+  polymarket?: PolymarketMarketFinder;
+  tradeExpression: TradeExpressionPlan;
+  candidate: MarketCandidate;
+  side?: "yes" | "no";
+}): Promise<MarketCandidate | PolymarketMarketAssessment> {
+  if (input.candidate.venue !== "polymarket") {
+    return MarketCandidateSchema.parse(input.candidate);
+  }
+  if (!input.polymarket) {
+    throw new Error("assess_expression_fit requires a configured Polymarket market finder dependency.");
+  }
+  const thesis = thesisFromTradeExpression(input.tradeExpression);
+  return PolymarketMarketAssessmentSchema.parse(await assessPolymarketMarket({
+    polymarket: input.polymarket,
+    thesis,
+    tradeExpression: input.tradeExpression,
+    market: {
+      conditionId: input.candidate.conditionId,
+      marketSlug: input.candidate.marketSlug,
+      question: input.candidate.marketQuestion,
+    },
+    side: input.side ?? polymarketSideFromCandidate(input.candidate),
+  }));
+}
+
+async function quoteExpression(input: {
+  polymarket?: PolymarketMarketFinder;
+  candidate: MarketCandidate;
+  side?: "yes" | "no";
+}): Promise<MarketCandidate | PolymarketQuote> {
+  if (input.candidate.venue !== "polymarket") {
+    return MarketCandidateSchema.parse(input.candidate);
+  }
+  if (!input.polymarket) {
+    throw new Error("quote_expression requires a configured Polymarket market finder dependency.");
+  }
+  if (!input.candidate.outcomeTokenId) {
+    throw new Error("quote_expression requires a Polymarket outcome token id.");
+  }
+  return PolymarketQuoteSchema.parse(await quotePolymarketMarket({
+    polymarket: input.polymarket,
+    conditionId: input.candidate.conditionId,
+    outcomeTokenId: input.candidate.outcomeTokenId,
+    side: input.side ?? polymarketSideFromCandidate(input.candidate),
+    yesPrice: input.candidate.yesPrice,
+    noPrice: input.candidate.noPrice,
+  }));
+}
+
+function polymarketSideFromCandidate(candidate: MarketCandidate): "yes" | "no" {
+  if (candidate.outcome === "no" || candidate.side === "buy_no") return "no";
+  return "yes";
+}
+
+function uniqueMarketCandidates(candidates: MarketCandidate[]): MarketCandidate[] {
+  const seen = new Set<string>();
+  return MarketCandidateSchema.array().parse(candidates).filter((candidate) => {
+    const key = [
+      candidate.venue,
+      candidate.symbol,
+      candidate.side,
+      candidate.conditionId ?? "",
+      candidate.outcomeTokenId ?? "",
+    ].join("|");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function assertUsableMarketSelection(selection?: MarketSelection): void {
