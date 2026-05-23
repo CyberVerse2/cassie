@@ -7,16 +7,18 @@ import {
   type AccountStateProvider,
 } from "../execution/account-state.ts";
 import {
-  createQueuedExecutionJob,
-  markExecutionFailed,
-  markExecutionRunning,
-  markExecutionSucceeded,
   VenueExecutionClient,
   WebhookExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
 import { evaluateRisk } from "../risk/index.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "./queue.ts";
+import {
+  createQueuedExecutionJob,
+  markExecutionFailed,
+  markExecutionRunning,
+  markExecutionSucceeded,
+} from "./state.ts";
 
 export async function executeExecutionJob(input: {
   jobId: string;

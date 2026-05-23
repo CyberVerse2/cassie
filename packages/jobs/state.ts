@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { ExecutionJob } from "../../core/schemas/index.ts";
+import type { ExecutionJob } from "../core/schemas/index.ts";
 
 export function createQueuedExecutionJob(ticketId: string): ExecutionJob {
   const now = new Date().toISOString();
