@@ -3,7 +3,7 @@ import {
   buildXPostResolutionPrompt,
   parseXPostUrl,
   XPostResolutionError,
-} from "../src/connectors/x-post-resolver.ts";
+} from "../packages/helpers/x-post-resolver.ts";
 
 describe("X post resolver", () => {
   it("parses x.com status URLs into canonical locators", () => {
