@@ -1,6 +1,6 @@
 import { ToolLoopAgent, type TelemetryIntegration } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { CassieStructuredClient } from "../../ai/client.ts";
+import { CassieStructuredClient, type StructuredAiClient } from "../../ai/client.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
@@ -11,8 +11,11 @@ import type { CassieStore } from "../../core/db/store.ts";
 import type { ControlRun } from "../../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../../core/schemas/index.ts";
 import { formatErrorForLog } from "../../core/helpers/index.ts";
-import type { CassieDependencies } from "./dependencies.ts";
-import { AiPolymarketDiscoveryQueryPlanner } from "../tools/market.ts";
+import {
+  AiPolymarketDiscoveryQueryPlanner,
+  type MarketDataProvider,
+  type PolymarketMarketFinder,
+} from "../tools/market.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
 import {
   createCassieStopConditions,
@@ -22,6 +25,14 @@ import { configureAiSdkWarningLogging } from "../../ai/helpers/index.ts";
 import { config } from "../../core/config.ts";
 
 configureAiSdkWarningLogging();
+
+export interface CassieDependencies {
+  ai?: StructuredAiClient;
+  cheapAi?: StructuredAiClient;
+  importantAi?: StructuredAiClient;
+  marketData: MarketDataProvider;
+  polymarketMarketFinder?: PolymarketMarketFinder;
+}
 
 export async function runCassieSupervisorForRun(input: {
   runId: string;
