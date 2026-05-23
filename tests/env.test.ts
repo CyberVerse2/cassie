@@ -4,6 +4,8 @@ import {
   assertPolymarketExecutionEnv,
   cassieCheapModel,
   cassieImportantModel,
+  readAiProviderEnv,
+  readGraphileWorkerEnv,
   googleApiKey,
   assertHyperliquidExecutionEnv,
   cassieApiToken,
@@ -143,6 +145,44 @@ describe("Polymarket env", () => {
       bearerToken: "bearer",
       cassieHandle: "cassie",
       maxResults: 30,
+    });
+  });
+
+  it("reads grouped AI provider and Graphile worker config", () => {
+    const env = {
+      GEMINI_API_KEY: "gemini",
+      GOOGLE_GENERATIVE_AI_API_KEY: "google",
+      DEEPSEEK_API_KEY: "deepseek",
+      XAI_API_KEY: "xai",
+      CASSIE_CHEAP_MODEL: "cheap",
+      CASSIE_IMPORTANT_MODEL: "important",
+      CASSIE_WEB_SEARCH_MODEL: "web-search",
+      GROK_X_SEARCH_MODEL: "grok-search",
+      GRAPHILE_EXECUTION_MAX_ATTEMPTS: "7",
+      GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: "4",
+      GRAPHILE_WORKER_CONCURRENCY: "3",
+      GRAPHILE_WORKER_POLL_INTERVAL_MS: "2500",
+    };
+
+    expect(readAiProviderEnv(env, {
+      cheapModel: "cheap-default",
+      importantModel: "important-default",
+      webSearchModel: "web-default",
+      grokXSearchModel: "grok-default",
+    })).toEqual({
+      googleApiKey: "gemini",
+      deepSeekApiKey: "deepseek",
+      xAiApiKey: "xai",
+      cheapModel: "cheap",
+      importantModel: "important",
+      webSearchModel: "web-search",
+      grokXSearchModel: "grok-search",
+    });
+    expect(readGraphileWorkerEnv(env)).toEqual({
+      executionMaxAttempts: 7,
+      supervisorMaxAttempts: 4,
+      concurrency: 3,
+      pollIntervalMs: 2500,
     });
   });
 });
