@@ -6,6 +6,7 @@ import { createCassieSupervisorTools } from "../packages/agent/supervisor/tools.
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   MarketSelection,
+  MarketCandidate,
   OpportunityFrame,
   SourcePost,
   TradeExpressionPlan,
@@ -430,6 +431,47 @@ describe("AI SDK supervisor agent", () => {
     expect(ai.calls.filter((call) => call === "cassie_opportunity_frame")).toHaveLength(1);
     const steps = await store.getRunSteps(run.runId);
     expect(steps.filter((step) => step.stepType === "opportunity")).toHaveLength(1);
+  });
+
+  it("does not reuse cached tool output for different inputs of the same step type", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie quote both",
+      sourcePost,
+    });
+    const firstCandidate = marketSelection.selectedMarket!;
+    const secondCandidate: MarketCandidate = {
+      ...firstCandidate,
+      symbol: "ETH",
+      reason: "Second candidate for cache-key coverage.",
+    };
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [firstCandidate, secondCandidate];
+          },
+        },
+      },
+    });
+
+    const first = await executeTool<MarketCandidate>(tools.quote_expression, {
+      candidate: firstCandidate,
+    });
+    const second = await executeTool<MarketCandidate>(tools.quote_expression, {
+      candidate: secondCandidate,
+    });
+
+    expect(first.symbol).toBe("SOL");
+    expect(second.symbol).toBe("ETH");
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
   });
 
   it("uses important AI for trade expression, but cheap AI for market selection", async () => {
