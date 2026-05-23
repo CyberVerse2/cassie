@@ -56,7 +56,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (request.method === "GET" && url.pathname === "/dashboard") {
-    requireApiToken(request);
     const state = await product.state();
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     response.end(renderDashboard(state));
