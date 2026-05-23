@@ -118,10 +118,10 @@ Useful examples:
   npm run cli -- settings:set --user local-user
   npm run cli -- settings:set --user local-user --size 50
   npm run cli -- state
-  npm run cli -- run --user local-user
-  npm run cli -- run --user local-user --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
-  npm run cli -- run --user local-user --post "SOL looks underpriced into ETF approval."
-  npm run cli -- run --user local-user --post "Exa raised $250M" --audit
+  npm run cli -- run
+  npm run cli -- run --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
+  npm run cli -- run --post "SOL looks underpriced into ETF approval."
+  npm run cli -- run --post "Exa raised $250M" --audit
   npm run cli -- run-supervisor <runId>
   npm run cli -- tickets --json
   npm run cli -- approve <ticketId>
