@@ -1,10 +1,6 @@
 import { ToolLoopAgent, type TelemetryIntegration } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import {
-  DEFAULT_IMPORTANT_MODEL,
-  DirectDeepSeekImportantStructuredClient,
-  DirectDeepSeekStructuredClient,
-} from "../../ai/client.ts";
+import { CassieStructuredClient } from "../../ai/client.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
@@ -173,17 +169,16 @@ function extractFinalizeRunOutput(result: { toolResults: unknown[]; steps: Array
 }
 
 function defaultDependencies(): CassieDependencies {
-  const cheapAi = new DirectDeepSeekStructuredClient();
-  const importantAi = new DirectDeepSeekImportantStructuredClient();
+  const ai = new CassieStructuredClient();
   return {
-    ai: cheapAi,
-    cheapAi,
-    importantAi,
+    ai,
+    cheapAi: ai,
+    importantAi: ai,
     marketData: new CompositeMarketDataProvider(),
     polymarketMarketFinder: new PolymarketMarketDataProvider(
       "https://gamma-api.polymarket.com/markets",
       "https://clob.polymarket.com",
-      new AiPolymarketDiscoveryQueryPlanner(importantAi),
+      new AiPolymarketDiscoveryQueryPlanner(ai),
     ),
   };
 }
