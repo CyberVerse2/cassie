@@ -1,6 +1,6 @@
 import "dotenv/config";
 import { pathToFileURL } from "node:url";
-import { Chain, ClobClient, OrderType, Side, type ApiKeyCreds } from "@polymarket/clob-client-v2";
+import { Chain, ClobClient, OrderType, Side, SignatureTypeV2, type ApiKeyCreds } from "@polymarket/clob-client-v2";
 import { createWalletClient, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
@@ -247,6 +247,8 @@ function authenticatedClient(): ClobClient {
     chain: Chain.POLYGON,
     signer,
     creds: clobCreds(),
+    signatureType: parseSignatureType(process.env.POLYMARKET_SIGNATURE_TYPE),
+    funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS,
     throwOnError: true,
   });
 }
@@ -273,6 +275,20 @@ function requiredEnv(name: string): string {
 
 function normalizePrivateKey(privateKey: string): `0x${string}` {
   return privateKey.startsWith("0x") ? privateKey as `0x${string}` : `0x${privateKey}` as `0x${string}`;
+}
+
+function parseSignatureType(value: string | undefined): SignatureTypeV2 | undefined {
+  if (value == null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  if (
+    parsed === SignatureTypeV2.EOA ||
+    parsed === SignatureTypeV2.POLY_PROXY ||
+    parsed === SignatureTypeV2.POLY_GNOSIS_SAFE ||
+    parsed === SignatureTypeV2.POLY_1271
+  ) {
+    return parsed;
+  }
+  throw new Error("POLYMARKET_SIGNATURE_TYPE must be 0, 1, 2, or 3.");
 }
 
 function parseStringArray(value: string | string[] | undefined): string[] {

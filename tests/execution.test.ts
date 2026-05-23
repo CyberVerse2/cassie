@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { Chain, OrderType, Side, type ApiKeyCreds, type ClobClientOptions } from "@polymarket/clob-client-v2";
+import { Chain, OrderType, Side, SignatureTypeV2, type ApiKeyCreds, type ClobClientOptions } from "@polymarket/clob-client-v2";
 import { PolymarketExecutionClient, type PolymarketClobClientLike } from "../packages/execution/index.ts";
 import type { TradeTicket } from "../packages/core/schemas/index.ts";
 
@@ -37,6 +37,8 @@ describe("PolymarketExecutionClient", () => {
         secret: "secret",
         passphrase: "passphrase",
       } satisfies ApiKeyCreds);
+      expect(options.signatureType).toBe(SignatureTypeV2.POLY_PROXY);
+      expect(options.funderAddress).toBe("0x193c2109089dD260811f1852C9B1521D6CCF1c6B");
       expect(options.signer).toBeDefined();
       return {
         createAndPostMarketOrder: postMarketOrder,
@@ -48,6 +50,8 @@ describe("PolymarketExecutionClient", () => {
       apiKey: "key",
       apiSecret: "secret",
       apiPassphrase: "passphrase",
+      signatureType: SignatureTypeV2.POLY_PROXY,
+      funderAddress: "0x193c2109089dD260811f1852C9B1521D6CCF1c6B",
       host: "https://clob.polymarket.com",
       factory,
     });

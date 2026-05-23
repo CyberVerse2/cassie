@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/connector-errors.ts";
-import { Chain, ClobClient, OrderType, Side, type ApiKeyCreds, type ClobClientOptions } from "@polymarket/clob-client-v2";
+import { Chain, ClobClient, OrderType, Side, SignatureTypeV2, type ApiKeyCreds, type ClobClientOptions } from "@polymarket/clob-client-v2";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { createWalletClient, http } from "viem";
@@ -148,6 +148,8 @@ export type PolymarketExecutionClientOptions = {
   apiPassphrase?: string;
   host?: string;
   rpcUrl?: string;
+  signatureType?: SignatureTypeV2;
+  funderAddress?: string;
   factory?: PolymarketClobClientFactory;
 };
 
@@ -156,12 +158,16 @@ export class PolymarketExecutionClient implements ExecutionClient {
   private readonly creds?: ApiKeyCreds;
   private readonly host: string;
   private readonly rpcUrl: string;
+  private readonly signatureType?: SignatureTypeV2;
+  private readonly funderAddress?: string;
   private readonly factory: PolymarketClobClientFactory;
 
   constructor(options: PolymarketExecutionClientOptions = {}) {
     this.privateKey = options.privateKey ?? process.env.POLYMARKET_PRIVATE_KEY;
     this.host = options.host ?? process.env.POLYMARKET_CLOB_HOST ?? "https://clob.polymarket.com";
     this.rpcUrl = options.rpcUrl ?? process.env.POLYMARKET_RPC_URL ?? "https://polygon-rpc.com";
+    this.signatureType = options.signatureType ?? parsePolymarketSignatureType(process.env.POLYMARKET_SIGNATURE_TYPE);
+    this.funderAddress = options.funderAddress ?? process.env.POLYMARKET_FUNDER_ADDRESS;
     this.factory = options.factory ?? ((clientOptions) => new ClobClient(clientOptions));
 
     const key = options.apiKey ?? process.env.POLYMARKET_CLOB_API_KEY;
@@ -192,6 +198,8 @@ export class PolymarketExecutionClient implements ExecutionClient {
       chain: Chain.POLYGON,
       signer,
       creds: this.creds,
+      signatureType: this.signatureType,
+      funderAddress: this.funderAddress,
     });
     const side = ticket.side === "buy_no" || ticket.side === "buy_yes" || ticket.side === "buy"
       ? Side.BUY
@@ -218,6 +226,20 @@ export class PolymarketExecutionClient implements ExecutionClient {
 
 function normalizePrivateKey(privateKey: string): `0x${string}` {
   return privateKey.startsWith("0x") ? privateKey as `0x${string}` : `0x${privateKey}` as `0x${string}`;
+}
+
+function parsePolymarketSignatureType(value: string | undefined): SignatureTypeV2 | undefined {
+  if (value == null || value.trim() === "") return undefined;
+  const parsed = Number(value);
+  if (
+    parsed === SignatureTypeV2.EOA ||
+    parsed === SignatureTypeV2.POLY_PROXY ||
+    parsed === SignatureTypeV2.POLY_GNOSIS_SAFE ||
+    parsed === SignatureTypeV2.POLY_1271
+  ) {
+    return parsed;
+  }
+  throw new Error("POLYMARKET_SIGNATURE_TYPE must be 0, 1, 2, or 3.");
 }
 
 function formatDecimal(value: number, decimals: number): string {
