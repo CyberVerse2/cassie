@@ -20,7 +20,7 @@ function errorStep(toolName: string, error: Error) {
 }
 
 describe("supervisor step policy", () => {
-  it("exposes only the next executable tool before terminal states", () => {
+  it("exposes compact flexible tool sets before terminal states", () => {
     const opportunity = step("frame_opportunity", { userIntent: "trade" });
     const expression = step("generate_trade_expressions", {
       decision: "needs_market_check",
@@ -35,45 +35,77 @@ describe("supervisor step policy", () => {
 
     expect(selectActiveTools([])).toEqual(["frame_opportunity"]);
     expect(selectActiveTools([opportunity])).toEqual(["generate_trade_expressions"]);
-    expect(selectActiveTools([opportunity, expression])).toEqual(["search_venues"]);
-    expect(selectActiveTools([opportunity, expression, candidates])).toEqual(["rank_expressions"]);
-    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["risk_check"]);
+    expect(selectActiveTools([opportunity, expression])).toEqual([
+      "generate_trade_expressions",
+      "search_venues",
+    ]);
+    expect(selectActiveTools([opportunity, expression, candidates])).toEqual([
+      "search_venues",
+      "assess_expression_fit",
+      "quote_expression",
+      "rank_expressions",
+    ]);
+    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual([
+      "quote_expression",
+      "rank_expressions",
+      "risk_check",
+    ]);
     expect(selectActiveTools([opportunity, expression, candidates, selection, risk])).toEqual(["create_trade_ticket"]);
   });
 
-  it("exposes finalization only for no-trade and ticket terminal states", () => {
+  it("keeps recovery tools available when searches or ranking do not find a trade", () => {
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "no_trade" }),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual([
+      "generate_trade_expressions",
+      "finalize_run",
+    ]);
 
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "needs_market_check" }),
       step("search_venues", []),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual([
+      "generate_trade_expressions",
+      "search_venues",
+      "finalize_run",
+    ]);
 
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "route_to_market_router" }),
       step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
       step("rank_expressions", { decision: "no_selection", selectedMarket: null, noTradeReason: null }),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual([
+      "search_venues",
+      "rank_expressions",
+      "finalize_run",
+    ]);
 
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "route_to_market_router" }),
       step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
       step("rank_expressions", { selectedMarket: null, noTradeReason: "No clean market." }),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual([
+      "search_venues",
+      "rank_expressions",
+      "finalize_run",
+    ]);
+  });
 
+  it("exposes finalization around risk and ticket terminal states", () => {
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "route_to_market_router" }),
       step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
       step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
       step("risk_check", { decision: "reject", reason: "Too large." }),
-    ])).toEqual(["finalize_run"]);
+    ])).toEqual([
+      "risk_check",
+      "finalize_run",
+    ]);
 
     expect(selectActiveTools([
       step("frame_opportunity", {}),

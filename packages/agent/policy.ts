@@ -48,29 +48,29 @@ export function selectActiveTools(
   const riskDecision = objectRecord(latestToolOutput(steps, "risk_check"));
   if (riskDecision.decision) {
     return riskDecision.decision === "reject"
-      ? ["finalize_run"]
+      ? ["risk_check", "finalize_run"]
       : ["create_trade_ticket"];
   }
 
   const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
   if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
     return marketSelection.selectedMarket && !marketSelection.noTradeReason
-      ? ["risk_check"]
-      : ["finalize_run"];
+      ? ["quote_expression", "rank_expressions", "risk_check"]
+      : ["search_venues", "rank_expressions", "finalize_run"];
   }
 
   const marketCandidates = latestToolOutput(steps, "search_venues");
   if (marketCandidates) {
     return Array.isArray(marketCandidates) && marketCandidates.length > 0
-      ? ["rank_expressions"]
-      : ["finalize_run"];
+      ? ["search_venues", "assess_expression_fit", "quote_expression", "rank_expressions"]
+      : ["generate_trade_expressions", "search_venues", "finalize_run"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
   if (tradeExpression.decision) {
     return tradeExpression.decision === "no_trade"
-      ? ["finalize_run"]
-      : ["search_venues"];
+      ? ["generate_trade_expressions", "finalize_run"]
+      : ["generate_trade_expressions", "search_venues"];
   }
 
   if (latestToolOutput(steps, "frame_opportunity")) {
