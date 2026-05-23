@@ -152,6 +152,7 @@ export type PolymarketExecutionClientOptions = {
   rpcUrl?: string;
   signatureType?: SignatureTypeV2;
   funderAddress?: string;
+  builderCode?: string;
   factory?: PolymarketClobClientFactory;
 };
 
@@ -162,6 +163,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
   private readonly rpcUrl: string;
   private readonly signatureType?: SignatureTypeV2;
   private readonly funderAddress?: string;
+  private readonly builderCode?: string;
   private readonly factory: PolymarketClobClientFactory;
 
   constructor(options: PolymarketExecutionClientOptions = {}) {
@@ -170,6 +172,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
     this.rpcUrl = options.rpcUrl ?? process.env.POLYMARKET_RPC_URL ?? "https://polygon-rpc.com";
     this.signatureType = options.signatureType ?? parsePolymarketSignatureType(process.env.POLYMARKET_SIGNATURE_TYPE);
     this.funderAddress = options.funderAddress ?? process.env.POLYMARKET_FUNDER_ADDRESS;
+    this.builderCode = options.builderCode ?? process.env.POLYMARKET_BUILDER_CODE;
     this.factory = options.factory ?? ((clientOptions) => new ClobClient(clientOptions));
 
     const key = options.apiKey ?? process.env.POLYMARKET_CLOB_API_KEY;
@@ -202,6 +205,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
       creds: this.creds,
       signatureType: this.signatureType,
       funderAddress: this.funderAddress,
+      builderConfig: this.builderCode ? { builderCode: this.builderCode } : undefined,
     });
     const side = ticket.side === "buy_no" || ticket.side === "buy_yes" || ticket.side === "buy"
       ? Side.BUY

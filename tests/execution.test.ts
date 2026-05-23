@@ -22,6 +22,7 @@ const ticket: TradeTicket = {
   },
   approvalState: "approved",
 };
+const builderCode = `0x${"a".repeat(64)}`;
 
 describe("PolymarketExecutionClient", () => {
   it("uses the v2 CLOB client with configured L2 credentials for market orders", async () => {
@@ -41,6 +42,9 @@ describe("PolymarketExecutionClient", () => {
       } satisfies ApiKeyCreds);
       expect(options.signatureType).toBe(SignatureTypeV2.POLY_PROXY);
       expect(options.funderAddress).toBe("0x193c2109089dD260811f1852C9B1521D6CCF1c6B");
+      expect(options.builderConfig).toEqual({
+        builderCode,
+      });
       expect(options.signer).toBeDefined();
       return {
         createAndPostMarketOrder: postMarketOrder,
@@ -56,6 +60,7 @@ describe("PolymarketExecutionClient", () => {
       apiPassphrase: "passphrase",
       signatureType: SignatureTypeV2.POLY_PROXY,
       funderAddress: "0x193c2109089dD260811f1852C9B1521D6CCF1c6B",
+      builderCode,
       host: "https://clob.polymarket.com",
       factory,
     });

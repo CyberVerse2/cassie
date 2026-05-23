@@ -249,6 +249,9 @@ function authenticatedClient(): ClobClient {
     creds: clobCreds(),
     signatureType: parseSignatureType(process.env.POLYMARKET_SIGNATURE_TYPE),
     funderAddress: process.env.POLYMARKET_FUNDER_ADDRESS,
+    builderConfig: process.env.POLYMARKET_BUILDER_CODE
+      ? { builderCode: process.env.POLYMARKET_BUILDER_CODE }
+      : undefined,
     throwOnError: true,
   });
 }
