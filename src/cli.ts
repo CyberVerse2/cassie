@@ -4,11 +4,11 @@ import { GrokXPostResolver } from "./connectors/x-post-resolver.ts";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/adapters/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
-import { runCassieSupervisorForRun } from "../packages/agent/supervisor/agent.ts";
+import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
 import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
-import { frameOpportunity, generateTradeExpressions } from "../packages/agent/supervisor/tools.ts";
+import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
   config,

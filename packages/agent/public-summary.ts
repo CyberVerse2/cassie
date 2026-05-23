@@ -2,7 +2,7 @@ import type {
   MarketSelection,
   RiskDecision,
   TradeExpressionPlan,
-} from "../../core/schemas/index.ts";
+} from "../core/schemas/index.ts";
 
 type PublicSummaryFinalizeInput = {
   responseType: "analysis" | "trade_ticket";

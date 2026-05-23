@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../packages/agent/supervisor/tools.ts";
+import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../packages/agent/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   MarketSelection,

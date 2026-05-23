@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { frameOpportunity, generateTradeExpressions } from "../packages/agent/supervisor/tools.ts";
+import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools.ts";
 import type {
   MarketCandidate,
   OpportunityFrame,

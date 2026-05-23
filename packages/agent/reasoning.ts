@@ -1,4 +1,4 @@
-import type { StructuredAiClient } from "../../ai/client.ts";
+import type { StructuredAiClient } from "../ai/client.ts";
 import {
   MarketCandidateSchema,
   OpportunityFrameSchema,
@@ -7,11 +7,11 @@ import {
   type OpportunityFrame,
   type SourcePost,
   type TradeExpressionPlan,
-} from "../../core/schemas/index.ts";
+} from "../core/schemas/index.ts";
 import {
   opportunityFramePrompt,
   singleStepTradeExpressionPrompt,
-} from "../../prompts/index.ts";
+} from "../prompts/index.ts";
 
 export async function frameOpportunity(input: {
   ai: StructuredAiClient;

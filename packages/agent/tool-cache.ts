@@ -1,4 +1,4 @@
-import type { RunStepType } from "../../core/schemas/index.ts";
+import type { RunStepType } from "../core/schemas/index.ts";
 
 export function createRunStepCache() {
   const stepOutputs = new Map<string, Promise<unknown>>();

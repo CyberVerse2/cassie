@@ -4,7 +4,7 @@ This document lists the runtime prompts currently used by Cassie. Dynamic inputs
 
 ## Supervisor Agent
 
-Source: `packages/agent/supervisor/agent.ts`
+Source: `packages/agent/agent.ts`
 
 ### `buildSupervisorInstructions`
 

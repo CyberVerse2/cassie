@@ -1,12 +1,12 @@
 import { tool } from "ai";
 import { z } from "zod";
 import type { CassieDependencies } from "./agent.ts";
-import type { CassieStore } from "../../core/db/store.ts";
+import type { CassieStore } from "../core/db/store.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
-} from "../../adapters/hyperliquid/account-state.ts";
-import { config } from "../../core/config.ts";
+} from "../adapters/hyperliquid/account-state.ts";
+import { config } from "../core/config.ts";
 import {
   MarketCandidateSchema,
   MarketSelectionSchema,
@@ -17,10 +17,10 @@ import {
   type AccountState,
   type ControlRun,
   type UserSettings,
-} from "../../core/schemas/index.ts";
-import { selectMarket } from "../../adapters/selection.ts";
-import { evaluateRisk } from "../../risk/index.ts";
-import { createTradeTicket } from "../../tickets/index.ts";
+} from "../core/schemas/index.ts";
+import { selectMarket } from "../adapters/selection.ts";
+import { evaluateRisk } from "../risk/index.ts";
+import { createTradeTicket } from "../tickets/index.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
 import { createRunStepCache } from "./tool-cache.ts";

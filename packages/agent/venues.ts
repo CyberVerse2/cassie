@@ -6,14 +6,14 @@ import {
   type PolymarketMarketAssessment,
   type PolymarketQuote,
   type TradeExpressionPlan,
-} from "../../core/schemas/index.ts";
+} from "../core/schemas/index.ts";
 import {
   assessPolymarketMarket,
   findPolymarketMarkets,
   quotePolymarketMarket,
   type MarketDataProvider,
   type PolymarketMarketFinder,
-} from "../../adapters/selection.ts";
+} from "../adapters/selection.ts";
 import { thesisFromTradeExpression } from "./thesis.ts";
 
 export async function searchVenues(input: {

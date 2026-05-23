@@ -1,5 +1,5 @@
 import type { TaskList } from "graphile-worker";
-import { runCassieSupervisorForRun } from "../agent/supervisor/agent.ts";
+import { runCassieSupervisorForRun } from "../agent/agent.ts";
 import { enqueueAutoApprovedTicketsForRun, executeExecutionJob } from "./execution-job.ts";
 import {
   EXECUTE_TRADE_TICKET_TASK,

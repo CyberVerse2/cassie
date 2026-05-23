@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import { Pool } from "pg";
 import { CassieProduct } from "../packages/app/product.ts";
-import { runCassieSupervisorForRun } from "../packages/agent/supervisor/agent.ts";
+import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { DrizzleCassieStore } from "../packages/core/db/drizzle-store.ts";
 import { createCassieDb } from "../packages/core/db/client.ts";
 import {

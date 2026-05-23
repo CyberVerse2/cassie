@@ -1,29 +1,29 @@
 import { ToolLoopAgent, type TelemetryIntegration } from "ai";
 import { createDeepSeek } from "@ai-sdk/deepseek";
-import { CassieStructuredClient, type StructuredAiClient } from "../../ai/client.ts";
+import { CassieStructuredClient, type StructuredAiClient } from "../ai/client.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
-} from "../../adapters/hyperliquid/account-state.ts";
-import { CompositeMarketDataProvider } from "../../adapters/index.ts";
+} from "../adapters/hyperliquid/account-state.ts";
+import { CompositeMarketDataProvider } from "../adapters/index.ts";
 import {
   AiPolymarketDiscoveryQueryPlanner,
   PolymarketMarketDataProvider,
   type MarketDataProvider,
   type PolymarketMarketFinder,
-} from "../../adapters/polymarket/index.ts";
-import { DrizzleCassieStore } from "../../core/db/drizzle-store.ts";
-import type { CassieStore } from "../../core/db/store.ts";
-import type { ControlRun } from "../../core/schemas/index.ts";
-import { SupervisorFinalResultSchema } from "../../core/schemas/index.ts";
-import { formatErrorForLog } from "../../core/helpers/index.ts";
+} from "../adapters/polymarket/index.ts";
+import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
+import type { CassieStore } from "../core/db/store.ts";
+import type { ControlRun } from "../core/schemas/index.ts";
+import { SupervisorFinalResultSchema } from "../core/schemas/index.ts";
+import { formatErrorForLog } from "../core/helpers/index.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
 import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
-import { configureAiSdkWarningLogging } from "../../ai/helpers/index.ts";
-import { config } from "../../core/config.ts";
+import { configureAiSdkWarningLogging } from "../ai/helpers/index.ts";
+import { config } from "../core/config.ts";
 
 configureAiSdkWarningLogging();
 

@@ -1,4 +1,4 @@
-import type { TradeExpressionPlan } from "../../core/schemas/index.ts";
+import type { TradeExpressionPlan } from "../core/schemas/index.ts";
 
 export function thesisFromTradeExpression(tradeExpression: TradeExpressionPlan) {
   return {

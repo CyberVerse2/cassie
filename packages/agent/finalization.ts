@@ -1,5 +1,5 @@
 import { z } from "zod";
-import type { CassieStore } from "../../core/db/store.ts";
+import type { CassieStore } from "../core/db/store.ts";
 import {
   MarketSelectionSchema,
   RiskDecisionSchema,
@@ -13,7 +13,7 @@ import {
   type RunStepType,
   type TradeExpressionPlan,
   type TradeTicket,
-} from "../../core/schemas/index.ts";
+} from "../core/schemas/index.ts";
 import { prepareFinalInput } from "./public-summary.ts";
 import { recordRunStep } from "./steps.ts";
 import { isInsufficientEvidence } from "./thesis.ts";
