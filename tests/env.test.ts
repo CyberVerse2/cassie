@@ -5,6 +5,7 @@ import {
   cassieCheapModel,
   cassieImportantModel,
   readAiProviderEnv,
+  readCassieConfig,
   readGraphileWorkerEnv,
   googleApiKey,
   grokXSearchModel,
@@ -187,6 +188,57 @@ describe("Polymarket env", () => {
       supervisorMaxAttempts: 4,
       concurrency: 3,
       pollIntervalMs: 2500,
+    });
+  });
+
+  it("builds one validated runtime config object", () => {
+    const privateKey = "3".repeat(64);
+    const config = readCassieConfig({
+      DATABASE_URL: "postgres://cassie",
+      GEMINI_API_KEY: "gemini",
+      DEEPSEEK_API_KEY: "deepseek",
+      XAI_API_KEY: "xai",
+      CASSIE_API_TOKEN: "api-token",
+      X_BEARER_TOKEN: "bearer",
+      CASSIE_X_HANDLE: "cassie",
+      X_POLL_USER_ID: "123",
+      EXECUTION_WEBHOOK_URL: "https://execution.example.com",
+      HYPERLIQUID_PRIVATE_KEY: privateKey,
+      POLYMARKET_PRIVATE_KEY: privateKey,
+      POLYMARKET_CLOB_API_KEY: "poly-key",
+      POLYMARKET_CLOB_SECRET: "poly-secret",
+      POLYMARKET_CLOB_PASS_PHRASE: "poly-passphrase",
+    });
+
+    expect(config).toMatchObject({
+      ai: {
+        googleApiKey: "gemini",
+        deepSeekApiKey: "deepseek",
+        xAiApiKey: "xai",
+      },
+      database: {
+        url: "postgres://cassie",
+      },
+      http: {
+        apiToken: "api-token",
+      },
+      x: {
+        pollUserId: "123",
+      },
+      execution: {
+        webhookUrl: "https://execution.example.com",
+        hyperliquid: {
+          privateKey: `0x${privateKey}`,
+        },
+        polymarket: {
+          privateKey: `0x${privateKey}`,
+          creds: {
+            key: "poly-key",
+            secret: "poly-secret",
+            passphrase: "poly-passphrase",
+          },
+        },
+      },
     });
   });
 });
