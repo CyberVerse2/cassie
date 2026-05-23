@@ -77,7 +77,6 @@ export async function runCassieSupervisorForRun(input: {
         const usage = usageRecord(step.usage);
         await store.addModelCallUsage({
           controlRunId: running.runId,
-          researchRunId: null,
           runStepId: null,
           purpose: "supervisor_step",
           provider: providerFromModel(step.model),

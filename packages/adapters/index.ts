@@ -2,7 +2,6 @@ import type {
   MarketCandidate,
   PolymarketMarketAssessment,
   PolymarketQuote,
-  ResearchReport,
   Thesis,
   TradeExpressionPlan,
 } from "../core/schemas/index.ts";
@@ -92,7 +91,6 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
 
   async findCandidates(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate[]> {
     const results = await Promise.all(this.providers.map((provider) => provider.findCandidates(input)));
@@ -319,7 +317,6 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
 
   async assessPolymarketMarket(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     market: { conditionId?: string | null; marketSlug?: string | null; question?: string | null };
     side: "yes" | "no";

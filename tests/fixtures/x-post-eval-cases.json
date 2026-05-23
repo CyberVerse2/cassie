@@ -418,7 +418,7 @@
       "postText": "My watchlist for today: Banking: Potential strength if market holds support. Pharma: Defensive sector; may remain stable. Auto: Could benefit from improving sentiment. IT: Watch carefully; sector has shown pressure recently.",
       "whyUseful": "Tests conservative handling for vague sector commentary.",
       "expectedBehavior": [
-        "Classify as insufficient_evidence or no_trade unless the user asks for deeper sector research.",
+        "Classify as insufficient_evidence or no_trade unless the user asks for deeper sector analysis.",
         "Ask for or infer specific tickers only if supported by the post context.",
         "Avoid creating a trade without a concrete catalyst and instrument."
       ],

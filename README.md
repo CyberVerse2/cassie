@@ -1,6 +1,6 @@
 # Cassie
 
-Cassie is an X-native trading research and ticketing agent. A mention creates a durable control-plane run, a Graphile Worker supervisor drives bounded AI tools, and approved trade tickets are handed to the execution worker.
+Cassie is an X-native trade-expression and ticketing agent. A mention creates a durable control-plane run, a Graphile Worker supervisor drives bounded AI tools, and approved trade tickets are handed to the execution worker.
 
 Cassie can reason with AI, but she does not directly place orders.
 
@@ -11,9 +11,9 @@ flowchart TD
   User["X mention / API / CLI"] --> Intake["Durable control run"]
   Intake --> Supervisor["Graphile Worker supervisor"]
   Supervisor --> Tools["Bounded AI tools + run steps"]
-  Tools --> Research["Evidence-ledger research"]
+  Tools --> Router["Trade-expression router"]
   Tools --> Ticket["Trade ticket"]
-  Research --> Response["Response / critique / watchlist"]
+  Router --> Response["Response / trade candidate / no-trade"]
   Ticket --> Approval["Approval policy"]
   Approval --> Execution["Graphile execution worker"]
   Execution --> Audit["Execution events + audit trail"]
@@ -23,10 +23,10 @@ Runtime shape:
 
 - Intake is durable first: every mention becomes a `control_run` before the supervisor starts.
 - The supervisor is the control plane: it calls bounded tools and writes visible `run_steps`.
-- Research is query-job driven: web and X searches produce an evidence ledger before synthesis.
-- DeepSeek handles cheap extraction, bookkeeping, analyst judgment, and trade decisions; Gemini remains the grounded web-search lane.
-- Ticket creation is downstream of research, tradeability checks, approval policy, and deterministic risk.
-- Full supervisor and model-routing details live in `architecture.md`; the research contract lives in `research-subagent.md`.
+- Cassie treats the source post as raw verifiable signal, frames the opportunity, generates trade expressions, searches supported venues, ranks the cleanest real expression, and finalizes a ticket or no-trade.
+- DeepSeek handles cheap extraction, bookkeeping, analyst judgment, and trade decisions.
+- Ticket creation is downstream of market fit, approval policy, and deterministic risk.
+- Full supervisor and model-routing details live in `architecture.md`.
 
 ## Run
 
@@ -55,7 +55,7 @@ XAI_API_KEY
 EXECUTION_WEBHOOK_URL
 ```
 
-Missing database, AI/search, or execution credentials fail clearly. Cassie does not downgrade semantic routing, research, persistence, or execution into local keyword behavior or fake fills.
+Missing database, AI, market, or execution credentials fail clearly. Cassie does not downgrade semantic routing, persistence, or execution into local keyword behavior or fake fills.
 
 Run the worker in a second terminal:
 
@@ -136,11 +136,11 @@ curl http://localhost:3000/api/state
 
 Implemented:
 
-- AI intent routing for `critic`, `trade`, `countertrade`, and `watch`
-- AI thesis and inverse-thesis extraction
+- Single-loop AI supervisor for trade-expression routing
+- Opportunity framing for raw verifiable social signals
+- AI trade-expression generation and ranking
 - Polymarket market discovery using the documented market/search surfaces indexed in `docs/llms/`
-- Hyperliquid and Polymarket market-data connectors
-- AI market selection from real connector candidates
+- Hyperliquid and Polymarket adapters over real connector candidates
 - Deterministic risk checks
 - Trade-ticket creation
 - Approval endpoint

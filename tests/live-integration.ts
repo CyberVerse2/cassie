@@ -12,17 +12,8 @@ import {
   executionJobs,
   mentions,
   modelCallUsage,
-  researchContinuationDecisions,
-  researchEvidenceClaims,
-  researchGoalEvidenceLinks,
-  researchGoalResolutions,
-  researchQueryJobs,
-  researchReports,
-  researchRuns,
-  researchSearchResults,
   runSteps,
   tradeTickets,
-  tradeabilityDecisions,
   userSettings,
 } from "../packages/core/db/schema.ts";
 import type { SourcePost, UserSettings } from "../packages/core/schemas/index.ts";
@@ -52,25 +43,7 @@ afterEach(async () => {
 
   try {
     if (runIds.length > 0) {
-      const researchRunRows = await cleanupDb
-        .select({ researchRunId: researchRuns.researchRunId })
-        .from(researchRuns)
-        .where(inArray(researchRuns.controlRunId, runIds));
-      const researchRunIds = researchRunRows.map((row) => row.researchRunId);
-
-      if (researchRunIds.length > 0) {
-        await cleanupDb.delete(researchContinuationDecisions).where(inArray(researchContinuationDecisions.researchRunId, researchRunIds));
-        await cleanupDb.delete(researchGoalResolutions).where(inArray(researchGoalResolutions.researchRunId, researchRunIds));
-        await cleanupDb.delete(researchGoalEvidenceLinks).where(inArray(researchGoalEvidenceLinks.researchRunId, researchRunIds));
-        await cleanupDb.delete(researchEvidenceClaims).where(inArray(researchEvidenceClaims.researchRunId, researchRunIds));
-        await cleanupDb.delete(researchSearchResults).where(inArray(researchSearchResults.researchRunId, researchRunIds));
-        await cleanupDb.delete(researchQueryJobs).where(inArray(researchQueryJobs.researchRunId, researchRunIds));
-      }
-
-      await cleanupDb.delete(tradeabilityDecisions).where(inArray(tradeabilityDecisions.controlRunId, runIds));
       await cleanupDb.delete(modelCallUsage).where(inArray(modelCallUsage.controlRunId, runIds));
-      await cleanupDb.delete(researchRuns).where(inArray(researchRuns.controlRunId, runIds));
-      await cleanupDb.delete(researchReports).where(inArray(researchReports.runId, runIds));
       await cleanupDb.delete(runSteps).where(inArray(runSteps.runId, runIds));
       await cleanupDb.delete(auditEvents).where(inArray(auditEvents.entityId, runIds));
       await cleanupDb.delete(tradeTickets).where(inArray(tradeTickets.runId, runIds));
@@ -91,7 +64,7 @@ afterEach(async () => {
 });
 
 liveDescribe("live integration", () => {
-  it("runs a real critic mention through Postgres, Graphile enqueueing, live AI, live research lanes, and persisted final state", async () => {
+  it("runs a real mention through Postgres, Graphile enqueueing, live AI, and persisted final state", async () => {
     const userId = `live-integration-${Date.now()}`;
     cleanupUserIds.add(userId);
 
@@ -133,21 +106,15 @@ liveDescribe("live integration", () => {
     const inspected = await product.getRun(queued.runId);
     const state = await product.state();
     const runStepsForRun = inspected.steps.map((step) => step.stepType);
-    const researchRunsForRun = state.researchRuns.filter((run) => run.controlRunId === queued.runId);
     const modelUsageForRun = state.modelCallUsage.filter((usage) => usage.controlRunId === queued.runId);
     const auditsForRun = state.auditEvents.filter((event) => event.entityId === queued.runId);
 
     expect(inspected.run.status).toBe("succeeded");
     expect(inspected.run.result).toMatchObject({
-      responseType: expect.stringMatching(/^(analysis|critique)$/),
+      responseType: "analysis",
     });
     expect(runStepsForRun).toEqual(
-      expect.arrayContaining(["intake", "intent", "signal", "thesis", "research", "final"]),
-    );
-    expect(researchRunsForRun).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ controlRunId: queued.runId, status: "succeeded" }),
-      ]),
+      expect.arrayContaining(["intake", "opportunity", "trade_expression", "final"]),
     );
     expect(modelUsageForRun.length).toBeGreaterThan(0);
     expect(auditsForRun.map((event) => event.eventType)).toEqual(

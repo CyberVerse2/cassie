@@ -5,7 +5,6 @@ import { z } from "zod";
 
 const ActionStateSchema = z.enum([
   "no_trade",
-  "watchlist",
   "needs_market_check",
   "insufficient_evidence",
   "trade_candidate",

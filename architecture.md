@@ -1,6 +1,6 @@
 # Cassie Architecture
 
-Cassie is an X-native trading research and ticketing agent. A mention creates a durable control-plane run. A Graphile Worker supervisor job then drives bounded AI tools, records every step, and stops at a structured response, critique, watchlist decision, or trade ticket.
+Cassie is an X-native trade-expression and ticketing agent. A mention creates a durable control-plane run. A Graphile Worker supervisor job then drives bounded AI tools, records every step, and stops at structured analysis, no-trade, or a trade ticket.
 
 Cassie can reason with AI, but trading and execution decisions pass through code-owned gates.
 
@@ -11,7 +11,7 @@ X mention / API request / CLI command
 -> AI SDK ToolLoopAgent
 -> bounded tools
 -> run steps
--> response / critique / trade ticket
+-> analysis / no-trade / trade ticket
 -> approval + execution worker
 ```
 
@@ -26,20 +26,20 @@ src/
   dashboard.ts            Server-rendered dashboard
   security.ts             API token, body limit, and headers
   visibility.ts           CLI trace formatting
-  connectors/
-    x-post-resolver.ts    Grok-backed X status resolver
+  helpers/                CLI/runtime helper functions
 
 packages/
-  agent/                  supervisor loop, policy, and AI tool contracts
+  adapters/               Hyperliquid and Polymarket venue adapters
+  agent/                  Cassie supervisor loop, policy, and tool contracts
   ai/                     model-provider clients and SDK configuration
-  app/                    product facade, Graphile jobs, X polling/webhook helpers
+  app/                    product facade and X polling helpers
   core/                   shared schemas, ids, trace, connector errors
-  db/                     Drizzle schema, durable store, in-memory test store
   execution/              venue/webhook execution clients and account state
-  markets/                Hyperliquid and Polymarket discovery, quotes, venue confirmation
-  prompts/                prompt builders used by agent and research tools
-  research/               query planner, evidence ledger, web/X lanes
+  helpers/                shared helper utilities
+  jobs/                   Graphile job enqueueing and workers
+  prompts/                prompt builders used by Cassie tools
   risk/                   deterministic risk checks
+  tickets/                ticket creation helpers
 ```
 
 `src` is runtime surface. Package-owned implementation lives under `packages`.
@@ -82,11 +82,11 @@ Cassie separates mechanical extraction from analyst judgment.
 
 ```text
 Cheap model: DeepSeek v4 Flash through the DeepSeek AI SDK
-Important model: DeepSeek v4 Pro through the DeepSeek AI SDK for judgment, critique, and trade expression
+Important model: DeepSeek v4 Pro through the DeepSeek AI SDK for judgment and trade expression
 X search: Grok 4.3 with image/video understanding
 ```
 
-Cheap models handle extraction and tagging. DeepSeek v4 Pro handles critique, trade-expression planning, and whether a trade is justified.
+Cheap models handle extraction and tagging. DeepSeek v4 Pro handles trade-expression planning and whether a trade is justified.
 
 ## Trading
 

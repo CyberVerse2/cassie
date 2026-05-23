@@ -63,9 +63,6 @@ export type CassieRuntimeConfig = {
     pollIntervalMs: number;
     consumerSecret?: string;
   };
-  research: {
-    connectorCallTimeoutMs: number;
-  };
   supervisor: {
     timeoutMs: number;
     stepTimeoutMs: number;
@@ -157,9 +154,6 @@ export function readCassieConfig(
       pollUserId: optionalEnv("X_POLL_USER_ID", env),
       pollIntervalMs: numberEnv("X_POLL_INTERVAL_MS", 120_000, env, { integer: true, min: 1 }),
       consumerSecret: optionalEnv("X_CONSUMER_SECRET", env),
-    },
-    research: {
-      connectorCallTimeoutMs: numberEnv("CASSIE_CONNECTOR_CALL_TIMEOUT_MS", 180_000, env, { min: 1 }),
     },
     supervisor: {
       timeoutMs: numberEnv("CASSIE_SUPERVISOR_TIMEOUT_MS", 1_800_000, env, { integer: true, min: 1 }),

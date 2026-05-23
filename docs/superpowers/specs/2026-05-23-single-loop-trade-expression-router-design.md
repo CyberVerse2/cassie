@@ -4,7 +4,7 @@
 
 Cassie is a trade-expression router for noisy, untrusted, market-moving posts.
 
-When a user tags Cassie on a post, Cassie should not behave like a ticket clerk and should not start by validating the post as a standalone research task. The product goal is to infer the trade opportunity implied by the post, search supported expression surfaces, choose the cleanest executable expression, apply risk gates, and create a ticket only when the trade clears.
+When a user tags Cassie on a post, Cassie should not behave like a ticket clerk and should not start by validating the post as a standalone verification task. The product goal is to infer the trade opportunity implied by the post, search supported expression surfaces, choose the cleanest executable expression, apply risk gates, and create a ticket only when the trade clears.
 
 The canonical flow is:
 
@@ -196,7 +196,7 @@ Cassie may create a small prediction-market ticket, create a BTC perp ticket, or
 
 Cassie should optimize for the best trade expression, not for proving or disproving posts in isolation.
 
-Research, verification, and source-quality checks are valuable when they change trade expression, expected edge, sizing, or whether the post should be faded. They should not become a mandatory pre-trade ritual.
+Verification and source-quality checks are valuable when they change trade expression, expected edge, sizing, or whether the post should be faded. They should not become a mandatory pre-trade ritual.
 
 The app should converge on:
 

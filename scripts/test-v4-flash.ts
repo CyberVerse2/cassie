@@ -16,7 +16,7 @@ const SmokeResultSchema = z.object({
   ]),
   entities: z.array(z.string()).min(1),
   thesis: z.string().min(1),
-  shouldResearch: z.boolean(),
+  needsVerification: z.boolean(),
   confidence: z.number().min(0).max(1),
 });
 
@@ -68,7 +68,7 @@ Rules:
 - Do not make a trade recommendation.
 - Do not invent entities not present or directly implied by the text.
 - Keep thesis to one sentence.
-- Set shouldResearch true only if the text contains a concrete entity, event, metric, or market claim worth checking.
+- Set needsVerification true only if the text contains a concrete entity, event, metric, or market claim where truth materially changes trade expression.
 
 Signal:
 ${input}`;

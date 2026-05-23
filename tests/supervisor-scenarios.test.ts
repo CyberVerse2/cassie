@@ -147,7 +147,7 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 }
 
 describe("supervisor scenario coverage", () => {
-  it("creates a ticket from execution intent without intent, signal, or thesis steps", async () => {
+  it("creates a ticket from the single-loop step stream", async () => {
     const { store, tools } = await createScenario("@Cassie get me in");
     const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
     const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
@@ -172,9 +172,6 @@ describe("supervisor scenario coverage", () => {
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["opportunity", "trade_expression", "market_selection", "risk", "ticket"]),
-    );
-    expect(state.runSteps.map((step) => step.stepType)).not.toEqual(
-      expect.arrayContaining(["intent", "signal", "thesis", "inverse_thesis", "critique"]),
     );
   });
 

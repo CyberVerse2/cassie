@@ -208,9 +208,6 @@ describe("Polymarket env", () => {
         bearerToken: "bearer",
         cassieHandle: "cassie",
       },
-      research: {
-        connectorCallTimeoutMs: 120000,
-      },
       supervisor: {
         timeoutMs: 240000,
         stepTimeoutMs: 60000,

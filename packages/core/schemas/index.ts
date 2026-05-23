@@ -23,42 +23,6 @@ export const TimeHorizonSchema = z.enum([
   "unclear",
 ]);
 
-export const ResearchDispositionSchema = z.enum([
-  "ignore",
-  "research_lead",
-  "soft_signal",
-  "verified_non_tradeable",
-  "needs_more_research",
-  "needs_market_check",
-  "trade_candidate",
-  "block_trade",
-  "no_trade",
-]);
-
-export const TradeabilityDispositionSchema = z.enum([
-  "no_trade",
-  "private_only",
-  "watchlist_only",
-  "needs_market_check",
-  "prediction_market_candidate",
-  "public_market_candidate",
-  "crypto_market_candidate",
-  "route_to_market_router",
-  "block_trade",
-]);
-
-export const FinalRunDispositionSchema = z.enum([
-  "answered",
-  "critic_only",
-  "watchlist_added",
-  "trade_ticket_created",
-  "trade_rejected",
-  "no_trade",
-  "needs_more_research",
-]);
-
-const LegacyResearchDispositionSchema = z.enum(["watchlist", "tradable_now"]);
-
 export const SourcePostSchema = z.object({
   platform: z.literal("x"),
   postId: z.string().nullable(),
@@ -70,37 +34,6 @@ export const SourcePostSchema = z.object({
   quotedPostText: z.string().nullable().optional(),
   linkedUrls: z.array(z.string()).optional(),
   mediaDescriptions: z.array(z.string()).optional(),
-});
-
-export const SourceProfileSchema = z.object({
-  handle: z.string(),
-  displayName: z.string().nullable(),
-  profileUrl: z.string().nullable(),
-  bio: z.string().nullable(),
-  bioLinks: z.array(z.string()),
-  accountType: z.enum(["person", "builder", "company", "project", "media", "analyst", "trader", "anon", "parody", "unknown"]),
-  verificationStatus: z.string().nullable(),
-  followerCount: z.string().nullable(),
-  followingCount: z.string().nullable(),
-  accountAge: z.string().nullable(),
-  locationSignals: z.array(z.string()),
-  pinnedPost: z.string().nullable(),
-  claimSpecificRelevance: z.number().min(0).max(1).optional(),
-  profileEvidenceIds: z.array(z.string()).optional(),
-  credibility: z.enum(["high", "medium", "low", "unknown"]),
-  expertise: z.array(z.string()),
-  selfClaims: z.array(z.string()),
-  provenOutput: z.array(z.string()),
-  trackRecord: z.string(),
-  networkContext: z.string(),
-  engagementQuality: z.enum(["high", "medium", "low", "unknown"]),
-  recentRelevantActivity: z.array(z.string()),
-  redFlags: z.array(z.string()),
-  unresolvedQuestions: z.array(z.string()),
-  lowDataReasons: z.array(z.string()),
-  confidenceImpact: z.enum(["high", "medium", "low", "very_low", "none", "unknown"]),
-  confidenceImpactReason: z.string(),
-  confidence: z.number().min(0).max(1),
 });
 
 export const UserSettingsSchema = z.object({
@@ -117,49 +50,12 @@ export const UserSettingsSchema = z.object({
   autoTradeEnabled: z.boolean(),
 });
 
-export const IntentResultSchema = z.object({
-  intent: CassieIntentSchema,
-  executionRequested: z.boolean(),
-  counterThesis: z.boolean(),
-  specificAsset: z.string().nullable(),
-  specificVenue: z.string().nullable(),
-  userSizeOverrideUsd: z.number().positive().nullable(),
-  confidence: z.number().min(0).max(1),
-});
-
-export const SignalInterpretationSchema = z.object({
-  signalType: z.enum([
-    "explicit_trade",
-    "news",
-    "funding",
-    "product_launch",
-    "exploit_or_risk",
-    "regulatory",
-    "endorsement",
-    "rumor",
-    "social_momentum",
-    "generic_opinion",
-    "unknown",
-  ]),
-  containsExplicitThesis: z.boolean(),
-  impliedTheses: z.array(z.string()),
-  affectedEntities: z.array(z.string()),
-  affectedSectors: z.array(z.string()),
-  directTradability: z.enum(["direct", "indirect", "none", "unknown"]),
-  suggestedResearchAngles: z.array(z.string()),
-  leadQuality: z.union([ResearchDispositionSchema, LegacyResearchDispositionSchema]),
-  summary: z.string(),
-  confidence: z.number().min(0).max(1),
-});
-
 export const ThesisSchema = z.object({
   claim: z.string(),
   literalClaim: z.string().nullable().optional(),
-  impliedResearchQuestion: z.string().nullable().optional(),
   impliedTradeThesis: z.string().nullable().optional(),
   sourceOrMetaSignal: z.string().nullable().optional(),
   hasExplicitTrade: z.boolean().optional(),
-  hasConcreteResearchQuestion: z.boolean().optional(),
   hasTradableImplication: z.boolean().optional(),
   thesisStrength: z.enum(["none", "weak_inferred", "moderate_inferred", "explicit"]).optional(),
   shouldNotInferTradeBecause: z.array(z.string()).optional(),
@@ -170,482 +66,6 @@ export const ThesisSchema = z.object({
   evidenceQuality: z.enum(["strong", "medium", "weak", "unknown"]),
   manipulationRisk: z.enum(["low", "medium", "high", "unknown"]),
   confidence: z.number().min(0).max(1),
-});
-
-export const InverseThesisSchema = z.object({
-  originalThesis: ThesisSchema,
-  inverseClaim: z.string(),
-  inverseDirection: DirectionSchema,
-  mentionedAssets: z.array(z.string()),
-  topics: z.array(z.string()),
-  timeHorizon: TimeHorizonSchema,
-  confidence: z.number().min(0).max(1),
-});
-
-export const ResearchWarningSchema = z.enum([
-  "NO_PRIMARY_SOURCE",
-  "ONLY_SOCIAL_SOURCES",
-  "UNVERIFIED_SCREENSHOT",
-  "OLD_NEWS_RECIRCULATED",
-  "CLAIM_REFUTED",
-  "CLAIM_PARTIALLY_SUPPORTED",
-  "SOURCE_CONFLICT",
-  "HIGH_SOCIAL_MOMENTUM",
-  "POSSIBLE_COORDINATED_PUSH",
-  "PROMOTIONAL_LANGUAGE",
-  "TICKER_AMBIGUOUS",
-  "LOW_EVIDENCE_QUALITY",
-  "X_SEARCH_FAILED",
-  "OPENAI_SEARCH_FAILED",
-]);
-
-const UnitScoreFromModelSchema = z.number().min(0).max(10).transform((value) =>
-  value > 1 ? value / 10 : value
-);
-
-const ResearchEvidenceSourceTypeSchema = z.preprocess((value) => {
-  if (typeof value !== "string") return value;
-  const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-  const aliases: Record<string, string> = {
-    primary_source: "official",
-    official_source: "official",
-    official_document: "official",
-    regulatory_filing: "regulatory",
-    sec_filing: "regulatory",
-    filing: "regulatory",
-    company_announcement: "company",
-    company_statement: "company",
-    issuer_statement: "company",
-    exchange_data: "exchange",
-    market_data: "exchange",
-    news_article: "news",
-    media: "news",
-    x: "social",
-    twitter: "social",
-    social_media: "social",
-    blog_post: "blog",
-  };
-  return aliases[normalized] ?? value;
-}, z.enum([
-  "official",
-  "regulatory",
-  "company",
-  "exchange",
-  "news",
-  "social",
-  "blog",
-  "unknown",
-]));
-
-export const ResearchEvidenceSchema = z.object({
-  sourceLane: z.enum(["openai_search", "x_search"]),
-  sourceType: ResearchEvidenceSourceTypeSchema,
-  title: z.string().nullable(),
-  url: z.string().nullable(),
-  author: z.string().nullable(),
-  publishedAt: z.string().nullable(),
-  summary: z.string(),
-  stance: z.enum(["supports", "refutes", "mixed", "unclear"]),
-  reliability: z.enum(["high", "medium", "low"]),
-  relevance: UnitScoreFromModelSchema,
-  notes: z.array(z.string()).nullable(),
-});
-
-export const ResearchLaneSchema = z.enum(["web", "x"]);
-
-export const ResearchGoalKindSchema = z.enum([
-  "event_validation",
-  "entity_resolution",
-  "source_provenance",
-  "social_momentum",
-  "technical_reality",
-  "market_pricing",
-  "catalyst_timeline",
-  "impact_materiality",
-  "second_order_implications",
-  "risk_assessment",
-  "disconfirmation",
-  "trade_expression",
-]);
-
-export const ResearchDecisionUseSchema = z.enum([
-  "validate_or_kill_thesis",
-  "decide_watchlist_priority",
-  "estimate_materiality",
-  "estimate_market_pricing",
-  "identify_trade_expression",
-  "identify_risk",
-  "find_disconfirming_evidence",
-  "route_to_deeper_research",
-]);
-
-export const ResearchGoalSchema = z.object({
-  id: z.string(),
-  kind: ResearchGoalKindSchema,
-  question: z.string(),
-  decisionUse: ResearchDecisionUseSchema,
-  priority: UnitScoreFromModelSchema,
-  mustResolve: z.boolean(),
-  lanes: z.array(ResearchLaneSchema).min(1),
-  evidenceNeeds: z.array(z.string()).min(1),
-  disconfirmingQuestions: z.array(z.string()),
-  resolutionCriteria: z.object({
-    supportedIf: z.string(),
-    contradictedIf: z.string(),
-    unresolvedIf: z.string(),
-  }),
-  budget: z.object({
-    maxQueries: z.number().int().min(0),
-    maxResults: z.number().int().min(0),
-    wave: z.number().int().min(0),
-  }),
-  stopWhen: z.array(z.string()),
-});
-
-export const ResearchQuerySpecSchema = z.object({
-  id: z.string(),
-  goalIds: z.array(z.string()).min(1),
-  lane: ResearchLaneSchema,
-  queryKind: z.enum([
-    "exact_claim",
-    "entity_event",
-    "primary_source",
-    "broad_context",
-    "disconfirming",
-    "social_provenance",
-    "social_momentum",
-    "market_timeseries",
-    "code_docs",
-    "regulatory_lookup",
-  ]),
-  query: z.string().optional(),
-  queryIntent: z.string().optional(),
-  entities: z.array(z.string()).optional(),
-  requiredTerms: z.array(z.string()).optional(),
-  optionalTerms: z.array(z.string()).optional(),
-  excludeTerms: z.array(z.string()).optional(),
-  priority: UnitScoreFromModelSchema,
-  maxResults: z.number().int().min(1).max(100),
-  expectedEvidence: z.string(),
-  rationale: z.string(),
-});
-
-export const ResearchQueryBatchSchema = z.object({
-  wave: z.number().int().min(0),
-  name: z.string(),
-  purpose: z.string(),
-  queries: z.array(ResearchQuerySpecSchema),
-});
-
-export const ResearchQueryPlanSchema = z.object({
-  version: z.literal("research-query-plan/v1"),
-  normalizedClaim: z.string(),
-  signalType: SignalInterpretationSchema.shape.signalType,
-  mode: z.enum(["minimal_watchlist", "standard", "deep_dive", "crisis"]),
-  assets: z.array(z.string()),
-  topics: z.array(z.string()),
-  sourceHandle: z.string().nullable(),
-  sourceName: z.string().nullable(),
-  scores: z.object({
-    specificity: UnitScoreFromModelSchema,
-    marketLinkage: UnitScoreFromModelSchema,
-    sourceValue: UnitScoreFromModelSchema,
-    urgency: UnitScoreFromModelSchema,
-    risk: UnitScoreFromModelSchema,
-    novelty: UnitScoreFromModelSchema,
-    expectedValueOfResearch: UnitScoreFromModelSchema,
-  }),
-  goals: z.array(ResearchGoalSchema),
-  queryBatches: z.array(ResearchQueryBatchSchema),
-  synthesisContract: z.object({
-    requiredGoalIds: z.array(z.string()),
-    cannotConcludeIfUnresolved: z.array(z.string()),
-  }),
-});
-
-export const SearchSourceTypeSchema = z.enum([
-  "official",
-  "regulatory",
-  "company",
-  "exchange",
-  "filing",
-  "court_doc",
-  "news",
-  "specialist_media",
-  "blog",
-  "github",
-  "docs",
-  "social",
-  "security_researcher",
-  "market_data",
-  "onchain_data",
-  "prediction_market",
-  "aggregator",
-  "unknown",
-]);
-
-export const QueryJobSchema = z.object({
-  id: z.string(),
-  runId: z.string(),
-  wave: z.number().int().min(0),
-  querySpecId: z.string(),
-  goalIds: z.array(z.string()).min(1),
-  lane: ResearchLaneSchema,
-  provider: z.string(),
-  query: z.string(),
-  queryKind: ResearchQuerySpecSchema.shape.queryKind,
-  priority: z.number().min(0).max(1),
-  maxResults: z.number().int().min(1).max(100),
-  mustExecuteAtomically: z.boolean(),
-  expectedEvidence: z.string(),
-  rationale: z.string(),
-});
-
-export const SearchResultSchema = z.object({
-  id: z.string(),
-  runId: z.string(),
-  queryJobId: z.string(),
-  queryId: z.string(),
-  goalIds: z.array(z.string()).min(1),
-  wave: z.number().int().min(0),
-  lane: ResearchLaneSchema,
-  provider: z.string(),
-  title: z.string().nullable(),
-  url: z.string().nullable(),
-  canonicalUrl: z.string().nullable(),
-  author: z.string().nullable(),
-  sourceName: z.string().nullable(),
-  sourceType: SearchSourceTypeSchema,
-  publishedAt: z.string().nullable(),
-  retrievedAt: z.string(),
-  rawText: z.string().nullable(),
-  snippet: z.string().nullable(),
-  rank: z.number().int().nullable(),
-  duplicateOf: z.string().nullable(),
-  metadata: z.array(z.object({
-    key: z.string(),
-    value: z.string().nullable(),
-  })),
-});
-
-export const EvidenceClaimSchema = z.object({
-  id: z.string(),
-  resultId: z.string(),
-  queryJobId: z.string(),
-  queryId: z.string(),
-  goalIds: z.array(z.string()).min(1),
-  wave: z.number().int().min(0),
-  claimText: z.string(),
-  normalizedClaim: z.string().nullable(),
-  entities: z.array(z.string()),
-  assets: z.array(z.string()),
-  topics: z.array(z.string()),
-  eventTime: z.string().nullable(),
-  claimTimeRelation: z.enum(["before_signal", "same_time", "after_signal", "unclear"]),
-  sourceType: SearchSourceTypeSchema,
-  directness: z.enum(["primary", "direct_secondary", "indirect", "rumor", "context"]),
-  reliability: z.enum(["high", "medium", "low", "unknown"]),
-  extractionConfidence: z.number().min(0).max(1),
-  quote: z.string().nullable(),
-  quoteStartChar: z.number().int().nullable(),
-  quoteEndChar: z.number().int().nullable(),
-});
-
-export const GoalEvidenceLinkSchema = z.object({
-  id: z.string(),
-  goalId: z.string(),
-  evidenceClaimId: z.string(),
-  stance: z.enum(["supports", "contradicts", "qualifies", "context", "irrelevant"]),
-  relevance: UnitScoreFromModelSchema,
-  strength: UnitScoreFromModelSchema,
-  reason: z.string(),
-  satisfiesEvidenceNeeds: z.array(z.string()),
-  redFlags: z.array(z.enum([
-    "source_is_aggregator",
-    "unverified_social",
-    "promotional",
-    "stale",
-    "ambiguous_entity",
-    "ambiguous_resolution",
-    "duplicate",
-    "low_directness",
-    "possible_coordination",
-    "paywalled_or_unverified",
-  ])),
-});
-
-export const EvidenceLedgerSchema = z.object({
-  searchResults: z.array(SearchResultSchema),
-  evidenceClaims: z.array(EvidenceClaimSchema),
-  goalEvidenceLinks: z.array(GoalEvidenceLinkSchema),
-});
-
-export const GoalResolutionSchema = z.object({
-  goalId: z.string(),
-  status: z.enum([
-    "resolved_supported",
-    "resolved_contradicted",
-    "partially_resolved",
-    "unresolved",
-    "not_applicable",
-  ]),
-  confidence: z.number().min(0).max(1),
-  supportingEvidenceIds: z.array(z.string()),
-  contradictingEvidenceIds: z.array(z.string()),
-  contextualEvidenceIds: z.array(z.string()),
-  unresolvedQuestions: z.array(z.string()),
-  summary: z.string(),
-  synthesisImplication: z.string(),
-});
-
-export const ResearchContinuationDecisionSchema = z.object({
-  action: z.enum([
-    "stop_no_trade",
-    "stop_research_lead",
-    "stop_watchlist",
-    "continue_planned",
-    "continue_with_adaptive_queries",
-    "escalate_crisis",
-    "route_to_trade_expression",
-  ]),
-  reason: z.string(),
-  resolvedGoalIds: z.array(z.string()),
-  unresolvedBlockingGoalIds: z.array(z.string()),
-  contradictedGoalIds: z.array(z.string()),
-  allowedNextGoalIds: z.array(z.string()),
-  maxAdditionalQueries: z.number().int().min(0).nullable(),
-  adaptiveQueryInstructions: z.array(z.string()),
-  blockedActions: z.array(z.string()),
-});
-
-export const AdaptiveQueryRequestSchema = z.object({
-  requests: z.array(z.object({
-    unresolvedGoalId: z.string(),
-    evidenceGap: z.string(),
-    whyExistingEvidenceInsufficient: z.string(),
-    decisionImpact: z.enum([
-      "could_change_no_trade_to_watchlist",
-      "could_change_watchlist_to_trade_candidate",
-      "could_block_trade",
-      "could_change_trade_expression",
-      "could_change_risk_level",
-      "low_impact",
-    ]),
-    proposedQueries: z.array(z.object({
-      lane: ResearchLaneSchema,
-      queryKind: ResearchQuerySpecSchema.shape.queryKind,
-      query: z.string().optional(),
-      queryIntent: z.string().optional(),
-      expectedEvidence: z.string(),
-      maxResults: z.number().int().min(1).max(100),
-      stopAfter: z.string().optional(),
-      priority: UnitScoreFromModelSchema,
-      rationale: z.string(),
-    })).max(3),
-    remainingBudgetJustification: z.string().optional(),
-  })),
-});
-
-export const ResearchReportSchema = z.object({
-  claim: z.string(),
-  normalizedThesis: z.string(),
-  stance: z.enum([
-    "supported",
-    "partially_supported",
-    "refuted",
-    "unverified",
-    "unclear",
-  ]),
-  evidenceQuality: z.enum(["strong", "medium", "weak", "insufficient"]),
-  socialContext: z.object({
-    momentum: z.enum(["low", "medium", "high", "unknown"]),
-    crowdingSignal: z.enum(["low", "medium", "high", "unknown"]),
-    manipulationSignal: z.enum(["low", "medium", "high", "unknown"]),
-    summary: z.string(),
-  }),
-  socialSignal: z.object({
-    sourceCredibility: z.enum(["high", "medium", "low", "unknown"]),
-    endorserReputation: z.string(),
-    entityResolution: z.object({
-      resolvedEntity: z.string().nullable(),
-      confidence: z.enum(["high", "medium", "low", "unknown"]),
-      rationale: z.string(),
-      unverifiedAssumptions: z.array(z.string()),
-    }),
-    personProjectDossier: z.object({
-      identifiedPeople: z.array(z.string()),
-      evidenceSummary: z.string(),
-      openQuestions: z.array(z.string()),
-    }),
-    smartEngagerSignal: z.object({
-      quality: z.enum(["high", "medium", "low", "unknown"]),
-      summary: z.string(),
-      notableAccounts: z.array(z.string()),
-    }),
-    leadQuality: z.union([ResearchDispositionSchema, LegacyResearchDispositionSchema]),
-    nextResearchActions: z.array(z.string()),
-  }),
-  bullCase: z.array(z.string()),
-  bearCase: z.array(z.string()),
-  contradictions: z.array(z.string()),
-  evidence: z.array(ResearchEvidenceSchema),
-  warnings: z.array(ResearchWarningSchema),
-  confidence: z.number().min(0).max(1),
-  researchConclusion: z.enum([
-    "claim_likely_true",
-    "claim_plausible_but_unconfirmed",
-    "claim_false_or_refuted",
-    "claim_unclear",
-    "insufficient_research",
-  ]),
-  recommendedResearchAction: z.enum([
-    "proceed_to_market_router",
-    "proceed_with_caution",
-    "critic_only",
-    "insufficient_research",
-    "do_not_continue",
-  ]),
-  publicSummary: z.string(),
-  fullResearchBrief: z.string(),
-  blockedConclusions: z.array(z.string()).optional(),
-  allowedConclusions: z.array(z.string()).optional(),
-  requiredNextActions: z.array(z.string()).optional(),
-});
-
-export const CritiqueSchema = z.object({
-  verdict: z.enum([
-    "thesis_survives",
-    "thesis_weakened",
-    "thesis_contradicted",
-    "not_enough_evidence",
-    "trade_expression_weak",
-    "market_discovery_missing",
-  ]).optional(),
-  strongestObjections: z.array(z.object({
-    category: z.enum([
-      "source",
-      "entity_resolution",
-      "evidence",
-      "valuation",
-      "pricing",
-      "crowding",
-      "liquidity",
-      "causal_directness",
-      "timing",
-      "venue",
-      "risk",
-    ]),
-    objection: z.string(),
-    severity: z.number().min(0).max(1),
-    evidenceIds: z.array(z.string()).default([]),
-  })).optional(),
-  whatWouldChangeMind: z.array(z.string()).optional(),
-  blockedConclusions: z.array(z.string()).optional(),
-  strongestObjection: z.string(),
-  secondaryObjections: z.array(z.string()),
-  thesisTradable: z.boolean(),
-  fadeIsCleaner: z.boolean(),
-  finalCritique: z.string(),
 });
 
 export const MarketCandidateSchema = z.object({
@@ -860,7 +280,6 @@ export const RiskDecisionSchema = z.discriminatedUnion("decision", [
 
 export const CassieActionStateSchema = z.enum([
   "no_trade",
-  "watchlist",
   "needs_market_check",
   "insufficient_evidence",
   "trade_candidate",
@@ -916,7 +335,7 @@ export const ExecutionJobSchema = z.object({
 export const AuditEventSchema = z.object({
   eventId: z.string(),
   entityId: z.string(),
-  entityType: z.enum(["mention", "run", "research_report", "trade_ticket", "execution_job"]),
+  entityType: z.enum(["mention", "run", "trade_ticket", "execution_job"]),
   eventType: z.string(),
   message: z.string(),
   data: z.unknown().optional(),
@@ -933,7 +352,7 @@ export const ControlRunStatusSchema = z.enum([
 ]);
 
 export const SupervisorFinalResultSchema = z.object({
-  responseType: z.enum(["analysis", "critique", "trade_decision", "trade_ticket"]),
+  responseType: z.enum(["analysis", "trade_ticket"]),
   actionState: CassieActionStateSchema,
   publicSummary: z.string(),
   runStatus: ControlRunStatusSchema.exclude(["queued", "running"]),
@@ -951,12 +370,6 @@ export const RunStepStatusSchema = z.enum([
 
 export const RunStepTypeSchema = z.enum([
   "intake",
-  "intent",
-  "signal",
-  "thesis",
-  "inverse_thesis",
-  "research",
-  "critique",
   "opportunity",
   "trade_expression",
   "market_candidates",
@@ -996,29 +409,9 @@ export const RunStepSchema = z.object({
 });
 
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
-export type ResearchDisposition = z.infer<typeof ResearchDispositionSchema>;
-export type TradeabilityDisposition = z.infer<typeof TradeabilityDispositionSchema>;
-export type FinalRunDisposition = z.infer<typeof FinalRunDispositionSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
-export type SourceProfile = z.infer<typeof SourceProfileSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
-export type IntentResult = z.infer<typeof IntentResultSchema>;
-export type SignalInterpretation = z.infer<typeof SignalInterpretationSchema>;
 export type Thesis = z.infer<typeof ThesisSchema>;
-export type InverseThesis = z.infer<typeof InverseThesisSchema>;
-export type ResearchReport = z.infer<typeof ResearchReportSchema>;
-export type ResearchEvidence = z.infer<typeof ResearchEvidenceSchema>;
-export type ResearchGoal = z.infer<typeof ResearchGoalSchema>;
-export type ResearchQueryPlan = z.infer<typeof ResearchQueryPlanSchema>;
-export type QueryJob = z.infer<typeof QueryJobSchema>;
-export type SearchResult = z.infer<typeof SearchResultSchema>;
-export type EvidenceClaim = z.infer<typeof EvidenceClaimSchema>;
-export type GoalEvidenceLink = z.infer<typeof GoalEvidenceLinkSchema>;
-export type EvidenceLedger = z.infer<typeof EvidenceLedgerSchema>;
-export type GoalResolution = z.infer<typeof GoalResolutionSchema>;
-export type ResearchContinuationDecision = z.infer<typeof ResearchContinuationDecisionSchema>;
-export type AdaptiveQueryRequest = z.infer<typeof AdaptiveQueryRequestSchema>;
-export type Critique = z.infer<typeof CritiqueSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type OpportunityFrame = z.infer<typeof OpportunityFrameSchema>;
 export type PolymarketMarketAssessment = z.infer<typeof PolymarketMarketAssessmentSchema>;

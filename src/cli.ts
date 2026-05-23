@@ -552,60 +552,7 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
     });
   }
 
-  for (const researchRun of snapshot.researchRuns
-    .filter((candidate) => candidate.controlRunId === runId)
-    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))) {
-    events.push({
-      key: `research:${researchRun.researchRunId}`,
-      signature: `${researchRun.status}:${researchRun.completedAt ?? ""}:${researchRun.error ?? ""}`,
-      lines: [
-        `|-- ${theme.ai("[research]")} ${researchRun.researchRunId} ${statusTag(researchRun.status, theme)} ${liveDuration(researchRun.startedAt, researchRun.completedAt)}`,
-        ...indentWrap({ text: `${theme.label("thinking")} plan goals, run web/X query jobs that emit evidence ledgers, resolve goals`, indent: "|   |-- ", theme }),
-        ...(researchRun.error ? indentWrap({ text: `${theme.fail("error")} ${researchRun.error}`, indent: "|   |-- ", theme }) : []),
-      ],
-    });
-  }
-
-  const researchRunIds = new Set(snapshot.researchRuns
-    .filter((run) => run.controlRunId === runId)
-    .map((run) => run.researchRunId));
-  const jobs = snapshot.researchQueryJobs
-    .filter((candidate) => researchRunIds.has(candidate.researchRunId))
-    .sort(compareLiveQueryJobs);
-  for (const job of jobs) {
-    events.push({
-      key: `query:${job.id}`,
-      signature: `${job.status}:${job.startedAt ?? ""}:${job.completedAt ?? ""}:${job.error ?? ""}`,
-      lines: liveQueryJobLines(job, theme),
-    });
-  }
-
   return events;
-}
-
-function liveQueryJobLines(
-  job: CassieStoreSnapshot["researchQueryJobs"][number],
-  theme: TerminalTheme,
-): string[] {
-  const badge = job.lane === "x" ? theme.x(`[wave ${job.wave}]`) : theme.web(`[wave ${job.wave}]`);
-  const lines = [
-    `|   |-- ${badge} ${job.lane}/${job.provider} ${statusTag(job.status, theme)} ${liveDuration(job.startedAt, job.completedAt)}`,
-    ...indentWrap({ text: `${theme.label("query")} ${job.query}`, indent: "|   |   |-- ", theme }),
-    ...indentWrap({ text: `${theme.label("thinking")} ${job.rationale}`, indent: "|   |   |-- ", theme }),
-  ];
-  if (job.error) {
-    lines.push(...indentWrap({ text: `${theme.fail("error")} ${job.error}`, indent: "|   |   |-- ", theme }));
-  }
-  return lines;
-}
-
-function compareLiveQueryJobs(
-  left: CassieStoreSnapshot["researchQueryJobs"][number],
-  right: CassieStoreSnapshot["researchQueryJobs"][number],
-) {
-  return left.wave - right.wave ||
-    left.lane.localeCompare(right.lane) ||
-    left.querySpecId.localeCompare(right.querySpecId);
 }
 
 function liveToolBadge(model: string | null, stepType: string, theme: TerminalTheme): string {
@@ -621,10 +568,6 @@ function liveThinking(stepType: string): string {
       return "Persist the incoming mention before agent work starts.";
     case "opportunity":
       return "Frame the raw verifiable signal into a market opportunity.";
-    case "research":
-      return "Run goal-first research with query jobs and evidence resolution.";
-    case "critique":
-      return "Use evidence to identify the strongest objections.";
     case "trade_expression":
       return "Generate competing trade expressions from the framed opportunity.";
     case "market_candidates":

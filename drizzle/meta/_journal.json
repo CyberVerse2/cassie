@@ -36,6 +36,13 @@
       "when": 1779332580000,
       "tag": "0004_research_persistence",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1779332640000,
+      "tag": "0005_remove_research_persistence",
+      "breakpoints": true
     }
   ]
 }

@@ -297,7 +297,7 @@ export function createCassieSupervisorTools(input: {
       ),
     }),
     finalize_run: tool({
-      description: "Finalize the Cassie run with the user-facing result after analysis, critique, or trade-ticket creation.",
+      description: "Finalize the Cassie run with the user-facing result after analysis, no-trade, or trade-ticket creation.",
       inputSchema: FinalizeRunInputSchema,
       execute: async (finalInput) => runStepOnce("final", finalInput, async () => {
         const preparedFinalInput = prepareFinalInput(finalInput);

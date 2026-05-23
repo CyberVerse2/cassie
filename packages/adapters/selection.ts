@@ -9,7 +9,6 @@ import {
   type MarketSelection,
   type PolymarketMarketAssessment,
   type PolymarketQuote,
-  type ResearchReport,
   type Thesis,
   type TradeExpressionPlan,
 } from "../core/schemas/index.ts";
@@ -18,7 +17,6 @@ import { marketSelectionPrompt, polymarketDiscoveryQueryPrompt } from "../prompt
 export interface MarketDataProvider {
   findCandidates(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate[]>;
 }
@@ -26,13 +24,11 @@ export interface MarketDataProvider {
 export interface PolymarketMarketFinder {
   findPolymarketMarkets(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     limit?: number;
   }): Promise<MarketCandidate[]>;
   assessPolymarketMarket(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     market: {
       conditionId?: string | null;
@@ -53,7 +49,6 @@ export interface PolymarketMarketFinder {
 export interface PolymarketDiscoveryQueryPlanner {
   planPolymarketSearchQueries(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     limit?: number;
   }): Promise<string[]>;
@@ -68,7 +63,6 @@ export class AiPolymarketDiscoveryQueryPlanner implements PolymarketDiscoveryQue
 
   async planPolymarketSearchQueries(input: {
     thesis: Thesis;
-    researchReport?: ResearchReport;
     tradeExpression?: TradeExpressionPlan;
     limit?: number;
   }): Promise<string[]> {
@@ -79,7 +73,6 @@ export class AiPolymarketDiscoveryQueryPlanner implements PolymarketDiscoveryQue
       tier: "expensive",
       prompt: polymarketDiscoveryQueryPrompt({
         thesis: input.thesis,
-        researchReport: input.researchReport,
         tradeExpression: input.tradeExpression,
         limit,
       }),
@@ -93,14 +86,12 @@ export async function selectMarket(input: {
   ai: StructuredAiClient;
   marketData: MarketDataProvider;
   thesis: Thesis;
-  researchReport?: ResearchReport;
   tradeExpression?: TradeExpressionPlan;
   candidates?: MarketCandidate[];
 }): Promise<MarketSelection> {
   const providerCandidates = input.candidates === undefined
     ? await input.marketData.findCandidates({
       thesis: input.thesis,
-      researchReport: input.researchReport,
       tradeExpression: input.tradeExpression,
     })
     : [];
@@ -122,7 +113,6 @@ export async function selectMarket(input: {
     name: "cassie_market_selection",
     prompt: marketSelectionPrompt({
       thesis: input.thesis,
-      researchReport: input.researchReport,
       tradeExpression: input.tradeExpression,
       candidates,
     }),
@@ -148,13 +138,11 @@ function uniqueMarketCandidates(candidates: MarketCandidate[]): MarketCandidate[
 export async function findPolymarketMarkets(input: {
   polymarket: PolymarketMarketFinder;
   thesis: Thesis;
-  researchReport?: ResearchReport;
   tradeExpression?: TradeExpressionPlan;
   limit?: number;
 }): Promise<MarketCandidate[]> {
   const candidates = await input.polymarket.findPolymarketMarkets({
     thesis: input.thesis,
-    researchReport: input.researchReport,
     tradeExpression: input.tradeExpression,
     limit: input.limit,
   });
@@ -165,7 +153,6 @@ export async function findPolymarketMarkets(input: {
 export async function assessPolymarketMarket(input: {
   polymarket: PolymarketMarketFinder;
   thesis: Thesis;
-  researchReport?: ResearchReport;
   tradeExpression?: TradeExpressionPlan;
   market: {
     conditionId?: string | null;
@@ -176,7 +163,6 @@ export async function assessPolymarketMarket(input: {
 }): Promise<PolymarketMarketAssessment> {
   const assessment = await input.polymarket.assessPolymarketMarket({
     thesis: input.thesis,
-    researchReport: input.researchReport,
     tradeExpression: input.tradeExpression,
     market: input.market,
     side: input.side,

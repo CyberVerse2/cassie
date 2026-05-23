@@ -17,18 +17,10 @@ describe("structured AI model routing", () => {
   });
 
   it("routes judgment steps to DeepSeek v4 Pro", () => {
-    expect(routeStructuredModel({ name: "cassie_goal_resolution" })).toMatchObject({
-      provider: "deepseek",
-      tier: "expensive",
-      model: "deepseek-v4-pro",
-    });
-    expect(routeStructuredModel({ name: "cassie_research_report" })).toMatchObject({
-      provider: "deepseek",
-      tier: "expensive",
-    });
     expect(routeStructuredModel({ name: "cassie_trade_expressions" })).toMatchObject({
       provider: "deepseek",
       tier: "expensive",
+      model: "deepseek-v4-pro",
     });
   });
 

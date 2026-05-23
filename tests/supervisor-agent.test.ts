@@ -206,14 +206,9 @@ describe("AI SDK supervisor agent", () => {
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.approvalState).toBe("pending");
-    expect(state.researchReports).toHaveLength(0);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["opportunity", "trade_expression", "market_candidates", "market_selection", "risk", "ticket", "final"]),
     );
-    expect(state.runSteps.map((step) => step.stepType)).not.toEqual(
-      expect.arrayContaining(["intent", "signal", "thesis"]),
-    );
-    expect(state.runSteps.map((step) => step.stepType)).not.toContain("research");
     expect(state.executionJobs).toHaveLength(0);
   });
 

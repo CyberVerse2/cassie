@@ -4,11 +4,9 @@ export function thesisFromTradeExpression(tradeExpression: TradeExpressionPlan) 
   return {
     claim: tradeExpression.coreInterpretation || tradeExpression.signal,
     literalClaim: tradeExpression.signal,
-    impliedResearchQuestion: null,
     impliedTradeThesis: tradeExpression.highestPurityExpression,
     sourceOrMetaSignal: null,
     hasExplicitTrade: true,
-    hasConcreteResearchQuestion: false,
     hasTradableImplication: tradeExpression.decision !== "no_trade",
     thesisStrength: "explicit" as const,
     shouldNotInferTradeBecause: [],
