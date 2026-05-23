@@ -1,6 +1,7 @@
 import { tool } from "ai";
 import { z } from "zod";
-import type { CassieDependencies } from "../../app/dependencies.ts";
+import type { StructuredAiClient } from "../../ai/client.ts";
+import type { CassieDependencies } from "./dependencies.ts";
 import type { CassieStore } from "../../core/db/store.ts";
 import {
   HyperliquidAccountStateProvider,
@@ -22,21 +23,26 @@ import {
   type ControlRun,
   type MarketCandidate,
   type MarketSelection,
+  type OpportunityFrame,
   type PolymarketMarketAssessment,
   type PolymarketQuote,
   type RiskDecision,
   type TradeTicket,
   type TradeExpressionPlan,
   type RunStepType,
+  type SourcePost,
   type UserSettings,
 } from "../../core/schemas/index.ts";
 import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../tools/market.ts";
 import type { MarketDataProvider, PolymarketMarketFinder } from "../tools/market.ts";
-import { frameOpportunity, generateTradeExpressions } from "../tools/trade-expression.ts";
 import { evaluateRisk } from "../../risk/index.ts";
 import { createTradeTicket } from "../tools/trade.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
+import {
+  opportunityFramePrompt,
+  singleStepTradeExpressionPrompt,
+} from "../../prompts/index.ts";
 
 const promptVersion = "2026-05-20";
 
@@ -51,6 +57,44 @@ const FinalizeRunInputSchema = z.object({
 
 type FinalizeRunInput = z.infer<typeof FinalizeRunInputSchema>;
 type PreparedFinalizeRunInput = FinalizeRunInput;
+
+export async function frameOpportunity(input: {
+  ai: StructuredAiClient;
+  sourcePost: SourcePost;
+  userCommand: string;
+}): Promise<OpportunityFrame> {
+  return OpportunityFrameSchema.parse(await input.ai.generateObject({
+    schema: OpportunityFrameSchema,
+    name: "cassie_opportunity_frame",
+    prompt: opportunityFramePrompt({
+      sourcePost: input.sourcePost,
+      userCommand: input.userCommand,
+    }),
+  }));
+}
+
+export async function generateTradeExpressions(input: {
+  ai: StructuredAiClient;
+  sourcePost: SourcePost;
+  userCommand: string;
+  opportunityFrame?: OpportunityFrame;
+  marketCandidates?: MarketCandidate[];
+}): Promise<TradeExpressionPlan> {
+  const marketCandidates = input.marketCandidates
+    ? MarketCandidateSchema.array().parse(input.marketCandidates)
+    : undefined;
+
+  return TradeExpressionPlanSchema.parse(await input.ai.generateObject({
+    schema: TradeExpressionPlanSchema,
+    name: "cassie_trade_expressions",
+    prompt: singleStepTradeExpressionPrompt({
+      sourcePost: input.sourcePost,
+      userCommand: input.userCommand,
+      opportunityFrame: input.opportunityFrame,
+      marketCandidates,
+    }),
+  }));
+}
 
 export class SupervisorPrerequisiteError extends Error {
   constructor(message: string) {

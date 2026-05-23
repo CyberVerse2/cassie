@@ -15,7 +15,6 @@ import {
 } from "../core/schemas/index.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import type { CassieDependencies } from "./dependencies.ts";
 import { pollXMentions } from "./x-polling.ts";
 import {
   GraphileExecutionJobQueue,
@@ -35,7 +34,6 @@ export const SettingsRequestSchema = UserSettingsSchema;
 export class CassieProduct {
   constructor(
     private readonly store: CassieStore = new DrizzleCassieStore(),
-    _deps?: CassieDependencies,
     private readonly executionClient: ExecutionClient | null = null,
     private readonly accountStateProvider: AccountStateProvider | undefined = new HyperliquidAccountStateProvider(),
     private readonly jobQueue: CassieJobQueue = new GraphileExecutionJobQueue(),

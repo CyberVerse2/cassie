@@ -1,5 +1,5 @@
-import type { StructuredAiClient } from "../ai/client.ts";
-import type { MarketDataProvider, PolymarketMarketFinder } from "../agent/tools/market.ts";
+import type { StructuredAiClient } from "../../ai/client.ts";
+import type { MarketDataProvider, PolymarketMarketFinder } from "../tools/market.ts";
 
 export interface CassieDependencies {
   ai?: StructuredAiClient;

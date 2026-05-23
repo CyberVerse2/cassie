@@ -81,7 +81,6 @@ describe("control plane run persistence", () => {
     const queue = new FakeCassieJobQueue();
     const product = new CassieProduct(
       store,
-      undefined,
       null,
       undefined,
       queue,
@@ -102,7 +101,7 @@ describe("control plane run persistence", () => {
   it("returns a run with its recorded steps", async () => {
     const store = new InMemoryCassieStore();
     const queue = new FakeCassieJobQueue();
-    const product = new CassieProduct(store, undefined, null, undefined, queue);
+    const product = new CassieProduct(store, null, undefined, queue);
 
     await product.upsertSettings(settings);
     const result = await product.createMentionRun({
