@@ -38,6 +38,7 @@ const commands = new Map<string, (args: ParsedArgs) => Promise<unknown>>([
   ["help", help],
   ["env", env],
   ["settings:set", settingsSet],
+  ["run", run],
   ["mention", mention],
   ["run-supervisor", runSupervisor],
   ["control-run", controlRun],
@@ -98,9 +99,10 @@ Setup:
   env                       Show required runtime dependencies, with secrets masked.
 
 App flow:
-  mention                   Create a durable control-plane run for a Cassie mention.
-  run-supervisor <runId>    Run the ToolLoopAgent supervisor for a queued control-plane run.
-  control-run <runId>       Show a durable control-plane run, recorded steps, and timeline.
+  run                       Create a run, enqueue Cassie, and show the live timeline.
+  mention                   Create a durable queued run without executing it.
+  run-supervisor <runId>    Execute an existing queued run.
+  control-run <runId>       Show a durable run, recorded steps, and timeline.
   state                     Show the persisted app state summary.
   runs                      List durable control-plane runs.
   tickets                   List trade tickets.
@@ -115,9 +117,9 @@ Useful examples:
   npm run cli -- settings:set --user local-user
   npm run cli -- settings:set --user local-user --size 50
   npm run cli -- state
-  npm run cli -- mention --user local-user --command "@Cassie trade this" --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
-  npm run cli -- mention --user local-user --command "@Cassie trade this" --post "SOL looks underpriced into ETF approval."
-  npm run cli -- mention --user local-user --command "@Cassie trade this" --post "Exa raised $250M" --audit
+  npm run cli -- run --user local-user --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
+  npm run cli -- run --user local-user --post "SOL looks underpriced into ETF approval."
+  npm run cli -- run --user local-user --post "Exa raised $250M" --audit
   npm run cli -- run-supervisor <runId>
   npm run cli -- tickets --json
   npm run cli -- approve <ticketId>
@@ -144,17 +146,49 @@ async function settingsSet(args: ParsedArgs) {
   return { saved: true, settings, generatedWallet };
 }
 
+async function run(args: ParsedArgs) {
+  const store = new ControlPlaneStore();
+  const queued = await new CassieProduct(store)
+    .createMentionRun(await mentionRequestFromArgs(args));
+  const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
+  const liveTimeline = showTimeline ? startLiveRunTimeline(store, queued.runId) : null;
+  try {
+    if (showTimeline) {
+      await waitForRunToStop(store, queued.runId);
+    }
+  } finally {
+    await liveTimeline?.stop();
+  }
+
+  const snapshot = await store.load();
+  const timeline = formatRunTimeline(snapshot, queued.runId);
+  if (showTimeline) {
+    console.error(timeline);
+  }
+  if (args.flags.json) return { runId: queued.runId, queued, timeline };
+  if (args.flags.full) return { runId: queued.runId, queued };
+  return summarizeRun(snapshot, queued.runId);
+}
+
 async function mention(args: ParsedArgs) {
-  return product().createMentionRun({
-    userId: flag(args, "user", "local-user"),
-    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie critic this"),
-    sourcePost: await sourcePostFromFlags(args),
-  });
+  return product().createMentionRun(await mentionRequestFromArgs(args));
 }
 
 async function runSupervisor(args: ParsedArgs) {
   const runId = requiredPositional(args, 0, "runId");
-  const store = new ControlPlaneStore();
+  return executeRunWithTimeline({
+    args,
+    store: new ControlPlaneStore(),
+    runId,
+  });
+}
+
+async function executeRunWithTimeline(input: {
+  args: ParsedArgs;
+  store: ControlPlaneStore;
+  runId: string;
+}) {
+  const { args, store, runId } = input;
   const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
   const liveTimeline = showTimeline ? startLiveRunTimeline(store, runId) : null;
   let result: unknown;
@@ -279,6 +313,14 @@ async function smokeMarket(args: ParsedArgs) {
 
 function product() {
   return new CassieProduct(new ControlPlaneStore());
+}
+
+async function mentionRequestFromArgs(args: ParsedArgs) {
+  return {
+    userId: flag(args, "user", "local-user"),
+    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie trade this"),
+    sourcePost: await sourcePostFromFlags(args),
+  };
 }
 
 function summarizeState(snapshot: CassieStoreSnapshot) {
@@ -452,6 +494,17 @@ function startLiveRunTimeline(store: CassieStore, runId: string) {
   };
 }
 
+async function waitForRunToStop(store: CassieStore, runId: string) {
+  while (true) {
+    const snapshot = await store.load();
+    const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
+    if (run && run.status !== "queued" && run.status !== "running") {
+      return;
+    }
+    await sleep(1_000);
+  }
+}
+
 function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: TerminalTheme) {
   const events: Array<{ key: string; signature: string; lines: string[] }> = [];
   const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
@@ -603,6 +656,10 @@ function liveDuration(startedAt: string | null, completedAt: string | null): str
 
 function truncate(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, maxLength - 1)}…` : value;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function flag(args: ParsedArgs, name: string, defaultValue: string): string {

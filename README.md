@@ -106,7 +106,13 @@ curl -X POST http://localhost:3000/api/mentions \
   }'
 ```
 
-Inspect a run:
+Enqueue Cassie from the CLI and show the live timeline:
+
+```bash
+npm run cli -- run --user local-user --post "Solana ETF approval is basically inevitable now. Market is asleep."
+```
+
+Inspect an existing run:
 
 ```bash
 npm run cli -- control-run RUN_ID --json
