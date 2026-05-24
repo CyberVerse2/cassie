@@ -23,8 +23,7 @@ Core behavior:
 - A true claim can still be a bad trade if it is stale or already priced.
 - A relevant market can still be a bad trade if the rules or contract do not match the thesis.
 - Do not invent tickers, markets, prices, quotes, liquidity, probabilities, listings, funding rates, or contract rules.
-- Preserve concise audit-friendly reasoning. Do not reveal hidden chain-of-thought.
-- Output valid JSON only.`;
+- Preserve concise audit-friendly reasoning. Do not reveal hidden chain-of-thought.`;
 
 function sourceForPrompt(sourcePost: SourcePost) {
   return {
@@ -60,12 +59,11 @@ Rules:
 - Do not select a weak proxy if a direct expression exists.
 - Do not select a trade just because the tweet is interesting.
 - Return noTradeReason when no candidate has clear semantic fit and acceptable execution.
+- Use selectedMarket only for a real validated candidate.
 - Never execute orders.
 
 Inputs:
-${JSON.stringify(input, null, 2)}
-
-Return JSON matching the provided schema. Use selectedMarket only for a real validated candidate.`;
+${JSON.stringify(input, null, 2)}`;
 }
 
 export function polymarketDiscoveryQueryPrompt(input: {
@@ -88,9 +86,7 @@ Rules:
 - Return at most ${input.limit} concise reusable queries.
 
 Inputs:
-${JSON.stringify(input, null, 2)}
-
-Return JSON with { "queries": string[] }.`;
+${JSON.stringify(input, null, 2)}`;
 }
 
 export function opportunityFramePrompt(input: {
@@ -113,6 +109,7 @@ Analyze the source and identify:
 4. Likely expression families across crypto, pre-IPO/private stock, prediction market, or no trade.
 5. Verification needed before expression generation.
 6. Reasons this may not be tradable.
+Keep expressionFamilies abstract, such as "long SOL perp", "SpaceX pre-IPO if listed", "buy Yes/No on an exact event market", or "no trade".
 
 Input:
 ${JSON.stringify({
@@ -120,9 +117,7 @@ ${JSON.stringify({
     userCommand: input.userCommand,
     current_datetime: new Date().toISOString(),
     allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
-  }, null, 2)}
-
-Return JSON matching the provided schema. Keep expressionFamilies abstract, such as "long SOL perp", "SpaceX pre-IPO if listed", "buy Yes/No on an exact event market", or "no trade".`;
+  }, null, 2)}`;
 }
 
 export function singleStepTradeExpressionPrompt(input: {
@@ -155,9 +150,7 @@ ${JSON.stringify({
     opportunityFrame: input.opportunityFrame ?? null,
     marketCandidates: input.marketCandidates ?? null,
     allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
-  }, null, 2)}
-
-Return JSON matching the provided schema. Fill candidateExpressions with expressionId, expressionRail, intendedSide, thesis, searchTerms, required features, risks, priority, and confidence. Also fill the legacy candidates/highestPurityExpression fields so downstream venue tools can search real markets.`;
+  }, null, 2)}`;
 }
 
 export function expressionFitPrompt(input: {
@@ -189,9 +182,8 @@ Rules:
 - Mark needs_more_info if rules/specs are missing.
 - Do not use price attractiveness here; assess semantic and contract fit only.
 - Do not invent missing rules, specs, or venue data.
+- Use a stable candidateId built from venue, symbol/instrument, and side when the input does not provide one.
 
 Input:
-${JSON.stringify(input, null, 2)}
-
-Return JSON matching the provided schema. Use a stable candidateId built from venue, symbol/instrument, and side when the input does not provide one.`;
+${JSON.stringify(input, null, 2)}`;
 }
