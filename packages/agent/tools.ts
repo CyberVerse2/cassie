@@ -12,6 +12,7 @@ import {
   MarketCandidateSchema,
   MarketSelectionSchema,
   OpportunityFrameSchema,
+  PolymarketQuoteSchema,
   ExpressionFitAssessmentSchema,
   SourcePostSchema,
   RiskDecisionSchema,
@@ -305,22 +306,24 @@ export function createCassieSupervisorTools(input: {
       description: "Rank real venue candidates and choose the best grounded trade expression; do not invent markets.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema,
-        candidates: MarketCandidateSchema.array().optional(),
-        fitAssessments: ExpressionFitAssessmentSchema.array().optional(),
+        candidates: z.array(z.unknown()).default([]),
+        fitAssessments: z.array(z.unknown()).default([]),
         quotes: z.array(z.unknown()).default([]),
-        xSentiment: XSentimentAssessmentSchema.optional(),
+        xSentiment: XSentimentAssessmentSchema.nullable().default(null),
       }),
       execute: async ({ tradeExpression, candidates, fitAssessments, quotes, xSentiment }) => {
-        const persistedCandidates = candidates && candidates.length > 0
-          ? candidates
-          : await latestPersistedMarketCandidates(input.store, input.run.runId);
-        const persistedFitAssessments = fitAssessments && fitAssessments.length > 0
-          ? fitAssessments
-          : await latestPersistedFitAssessments(input.store, input.run.runId);
+        const storedCandidates = await latestPersistedMarketCandidates(input.store, input.run.runId);
+        const persistedCandidates = storedCandidates.length > 0
+          ? storedCandidates
+          : parseSuppliedMarketCandidates(candidates);
+        const storedFitAssessments = await latestPersistedFitAssessments(input.store, input.run.runId);
+        const persistedFitAssessments = storedFitAssessments.length > 0
+          ? storedFitAssessments
+          : parseSuppliedFitAssessments(fitAssessments);
         const persistedQuotes = await latestPersistedQuotes(input.store, input.run.runId);
         const persistedXSentiment = xSentiment
           ?? await latestPersistedXSentiment(input.store, input.run.runId);
-        const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : quotes;
+        const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : parseSuppliedRankQuotes(quotes);
         if (persistedCandidates.length > 0 && persistedFitAssessments.length < persistedCandidates.length) {
           throw new Error("rank_expressions requires fit assessments for every persisted venue candidate.");
         }
@@ -508,6 +511,24 @@ async function latestPersistedQuotes(store: CassieStore, runId: string): Promise
     .filter((quote) => quote !== null && quote !== undefined);
 }
 
+function parseSuppliedMarketCandidates(value: unknown): MarketCandidate[] {
+  const parsed = MarketCandidateSchema.array().safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new Error("rank_expressions requires real venue candidates from search_venues.");
+}
+
+function parseSuppliedFitAssessments(value: unknown): ExpressionFitAssessment[] {
+  const parsed = ExpressionFitAssessmentSchema.array().safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new Error("rank_expressions requires expression-fit assessments from assess_expression_fit.");
+}
+
+function parseSuppliedRankQuotes(value: unknown): unknown[] {
+  const parsed = z.array(z.union([MarketCandidateSchema, PolymarketQuoteSchema])).safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new Error("rank_expressions requires quotes from quote_expression.");
+}
+
 async function latestPersistedXSentiment(store: CassieStore, runId: string) {
   const latestStep = await latestSucceededStep(store, runId, "x_sentiment");
   return latestStep
@@ -531,20 +552,15 @@ async function resolveLatestFitAssessment(input: {
   runId: string;
   fitAssessment: ExpressionFitAssessment;
 }): Promise<ExpressionFitAssessment> {
-  const steps = await input.store.getRunSteps(input.runId);
-  const latestStep = steps
-    .filter((step) => step.stepType === "market_assessment" && step.status === "succeeded")
-    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
-  const assessment = latestStep
-    ? ExpressionFitAssessmentSchema.safeParse(latestStep.output).data
-    : null;
-  const match = assessment
-    && assessment.candidateId === input.fitAssessment.candidateId
+  const assessments = await latestPersistedFitAssessments(input.store, input.runId);
+  const match = assessments.find((assessment) =>
+    assessment.candidateId === input.fitAssessment.candidateId
     && assessment.expressionId === input.fitAssessment.expressionId
     && assessment.venue === input.fitAssessment.venue
-    && assessment.fitStatus === input.fitAssessment.fitStatus;
+    && assessment.fitStatus === input.fitAssessment.fitStatus,
+  );
 
-  if (match) return assessment;
+  if (match) return match;
   throw new Error(`Fit assessment ${input.fitAssessment.candidateId} was not found in persisted expression-fit results.`);
 }
 

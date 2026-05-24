@@ -605,13 +605,13 @@ describe("AI SDK supervisor agent", () => {
     });
 
     await seedFitAssessment(store, run.runId, expressionFitAssessment);
-    const first = await executeTool<MarketCandidate>(tools.quote_expression, {
-      candidate: firstCandidate,
-      fitAssessment: expressionFitAssessment,
-    });
     await seedFitAssessment(store, run.runId, {
       ...expressionFitAssessment,
       candidateId: "hyperliquid:ETH:long",
+    });
+    const first = await executeTool<MarketCandidate>(tools.quote_expression, {
+      candidate: firstCandidate,
+      fitAssessment: expressionFitAssessment,
     });
     const second = await executeTool<MarketCandidate>(tools.quote_expression, {
       candidate: secondCandidate,
@@ -789,9 +789,16 @@ describe("AI SDK supervisor agent", () => {
       tradeExpression,
       fitAssessments: [expressionFitAssessment],
     }).success).toBe(true);
+    expect(rankInputSchema.safeParse({
+      tradeExpression,
+      candidates: tradeExpression.candidates,
+      fitAssessments: [expressionFitAssessment],
+      quotes: [persistedCandidate],
+    }).success).toBe(true);
 
     await expect(executeTool(tools.rank_expressions, {
       tradeExpression,
+      candidates: tradeExpression.candidates,
       fitAssessments: [expressionFitAssessment],
     })).resolves.toMatchObject({
       selectedMarket: persistedCandidate,
