@@ -154,13 +154,14 @@ export function createCassieSupervisorTools(input: {
     assess_expression_fit: tool({
       description: "Use AI semantic judgment to assess whether a real venue candidate fits the framed opportunity and intended expression.",
       inputSchema: z.object({
+        opportunityFrame: OpportunityFrameSchema,
         tradeExpression: TradeExpressionPlanSchema,
         candidate: MarketCandidateSchema,
         side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ tradeExpression, candidate, side }) => runStepOnce(
+      execute: async ({ opportunityFrame, tradeExpression, candidate, side }) => runStepOnce(
         "market_assessment",
-        { tradeExpression, candidate, side },
+        { opportunityFrame, tradeExpression, candidate, side },
         async () => {
           return recordRunStep({
             store: input.store,
@@ -169,10 +170,11 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_expression_fit",
             promptVersion,
             model: importantModel,
-            stepInput: { tradeExpression, candidate, side },
+            stepInput: { opportunityFrame, tradeExpression, candidate, side },
             execute: () => assessExpressionFit({
               ai: importantAi,
               polymarket: input.deps.polymarketMarketFinder,
+              opportunityFrame,
               tradeExpression,
               candidate,
               side,
@@ -215,7 +217,7 @@ export function createCassieSupervisorTools(input: {
         tradeExpression: TradeExpressionPlanSchema,
         candidates: MarketCandidateSchema.array().optional(),
         fitAssessments: ExpressionFitAssessmentSchema.array().optional(),
-        quotes: z.array(z.unknown()).optional(),
+        quotes: z.array(z.unknown()).min(1),
       }),
       execute: async ({ tradeExpression, candidates, fitAssessments, quotes }) => runStepOnce(
         "market_selection",

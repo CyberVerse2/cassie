@@ -5,6 +5,7 @@ import {
   PolymarketQuoteSchema,
   type ExpressionFitAssessment,
   type MarketCandidate,
+  type OpportunityFrame,
   type PolymarketQuote,
   type Thesis,
   type TradeExpressionPlan,
@@ -100,6 +101,7 @@ function buildVenueSearchIntent(input: {
 export async function assessExpressionFit(input: {
   ai: StructuredAiClient;
   polymarket?: PolymarketMarketFinder;
+  opportunityFrame: OpportunityFrame;
   tradeExpression: TradeExpressionPlan;
   candidate: MarketCandidate;
   side?: "yes" | "no";
@@ -109,6 +111,7 @@ export async function assessExpressionFit(input: {
     schema: ExpressionFitAssessmentSchema,
     name: "cassie_expression_fit",
     prompt: expressionFitPrompt({
+      opportunityFrame: input.opportunityFrame,
       tradeExpression: input.tradeExpression,
       candidate,
       side: input.side,

@@ -47,10 +47,13 @@ describe("supervisor step policy", () => {
     expect(selectActiveTools([opportunity, expression, candidates, fit])).toEqual([
       "assess_expression_fit",
       "quote_expression",
+    ]);
+    const quote = step("quote_expression", { venue: "hyperliquid", symbol: "SOL", markPrice: 100 });
+    expect(selectActiveTools([opportunity, expression, candidates, fit, quote])).toEqual([
+      "quote_expression",
       "rank_expressions",
     ]);
     expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual([
-      "quote_expression",
       "rank_expressions",
       "risk_check",
     ]);

@@ -51,7 +51,7 @@ export function selectActiveTools(
   const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
   if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
     return marketSelection.selectedMarket && !marketSelection.noTradeReason
-      ? ["quote_expression", "rank_expressions", "risk_check"]
+      ? ["rank_expressions", "risk_check"]
       : ["search_venues", "rank_expressions", "finalize_run"];
   }
 
@@ -66,9 +66,14 @@ export function selectActiveTools(
       return ["search_venues", "assess_expression_fit"];
     }
 
-    return fitAssessment.fitStatus === "validated"
-      ? ["assess_expression_fit", "quote_expression", "rank_expressions"]
-      : ["search_venues", "assess_expression_fit", "finalize_run"];
+    if (fitAssessment.fitStatus !== "validated") {
+      return ["search_venues", "assess_expression_fit", "finalize_run"];
+    }
+
+    const quote = latestToolOutput(steps, "quote_expression");
+    return quote
+      ? ["quote_expression", "rank_expressions"]
+      : ["assess_expression_fit", "quote_expression"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));

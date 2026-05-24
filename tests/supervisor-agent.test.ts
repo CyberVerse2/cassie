@@ -450,6 +450,7 @@ describe("AI SDK supervisor agent", () => {
     });
 
     await expect(executeTool(tools.assess_expression_fit, {
+      opportunityFrame,
       tradeExpression,
       candidate: marketSelection.selectedMarket!,
     })).resolves.toMatchObject({
