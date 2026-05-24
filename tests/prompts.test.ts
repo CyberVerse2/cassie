@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
 import {
   expressionFitPrompt,
+  expressionFitPromptSpec,
   marketSelectionPrompt,
+  marketSelectionPromptSpec,
   opportunityFramePrompt,
+  opportunityFramePromptSpec,
   polymarketDiscoveryQueryPrompt,
+  polymarketDiscoveryQueryPromptSpec,
+  renderPromptSpec,
   singleStepTradeExpressionPrompt,
+  singleStepTradeExpressionPromptSpec,
+  structuredPromptInput,
 } from "../packages/prompts/index.ts";
 import type {
   MarketCandidate,
@@ -138,5 +145,88 @@ describe("prompts", () => {
     expect(prompts.join("\n")).toContain("Do not invent tickers");
     expect(prompts.join("\n")).toContain("Generate candidateExpressions first");
     expect(prompts.join("\n")).toContain("Do not assume a real market exists");
+  });
+
+  it("exposes stage prompts as AI SDK-ready specs", () => {
+    const specs = [
+      opportunityFramePromptSpec({ sourcePost, userCommand: "@cassie trade this" }),
+      singleStepTradeExpressionPromptSpec({
+        sourcePost,
+        userCommand: "@cassie trade this",
+        opportunityFrame,
+      }),
+      expressionFitPromptSpec({
+        opportunityFrame,
+        tradeExpression,
+        candidate: marketCandidate,
+      }),
+      marketSelectionPromptSpec({
+        thesis,
+        tradeExpression,
+        candidates: [marketCandidate],
+        fitAssessments: [],
+        quotes: [marketCandidate],
+      }),
+      polymarketDiscoveryQueryPromptSpec({
+        thesis,
+        tradeExpression,
+        limit: 5,
+      }),
+    ];
+
+    expect(specs.map((spec) => spec.name)).toEqual([
+      "cassie_opportunity_frame",
+      "cassie_trade_expressions",
+      "cassie_expression_fit",
+      "cassie_market_selection",
+      "cassie_polymarket_discovery_queries",
+    ]);
+    expect(specs.map((spec) => spec.version)).toEqual([
+      "2026-05-24",
+      "2026-05-24",
+      "2026-05-24",
+      "2026-05-24",
+      "2026-05-24",
+    ]);
+    expect(specs.every((spec) => spec.outputSchema)).toBe(true);
+    expect(specs.every((spec) => spec.system.includes("tagged-tweet trading research agent"))).toBe(true);
+    expect(specs.every((spec) => spec.messages.length === 1)).toBe(true);
+    expect(specs.every((spec) => spec.messages[0]?.role === "user")).toBe(true);
+    expect(opportunityFramePromptSpec({ sourcePost, userCommand: "@cassie trade this" }).tools).toEqual({
+      webSearch: {
+        externalWebAccess: true,
+        searchContextSize: "low",
+      },
+    });
+    expect(marketSelectionPromptSpec({
+      thesis,
+      tradeExpression,
+      candidates: [marketCandidate],
+      fitAssessments: [],
+      quotes: [marketCandidate],
+    }).tier).toBe("cheap");
+  });
+
+  it("keeps legacy string prompts rendered from the prompt spec content", () => {
+    const spec = singleStepTradeExpressionPromptSpec({
+      sourcePost,
+      userCommand: "@cassie trade this",
+      opportunityFrame,
+    });
+    const rendered = renderPromptSpec(spec);
+    const legacy = singleStepTradeExpressionPrompt({
+      sourcePost,
+      userCommand: "@cassie trade this",
+      opportunityFrame,
+    });
+
+    expect(legacy).toBe(rendered);
+    expect(structuredPromptInput(spec)).toMatchObject({
+      name: "cassie_trade_expressions",
+      prompt: rendered,
+      system: spec.system,
+      messages: spec.messages,
+      schema: spec.outputSchema,
+    });
   });
 });

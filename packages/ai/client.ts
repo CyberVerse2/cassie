@@ -1,6 +1,7 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createOpenAI } from "@ai-sdk/openai";
-import { Output, generateText } from "ai";
+import { Output, generateText, type ModelMessage } from "ai";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { formatErrorForLog } from "../core/helpers/index.ts";
@@ -26,12 +27,23 @@ export type ModelRoute = {
 
 export const IMPORTANT_OPENAI_REASONING_EFFORT = "medium";
 
+export type StructuredToolConfig = {
+  webSearch?: {
+    externalWebAccess: true;
+    searchContextSize: "low" | "medium" | "high";
+  };
+};
+
 export interface StructuredAiClient {
   generateObject<T>(input: {
     schema: z.ZodType<T>;
     prompt: string;
+    system?: string;
+    messages?: ModelMessage[];
     name: string;
     tier?: ModelTier;
+    providerOptions?: ProviderOptions;
+    tools?: StructuredToolConfig;
     onThinkingTrace?: (thinkingTrace: string | null) => void;
   }): Promise<T>;
 }
@@ -144,16 +156,14 @@ export function structuredToolsForCall(input: {
   name: string;
   route: ModelRoute;
   openai: Pick<OpenAiProviderForStructuredCall, "tools">;
+  tools?: StructuredToolConfig;
 }): Record<string, unknown> | undefined {
-  if (input.route.provider !== "openai" || input.name !== "cassie_opportunity_frame") {
+  if (input.route.provider !== "openai" || !input.tools?.webSearch) {
     return undefined;
   }
 
   return {
-    web_search: input.openai.tools.webSearch({
-      externalWebAccess: true,
-      searchContextSize: "low",
-    }),
+    web_search: input.openai.tools.webSearch(input.tools.webSearch),
   };
 }
 
@@ -180,8 +190,12 @@ export class CassieStructuredClient implements StructuredAiClient {
   async generateObject<T>(input: {
     schema: z.ZodType<T>;
     prompt: string;
+    system?: string;
+    messages?: ModelMessage[];
     name: string;
     tier?: ModelTier;
+    providerOptions?: ProviderOptions;
+    tools?: StructuredToolConfig;
     onThinkingTrace?: (thinkingTrace: string | null) => void;
   }): Promise<T> {
     const route = routeStructuredModel({
@@ -209,7 +223,7 @@ export class CassieStructuredClient implements StructuredAiClient {
         : "Requesting an expensive structured judgment and validating it against the expected schema.",
       input: {
         schemaName: input.name,
-        promptChars: input.prompt.length,
+        promptChars: promptTextForTrace(input).length,
         modelTier: route.tier,
         provider: route.provider,
       },
@@ -227,6 +241,7 @@ export class CassieStructuredClient implements StructuredAiClient {
           name: input.name,
           route,
           openai,
+          tools: input.tools,
         })
         : undefined;
       const result = await generateText({
@@ -240,10 +255,10 @@ export class CassieStructuredClient implements StructuredAiClient {
           schema: input.schema,
           name: input.name,
         }),
-        prompt: input.prompt,
+        ...promptParametersForStructuredCall(input),
         maxRetries: structuredMaxRetries(),
         maxOutputTokens: maxOutputTokensForTier(route.tier),
-        providerOptions: providerOptionsForRoute(route),
+        providerOptions: input.providerOptions ?? providerOptionsForRoute(route),
         tools: tools as never,
       });
 
@@ -265,6 +280,34 @@ export class CassieStructuredClient implements StructuredAiClient {
       throw wrapped;
     }
   }
+}
+
+export function promptParametersForStructuredCall(input: {
+  prompt?: string;
+  system?: string;
+  messages?: ModelMessage[];
+}): { prompt: string } | { system?: string; messages: ModelMessage[] } {
+  if (input.messages) {
+    return input.system
+      ? { system: input.system, messages: input.messages }
+      : { messages: input.messages };
+  }
+  if (!input.prompt) {
+    throw new Error("Structured AI call requires either prompt or messages.");
+  }
+  return { prompt: input.prompt };
+}
+
+function promptTextForTrace(input: {
+  prompt?: string;
+  system?: string;
+  messages?: ModelMessage[];
+}): string {
+  if (input.prompt) return input.prompt;
+  return [
+    input.system ?? "",
+    ...(input.messages ?? []).map((message) => JSON.stringify(message)),
+  ].join("\n");
 }
 
 function structuredMaxRetries(): number {

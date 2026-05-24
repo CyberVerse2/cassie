@@ -16,7 +16,7 @@ import {
   type MarketDataProvider,
   type PolymarketMarketFinder,
 } from "../adapters/selection.ts";
-import { expressionFitPrompt } from "../prompts/index.ts";
+import { expressionFitPromptSpec, structuredPromptInput } from "../prompts/index.ts";
 
 export type TradeExpressionIntent = {
   thesis: Thesis;
@@ -108,14 +108,12 @@ export async function assessExpressionFit(input: {
 }): Promise<ExpressionFitAssessment> {
   const candidate = MarketCandidateSchema.parse(input.candidate);
   return ExpressionFitAssessmentSchema.parse(await input.ai.generateObject({
-    schema: ExpressionFitAssessmentSchema,
-    name: "cassie_expression_fit",
-    prompt: expressionFitPrompt({
+    ...structuredPromptInput(expressionFitPromptSpec({
       opportunityFrame: input.opportunityFrame,
       tradeExpression: input.tradeExpression,
       candidate,
       side: input.side,
-    }),
+    })),
   }));
 }
 

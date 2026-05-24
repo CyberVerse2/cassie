@@ -104,7 +104,8 @@ export const OpportunityFrameSchema = z.object({
   affectedEntities: z.array(z.string()),
   affectedAssets: z.array(z.string()),
   expressionFamilies: z.array(z.string()),
-  signalVerificationRisk: z.enum(["low", "medium", "high", "unknown"]),
+  signalVerificationRisk: z.enum(["low", "medium", "high", "unknown"])
+    .describe("The risk that the source claim is false, misleading, stale, unverifiable, or missing critical context."),
   shouldVerifyTruthBeforeTrading: z.boolean(),
   reason: z.string(),
   confidence: z.number().min(0).max(1),
@@ -190,11 +191,13 @@ export const CandidateTradeExpressionSchema = z.object({
   relatedEntities: z.array(z.string()),
   thesis: z.string(),
   whyThisExpressesTheOpportunity: z.string(),
-  directness: z.enum(["direct", "strong_proxy", "weak_proxy", "none"]),
+  directness: z.enum(["direct", "strong_proxy", "weak_proxy", "none"])
+    .describe("How directly the expression gives causal exposure to the framed opportunity, not merely thematic similarity."),
   whatMustBeTrue: z.array(z.string()),
   searchTerms: z.array(z.string()),
   requiredMarketFeatures: z.array(z.string()),
-  requiredRuleOrContractFeatures: z.array(z.string()),
+  requiredRuleOrContractFeatures: z.array(z.string())
+    .describe("Required market rules, listing details, resolution criteria, instrument specs, or contract terms that must be verified before selection."),
   keyRisks: z.array(z.string()),
   expectedTimeHorizon: z.enum(["minutes", "hours", "days", "weeks", "months", "year_plus", "unknown"]),
   priority: z.enum(["high", "medium", "low"]),
@@ -208,7 +211,7 @@ export const DiscardedTradeExpressionSchema = z.object({
 
 export const NoTradeCaseSchema = z.object({
   shouldConsiderNoTrade: z.boolean(),
-  reason: z.string(),
+  reason: z.string().describe("Explain why no trade may be preferable despite the tweet containing a potentially interesting market signal."),
   whatWouldChangeThis: z.array(z.string()),
 });
 
@@ -217,13 +220,15 @@ export const ExpressionFitAssessmentSchema = z.object({
   expressionId: z.string(),
   expressionRail: z.enum(["crypto", "pre_ipo", "prediction_market"]),
   venue: z.string(),
-  fitStatus: z.enum(["validated", "rejected", "needs_more_info"]),
+  fitStatus: z.enum(["validated", "rejected", "needs_more_info"])
+    .describe("Use validated only when the real venue candidate semantically and contractually matches the intended expression."),
   intendedSide: z.string(),
   sideFit: z.enum(["correct", "opposite", "ambiguous", "unknown"]),
   directness: z.enum(["direct", "strong_proxy", "weak_proxy", "unrelated", "unknown"]),
   fitScore: z.number().min(0).max(1),
   semanticFitSummary: z.string(),
-  ruleOrContractFitSummary: z.string(),
+  ruleOrContractFitSummary: z.string()
+    .describe("Summarize verified venue rules, contract terms, listing details, or instrument specs that support or block the fit."),
   basisRisks: z.array(z.string()),
   mismatchReasons: z.array(z.string()),
   requiredFollowUp: z.array(z.string()),

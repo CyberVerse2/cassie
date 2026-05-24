@@ -1,7 +1,28 @@
 import { describe, expect, it } from "vitest";
-import { TradeExpressionPlanSchema } from "../packages/core/schemas/index.ts";
+import {
+  CandidateTradeExpressionSchema,
+  ExpressionFitAssessmentSchema,
+  NoTradeCaseSchema,
+  OpportunityFrameSchema,
+  TradeExpressionPlanSchema,
+} from "../packages/core/schemas/index.ts";
 
 describe("schema normalization", () => {
+  it("describes ambiguous structured-output fields for provider schema guidance", () => {
+    expect(OpportunityFrameSchema.shape.signalVerificationRisk.description)
+      .toContain("risk that the source claim is false");
+    expect(CandidateTradeExpressionSchema.shape.directness.description)
+      .toContain("causal exposure");
+    expect(CandidateTradeExpressionSchema.shape.requiredRuleOrContractFeatures.description)
+      .toContain("contract terms");
+    expect(NoTradeCaseSchema.shape.reason.description)
+      .toContain("why no trade may be preferable");
+    expect(ExpressionFitAssessmentSchema.shape.fitStatus.description)
+      .toContain("validated only when");
+    expect(ExpressionFitAssessmentSchema.shape.ruleOrContractFitSummary.description)
+      .toContain("rules");
+  });
+
   it("requires explicit nullable response fields for trade-expression structured output", () => {
     const basePlan = {
       signal: "ZEC thesis",

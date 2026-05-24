@@ -1,5 +1,4 @@
 import type { StructuredAiClient } from "../ai/client.ts";
-import { z } from "zod";
 import {
   MarketCandidateSchema,
   MarketSelectionSchema,
@@ -13,7 +12,11 @@ import {
   type Thesis,
   type TradeExpressionPlan,
 } from "../core/schemas/index.ts";
-import { marketSelectionPrompt, polymarketDiscoveryQueryPrompt } from "../prompts/index.ts";
+import {
+  marketSelectionPromptSpec,
+  polymarketDiscoveryQueryPromptSpec,
+  structuredPromptInput,
+} from "../prompts/index.ts";
 
 export interface MarketDataProvider {
   findCandidates(input: {
@@ -55,10 +58,6 @@ export interface PolymarketDiscoveryQueryPlanner {
   }): Promise<string[]>;
 }
 
-const PolymarketDiscoveryQueryPlanSchema = z.object({
-  queries: z.array(z.string().min(2)).max(8),
-});
-
 export class AiPolymarketDiscoveryQueryPlanner implements PolymarketDiscoveryQueryPlanner {
   constructor(private readonly ai: StructuredAiClient) {}
 
@@ -69,14 +68,11 @@ export class AiPolymarketDiscoveryQueryPlanner implements PolymarketDiscoveryQue
   }): Promise<string[]> {
     const limit = input.limit ?? 8;
     const result = await this.ai.generateObject({
-      schema: PolymarketDiscoveryQueryPlanSchema,
-      name: "cassie_polymarket_discovery_queries",
-      tier: "expensive",
-      prompt: polymarketDiscoveryQueryPrompt({
+      ...structuredPromptInput(polymarketDiscoveryQueryPromptSpec({
         thesis: input.thesis,
         tradeExpression: input.tradeExpression,
         limit,
-      }),
+      })),
     });
 
     return Array.from(new Set(result.queries.map((query) => query.trim()).filter(Boolean))).slice(0, limit);
@@ -116,15 +112,13 @@ export async function selectMarket(input: {
   }
 
   return input.ai.generateObject({
-    schema: MarketSelectionSchema,
-    name: "cassie_market_selection",
-    prompt: marketSelectionPrompt({
+    ...structuredPromptInput(marketSelectionPromptSpec({
       thesis: input.thesis,
       tradeExpression: input.tradeExpression,
       candidates,
       fitAssessments: input.fitAssessments ?? [],
       quotes: input.quotes ?? [],
-    }),
+    })),
   });
 }
 

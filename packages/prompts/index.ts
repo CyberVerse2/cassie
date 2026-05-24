@@ -1,6 +1,37 @@
-import type { MarketCandidate, OpportunityFrame, SourcePost, Thesis, TradeExpressionPlan } from "../core/schemas/index.ts";
+import type { ModelMessage } from "ai";
+import type { ProviderOptions } from "@ai-sdk/provider-utils";
+import { z } from "zod";
+import type { ModelTier, StructuredToolConfig } from "../ai/client.ts";
+import {
+  ExpressionFitAssessmentSchema,
+  MarketSelectionSchema,
+  OpportunityFrameSchema,
+  TradeExpressionPlanSchema,
+  type ExpressionFitAssessment,
+  type MarketCandidate,
+  type MarketSelection,
+  type OpportunityFrame,
+  type SourcePost,
+  type Thesis,
+  type TradeExpressionPlan,
+} from "../core/schemas/index.ts";
 
 const PROMPT_VERSION = "2026-05-24";
+
+export const PolymarketDiscoveryQueryPlanSchema = z.object({
+  queries: z.array(z.string().min(2)).max(8),
+});
+
+export type CassiePromptSpec<T> = {
+  name: string;
+  version: string;
+  system: string;
+  messages: ModelMessage[];
+  outputSchema: z.ZodType<T>;
+  tier?: ModelTier;
+  providerOptions?: ProviderOptions;
+  tools?: StructuredToolConfig;
+};
 
 const UNIVERSAL_SYSTEM_PROMPT = `You are a tagged-tweet trading research agent.
 
@@ -38,6 +69,61 @@ function sourceForPrompt(sourcePost: SourcePost) {
   };
 }
 
+function userPayloadMessage(payload: unknown): ModelMessage {
+  return {
+    role: "user",
+    content: JSON.stringify(payload, null, 2),
+  };
+}
+
+function makePromptSpec<T>(input: {
+  name: string;
+  stage: string;
+  payload: unknown;
+  outputSchema: z.ZodType<T>;
+  tier?: ModelTier;
+  providerOptions?: ProviderOptions;
+  tools?: StructuredToolConfig;
+}): CassiePromptSpec<T> {
+  return {
+    name: input.name,
+    version: PROMPT_VERSION,
+    system: `${UNIVERSAL_SYSTEM_PROMPT}
+
+${input.stage}`,
+    messages: [userPayloadMessage(input.payload)],
+    outputSchema: input.outputSchema,
+    tier: input.tier,
+    providerOptions: input.providerOptions,
+    tools: input.tools,
+  };
+}
+
+export function renderPromptSpec(spec: CassiePromptSpec<unknown>): string {
+  return [
+    spec.system,
+    ...spec.messages.map((message) => {
+      const content = typeof message.content === "string"
+        ? message.content
+        : JSON.stringify(message.content, null, 2);
+      return `Input:\n${content}`;
+    }),
+  ].join("\n\n");
+}
+
+export function structuredPromptInput<T>(spec: CassiePromptSpec<T>) {
+  return {
+    name: spec.name,
+    schema: spec.outputSchema,
+    prompt: renderPromptSpec(spec),
+    system: spec.system,
+    messages: spec.messages,
+    tier: spec.tier,
+    providerOptions: spec.providerOptions,
+    tools: spec.tools,
+  };
+}
+
 export function marketSelectionPrompt(input: {
   thesis: Thesis;
   candidates: unknown[];
@@ -45,9 +131,22 @@ export function marketSelectionPrompt(input: {
   fitAssessments?: unknown[];
   quotes?: unknown[];
 }): string {
-  return `${UNIVERSAL_SYSTEM_PROMPT}
+  return renderPromptSpec(marketSelectionPromptSpec(input));
+}
 
-Tool name: rank_expressions
+export function marketSelectionPromptSpec(input: {
+  thesis: Thesis;
+  candidates: unknown[];
+  tradeExpression?: unknown;
+  fitAssessments?: unknown[];
+  quotes?: unknown[];
+}): CassiePromptSpec<MarketSelection> {
+  return makePromptSpec({
+    name: "cassie_market_selection",
+    tier: "cheap",
+    outputSchema: MarketSelectionSchema,
+    payload: input,
+    stage: `Tool name: rank_expressions
 Prompt version: ${PROMPT_VERSION}
 
 Purpose:
@@ -60,10 +159,8 @@ Rules:
 - Do not select a trade just because the tweet is interesting.
 - Return noTradeReason when no candidate has clear semantic fit and acceptable execution.
 - Use selectedMarket only for a real validated candidate.
-- Never execute orders.
-
-Inputs:
-${JSON.stringify(input, null, 2)}`;
+- Never execute orders.`,
+  });
 }
 
 export function polymarketDiscoveryQueryPrompt(input: {
@@ -71,9 +168,20 @@ export function polymarketDiscoveryQueryPrompt(input: {
   tradeExpression?: unknown;
   limit: number;
 }): string {
-  return `${UNIVERSAL_SYSTEM_PROMPT}
+  return renderPromptSpec(polymarketDiscoveryQueryPromptSpec(input));
+}
 
-Tool name: polymarket_discovery_query_planner
+export function polymarketDiscoveryQueryPromptSpec(input: {
+  thesis: Thesis;
+  tradeExpression?: unknown;
+  limit: number;
+}): CassiePromptSpec<z.infer<typeof PolymarketDiscoveryQueryPlanSchema>> {
+  return makePromptSpec({
+    name: "cassie_polymarket_discovery_queries",
+    tier: "expensive",
+    outputSchema: PolymarketDiscoveryQueryPlanSchema,
+    payload: input,
+    stage: `Tool name: polymarket_discovery_query_planner
 Prompt version: ${PROMPT_VERSION}
 
 Purpose:
@@ -83,19 +191,38 @@ Rules:
 - Search from event terms, affected entities, aliases, deadlines, legal/regulatory terms, acquirer/target terms, launch terms, outcome terms, and likely rule wording.
 - Do not invent markets.
 - Do not include price, probability, or liquidity claims.
-- Return at most ${input.limit} concise reusable queries.
-
-Inputs:
-${JSON.stringify(input, null, 2)}`;
+- Return at most ${input.limit} concise reusable queries.`,
+  });
 }
 
 export function opportunityFramePrompt(input: {
   sourcePost: SourcePost;
   userCommand: string;
 }): string {
-  return `${UNIVERSAL_SYSTEM_PROMPT}
+  return renderPromptSpec(opportunityFramePromptSpec(input));
+}
 
-Tool name: frame_opportunity
+export function opportunityFramePromptSpec(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+}): CassiePromptSpec<OpportunityFrame> {
+  return makePromptSpec({
+    name: "cassie_opportunity_frame",
+    tier: "expensive",
+    outputSchema: OpportunityFrameSchema,
+    payload: {
+      source: sourceForPrompt(input.sourcePost),
+      userCommand: input.userCommand,
+      current_datetime: new Date().toISOString(),
+      allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
+    },
+    tools: {
+      webSearch: {
+        externalWebAccess: true,
+        searchContextSize: "low",
+      },
+    },
+    stage: `Tool name: frame_opportunity
 Prompt version: ${PROMPT_VERSION}
 
 Purpose:
@@ -109,15 +236,8 @@ Analyze the source and identify:
 4. Likely expression families across crypto, pre-IPO/private stock, prediction market, or no trade.
 5. Verification needed before expression generation.
 6. Reasons this may not be tradable.
-Keep expressionFamilies abstract, such as "long SOL perp", "SpaceX pre-IPO if listed", "buy Yes/No on an exact event market", or "no trade".
-
-Input:
-${JSON.stringify({
-    source: sourceForPrompt(input.sourcePost),
-    userCommand: input.userCommand,
-    current_datetime: new Date().toISOString(),
-    allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
-  }, null, 2)}`;
+Keep expressionFamilies abstract, such as "long SOL perp", "SpaceX pre-IPO if listed", "buy Yes/No on an exact event market", or "no trade".`,
+  });
 }
 
 export function singleStepTradeExpressionPrompt(input: {
@@ -126,9 +246,27 @@ export function singleStepTradeExpressionPrompt(input: {
   opportunityFrame?: OpportunityFrame;
   marketCandidates?: MarketCandidate[];
 }): string {
-  return `${UNIVERSAL_SYSTEM_PROMPT}
+  return renderPromptSpec(singleStepTradeExpressionPromptSpec(input));
+}
 
-Tool name: generate_trade_expressions
+export function singleStepTradeExpressionPromptSpec(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+  opportunityFrame?: OpportunityFrame;
+  marketCandidates?: MarketCandidate[];
+}): CassiePromptSpec<TradeExpressionPlan> {
+  return makePromptSpec({
+    name: "cassie_trade_expressions",
+    tier: "expensive",
+    outputSchema: TradeExpressionPlanSchema,
+    payload: {
+      source: sourceForPrompt(input.sourcePost),
+      userCommand: input.userCommand,
+      opportunityFrame: input.opportunityFrame ?? null,
+      marketCandidates: input.marketCandidates ?? null,
+      allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
+    },
+    stage: `Tool name: generate_trade_expressions
 Prompt version: ${PROMPT_VERSION}
 
 Purpose:
@@ -141,16 +279,8 @@ Rules:
 - Include noTradeCase when the opportunity is weak, vague, unverified, stale, already priced, or has no clean allowed expression.
 - Include proxy expressions only when causal linkage is strong.
 - Include No/contrarian prediction-market expressions when hype or rule mismatch may be overpricing Yes.
-- Set decision to no_trade only when no venue search is warranted; otherwise use needs_market_check or route_to_market_router.
-
-Input:
-${JSON.stringify({
-    source: sourceForPrompt(input.sourcePost),
-    userCommand: input.userCommand,
-    opportunityFrame: input.opportunityFrame ?? null,
-    marketCandidates: input.marketCandidates ?? null,
-    allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
-  }, null, 2)}`;
+- Set decision to no_trade only when no venue search is warranted; otherwise use needs_market_check or route_to_market_router.`,
+  });
 }
 
 export function expressionFitPrompt(input: {
@@ -159,9 +289,21 @@ export function expressionFitPrompt(input: {
   candidate: MarketCandidate;
   side?: "yes" | "no";
 }): string {
-  return `${UNIVERSAL_SYSTEM_PROMPT}
+  return renderPromptSpec(expressionFitPromptSpec(input));
+}
 
-Tool name: assess_expression_fit
+export function expressionFitPromptSpec(input: {
+  opportunityFrame?: OpportunityFrame;
+  tradeExpression: TradeExpressionPlan;
+  candidate: MarketCandidate;
+  side?: "yes" | "no";
+}): CassiePromptSpec<ExpressionFitAssessment> {
+  return makePromptSpec({
+    name: "cassie_expression_fit",
+    tier: "expensive",
+    outputSchema: ExpressionFitAssessmentSchema,
+    payload: input,
+    stage: `Tool name: assess_expression_fit
 Prompt version: ${PROMPT_VERSION}
 
 Purpose:
@@ -182,8 +324,6 @@ Rules:
 - Mark needs_more_info if rules/specs are missing.
 - Do not use price attractiveness here; assess semantic and contract fit only.
 - Do not invent missing rules, specs, or venue data.
-- Use a stable candidateId built from venue, symbol/instrument, and side when the input does not provide one.
-
-Input:
-${JSON.stringify(input, null, 2)}`;
+- Use a stable candidateId built from venue, symbol/instrument, and side when the input does not provide one.`,
+  });
 }

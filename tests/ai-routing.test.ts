@@ -6,6 +6,7 @@ import {
   MissingAiDependencyError,
   extractModelThinkingTrace,
   openAiModelForStructuredCall,
+  promptParametersForStructuredCall,
   providerOptionsForRoute,
   routeStructuredModel,
   structuredToolsForCall,
@@ -56,6 +57,12 @@ describe("structured AI model routing", () => {
     expect(structuredToolsForCall({
       name: "cassie_opportunity_frame",
       route,
+      tools: {
+        webSearch: {
+          externalWebAccess: true,
+          searchContextSize: "low",
+        },
+      },
       openai: { tools: { webSearch } },
     })).toEqual({
       web_search: { id: "openai.web_search" },
@@ -67,8 +74,25 @@ describe("structured AI model routing", () => {
     expect(structuredToolsForCall({
       name: "cassie_trade_expressions",
       route: routeStructuredModel({ name: "cassie_trade_expressions" }),
+      tools: undefined,
       openai: { tools: { webSearch } },
     })).toBeUndefined();
+  });
+
+  it("uses AI SDK messages when a structured prompt spec supplies them", () => {
+    expect(promptParametersForStructuredCall({
+      prompt: "legacy flat prompt",
+      system: "system contract",
+      messages: [{ role: "user", content: "structured payload" }],
+    })).toEqual({
+      system: "system contract",
+      messages: [{ role: "user", content: "structured payload" }],
+    });
+    expect(promptParametersForStructuredCall({
+      prompt: "legacy flat prompt",
+    })).toEqual({
+      prompt: "legacy flat prompt",
+    });
   });
 
   it("uses the OpenAI Responses API for every OpenAI structured call", () => {

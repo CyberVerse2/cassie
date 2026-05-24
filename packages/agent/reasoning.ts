@@ -9,8 +9,9 @@ import {
   type TradeExpressionPlan,
 } from "../core/schemas/index.ts";
 import {
-  opportunityFramePrompt,
-  singleStepTradeExpressionPrompt,
+  opportunityFramePromptSpec,
+  singleStepTradeExpressionPromptSpec,
+  structuredPromptInput,
 } from "../prompts/index.ts";
 
 export async function frameOpportunity(input: {
@@ -19,12 +20,10 @@ export async function frameOpportunity(input: {
   userCommand: string;
 }): Promise<OpportunityFrame> {
   return OpportunityFrameSchema.parse(await input.ai.generateObject({
-    schema: OpportunityFrameSchema,
-    name: "cassie_opportunity_frame",
-    prompt: opportunityFramePrompt({
+    ...structuredPromptInput(opportunityFramePromptSpec({
       sourcePost: input.sourcePost,
       userCommand: input.userCommand,
-    }),
+    })),
   }));
 }
 
@@ -40,13 +39,11 @@ export async function generateTradeExpressions(input: {
     : undefined;
 
   return TradeExpressionPlanSchema.parse(await input.ai.generateObject({
-    schema: TradeExpressionPlanSchema,
-    name: "cassie_trade_expressions",
-    prompt: singleStepTradeExpressionPrompt({
+    ...structuredPromptInput(singleStepTradeExpressionPromptSpec({
       sourcePost: input.sourcePost,
       userCommand: input.userCommand,
       opportunityFrame: input.opportunityFrame,
       marketCandidates,
-    }),
+    })),
   }));
 }
