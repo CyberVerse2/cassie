@@ -2,6 +2,8 @@ import "dotenv/config";
 import { inspect } from "node:util";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/adapters/index.ts";
+import { XApiSourceResolver } from "../packages/agent/source.ts";
+import { sourcePostFromInput } from "../packages/helpers/source-post-input.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";
@@ -129,6 +131,7 @@ Useful examples:
   npm run cli -- settings:set --user local-user --size 50
   npm run cli -- state
   npm run cli -- run
+  npm run cli -- run --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- run --post "SOL looks underpriced into ETF approval."
   npm run cli -- run --post "Exa raised $250M" --audit
   npm run cli -- run-supervisor <runId>
@@ -324,7 +327,7 @@ async function mentionRequestFromArgs(args: ParsedArgs) {
 }
 
 async function mentionSourcePostFromArgs(args: ParsedArgs): Promise<SourcePost> {
-  return sourcePostFromFlags(args);
+  return sourcePostFromFlags(args, { useRoundRobin: true });
 }
 
 function summarizeState(snapshot: CassieStoreSnapshot) {
@@ -422,24 +425,25 @@ function truncateTerminal(value: string, maxLength: number): string {
   return value.length > maxLength ? `${value.slice(0, Math.max(0, maxLength - 3))}...` : value;
 }
 
-async function sourcePostFromFlags(args: ParsedArgs): Promise<SourcePost> {
-  const tweetUrl = nullableFlag(args, "tweet-url");
-  if (tweetUrl) {
-    throw new CliError("Tweet URL resolution is not supported. Pass tweet text with --post.");
-  }
-
-  return {
-    platform: "x",
+async function sourcePostFromFlags(
+  args: ParsedArgs,
+  options: { useRoundRobin?: boolean } = {},
+): Promise<SourcePost> {
+  return sourcePostFromInput({
+    sourceResolver: new XApiSourceResolver(),
+    tweetUrl: nullableFlag(args, "tweet-url"),
+    tweetsFile: nullableFlag(args, "tweets-file"),
+    postText: nullableFlag(args, "post"),
     postId: nullableFlag(args, "post-id"),
     url: nullableFlag(args, "url"),
-    authorHandle: nullableFlag(args, "author") ?? "local-test",
-    authorName: nullableFlag(args, "author-name") ?? "Local Test",
-    text: flag(args, "post", "Solana ETF approval is basically inevitable now. Market is asleep."),
+    authorHandle: nullableFlag(args, "author"),
+    authorName: nullableFlag(args, "author-name"),
     createdAt: nullableFlag(args, "created-at"),
-    quotedPostText: nullableFlag(args, "quote") ?? undefined,
+    quotedPostText: nullableFlag(args, "quote"),
     linkedUrls: csvFlag(args, "links", []),
     mediaDescriptions: csvFlag(args, "media", []),
-  };
+    defaultPostText: options.useRoundRobin ? null : "Solana ETF approval is basically inevitable now. Market is asleep.",
+  });
 }
 
 function parseArgs(argv: string[]): ParsedArgs {

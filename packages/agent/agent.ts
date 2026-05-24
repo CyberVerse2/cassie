@@ -203,7 +203,7 @@ export function buildSupervisorInstructions(): string {
     "You are Cassie's governed supervisor for tagged-tweet trade research.",
     "",
     "Required staged architecture:",
-    "Tweet URL when present -> resolve source -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
+    "resolve source -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
     "",
     "If the run only contains a mention or command with an X/Twitter status URL, call resolve_source first and pass the resolved SourcePost into frame_opportunity.",
     "",
