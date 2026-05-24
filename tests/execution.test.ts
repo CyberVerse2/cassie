@@ -35,7 +35,6 @@ describe("PolymarketExecutionClient", () => {
       tradeIds: [],
     });
     const setupGaslessWallet = vi.fn();
-    const setupTradingApprovals = vi.fn();
     const factory = vi.fn(async (config): Promise<PolymarketSdkTradingClientLike> => {
       expect(config.host).toBe("https://clob.polymarket.com");
       expect(config.creds).toEqual({
@@ -49,7 +48,6 @@ describe("PolymarketExecutionClient", () => {
       return {
         isGaslessReady: vi.fn().mockResolvedValue(true),
         setupGaslessWallet,
-        setupTradingApprovals: vi.fn().mockResolvedValue({ wait: setupTradingApprovals }),
         placeMarketOrder,
       };
     });
@@ -72,7 +70,6 @@ describe("PolymarketExecutionClient", () => {
 
     expect(factory).toHaveBeenCalledTimes(1);
     expect(setupGaslessWallet).not.toHaveBeenCalled();
-    expect(setupTradingApprovals).toHaveBeenCalledTimes(1);
     expect(placeMarketOrder).toHaveBeenCalledWith({
       tokenId: "123",
       amount: 25,
@@ -97,7 +94,6 @@ describe("PolymarketExecutionClient", () => {
       factory: async () => ({
         isGaslessReady: vi.fn().mockResolvedValue(false),
         setupGaslessWallet: vi.fn(),
-        setupTradingApprovals: vi.fn(),
         placeMarketOrder: vi.fn(),
       }),
     });

@@ -141,7 +141,6 @@ export class HyperliquidExecutionClient implements ExecutionClient {
 export interface PolymarketSdkTradingClientLike {
   isGaslessReady(): Promise<boolean>;
   setupGaslessWallet(): Promise<PolymarketSdkTradingClientLike>;
-  setupTradingApprovals(): Promise<{ wait(): Promise<unknown> }>;
   placeMarketOrder(order: {
     tokenId: string;
     amount: number;
@@ -222,7 +221,6 @@ function adaptPolymarketSecureClient(client: SecureClient): PolymarketSdkTrading
   return {
     isGaslessReady: () => client.isGaslessReady(),
     setupGaslessWallet: async () => adaptPolymarketSecureClient(await client.setupGaslessWallet()),
-    setupTradingApprovals: () => client.setupTradingApprovals(),
     placeMarketOrder: (order) => client.placeMarketOrder(order),
   };
 }
@@ -242,10 +240,7 @@ async function preparePolymarketTradingClient(
     );
   }
 
-  const gaslessClient = await client.isGaslessReady()
+  return await client.isGaslessReady()
     ? client
     : await client.setupGaslessWallet();
-  const approvals = await gaslessClient.setupTradingApprovals();
-  await approvals.wait();
-  return gaslessClient;
 }

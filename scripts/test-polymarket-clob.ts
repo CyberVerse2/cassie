@@ -301,12 +301,9 @@ async function authenticatedClient() {
   if (!config.relayerApiKey || !config.relayerApiKeyAddress) {
     throw new Error("Polymarket gasless trading setup requires POLYMARKET_RELAYER_API_KEY and POLYMARKET_RELAYER_API_KEY_ADDRESS.");
   }
-  const gaslessClient = await client.isGaslessReady()
+  return await client.isGaslessReady()
     ? client
     : await client.setupGaslessWallet();
-  const approvals = await gaslessClient.setupTradingApprovals();
-  await approvals.wait();
-  return gaslessClient;
 }
 
 function parseStringArray(value: string | string[] | undefined): string[] {
