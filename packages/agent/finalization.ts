@@ -1,6 +1,8 @@
 import { z } from "zod";
 import type { CassieStore } from "../core/db/store.ts";
 import {
+  ExpressionFitAssessmentSchema,
+  MarketCandidateSchema,
   MarketSelectionSchema,
   RiskDecisionSchema,
   SupervisorFinalResultSchema,
@@ -8,8 +10,11 @@ import {
   TradeTicketSchema,
   type CassieActionState,
   type ControlRun,
+  type ExpressionFitAssessment,
+  type MarketCandidate,
   type MarketSelection,
   type RiskDecision,
+  type RunStep,
   type RunStepType,
   type TradeExpressionPlan,
   type TradeTicket,
@@ -41,12 +46,25 @@ export async function finalizeRunFromPersistedSteps(input: {
   store: CassieStore;
   run: ControlRun;
 }) {
-  const [tradeExpression, marketSelection, riskDecision, tradeTicket] = await Promise.all([
-    readPersistedStepOutput<TradeExpressionPlan>(input.store, input.run.runId, "trade_expression", TradeExpressionPlanSchema),
-    readPersistedStepOutput<MarketSelection>(input.store, input.run.runId, "market_selection", MarketSelectionSchema),
-    readPersistedStepOutput<RiskDecision>(input.store, input.run.runId, "risk", RiskDecisionSchema),
-    readPersistedStepOutput<TradeTicket>(input.store, input.run.runId, "ticket", TradeTicketSchema),
-  ]);
+  const steps = await input.store.getRunSteps(input.run.runId);
+  const tradeExpression = readPersistedStepOutput<TradeExpressionPlan>(steps, "trade_expression", TradeExpressionPlanSchema);
+  const marketCandidates = readPersistedStepOutput<MarketCandidate[]>(steps, "market_candidates", MarketCandidateSchema.array());
+  const expressionFit = readPersistedStepOutput<ExpressionFitAssessment>(steps, "market_assessment", ExpressionFitAssessmentSchema);
+  const quote = latestPersistedStepOutput(steps, "market_quote");
+  const marketSelection = readPersistedStepOutput<MarketSelection>(steps, "market_selection", MarketSelectionSchema)
+    ?? noTradeSelectionFromCompletedMarketCheck(marketCandidates, expressionFit);
+  const riskDecision = readPersistedStepOutput<RiskDecision>(steps, "risk", RiskDecisionSchema);
+  const tradeTicket = readPersistedStepOutput<TradeTicket>(steps, "ticket", TradeTicketSchema);
+
+  validatePersistedStageProgress({
+    tradeExpression,
+    marketCandidates,
+    expressionFit,
+    quote,
+    marketSelection,
+    riskDecision,
+    tradeTicket,
+  });
 
   const finalInput: PreparedFinalizeRunInput = {
     responseType: tradeTicket ? "trade_ticket" : "analysis",
@@ -78,6 +96,101 @@ export async function finalizeRunFromPersistedSteps(input: {
       return result;
     },
   });
+}
+
+function validatePersistedStageProgress(input: {
+  tradeExpression?: TradeExpressionPlan;
+  marketCandidates?: MarketCandidate[];
+  expressionFit?: ExpressionFitAssessment;
+  quote?: unknown;
+  marketSelection?: MarketSelection;
+  riskDecision?: RiskDecision;
+  tradeTicket?: TradeTicket;
+}) {
+  if (!input.tradeExpression || input.tradeExpression.decision === "no_trade") {
+    return;
+  }
+
+  if (input.tradeExpression.decision !== "needs_market_check" && input.tradeExpression.decision !== "route_to_market_router") {
+    return;
+  }
+
+  if (!input.marketCandidates) {
+    throw new SupervisorPrerequisiteError("Market-check finalization requires a completed venue search.");
+  }
+
+  if (input.marketCandidates.length === 0) {
+    return;
+  }
+
+  if (!input.expressionFit) {
+    throw new SupervisorPrerequisiteError("Market-check finalization requires expression-fit assessment.");
+  }
+
+  if (input.expressionFit.fitStatus !== "validated") {
+    return;
+  }
+
+  if (!input.quote) {
+    throw new SupervisorPrerequisiteError("Validated expression finalization requires a quote.");
+  }
+
+  if (!input.marketSelection) {
+    throw new SupervisorPrerequisiteError("Quoted expression finalization requires expression ranking.");
+  }
+
+  if (!input.marketSelection.selectedMarket || input.marketSelection.noTradeReason) {
+    return;
+  }
+
+  if (!input.riskDecision) {
+    throw new SupervisorPrerequisiteError("Selected expression finalization requires a deterministic risk check.");
+  }
+
+  if (input.riskDecision.decision === "reject") {
+    return;
+  }
+
+  if (!input.tradeTicket) {
+    throw new SupervisorPrerequisiteError("Approved expression finalization requires trade ticket creation.");
+  }
+}
+
+function noTradeSelectionFromCompletedMarketCheck(
+  marketCandidates?: MarketCandidate[],
+  expressionFit?: ExpressionFitAssessment,
+): MarketSelection | undefined {
+  if (marketCandidates && marketCandidates.length === 0) {
+    return {
+      decision: "no_selection",
+      selectedMarket: null,
+      selectedCandidateId: null,
+      rejectionReason: "No configured venue candidates matched the trade expression.",
+      rankedCandidates: [],
+      rejectedCandidates: [],
+      noTradeReason: "No configured venue candidates matched the trade expression.",
+    };
+  }
+
+  if (expressionFit && expressionFit.fitStatus !== "validated") {
+    return {
+      decision: "no_selection",
+      selectedMarket: null,
+      selectedCandidateId: expressionFit.candidateId,
+      rejectionReason: expressionFit.semanticFitSummary,
+      rankedCandidates: [],
+      rejectedCandidates: [
+        {
+          venue: expressionFit.venue,
+          symbol: expressionFit.candidateId,
+          reason: expressionFit.semanticFitSummary,
+        },
+      ],
+      noTradeReason: expressionFit.semanticFitSummary,
+    };
+  }
+
+  return undefined;
 }
 
 export function assertUsableMarketSelection(selection?: MarketSelection): void {
@@ -141,17 +254,19 @@ export function finalizeResult(input: PreparedFinalizeRunInput) {
   });
 }
 
-async function readPersistedStepOutput<T>(
-  store: CassieStore,
-  runId: string,
+function readPersistedStepOutput<T>(
+  steps: RunStep[],
   stepType: RunStepType,
   schema: z.ZodType<T>,
-): Promise<T | undefined> {
-  const steps = await store.getRunSteps(runId);
-  const persisted = steps
+): T | undefined {
+  const persisted = latestPersistedStepOutput(steps, stepType);
+  return persisted == null ? undefined : schema.parse(persisted);
+}
+
+function latestPersistedStepOutput(steps: RunStep[], stepType: RunStepType): unknown {
+  return steps
     .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
     .at(-1)?.output;
-  return persisted == null ? undefined : schema.parse(persisted);
 }
 
 function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState {

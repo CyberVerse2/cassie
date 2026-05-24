@@ -301,7 +301,7 @@ describe("supervisor scenario coverage", () => {
     });
   });
 
-  it("finalizes from persisted canonical steps when the agent loop does not call finalize_run", async () => {
+  it("does not fallback-finalize a market-check expression before venue search", async () => {
     const { store, run } = await createScenario("@Cassie get me in");
     await store.addRunStep({
       runId: run.runId,
@@ -329,18 +329,93 @@ describe("supervisor scenario coverage", () => {
       completedAt: new Date().toISOString(),
     });
 
+    await expect(finalizeRunFromPersistedSteps({ store, run }))
+      .rejects.toThrow("Market-check finalization requires a completed venue search.");
+
+    await expect(store.getRun(run.runId)).resolves.toMatchObject({
+      status: "queued",
+      result: null,
+    });
+  });
+
+  it("fallback-finalizes no-trade after venue search finds no candidates", async () => {
+    const { store, run } = await createScenario("@Cassie get me in");
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "trade_expression",
+      status: "succeeded",
+      input: null,
+      output: {
+        ...tradeExpression,
+        decision: "needs_market_check",
+        reason: "Venue confirmation is required before this can be treated as tradable.",
+      },
+      error: null,
+      model: "deepseek-v4-pro",
+      promptName: "cassie_trade_expression",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_candidates",
+      status: "succeeded",
+      input: null,
+      output: [],
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      completedAt: new Date().toISOString(),
+    });
+
     const final = await finalizeRunFromPersistedSteps({ store, run });
 
     expect(final).toMatchObject({
-      actionState: "insufficient_evidence",
+      actionState: "no_trade",
       responseType: "analysis",
-      publicSummary: expect.stringContaining("Next step: check the matching venue or market"),
+      publicSummary: expect.stringContaining("Market check came back no-trade"),
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       status: "succeeded",
       result: {
-        actionState: "insufficient_evidence",
+        actionState: "no_trade",
       },
     });
+  });
+
+  it("does not fallback-finalize venue candidates before expression-fit assessment", async () => {
+    const { store, run } = await createScenario("@Cassie get me in");
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "trade_expression",
+      status: "succeeded",
+      input: null,
+      output: {
+        ...tradeExpression,
+        decision: "needs_market_check",
+        reason: "Venue confirmation is required before this can be treated as tradable.",
+      },
+      error: null,
+      model: "deepseek-v4-pro",
+      promptName: "cassie_trade_expression",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_candidates",
+      status: "succeeded",
+      input: null,
+      output: [marketSelection.selectedMarket],
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    await expect(finalizeRunFromPersistedSteps({ store, run }))
+      .rejects.toThrow("Market-check finalization requires expression-fit assessment.");
   });
 });
