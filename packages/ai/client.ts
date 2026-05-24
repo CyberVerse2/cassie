@@ -24,6 +24,8 @@ export type ModelRoute = {
   model: string;
 };
 
+export const IMPORTANT_OPENAI_REASONING_EFFORT = "medium";
+
 export interface StructuredAiClient {
   generateObject<T>(input: {
     schema: z.ZodType<T>;
@@ -81,6 +83,16 @@ export function routeStructuredModel(input: {
   return tier === "cheap"
     ? { tier, provider: "deepseek", model: cheapModel }
     : { tier, provider: "openai", model: expensiveModel };
+}
+
+export function providerOptionsForRoute(route: ModelRoute) {
+  return route.provider === "openai"
+    ? {
+      openai: {
+        reasoningEffort: IMPORTANT_OPENAI_REASONING_EFFORT,
+      },
+    }
+    : undefined;
 }
 
 export class CassieStructuredClient implements StructuredAiClient {
@@ -151,6 +163,7 @@ export class CassieStructuredClient implements StructuredAiClient {
         prompt: input.prompt,
         maxRetries: structuredMaxRetries(),
         maxOutputTokens: maxOutputTokensForTier(route.tier),
+        providerOptions: providerOptionsForRoute(route),
       });
 
       finishTrace?.({

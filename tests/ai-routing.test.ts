@@ -4,6 +4,7 @@ import {
   IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS,
   CassieStructuredClient,
   MissingAiDependencyError,
+  providerOptionsForRoute,
   routeStructuredModel,
 } from "../packages/ai/client.ts";
 
@@ -22,6 +23,15 @@ describe("structured AI model routing", () => {
       tier: "expensive",
       model: "gpt-5.4-mini",
     });
+  });
+
+  it("sets GPT 5.4 mini reasoning effort to medium for judgment calls", () => {
+    expect(providerOptionsForRoute(routeStructuredModel({ name: "cassie_trade_expressions" }))).toEqual({
+      openai: {
+        reasoningEffort: "medium",
+      },
+    });
+    expect(providerOptionsForRoute(routeStructuredModel({ name: "cassie_market_selection" }))).toBeUndefined();
   });
 
   it("allows explicit tier overrides for structured calls", () => {
