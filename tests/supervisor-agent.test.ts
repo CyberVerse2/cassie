@@ -198,6 +198,38 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
   return execute(input, {});
 }
 
+async function seedMarketCandidates(store: InMemoryCassieStore, runId: string, candidates: MarketCandidate[]) {
+  await store.addRunStep({
+    runId,
+    stepType: "market_candidates",
+    status: "succeeded",
+    input: {},
+    output: candidates,
+    error: null,
+    model: null,
+    promptName: null,
+    promptVersion: null,
+    thinkingTrace: null,
+    completedAt: new Date().toISOString(),
+  });
+}
+
+async function seedFitAssessment(store: InMemoryCassieStore, runId: string, fitAssessment: typeof expressionFitAssessment) {
+  await store.addRunStep({
+    runId,
+    stepType: "market_assessment",
+    status: "succeeded",
+    input: {},
+    output: fitAssessment,
+    error: null,
+    model: "gpt-5.4-mini",
+    promptName: "cassie_expression_fit",
+    promptVersion: "2026-05-24",
+    thinkingTrace: null,
+    completedAt: new Date().toISOString(),
+  });
+}
+
 describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
@@ -486,6 +518,7 @@ describe("AI SDK supervisor agent", () => {
       symbol: "ETH",
       reason: "Second candidate for cache-key coverage.",
     };
+    await seedMarketCandidates(store, run.runId, [firstCandidate, secondCandidate]);
 
     const tools = createCassieSupervisorTools({
       store,
@@ -501,9 +534,14 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
+    await seedFitAssessment(store, run.runId, expressionFitAssessment);
     const first = await executeTool<MarketCandidate>(tools.quote_expression, {
       candidate: firstCandidate,
       fitAssessment: expressionFitAssessment,
+    });
+    await seedFitAssessment(store, run.runId, {
+      ...expressionFitAssessment,
+      candidateId: "hyperliquid:ETH:long",
     });
     const second = await executeTool<MarketCandidate>(tools.quote_expression, {
       candidate: secondCandidate,
@@ -596,6 +634,7 @@ describe("AI SDK supervisor agent", () => {
       userCommand: "@Cassie check the SOL expression",
       sourcePost,
     });
+    await seedMarketCandidates(store, run.runId, [marketSelection.selectedMarket!]);
 
     const tools = createCassieSupervisorTools({
       store,
@@ -611,15 +650,26 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
+    const rewrittenCandidate = {
+      ...marketSelection.selectedMarket!,
+      instrument: "Solana narrative",
+      markPrice: null,
+      warnings: ["model-written candidate"],
+    };
+
     await expect(executeTool(tools.assess_expression_fit, {
       opportunityFrame,
       tradeExpression,
-      candidate: marketSelection.selectedMarket!,
+      candidate: rewrittenCandidate,
     })).resolves.toMatchObject({
       fitStatus: "validated",
       semanticFitSummary: expect.stringContaining("direct exposure"),
     });
     expect(ai.calls).toContain("cassie_expression_fit");
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.find((step) => step.stepType === "market_assessment")?.input).toMatchObject({
+      candidate: marketSelection.selectedMarket,
+    });
   });
 
 });

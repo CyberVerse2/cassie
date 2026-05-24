@@ -20,6 +20,8 @@ import {
   XSentimentAssessmentSchema,
   type AccountState,
   type ControlRun,
+  type ExpressionFitAssessment,
+  type MarketCandidate,
   type UserSettings,
 } from "../core/schemas/index.ts";
 import { selectMarket } from "../adapters/selection.ts";
@@ -186,10 +188,16 @@ export function createCassieSupervisorTools(input: {
         candidate: MarketCandidateSchema,
         side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ opportunityFrame, tradeExpression, candidate, side }) => runStepOnce(
-        "market_assessment",
-        { opportunityFrame, tradeExpression, candidate, side },
-        async () => {
+      execute: async ({ opportunityFrame, tradeExpression, candidate, side }) => {
+        const persistedCandidate = await resolveLatestMarketCandidate({
+          store: input.store,
+          runId: input.run.runId,
+          candidate,
+        });
+        return runStepOnce(
+          "market_assessment",
+          { opportunityFrame, tradeExpression, candidate: persistedCandidate, side },
+          async () => {
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,
@@ -197,18 +205,19 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_expression_fit",
             promptVersion,
             model: importantModel,
-            stepInput: { opportunityFrame, tradeExpression, candidate, side },
+            stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, side },
             execute: ({ setThinkingTrace }) => assessExpressionFit({
               ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
               polymarket: input.deps.polymarketMarketFinder,
               opportunityFrame,
               tradeExpression,
-              candidate,
+              candidate: persistedCandidate,
               side,
             }),
           });
         },
-      ),
+        );
+      },
     }),
     quote_expression: tool({
       description: "Refresh quote data for a validated candidate. Do not quote rejected or unassessed expressions.",
@@ -217,26 +226,38 @@ export function createCassieSupervisorTools(input: {
         fitAssessment: ExpressionFitAssessmentSchema,
         side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ candidate, fitAssessment, side }) => runStepOnce(
-        "market_quote",
-        { candidate, fitAssessment, side },
-        async () => {
-          if (fitAssessment.fitStatus !== "validated") {
+      execute: async ({ candidate, fitAssessment, side }) => {
+        const persistedCandidate = await resolveLatestMarketCandidate({
+          store: input.store,
+          runId: input.run.runId,
+          candidate,
+        });
+        const persistedFitAssessment = await resolveLatestFitAssessment({
+          store: input.store,
+          runId: input.run.runId,
+          fitAssessment,
+        });
+        return runStepOnce(
+          "market_quote",
+          { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, side },
+          async () => {
+          if (persistedFitAssessment.fitStatus !== "validated") {
             throw new Error("quote_expression requires a validated fit assessment.");
           }
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,
             stepType: "market_quote",
-            stepInput: { candidate, fitAssessment, side },
+            stepInput: { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, side },
             execute: () => quoteExpression({
               polymarket: input.deps.polymarketMarketFinder,
-              candidate,
+              candidate: persistedCandidate,
               side,
             }),
           });
         },
-      ),
+        );
+      },
     }),
     check_x_sentiment: tool({
       description: "Check X-only sentiment, novelty, crowding, and correction risk for a validated and quoted candidate.",
@@ -407,4 +428,65 @@ export function createCassieSupervisorTools(input: {
       }),
     }),
   };
+}
+
+async function resolveLatestMarketCandidate(input: {
+  store: CassieStore;
+  runId: string;
+  candidate: MarketCandidate;
+}): Promise<MarketCandidate> {
+  const steps = await input.store.getRunSteps(input.runId);
+  const latestStep = steps
+    .filter((step) => step.stepType === "market_candidates" && step.status === "succeeded")
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
+  const candidates = latestStep
+    ? MarketCandidateSchema.array().safeParse(latestStep.output).data ?? []
+    : [];
+
+  const requestedKey = marketCandidateLookupKey(input.candidate);
+  const matches = candidates.filter((candidate) => marketCandidateLookupKey(candidate) === requestedKey);
+  if (matches.length === 1) return matches[0]!;
+  if (matches.length > 1) {
+    throw new Error(`Candidate ${requestedKey} is ambiguous across latest venue-search results.`);
+  }
+  throw new Error(`Candidate ${requestedKey} was not found in persisted venue-search results.`);
+}
+
+async function resolveLatestFitAssessment(input: {
+  store: CassieStore;
+  runId: string;
+  fitAssessment: ExpressionFitAssessment;
+}): Promise<ExpressionFitAssessment> {
+  const steps = await input.store.getRunSteps(input.runId);
+  const latestStep = steps
+    .filter((step) => step.stepType === "market_assessment" && step.status === "succeeded")
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
+  const assessment = latestStep
+    ? ExpressionFitAssessmentSchema.safeParse(latestStep.output).data
+    : null;
+  const match = assessment
+    && assessment.candidateId === input.fitAssessment.candidateId
+    && assessment.expressionId === input.fitAssessment.expressionId
+    && assessment.venue === input.fitAssessment.venue
+    && assessment.fitStatus === input.fitAssessment.fitStatus;
+
+  if (match) return assessment;
+  throw new Error(`Fit assessment ${input.fitAssessment.candidateId} was not found in persisted expression-fit results.`);
+}
+
+function marketCandidateLookupKey(candidate: MarketCandidate): string {
+  if (candidate.venue === "polymarket") {
+    return [
+      candidate.venue,
+      candidate.conditionId ?? candidate.marketSlug ?? candidate.symbol,
+      candidate.outcomeTokenId ?? candidate.outcome ?? candidate.side,
+      candidate.side,
+    ].join("|");
+  }
+
+  return [
+    candidate.venue,
+    candidate.symbol,
+    candidate.side,
+  ].join("|");
 }

@@ -461,6 +461,118 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("does not return hedge or reference assets for direct Hyperliquid searches", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      dexes: [null, { name: "hyna" }],
+      metas: {
+        main: {
+          universe: [{ name: "BTC" }, { name: "ZEC" }],
+          ctxs: [{ dayNtlVlm: "100000000" }, { dayNtlVlm: "50000000" }],
+        },
+        hyna: {
+          universe: [{ name: "hyna:BTC" }, { name: "hyna:ZEC" }],
+          ctxs: [{ dayNtlVlm: "2000000" }, { dayNtlVlm: "1200000" }],
+        },
+      },
+      books: {
+        ZEC: {
+          levels: [
+            [{ px: "632.4", sz: "100" }],
+            [{ px: "632.6", sz: "100" }],
+          ],
+        },
+        "hyna:ZEC": {
+          levels: [
+            [{ px: "632.5", sz: "100" }],
+            [{ px: "632.7", sz: "100" }],
+          ],
+        },
+      },
+    });
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        claim: "ZEC should outperform BTC.",
+        direction: "bullish",
+        mentionedAssets: ["ZEC", "BTC"],
+        topics: ["relative value"],
+        timeHorizon: "days",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.74,
+      },
+      tradeExpression: {
+        signal: "ZEC relative value versus BTC",
+        coreInterpretation: "The direct leg is long ZEC; BTC is only a hedge/reference asset until multi-leg tickets exist.",
+        directAsset: "ZEC",
+        directAssetTradable: true,
+        evidenceConfidence: 0.7,
+        marketDiscoveryConfidence: 0.7,
+        tradeExpressionConfidence: 0.74,
+        highestPurityExpression: "Long ZEC against BTC if supported.",
+        publicMarketReadThrough: "moderate",
+        candidates: [
+          {
+            instrument: "BTC hedge",
+            expression: "short",
+            thesis: "BTC is the hedge leg.",
+            causalDirectness: 0.4,
+            liquidity: 0.9,
+            surprise: 0.2,
+            timing: 0.6,
+            crowdingRisk: 0.4,
+            downsideAsymmetry: 0.4,
+            evidenceQuality: 0.4,
+            expectedEdge: 0.1,
+            tradableNow: false,
+            rejectionReason: "Hedge leg only.",
+            invalidation: [],
+            evidenceNeeded: [],
+            currentMarketPriceOrOdds: null,
+            fairValueOrExpectedValue: null,
+            instrumentType: "perp",
+            symbol: "BTC",
+            venue: "hyperliquid",
+            venueChecks: ["BTC perp"],
+            venueQuery: "BTC perp",
+          },
+        ],
+        rankedCandidates: [],
+        candidateExpressions: [
+          {
+            expressionId: "zec_direct",
+            expressionRail: "crypto",
+            expressionType: "directional",
+            abstractMarket: "ZEC perp",
+            intendedSide: "long",
+            primaryEntityOrEvent: "ZEC",
+            relatedEntities: ["BTC"],
+            thesis: "Long ZEC captures the direct narrative.",
+            whyThisExpressesTheOpportunity: "ZEC is the asset expected to re-rate.",
+            directness: "direct",
+            whatMustBeTrue: ["ZEC is listed"],
+            searchTerms: ["ZEC perp", "BTC hedge"],
+            requiredMarketFeatures: ["live ZEC perp"],
+            requiredRuleOrContractFeatures: ["tracks ZEC"],
+            keyRisks: ["BTC hedge mechanics unsupported"],
+            expectedTimeHorizon: "days",
+            priority: "high",
+            confidence: 0.74,
+          },
+        ],
+        discardedExpressions: [],
+        noTradeCase: null,
+        decision: "needs_market_check",
+        reason: "Needs live ZEC venue confirmation.",
+        insufficiency: null,
+        marketRouterInstructions: "Search direct ZEC only.",
+      },
+    });
+
+    expect(candidates.map((candidate) => candidate.symbol)).toEqual(["ZEC", "hyna:ZEC"]);
+    fetchMock.mockRestore();
+  });
+
   it("maps Polymarket markets into prediction-market candidates", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = new URL(String(input));

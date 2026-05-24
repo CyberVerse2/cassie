@@ -292,19 +292,19 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
 }
 
 function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
-  return [
-    ...thesis.mentionedAssets,
-    tradeExpression?.directAsset,
-    ...(tradeExpression?.candidates.flatMap((candidate) => [
-      candidate.symbol,
-      candidate.instrument,
-    ]) ?? []),
-    ...(tradeExpression?.candidateExpressions.flatMap((candidate) => [
-      candidate.expressionRail === "crypto" || candidate.expressionRail === "pre_ipo"
-        ? candidate.primaryEntityOrEvent
-        : null,
-    ]) ?? []),
-  ]
+  const anchors = tradeExpression
+    ? [
+      tradeExpression.directAsset,
+      ...(tradeExpression.candidateExpressions.flatMap((candidate) => [
+        (candidate.expressionRail === "crypto" || candidate.expressionRail === "pre_ipo")
+          && (candidate.directness === "direct" || candidate.directness === "strong_proxy")
+          ? candidate.primaryEntityOrEvent
+          : null,
+      ]) ?? []),
+    ]
+    : thesis.mentionedAssets;
+
+  return anchors
     .filter((value): value is string => Boolean(value))
     .filter(isExactSymbolAnchor);
 }
