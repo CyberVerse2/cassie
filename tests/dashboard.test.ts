@@ -249,4 +249,26 @@ describe("dashboard", () => {
     expect(html).toContain('data-run-status="failed"');
     expect(html).not.toContain('data-run-row="run_1"');
   });
+
+  it("renders simplified dashboard layout affordances", () => {
+    const html = renderDashboard({
+      ...snapshot,
+      runSteps: [
+        {
+          ...snapshot.runSteps[0]!,
+          status: "failed",
+          error: "StructuredAiCallError: schema mismatch",
+        },
+      ],
+    });
+
+    expect(html).toContain('class="dashboard-shell"');
+    expect(html).toContain('class="summary-panel"');
+    expect(html).toContain('class="primary-workspace"');
+    expect(html).toContain('class="diagnostics"');
+    expect(html).toContain('class="run-detail is-sticky"');
+    expect(html).toContain('class="attention-card attention-card-critical"');
+    expect(html).toContain(":focus-visible");
+    expect(html).toContain("prefers-reduced-motion");
+  });
 });

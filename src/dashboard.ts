@@ -125,12 +125,13 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       margin: 0;
       background: var(--bg);
       color: var(--text);
+      min-height: 100vh;
       font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
     a { color: inherit; text-decoration: none; }
     header {
       border-bottom: 1px solid var(--line);
-      padding: 16px 24px;
+      padding: 14px clamp(16px, 2vw, 28px);
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -146,6 +147,11 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
     h2 { font-size: 15px; }
     h3 { font-size: 14px; }
     main { display: grid; gap: 16px; padding: 16px; }
+    .dashboard-shell {
+      width: min(100%, 1680px);
+      margin: 0 auto;
+      padding: 16px clamp(14px, 1.4vw, 24px) 32px;
+    }
     section {
       border: 1px solid var(--line);
       background: var(--panel);
@@ -165,8 +171,19 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       align-items: center;
       justify-content: center;
       gap: 6px;
+      min-height: 34px;
+      transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
     }
-    button:hover, .button:hover { border-color: var(--muted); }
+    button:hover, .button:hover { border-color: var(--muted); background: #29303d; }
+    button:focus-visible,
+    .button:focus-visible,
+    a:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    summary:focus-visible {
+      outline: 2px solid var(--blue);
+      outline-offset: 2px;
+    }
     input, select {
       width: 100%;
       border: 1px solid var(--line);
@@ -175,6 +192,7 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       border-radius: 6px;
       padding: 8px 10px;
       font: inherit;
+      min-height: 36px;
     }
     label {
       display: grid;
@@ -237,13 +255,17 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
     }
+    .summary-panel .topline { margin-bottom: 10px; }
+    .summary-panel .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .metric, .attention-card {
       border: 1px solid var(--line);
       background: var(--panel-2);
       border-radius: 8px;
       padding: 12px;
       min-width: 0;
+      transition: background-color 150ms ease, border-color 150ms ease;
     }
+    .metric:hover, .attention-card:hover { border-color: #3b4351; }
     .metric-label {
       color: var(--quiet);
       font-size: 12px;
@@ -259,10 +281,26 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       overflow-wrap: anywhere;
     }
     .metric-note { margin-top: 5px; color: var(--muted); font-size: 12px; }
-    .layout {
+    .primary-workspace { min-width: 0; }
+    .diagnostics {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      padding: 0;
+      overflow: hidden;
+    }
+    .diagnostics > summary {
+      padding: 14px;
+      color: var(--text);
+      font-weight: 650;
+      border-bottom: 1px solid var(--line-soft);
+    }
+    .diagnostics:not([open]) > summary { border-bottom: 0; }
+    .diagnostics-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.15fr) minmax(340px, 0.85fr);
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 0.72fr);
       gap: 16px;
+      padding: 14px;
       align-items: start;
     }
     .stack { display: grid; gap: 16px; min-width: 0; }
@@ -330,15 +368,30 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       gap: 10px;
       align-items: end;
     }
+    .filters-block {
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--line-soft);
+    }
+    .filters-block .topline { margin-bottom: 10px; }
     .filter-tabs { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
-    .filter-tabs a[aria-current="page"] { border-color: var(--blue); color: var(--blue); }
-    .attention-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+    .filter-tabs a[aria-current="page"] {
+      border-color: var(--blue);
+      color: var(--blue);
+      background: #172235;
+    }
+    .attention-panel .topline { margin-bottom: 10px; }
+    .attention-grid { grid-template-columns: repeat(5, minmax(140px, 1fr)); }
     .attention-card strong {
       display: block;
       font-size: 13px;
       margin-bottom: 5px;
     }
     .attention-card div { color: var(--muted); overflow-wrap: anywhere; }
+    .attention-card-critical { border-color: rgba(255, 138, 138, 0.42); }
+    .attention-card-warning { border-color: rgba(240, 195, 109, 0.34); }
+    .attention-card-info { border-color: rgba(132, 184, 255, 0.32); }
+    .attention-card-success { border-color: rgba(115, 209, 143, 0.32); }
     .run-shell {
       display: grid;
       grid-template-columns: minmax(250px, 0.8fr) minmax(0, 1.2fr);
@@ -348,15 +401,18 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
     .run-rail {
       border: 1px solid var(--line-soft);
       border-radius: 8px;
-      overflow: hidden;
+      overflow: auto;
       background: var(--panel-3);
+      max-height: calc(100vh - 132px);
     }
     .run-row {
       display: grid;
       gap: 6px;
       padding: 11px;
       border-bottom: 1px solid var(--line-soft);
+      transition: background-color 150ms ease, border-color 150ms ease;
     }
+    .run-row:hover { background: #1b2029; }
     .run-row:last-child { border-bottom: 0; }
     .run-row[aria-current="page"] {
       background: #202633;
@@ -376,6 +432,12 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       background: var(--panel-2);
       padding: 14px;
       min-width: 0;
+    }
+    .run-detail.is-sticky {
+      position: sticky;
+      top: 82px;
+      max-height: calc(100vh - 104px);
+      overflow: auto;
     }
     .run-detail-head {
       display: flex;
@@ -480,20 +542,30 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       transition: opacity 160ms ease-out;
     }
     .sr-status.visible { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+      }
+    }
     @media (max-width: 1180px) {
-      .attention-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .attention-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       .run-shell { grid-template-columns: 1fr; }
+      .run-rail { max-height: 28rem; }
+      .run-detail.is-sticky { position: static; max-height: none; }
     }
     @media (max-width: 980px) {
       .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .layout { grid-template-columns: 1fr; }
+      .diagnostics-grid { grid-template-columns: 1fr; }
       .control-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 640px) {
       header { align-items: flex-start; flex-direction: column; }
-      main { padding: 12px; }
+      main, .dashboard-shell { padding: 12px; }
       section { padding: 13px; }
-      .grid, .two-col, .token-grid, .attention-grid, .control-form { grid-template-columns: 1fr; }
+      .grid, .two-col, .token-grid, .attention-grid, .control-form, .summary-panel .grid { grid-template-columns: 1fr; }
       .metric-value { font-size: 21px; }
       .timeline::before { left: 71px; }
       .event { grid-template-columns: 56px 1fr; gap: 28px; }
@@ -516,8 +588,8 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
       <a class="button" href="/dashboard">Refresh</a>
     </div>
   </header>
-  <main>
-    <section aria-labelledby="overview-title">
+  <main class="dashboard-shell">
+    <section class="summary-panel" aria-labelledby="overview-title">
       <div class="topline">
         <div>
           <h2 id="overview-title">Overview</h2>
@@ -530,12 +602,16 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
         ${metric("Token Spend", `${formatNumber(tokenTotals.total)} tokens`, `${formatUsd(tokenTotals.costUsd)} / ${tokenTotals.calls} model calls`)}
         ${metric("Approvals", String(pendingTickets.length), `${state.tradeTickets.length} total tickets`)}
       </div>
+      ${renderControls(filters, statuses, models)}
     </section>
-    ${renderControls(filters, statuses, models)}
     ${renderAttention(state, sortedRuns, failures)}
-    <div class="layout">
+    <div class="primary-workspace">
+      ${renderRunExplorer(state, filteredRuns, selectedRun, filters)}
+    </div>
+    <details class="diagnostics">
+      <summary>Diagnostics and history</summary>
+      <div class="diagnostics-grid">
       <div class="stack">
-        ${renderRunExplorer(state, filteredRuns, selectedRun, filters)}
         <section aria-labelledby="jobs-title">
           <div class="topline">
             <div>
@@ -586,7 +662,8 @@ export function renderDashboard(state: CassieStoreSnapshot, options: DashboardOp
           ${renderTimeline(timeline)}
         </section>
       </div>
-    </div>
+      </div>
+    </details>
     <div class="sr-status" role="status" aria-live="polite"></div>
   </main>
 </body>
@@ -623,11 +700,10 @@ function renderControls(filters: DashboardFilters, statuses: string[], models: s
     return `<a class="status" href="${attributeValue(href)}" ${active ? `aria-current="page"` : ""}>${escapeHtml(status)}</a>`;
   }).join("");
 
-  return `<section aria-labelledby="controls-title">
+  return `<div class="filters-block" aria-labelledby="controls-title">
     <div class="topline">
       <div>
         <h2 id="controls-title">Run Search</h2>
-        <div class="subhead">Filter by status, model, run ID, prompt, source, or error text.</div>
       </div>
     </div>
     <form class="control-form" method="get" action="/dashboard">
@@ -639,7 +715,7 @@ function renderControls(filters: DashboardFilters, statuses: string[], models: s
       <button type="submit">Apply</button>
     </form>
     <div class="filter-tabs">${statusTabs}</div>
-  </section>`;
+  </div>`;
 }
 
 function renderAttention(state: CassieStoreSnapshot, runs: ControlRun[], failures: FailureItem[]): string {
@@ -651,7 +727,7 @@ function renderAttention(state: CassieStoreSnapshot, runs: ControlRun[], failure
     .map((run) => ({ run, totals: summarizeTokenUsage(state.modelCallUsage.filter((record) => record.controlRunId === run.runId)) }))
     .sort((left, right) => right.totals.total - left.totals.total)[0];
 
-  return `<section aria-labelledby="attention-title">
+  return `<section class="panel attention-panel" aria-labelledby="attention-title">
     <div class="topline">
       <div>
         <h2 id="attention-title">Attention Needed</h2>
@@ -659,17 +735,17 @@ function renderAttention(state: CassieStoreSnapshot, runs: ControlRun[], failure
       </div>
     </div>
     <div class="grid attention-grid">
-      ${attentionCard("Latest failure", latestFailure ? `<a href="${attributeValue(dashboardHref({ selectedRunId: latestFailure.runId }))}">${escapeHtml(latestFailure.source)}</a><br>${escapeHtml(compactError(latestFailure.error))}` : "No failures recorded.")}
-      ${attentionCard("Running now", `${running.length} active${running[0] ? `<br><a href="${attributeValue(dashboardHref({ selectedRunId: running[0].runId }))}">${escapeHtml(running[0].runId)}</a>` : ""}`)}
-      ${attentionCard("Queued", `${queued.length} waiting${queued[0] ? `<br><a href="${attributeValue(dashboardHref({ selectedRunId: queued[0].runId }))}">${escapeHtml(queued[0].runId)}</a>` : ""}`)}
-      ${attentionCard("Most expensive run", expensive ? `<a href="${attributeValue(dashboardHref({ selectedRunId: expensive.run.runId }))}">${formatNumber(expensive.totals.total)} tokens</a><br>${escapeHtml(expensive.run.status)}` : "No runs recorded.")}
-      ${attentionCard("Last successful run", succeeded ? `<a href="${attributeValue(dashboardHref({ selectedRunId: succeeded.runId }))}">${escapeHtml(formatDateTime(succeeded.updatedAt))}</a><br>${escapeHtml(succeeded.runId)}` : "No successful runs yet.")}
+      ${attentionCard("Latest failure", latestFailure ? `<a href="${attributeValue(dashboardHref({ selectedRunId: latestFailure.runId }))}">${escapeHtml(latestFailure.source)}</a><br>${escapeHtml(compactError(latestFailure.error))}` : "No failures recorded.", latestFailure ? "critical" : "success")}
+      ${attentionCard("Running now", `${running.length} active${running[0] ? `<br><a href="${attributeValue(dashboardHref({ selectedRunId: running[0].runId }))}">${escapeHtml(running[0].runId)}</a>` : ""}`, running.length > 0 ? "warning" : "info")}
+      ${attentionCard("Queued", `${queued.length} waiting${queued[0] ? `<br><a href="${attributeValue(dashboardHref({ selectedRunId: queued[0].runId }))}">${escapeHtml(queued[0].runId)}</a>` : ""}`, queued.length > 0 ? "warning" : "info")}
+      ${attentionCard("Most expensive run", expensive ? `<a href="${attributeValue(dashboardHref({ selectedRunId: expensive.run.runId }))}">${formatNumber(expensive.totals.total)} tokens</a><br>${escapeHtml(expensive.run.status)}` : "No runs recorded.", "info")}
+      ${attentionCard("Last successful run", succeeded ? `<a href="${attributeValue(dashboardHref({ selectedRunId: succeeded.runId }))}">${escapeHtml(formatDateTime(succeeded.updatedAt))}</a><br>${escapeHtml(succeeded.runId)}` : "No successful runs yet.", succeeded ? "success" : "info")}
     </div>
   </section>`;
 }
 
-function attentionCard(title: string, body: string): string {
-  return `<div class="attention-card"><strong>${escapeHtml(title)}</strong><div>${body}</div></div>`;
+function attentionCard(title: string, body: string, tone: "critical" | "warning" | "info" | "success"): string {
+  return `<div class="attention-card attention-card-${tone}"><strong>${escapeHtml(title)}</strong><div>${body}</div></div>`;
 }
 
 function renderRunExplorer(
@@ -687,7 +763,7 @@ function renderRunExplorer(
     </div>
     <div class="run-shell">
       ${renderRunRail(state, runs, selectedRun, filters)}
-      ${selectedRun ? renderRunDetail(state, selectedRun) : `<div class="run-detail"><div class="empty">No run matches the current filters.</div></div>`}
+      ${selectedRun ? renderRunDetail(state, selectedRun) : `<div class="run-detail is-sticky"><div class="empty">No run matches the current filters.</div></div>`}
     </div>
   </section>`;
 }
@@ -729,7 +805,7 @@ function renderRunDetail(state: CassieStoreSnapshot, run: ControlRun): string {
   const summary = resultSummary(run.result);
   const thinkingTraces = buildThinkingTraces(context.steps, context.usage);
 
-  return `<article class="run-detail" id="run-${attributeValue(run.runId)}">
+  return `<article class="run-detail is-sticky" id="run-${attributeValue(run.runId)}">
     <div class="run-detail-head">
       <div>
         <h3>${escapeHtml(run.userCommand)}</h3>
