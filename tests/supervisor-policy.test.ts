@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { prepareCassieSupervisorStep, selectActiveTools } from "../packages/agent/policy.ts";
+import { createCassieStopConditions, prepareCassieSupervisorStep, selectActiveTools } from "../packages/agent/policy.ts";
 import { SupervisorPrerequisiteError } from "../packages/agent/tools.ts";
 
 function step(toolName: string, output?: unknown) {
@@ -20,7 +20,7 @@ function errorStep(toolName: string, error: Error) {
 }
 
 describe("supervisor step policy", () => {
-  it("exposes compact flexible tool sets before terminal states", () => {
+  it("exposes one next tool after each known staged state", () => {
     const opportunity = step("frame_opportunity", { userIntent: "trade" });
     const expression = step("generate_trade_expressions", {
       decision: "needs_market_check",
@@ -37,33 +37,15 @@ describe("supervisor step policy", () => {
     const source = step("resolve_source", { text: "OpenAI revenue growth is accelerating." });
     expect(selectActiveTools([source])).toEqual(["frame_opportunity"]);
     expect(selectActiveTools([opportunity])).toEqual(["generate_trade_expressions"]);
-    expect(selectActiveTools([opportunity, expression])).toEqual([
-      "generate_trade_expressions",
-      "search_venues",
-    ]);
-    expect(selectActiveTools([opportunity, expression, candidates])).toEqual([
-      "search_venues",
-      "assess_expression_fit",
-    ]);
+    expect(selectActiveTools([opportunity, expression])).toEqual(["search_venues"]);
+    expect(selectActiveTools([opportunity, expression, candidates])).toEqual(["assess_expression_fit"]);
     const fit = step("assess_expression_fit", { fitStatus: "validated", candidateId: "hyperliquid:SOL:long" });
-    expect(selectActiveTools([opportunity, expression, candidates, fit])).toEqual([
-      "assess_expression_fit",
-      "quote_expression",
-    ]);
+    expect(selectActiveTools([opportunity, expression, candidates, fit])).toEqual(["quote_expression"]);
     const quote = step("quote_expression", { venue: "hyperliquid", symbol: "SOL", markPrice: 100 });
-    expect(selectActiveTools([opportunity, expression, candidates, fit, quote])).toEqual([
-      "quote_expression",
-      "check_x_sentiment",
-    ]);
+    expect(selectActiveTools([opportunity, expression, candidates, fit, quote])).toEqual(["check_x_sentiment"]);
     const xSentiment = step("check_x_sentiment", { status: "available", sentimentDirection: "mixed" });
-    expect(selectActiveTools([opportunity, expression, candidates, fit, quote, xSentiment])).toEqual([
-      "check_x_sentiment",
-      "rank_expressions",
-    ]);
-    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual([
-      "rank_expressions",
-      "risk_check",
-    ]);
+    expect(selectActiveTools([opportunity, expression, candidates, fit, quote, xSentiment])).toEqual(["rank_expressions"]);
+    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["risk_check"]);
     expect(selectActiveTools([opportunity, expression, candidates, selection, risk])).toEqual(["create_trade_ticket"]);
   });
 
@@ -71,10 +53,7 @@ describe("supervisor step policy", () => {
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "no_trade" }),
-    ])).toEqual([
-      "generate_trade_expressions",
-      "finalize_run",
-    ]);
+    ])).toEqual(["finalize_run"]);
 
     expect(selectActiveTools([
       step("frame_opportunity", {}),
@@ -104,10 +83,7 @@ describe("supervisor step policy", () => {
       step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
       step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
       step("risk_check", { decision: "reject", reason: "Too large." }),
-    ])).toEqual([
-      "risk_check",
-      "finalize_run",
-    ]);
+    ])).toEqual(["finalize_run"]);
 
     expect(selectActiveTools([
       step("frame_opportunity", {}),
@@ -156,10 +132,13 @@ describe("supervisor step policy", () => {
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
     expect(prepared.activeTools).toEqual([
-      "generate_trade_expressions",
       "search_venues",
     ]);
     expect(prepared.toolChoice).toBe("required");
+  });
+
+  it("uses finalize and step-count stop conditions", () => {
+    expect(createCassieStopConditions()).toHaveLength(2);
   });
 
   it("keeps trade-expression substance when compressing tool messages before finalization", () => {

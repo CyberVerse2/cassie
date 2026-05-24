@@ -4,6 +4,7 @@ import {
   type StopCondition,
   type ToolSet,
   hasToolCall,
+  stepCountIs,
 } from "ai";
 import type { createCassieSupervisorTools } from "./tools.ts";
 
@@ -13,6 +14,7 @@ export type CassieSupervisorToolName = keyof CassieSupervisorTools;
 export function createCassieStopConditions(): StopCondition<CassieSupervisorTools>[] {
   return [
     hasToolCall("finalize_run"),
+    stepCountIs(12),
   ];
 }
 
@@ -44,14 +46,14 @@ export function selectActiveTools(
   const riskDecision = objectRecord(latestToolOutput(steps, "risk_check"));
   if (riskDecision.decision) {
     return riskDecision.decision === "reject"
-      ? ["risk_check", "finalize_run"]
+      ? ["finalize_run"]
       : ["create_trade_ticket"];
   }
 
   const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
   if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
     return marketSelection.selectedMarket && !marketSelection.noTradeReason
-      ? ["rank_expressions", "risk_check"]
+      ? ["risk_check"]
       : ["finalize_run"];
   }
 
@@ -63,29 +65,29 @@ export function selectActiveTools(
 
     const fitAssessment = objectRecord(latestToolOutput(steps, "assess_expression_fit"));
     if (!fitAssessment.fitStatus) {
-      return ["search_venues", "assess_expression_fit"];
+      return ["assess_expression_fit"];
     }
 
     if (fitAssessment.fitStatus !== "validated") {
-      return ["search_venues", "assess_expression_fit", "finalize_run"];
+      return ["finalize_run"];
     }
 
     const quote = latestToolOutput(steps, "quote_expression");
     const xSentiment = latestToolOutput(steps, "check_x_sentiment");
     if (quote && !xSentiment) {
-      return ["quote_expression", "check_x_sentiment"];
+      return ["check_x_sentiment"];
     }
     if (quote && xSentiment) {
-      return ["check_x_sentiment", "rank_expressions"];
+      return ["rank_expressions"];
     }
-    return ["assess_expression_fit", "quote_expression"];
+    return ["quote_expression"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
   if (tradeExpression.decision) {
     return tradeExpression.decision === "no_trade"
-      ? ["generate_trade_expressions", "finalize_run"]
-      : ["generate_trade_expressions", "search_venues"];
+      ? ["finalize_run"]
+      : ["search_venues"];
   }
 
   if (latestToolOutput(steps, "frame_opportunity")) {
