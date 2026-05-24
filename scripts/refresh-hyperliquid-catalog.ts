@@ -3,7 +3,7 @@ import { dirname } from "node:path";
 import type {
   HyperliquidCatalogAsset,
   HyperliquidCatalogInstrumentType,
-} from "../packages/markets/hyperliquid-catalog.ts";
+} from "../packages/adapters/hyperliquid/catalog.ts";
 
 type HyperliquidPerpAsset = {
   name: string;
@@ -56,6 +56,7 @@ const knownAliases: Record<string, string[]> = {
   BTC: ["Bitcoin"],
   ETH: ["Ethereum"],
   SOL: ["Solana"],
+  TAO: ["Bittensor"],
   MSTR: ["MicroStrategy", "Strategy", "Michael Saylor"],
 };
 

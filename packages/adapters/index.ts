@@ -129,7 +129,9 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     const catalog = this.catalog ?? await loadHyperliquidCatalog().catch(() => []);
     const query = hyperliquidCatalogQuery(input.thesis, input.tradeExpression);
 
-    return searchHyperliquidCatalog(catalog, query, 10)
+    return searchHyperliquidCatalog(catalog, query, 10, {
+      exactSymbolTokens: hyperliquidExactSymbolTokens(input.thesis, input.tradeExpression),
+    })
       .filter((asset) => asset.surface !== "spot");
   }
 
@@ -153,12 +155,13 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
           throw new Error(`Hyperliquid catalog asset ${catalogAsset.symbol} was not found in live ${catalogAsset.dex ?? "native"} metadata.`);
         }
 
-        candidates.push(await this.marketCandidateFromLiveAsset({
+        const candidate = await this.marketCandidateFromLiveAsset({
           asset: meta.universe[index]!,
           ctx: ctxs[index],
           instrument: catalogAsset.instrumentType,
           thesis,
-        }));
+        });
+        if (candidate) candidates.push(candidate);
       }
     }
 
@@ -170,13 +173,13 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     ctx?: HyperliquidAssetCtx;
     instrument: string;
     thesis: Thesis;
-  }): Promise<MarketCandidate> {
+  }): Promise<MarketCandidate | null> {
     const volume = Number(input.ctx?.dayNtlVlm ?? 0);
     const book = await this.getL2Book(input.asset.name);
     const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
 
     if (!bookMetrics) {
-      throw new Error(`Hyperliquid l2 book is empty for ${input.asset.name}.`);
+      return null;
     }
 
     return {
@@ -228,6 +231,25 @@ function hyperliquidCatalogQuery(thesis: Thesis, tradeExpression?: TradeExpressi
   ]
     .filter((value): value is string => Boolean(value))
     .join(" ");
+}
+
+function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
+  return [
+    ...thesis.mentionedAssets,
+    tradeExpression?.directAsset,
+    ...(tradeExpression?.candidates.flatMap((candidate) => [
+      candidate.symbol,
+      candidate.instrument,
+    ]) ?? []),
+  ]
+    .filter((value): value is string => Boolean(value))
+    .filter(isExactSymbolAnchor);
+}
+
+function isExactSymbolAnchor(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized || normalized.includes("unknown") || normalized.includes("proxy")) return false;
+  return /^[a-z0-9:_/-]+$/i.test(value.trim());
 }
 
 export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {

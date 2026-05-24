@@ -42,6 +42,42 @@ const catalog: HyperliquidCatalogAsset[] = [
     raw: { name: "BTC" },
     lastSeenAt: "2026-05-23T00:00:00.000Z",
   },
+  {
+    venue: "hyperliquid",
+    catalogId: "hyperliquid:perp:AI",
+    symbol: "AI",
+    baseSymbol: "AI",
+    displayName: "AI",
+    surface: "native_perp",
+    instrumentType: "perp",
+    dex: null,
+    aliases: ["AI"],
+    searchText: "AI AI AI native perp",
+    maxLeverage: 3,
+    onlyIsolated: false,
+    marginMode: null,
+    source: "hyperliquid_metaAndAssetCtxs",
+    raw: { name: "AI" },
+    lastSeenAt: "2026-05-23T00:00:00.000Z",
+  },
+  {
+    venue: "hyperliquid",
+    catalogId: "hyperliquid:perp:TAO",
+    symbol: "TAO",
+    baseSymbol: "TAO",
+    displayName: "Bittensor",
+    surface: "native_perp",
+    instrumentType: "perp",
+    dex: null,
+    aliases: ["TAO", "Bittensor"],
+    searchText: "TAO Bittensor native perp",
+    maxLeverage: 5,
+    onlyIsolated: false,
+    marginMode: null,
+    source: "hyperliquid_metaAndAssetCtxs",
+    raw: { name: "TAO" },
+    lastSeenAt: "2026-05-23T00:00:00.000Z",
+  },
 ];
 
 describe("Hyperliquid asset catalog", () => {
@@ -57,5 +93,26 @@ describe("Hyperliquid asset catalog", () => {
 
     expect(text).toContain("vntl:ANTHROPIC");
     expect(text).toContain("Anthropic");
+  });
+
+  it("does not map generic AI themes to the AI ticker", () => {
+    const results = searchHyperliquidCatalog(catalog, "AI inference infrastructure proxy", 5);
+
+    expect(results.map((result) => result.symbol)).not.toContain("AI");
+  });
+
+  it("lets named project aliases drive discovery before generic themes", () => {
+    const results = searchHyperliquidCatalog(catalog, "Venice Chutes Bittensor AI inference", 5);
+
+    expect(results[0]?.symbol).toBe("TAO");
+    expect(results.map((result) => result.symbol)).not.toContain("AI");
+  });
+
+  it("allows explicit symbol anchors to match generic-looking tickers", () => {
+    const results = searchHyperliquidCatalog(catalog, "AI", 5, {
+      exactSymbolTokens: ["AI"],
+    });
+
+    expect(results[0]?.symbol).toBe("AI");
   });
 });

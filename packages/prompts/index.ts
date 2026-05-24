@@ -117,9 +117,12 @@ Posture:
 Candidate requirements:
 - Populate every schema field. Use null for unknown nullable scalar fields and [] for empty arrays. Do not omit keys.
 - First identify the instrument, asset, company, event, team, election, macro release, approval, listing, lawsuit, earnings event, launch, or other thing the user is trying to trade.
+- When a post names specific projects or entities, make those names and known aliases the first discovery anchors. Only consider generic thematic proxies after exact named-entity lookup fails.
 - Hyperliquid can express that target only when it exists as a real Hyperliquid spot, native perp, HIP-3 perp, or pre-stock perp instrument in the catalog.
 - Polymarket can express that target only when it exists as a real prediction market with matching resolution terms, side, date bounds, and outcome tokens.
+- Do not use generic sector words like AI, compute, infra, agent, token, or market as Hyperliquid symbols unless the post or user explicitly identifies that exact ticker.
 - For candidate.venue and rankedCandidates.venue, use only hyperliquid or polymarket. Do not use exchange names like NASDAQ/NYSE/CME, generic venue buckets, or private-market access as venue values.
+- Do not put generic unknown proxies in rankedCandidates. Rank only real venue-confirmed candidates.
 - If the target is not directly listed on Hyperliquid, still search whether Polymarket has a prediction market that expresses the same event or outcome.
 - When Hyperliquid and Polymarket both express the same view, compare them as competing trades. Prefer the expression with better expected value after price/odds, mispricing, expiry timing, liquidity, spread, slippage, payoff shape, and downside risk.
 - Example: for a bullish BTC view, compare BTC spot/perp/short-or-long exposure against BTC Polymarket event markets. A near-expiry mispriced BTC prediction market may be better than a BTC perp; a liquid BTC perp may be better than a thin or fairly priced prediction market.

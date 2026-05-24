@@ -91,6 +91,39 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("does not return Hyperliquid candidates without a quoted l2 book", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify([
+            { universe: [{ name: "AI" }] },
+            [{ dayNtlVlm: "1000000", markPx: "0.42" }],
+          ]),
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            levels: [[], []],
+          }),
+        ),
+      );
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info", [
+      catalogAsset({ symbol: "AI", aliases: ["AI", "Sleepless AI"] }),
+    ]).findCandidates({
+      thesis: {
+        ...thesis,
+        claim: "AI may rally after the headline.",
+        mentionedAssets: ["AI"],
+        topics: ["AI"],
+      },
+    });
+
+    expect(candidates).toEqual([]);
+    fetchMock.mockRestore();
+  });
+
   it("checks Hyperliquid pre-stock aliases for private-company signals", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
       const body = JSON.parse(String(init?.body ?? "{}")) as { type: string; dex?: string; coin?: string };

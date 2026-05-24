@@ -29,9 +29,45 @@ export type HyperliquidCatalogAsset = {
   lastSeenAt: string;
 };
 
+export type HyperliquidCatalogSearchOptions = {
+  exactSymbolTokens?: string[];
+};
+
 export const HYPERLIQUID_CATALOG_PATH = fileURLToPath(
   new URL("../../../data/markets/hyperliquid-catalog.json", import.meta.url),
 );
+
+const GENERIC_THEME_TOKENS = new Set([
+  "ai",
+  "agent",
+  "agents",
+  "adoption",
+  "compute",
+  "computing",
+  "growth",
+  "infra",
+  "inference",
+  "infrastructure",
+  "market",
+  "markets",
+  "company",
+  "crypto",
+  "decentralized",
+  "perp",
+  "perpetual",
+  "pre",
+  "prediction",
+  "private",
+  "proxy",
+  "related",
+  "sector",
+  "stock",
+  "theme",
+  "thematic",
+  "token",
+  "tokens",
+  "unknown",
+]);
 
 export async function loadHyperliquidCatalog(
   path = HYPERLIQUID_CATALOG_PATH,
@@ -43,14 +79,16 @@ export function searchHyperliquidCatalog(
   catalog: HyperliquidCatalogAsset[],
   query: string,
   limit = 20,
+  options: HyperliquidCatalogSearchOptions = {},
 ): HyperliquidCatalogAsset[] {
   const queryTokens = tokenize(query);
   if (queryTokens.length === 0) return [];
+  const exactSymbolTokens = new Set((options.exactSymbolTokens ?? []).map(normalizeToken).filter(Boolean));
 
   return catalog
     .map((asset) => ({
       asset,
-      score: scoreCatalogAsset(asset, queryTokens),
+      score: scoreCatalogAsset(asset, queryTokens, exactSymbolTokens),
     }))
     .filter((entry) => entry.score > 0)
     .sort((left, right) =>
@@ -76,7 +114,11 @@ export function buildHyperliquidAssetSearchText(asset: HyperliquidCatalogAsset):
     .join(" ");
 }
 
-function scoreCatalogAsset(asset: HyperliquidCatalogAsset, queryTokens: string[]): number {
+function scoreCatalogAsset(
+  asset: HyperliquidCatalogAsset,
+  queryTokens: string[],
+  exactSymbolTokens: Set<string>,
+): number {
   const searchText = buildHyperliquidAssetSearchText(asset).toLowerCase();
   const symbol = asset.symbol.toLowerCase();
   const baseSymbol = asset.baseSymbol.toLowerCase();
@@ -84,13 +126,16 @@ function scoreCatalogAsset(asset: HyperliquidCatalogAsset, queryTokens: string[]
   let score = 0;
 
   for (const token of queryTokens) {
+    const isGenericThemeToken = GENERIC_THEME_TOKENS.has(token);
     if (baseSymbol === token || symbol === token) {
-      score += 12;
+      if (!isGenericThemeToken || exactSymbolTokens.has(token)) {
+        score += 12;
+      }
     } else if (displayName === token) {
       score += 10;
     } else if (asset.aliases.some((alias) => alias.toLowerCase() === token)) {
       score += 8;
-    } else if (searchText.includes(token)) {
+    } else if (!isGenericThemeToken && searchText.includes(token)) {
       score += 1;
     }
   }
@@ -108,4 +153,8 @@ function tokenize(value: string): string[] {
         .filter((part) => part.length >= 2),
     ),
   );
+}
+
+function normalizeToken(value: string): string {
+  return value.toLowerCase().trim();
 }

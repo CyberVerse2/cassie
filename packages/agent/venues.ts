@@ -5,6 +5,7 @@ import {
   type MarketCandidate,
   type PolymarketMarketAssessment,
   type PolymarketQuote,
+  type Thesis,
   type TradeExpressionPlan,
 } from "../core/schemas/index.ts";
 import {
@@ -16,40 +17,84 @@ import {
 } from "../adapters/selection.ts";
 import { thesisFromTradeExpression } from "./thesis.ts";
 
+export type TradeExpressionIntent = {
+  thesis: Thesis;
+  tradeExpression: TradeExpressionPlan;
+};
+
+export type VenueSearchIntent = TradeExpressionIntent & {
+  venues: Array<"hyperliquid" | "polymarket">;
+  limit?: number;
+};
+
+export type VenueMarketCandidate = MarketCandidate;
+
 export async function searchVenues(input: {
   marketData: MarketDataProvider;
   polymarket?: PolymarketMarketFinder;
-  thesis: ReturnType<typeof thesisFromTradeExpression>;
+  thesis: Thesis;
   tradeExpression: TradeExpressionPlan;
   venues?: Array<"hyperliquid" | "polymarket">;
   limit?: number;
-}): Promise<MarketCandidate[]> {
-  const venues = input.venues ?? [
-    "hyperliquid",
-    ...(input.polymarket ? ["polymarket" as const] : []),
-  ];
-  const candidateBatches: MarketCandidate[][] = [];
+}): Promise<VenueMarketCandidate[]> {
+  const searchIntent = buildVenueSearchIntent(input);
+  const venues = searchIntent.venues;
+  const candidateBatches: VenueMarketCandidate[][] = [];
+  const failures: string[] = [];
+  let attemptedVenues = 0;
 
   if (venues.includes("hyperliquid")) {
-    candidateBatches.push(await input.marketData.findCandidates({
-      thesis: input.thesis,
-      tradeExpression: input.tradeExpression,
-    }));
+    attemptedVenues += 1;
+    try {
+      candidateBatches.push(await input.marketData.findCandidates({
+        thesis: searchIntent.thesis,
+        tradeExpression: searchIntent.tradeExpression,
+      }));
+    } catch (error) {
+      failures.push(`hyperliquid: ${errorMessage(error)}`);
+    }
   }
 
   if (venues.includes("polymarket")) {
-    if (!input.polymarket) {
-      throw new Error("search_venues requires a configured Polymarket market finder dependency.");
+    attemptedVenues += 1;
+    try {
+      if (!input.polymarket) {
+        throw new Error("search_venues requires a configured Polymarket market finder dependency.");
+      }
+      candidateBatches.push(await findPolymarketMarkets({
+        polymarket: input.polymarket,
+        thesis: searchIntent.thesis,
+        tradeExpression: searchIntent.tradeExpression,
+        limit: searchIntent.limit,
+      }));
+    } catch (error) {
+      failures.push(`polymarket: ${errorMessage(error)}`);
     }
-    candidateBatches.push(await findPolymarketMarkets({
-      polymarket: input.polymarket,
-      thesis: input.thesis,
-      tradeExpression: input.tradeExpression,
-      limit: input.limit,
-    }));
+  }
+
+  if (failures.length > 0 && failures.length === attemptedVenues) {
+    throw new Error(`Venue search failed across all requested venues: ${failures.join("; ")}`);
   }
 
   return uniqueMarketCandidates(candidateBatches.flat());
+}
+
+function buildVenueSearchIntent(input: {
+  thesis: Thesis;
+  tradeExpression: TradeExpressionPlan;
+  venues?: Array<"hyperliquid" | "polymarket">;
+  limit?: number;
+  polymarket?: PolymarketMarketFinder;
+}): VenueSearchIntent {
+  return {
+    thesis: input.thesis,
+    tradeExpression: input.tradeExpression,
+    limit: input.limit,
+    venues: input.venues ?? [
+    "hyperliquid",
+    ...(input.polymarket ? ["polymarket" as const] : []),
+    ],
+  };
 }
 
 export async function assessExpressionFit(input: {
@@ -121,4 +166,8 @@ function uniqueMarketCandidates(candidates: MarketCandidate[]): MarketCandidate[
     seen.add(key);
     return true;
   });
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }

@@ -22,6 +22,9 @@ describe("Cassie prompts", () => {
     expect(prompt).toContain("First identify the instrument, asset, company, event, team, election, macro release");
     expect(prompt).toContain("Hyperliquid can express that target only when it exists as a real Hyperliquid spot");
     expect(prompt).toContain("Polymarket can express that target only when it exists as a real prediction market");
+    expect(prompt).toContain("make those names and known aliases the first discovery anchors");
+    expect(prompt).toContain("Do not use generic sector words like AI, compute, infra, agent, token, or market as Hyperliquid symbols");
+    expect(prompt).toContain("Do not put generic unknown proxies in rankedCandidates");
     expect(prompt).toContain("use only hyperliquid or polymarket");
     expect(prompt).toContain("compare them as competing trades");
     expect(prompt).toContain("A near-expiry mispriced BTC prediction market may be better than a BTC perp");

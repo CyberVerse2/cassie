@@ -7245,14 +7245,15 @@
     "catalogId": "hyperliquid:perp:TAO",
     "symbol": "TAO",
     "baseSymbol": "TAO",
-    "displayName": "TAO",
+    "displayName": "Bittensor",
     "surface": "native_perp",
     "instrumentType": "perp",
     "dex": null,
     "aliases": [
-      "TAO"
+      "TAO",
+      "Bittensor"
     ],
-    "searchText": "TAO TAO TAO native_perp perp TAO",
+    "searchText": "TAO TAO Bittensor native_perp perp TAO Bittensor",
     "maxLeverage": 5,
     "onlyIsolated": false,
     "marginMode": null,
