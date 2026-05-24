@@ -146,4 +146,32 @@ describe("dashboard", () => {
     expect(html).toContain('class="step-error"');
     expect(html).toContain("Structured AI failed:");
   });
+
+  it("renders thinking traces for run steps and model calls", () => {
+    const html = renderDashboard({
+      ...snapshot,
+      runSteps: [
+        {
+          ...snapshot.runSteps[0]!,
+          thinkingTrace: "The model selected the SOL ETF market because it matched the source post catalyst.",
+        },
+      ],
+      modelCallUsage: [
+        {
+          ...snapshot.modelCallUsage[0]!,
+          purpose: "supervisor_step",
+          runStepId: null,
+          promptName: "cassie_supervisor",
+          thinkingTrace: "The supervisor decided to create an approval ticket after checking risk settings.",
+        },
+      ],
+    });
+
+    expect(html).toContain("Thinking Traces");
+    expect(html).toContain('class="thinking-trace"');
+    expect(html).toContain("market_selection");
+    expect(html).toContain("The model selected the SOL ETF market");
+    expect(html).toContain("supervisor_step");
+    expect(html).toContain("The supervisor decided to create an approval ticket");
+  });
 });

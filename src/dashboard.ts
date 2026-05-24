@@ -21,6 +21,15 @@ interface TokenTotals {
   failedCalls: number;
 }
 
+interface ThinkingTraceItem {
+  at: string;
+  source: "step" | "model.call";
+  title: string;
+  detail: string;
+  status: string;
+  trace: string;
+}
+
 export function renderDashboard(state: CassieStoreSnapshot): string {
   const tokenTotals = summarizeTokenUsage(state.modelCallUsage);
   const pendingTickets = state.tradeTickets.filter((ticket) => ticket.approvalState === "pending");
@@ -270,6 +279,30 @@ export function renderDashboard(state: CassieStoreSnapshot): string {
       overflow: hidden;
     }
     .mini-panel h3 { margin-bottom: 8px; }
+    .wide-panel { grid-column: 1 / -1; }
+    .thinking-trace {
+      border-top: 1px solid var(--line-soft);
+      padding: 10px 0;
+    }
+    .thinking-trace:first-of-type {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .trace-head {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 5px;
+    }
+    .trace-text {
+      color: var(--muted);
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: pre-wrap;
+      max-height: 11rem;
+      overflow: auto;
+    }
     .step-error {
       margin-top: 6px;
       color: var(--muted);
@@ -429,6 +462,7 @@ function renderRunCard(state: CassieStoreSnapshot, run: ControlRun): string {
   const jobs = state.executionJobs.filter((job) => ticketIds.has(job.ticketId));
   const totals = summarizeTokenUsage(usage);
   const summary = resultSummary(run.result);
+  const thinkingTraces = buildThinkingTraces(steps, usage);
 
   return `<article class="run-card" id="run-${attributeValue(run.runId)}">
     <details>
@@ -471,6 +505,12 @@ function renderRunCard(state: CassieStoreSnapshot, run: ControlRun): string {
         </div>
       </div>
       <div class="two-col">
+        <div class="mini-panel wide-panel">
+          <h3>Thinking Traces</h3>
+          ${renderThinkingTraces(thinkingTraces)}
+        </div>
+      </div>
+      <div class="two-col">
         <div class="mini-panel">
           <h3>Tickets</h3>
           ${tickets.length === 0 ? `<div class="muted">No tickets created.</div>` : tickets.map(renderTicketRow).join("")}
@@ -495,6 +535,53 @@ function renderTokenBreakdown(totals: TokenTotals): string {
     ${metric("Output", formatNumber(totals.output), `${formatNumber(totals.reasoning)} reasoning`)}
     ${metric("Failures", String(totals.failedCalls), `${totals.calls} model calls tracked`)}
   </div>`;
+}
+
+function buildThinkingTraces(steps: RunStep[], usage: ModelCallUsageRecord[]): ThinkingTraceItem[] {
+  return [
+    ...steps
+      .flatMap((step) => {
+        const trace = step.thinkingTrace?.trim();
+        if (!trace) return [];
+        return [{
+          at: step.completedAt ?? step.startedAt,
+          source: "step" as const,
+          title: step.stepType,
+          detail: `${step.model ?? "no model"}${step.promptName ? ` / ${step.promptName}` : ""}`,
+          status: step.status,
+          trace,
+        }];
+      }),
+    ...usage
+      .flatMap((record) => {
+        const trace = record.thinkingTrace?.trim();
+        if (!trace) return [];
+        return [{
+          at: record.createdAt,
+          source: "model.call" as const,
+          title: record.purpose,
+          detail: `${record.model}${record.promptName ? ` / ${record.promptName}` : ""}`,
+          status: record.status,
+          trace,
+        }];
+      }),
+  ].sort((left, right) => left.at.localeCompare(right.at));
+}
+
+function renderThinkingTraces(items: ThinkingTraceItem[]): string {
+  if (items.length === 0) {
+    return `<div class="muted">No thinking traces recorded.</div>`;
+  }
+
+  return items.map((item) => `<div class="thinking-trace">
+    <div class="trace-head">
+      <strong>${escapeHtml(item.title)}</strong>
+      <span class="status">${escapeHtml(item.source)}</span>
+      ${statusBadge(item.status)}
+      <span class="quiet">${escapeHtml(item.detail)}</span>
+    </div>
+    <div class="trace-text">${escapeHtml(item.trace)}</div>
+  </div>`).join("");
 }
 
 function renderUsageTable(records: ModelCallUsageRecord[]): string {
