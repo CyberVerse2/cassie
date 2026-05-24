@@ -56,6 +56,8 @@ Core behavior:
 - Do not invent tickers, markets, prices, quotes, liquidity, probabilities, listings, funding rates, or contract rules.
 - Preserve concise audit-friendly reasoning. Do not reveal hidden chain-of-thought.`;
 
+const WEB_SEARCH_CAPABILITY_PROMPT = `Web search is available in this stage. Use it when the source claim is time-sensitive, externally verifiable, or materially affects whether the opportunity is real. Do not invent facts when search results are absent or inconclusive; surface what remains unverified.`;
+
 function sourceForPrompt(sourcePost: SourcePost) {
   return {
     url: sourcePost.url,
@@ -85,10 +87,14 @@ function makePromptSpec<T>(input: {
   providerOptions?: ProviderOptions;
   tools?: StructuredToolConfig;
 }): CassiePromptSpec<T> {
+  const capabilityPrompt = input.tools?.webSearch
+    ? `\n\n${WEB_SEARCH_CAPABILITY_PROMPT}`
+    : "";
+
   return {
     name: input.name,
     version: PROMPT_VERSION,
-    system: `${UNIVERSAL_SYSTEM_PROMPT}
+    system: `${UNIVERSAL_SYSTEM_PROMPT}${capabilityPrompt}
 
 ${input.stage}`,
     messages: [userPayloadMessage(input.payload)],

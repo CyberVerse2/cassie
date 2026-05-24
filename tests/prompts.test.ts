@@ -192,6 +192,10 @@ describe("prompts", () => {
     expect(specs.every((spec) => spec.system.includes("tagged-tweet trading research agent"))).toBe(true);
     expect(specs.every((spec) => spec.messages.length === 1)).toBe(true);
     expect(specs.every((spec) => spec.messages[0]?.role === "user")).toBe(true);
+    expect(specs[0]?.system).toContain("Web search is available in this stage.");
+    for (const spec of specs.slice(1)) {
+      expect(spec.system).not.toContain("Web search is available in this stage.");
+    }
     expect(opportunityFramePromptSpec({ sourcePost, userCommand: "@cassie trade this" }).tools).toEqual({
       webSearch: {
         externalWebAccess: true,
