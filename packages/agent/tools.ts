@@ -308,10 +308,28 @@ export function createCassieSupervisorTools(input: {
         quotes: z.array(z.unknown()).min(1),
         xSentiment: XSentimentAssessmentSchema.optional(),
       }),
-      execute: async ({ tradeExpression, candidates, fitAssessments, quotes, xSentiment }) => runStepOnce(
-        "market_selection",
-        { tradeExpression, candidates, fitAssessments, quotes, xSentiment },
-        async () => {
+      execute: async ({ tradeExpression, candidates, fitAssessments, quotes, xSentiment }) => {
+        const persistedCandidates = candidates && candidates.length > 0
+          ? candidates
+          : await latestPersistedMarketCandidates(input.store, input.run.runId);
+        const persistedFitAssessments = fitAssessments && fitAssessments.length > 0
+          ? fitAssessments
+          : await latestPersistedFitAssessments(input.store, input.run.runId);
+        const persistedQuotes = await latestPersistedQuotes(input.store, input.run.runId);
+        const persistedXSentiment = xSentiment
+          ?? await latestPersistedXSentiment(input.store, input.run.runId);
+        const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : quotes;
+
+        return runStepOnce(
+          "market_selection",
+          {
+            tradeExpression,
+            candidates: persistedCandidates,
+            fitAssessments: persistedFitAssessments,
+            quotes: groundedQuotes,
+            xSentiment: persistedXSentiment,
+          },
+          async () => {
           const thesis = thesisFromTradeExpression(tradeExpression);
           return recordRunStep({
             store: input.store,
@@ -320,20 +338,27 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_market_selection",
             promptVersion,
             model: cheapModel,
-            stepInput: { tradeExpression, candidates, fitAssessments, quotes, xSentiment },
+            stepInput: {
+              tradeExpression,
+              candidates: persistedCandidates,
+              fitAssessments: persistedFitAssessments,
+              quotes: groundedQuotes,
+              xSentiment: persistedXSentiment,
+            },
             execute: ({ setThinkingTrace }) => selectMarket({
               ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
               marketData: input.deps.marketData,
               thesis,
               tradeExpression,
-              candidates: candidates ?? [],
-              fitAssessments,
-              quotes,
-              xSentiment,
+              candidates: persistedCandidates,
+              fitAssessments: persistedFitAssessments,
+              quotes: groundedQuotes,
+              xSentiment: persistedXSentiment,
             }),
           });
         },
-      ),
+        );
+      },
     }),
     risk_check: tool({
       description: "Run deterministic risk checks against user policy and live account state.",
@@ -435,13 +460,7 @@ async function resolveLatestMarketCandidate(input: {
   runId: string;
   candidate: MarketCandidate;
 }): Promise<MarketCandidate> {
-  const steps = await input.store.getRunSteps(input.runId);
-  const latestStep = steps
-    .filter((step) => step.stepType === "market_candidates" && step.status === "succeeded")
-    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0];
-  const candidates = latestStep
-    ? MarketCandidateSchema.array().safeParse(latestStep.output).data ?? []
-    : [];
+  const candidates = await latestPersistedMarketCandidates(input.store, input.runId);
 
   const requestedKey = marketCandidateLookupKey(input.candidate);
   const matches = candidates.filter((candidate) => marketCandidateLookupKey(candidate) === requestedKey);
@@ -450,6 +469,49 @@ async function resolveLatestMarketCandidate(input: {
     throw new Error(`Candidate ${requestedKey} is ambiguous across latest venue-search results.`);
   }
   throw new Error(`Candidate ${requestedKey} was not found in persisted venue-search results.`);
+}
+
+async function latestPersistedMarketCandidates(store: CassieStore, runId: string): Promise<MarketCandidate[]> {
+  const latestStep = await latestSucceededStep(store, runId, "market_candidates");
+  return latestStep
+    ? MarketCandidateSchema.array().safeParse(latestStep.output).data ?? []
+    : [];
+}
+
+async function latestPersistedFitAssessments(store: CassieStore, runId: string): Promise<ExpressionFitAssessment[]> {
+  const steps = await store.getRunSteps(runId);
+  return steps
+    .filter((step) => step.stepType === "market_assessment" && step.status === "succeeded")
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
+    .map((step) => ExpressionFitAssessmentSchema.safeParse(step.output).data)
+    .filter((assessment): assessment is ExpressionFitAssessment => Boolean(assessment));
+}
+
+async function latestPersistedQuotes(store: CassieStore, runId: string): Promise<unknown[]> {
+  const steps = await store.getRunSteps(runId);
+  return steps
+    .filter((step) => step.stepType === "market_quote" && step.status === "succeeded")
+    .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
+    .map((step) => step.output)
+    .filter((quote) => quote !== null && quote !== undefined);
+}
+
+async function latestPersistedXSentiment(store: CassieStore, runId: string) {
+  const latestStep = await latestSucceededStep(store, runId, "x_sentiment");
+  return latestStep
+    ? XSentimentAssessmentSchema.safeParse(latestStep.output).data
+    : undefined;
+}
+
+async function latestSucceededStep(
+  store: CassieStore,
+  runId: string,
+  stepType: "market_candidates" | "x_sentiment",
+) {
+  const steps = await store.getRunSteps(runId);
+  return steps
+    .filter((step) => step.stepType === stepType && step.status === "succeeded")
+    .sort((left, right) => right.startedAt.localeCompare(left.startedAt))[0] ?? null;
 }
 
 async function resolveLatestFitAssessment(input: {

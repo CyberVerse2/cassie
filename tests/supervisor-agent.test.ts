@@ -672,4 +672,60 @@ describe("AI SDK supervisor agent", () => {
     });
   });
 
+  it("hydrates ranking inputs from persisted venue search and quote outputs", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie rank the validated candidate",
+      sourcePost,
+    });
+    const persistedCandidate = marketSelection.selectedMarket!;
+    const ai = new FakeAi();
+    await seedMarketCandidates(store, run.runId, [persistedCandidate]);
+    await seedFitAssessment(store, run.runId, expressionFitAssessment);
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_quote",
+      status: "succeeded",
+      input: {},
+      output: persistedCandidate,
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      thinkingTrace: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {
+      tradeExpression,
+      fitAssessments: [expressionFitAssessment],
+      quotes: [{ symbol: "MODEL_WRITTEN_QUOTE" }],
+    })).resolves.toMatchObject({
+      selectedMarket: persistedCandidate,
+      noTradeReason: null,
+    });
+
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
+      candidates: [persistedCandidate],
+      quotes: [persistedCandidate],
+    });
+    expect(ai.calls).toContain("cassie_market_selection");
+  });
+
 });
