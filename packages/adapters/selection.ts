@@ -105,7 +105,11 @@ export async function selectMarket(input: {
 
   if (candidates.length === 0) {
     return {
+      decision: "no_selection",
       selectedMarket: null,
+      selectedCandidateId: null,
+      rejectionReason: "No configured market-data candidate matched the trade expression.",
+      rankedCandidates: [],
       rejectedCandidates: [],
       noTradeReason: "No configured market-data candidate matched the trade expression.",
     };

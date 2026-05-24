@@ -55,7 +55,7 @@ function inlineSourcePost(
     authorName: input.authorName ?? "Local Test",
     text,
     createdAt: input.createdAt ?? null,
-    quotedPostText: input.quotedPostText ?? undefined,
+    quotedPostText: input.quotedPostText ?? null,
     linkedUrls: input.linkedUrls ?? [],
     mediaDescriptions: input.mediaDescriptions ?? [],
   };

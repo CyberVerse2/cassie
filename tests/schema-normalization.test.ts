@@ -2,6 +2,38 @@ import { describe, expect, it } from "vitest";
 import { TradeExpressionPlanSchema } from "../packages/core/schemas/index.ts";
 
 describe("schema normalization", () => {
+  it("requires explicit nullable response fields for trade-expression structured output", () => {
+    const basePlan = {
+      signal: "ZEC thesis",
+      coreInterpretation: "Direct ZEC is the clean expression.",
+      directAsset: "ZEC",
+      directAssetTradable: true,
+      evidenceConfidence: 0.7,
+      marketDiscoveryConfidence: 0.8,
+      tradeExpressionConfidence: 0.9,
+      highestPurityExpression: "Long ZEC perp.",
+      publicMarketReadThrough: "none",
+      candidates: [],
+      rankedCandidates: [],
+      decision: "no_trade",
+      reason: "Expression is clean but expected edge is negative.",
+      insufficiency: null,
+      marketRouterInstructions: null,
+    };
+
+    expect(() => TradeExpressionPlanSchema.parse(basePlan)).toThrow();
+    expect(TradeExpressionPlanSchema.parse({
+      ...basePlan,
+      candidateExpressions: [],
+      discardedExpressions: [],
+      noTradeCase: null,
+    })).toMatchObject({
+      candidateExpressions: [],
+      discardedExpressions: [],
+      noTradeCase: null,
+    });
+  });
+
   it("accepts negative expected edge for no-trade candidates", () => {
     const plan = TradeExpressionPlanSchema.parse({
       signal: "ZEC to reach 3-5% of BTC market cap",
@@ -40,6 +72,9 @@ describe("schema normalization", () => {
         },
       ],
       rankedCandidates: [],
+      candidateExpressions: [],
+      discardedExpressions: [],
+      noTradeCase: null,
       decision: "no_trade",
       reason: "The trade thesis is structurally unviable.",
       insufficiency: null,

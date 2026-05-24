@@ -21,6 +21,9 @@ const sourcePost: SourcePost = {
   authorName: "Example",
   text: "Solana ETF approval is basically inevitable now. Market is asleep.",
   createdAt: null,
+  quotedPostText: null,
+  linkedUrls: [],
+  mediaDescriptions: [],
 };
 
 const resolvedSourcePost: SourcePost = {
@@ -31,7 +34,9 @@ const resolvedSourcePost: SourcePost = {
   authorName: "Example",
   text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
   createdAt: "2026-05-24T00:00:00.000Z",
+  quotedPostText: null,
   linkedUrls: ["https://example.com/source"],
+  mediaDescriptions: [],
 };
 
 const settings: UserSettings = {
@@ -49,11 +54,27 @@ const settings: UserSettings = {
 };
 
 const marketSelection: MarketSelection = {
+  decision: "select_market",
   selectedMarket: {
     venue: "hyperliquid",
     instrument: "perp",
     side: "long",
     symbol: "SOL",
+    conditionId: null,
+    outcomeTokenId: null,
+    yesOutcomeTokenId: null,
+    noOutcomeTokenId: null,
+    marketQuestion: null,
+    marketSlug: null,
+    outcome: null,
+    yesPrice: null,
+    noPrice: null,
+    heldSidePrice: null,
+    volumeUsd: null,
+    liquidityUsd: null,
+    endDate: null,
+    warnings: [],
+    markPrice: null,
     liquidityScore: 0.9,
     spreadBps: 10,
     estimatedSlippageBps: 10,
@@ -61,6 +82,9 @@ const marketSelection: MarketSelection = {
     thesisFit: 0.85,
     reason: "Direct SOL perp expression.",
   },
+  selectedCandidateId: "hyperliquid|SOL|long",
+  rejectionReason: null,
+  rankedCandidates: [],
   rejectedCandidates: [],
   noTradeReason: null,
 };
@@ -134,6 +158,9 @@ const tradeExpression: TradeExpressionPlan = {
     },
   ],
   rankedCandidates: [],
+  candidateExpressions: [],
+  discardedExpressions: [],
+  noTradeCase: null,
   decision: "route_to_market_router",
   reason: "The asset is liquid and directly maps to the catalyst.",
   insufficiency: null,

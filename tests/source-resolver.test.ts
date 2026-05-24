@@ -45,6 +45,7 @@ describe("Grok X source resolver", () => {
         authorName: "Example",
         text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
         createdAt: "2026-05-24T00:00:00.000Z",
+        quotedPostText: null,
         linkedUrls: ["https://example.com/source"],
         mediaDescriptions: ["Chart showing revenue acceleration."],
       },
@@ -70,6 +71,7 @@ describe("Grok X source resolver", () => {
       authorName: "Example",
       text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
       createdAt: "2026-05-24T00:00:00.000Z",
+      quotedPostText: null,
       linkedUrls: ["https://example.com/source"],
       mediaDescriptions: ["Chart showing revenue acceleration."],
     });

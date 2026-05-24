@@ -90,6 +90,9 @@ liveDescribe("live integration", () => {
       authorName: "Cassie Live Fixture",
       text: "A major Solana ETF approval is basically guaranteed this quarter and SOL will reprice immediately.",
       createdAt: new Date().toISOString(),
+      quotedPostText: null,
+      linkedUrls: [],
+      mediaDescriptions: [],
     };
 
     const product = new CassieProduct(new DrizzleCassieStore());

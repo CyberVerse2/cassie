@@ -13,6 +13,9 @@ const resolvedPost: SourcePost = {
   authorName: "A",
   text: "Tweet from the round-robin file.",
   createdAt: "2026-05-24T00:00:00.000Z",
+  quotedPostText: null,
+  linkedUrls: [],
+  mediaDescriptions: [],
 };
 
 describe("source post input", () => {

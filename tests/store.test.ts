@@ -36,6 +36,9 @@ describe("InMemoryCassieStore", () => {
         authorName: "Example",
         text: "SOL ETF is inevitable.",
         createdAt: null,
+        quotedPostText: null,
+        linkedUrls: [],
+        mediaDescriptions: [],
       },
     });
     const run = await store.createRun({
@@ -107,6 +110,9 @@ describe("InMemoryCassieStore", () => {
         authorName: "Example",
         text: "SOL ETF is inevitable.",
         createdAt: null,
+        quotedPostText: null,
+        linkedUrls: [],
+        mediaDescriptions: [],
       },
     });
 

@@ -89,9 +89,11 @@ export async function pollXMentions(input: {
       authorName: author?.name ?? null,
       text: tweet.text,
       createdAt: tweet.created_at ?? null,
+      quotedPostText: null,
       linkedUrls: (tweet.entities?.urls ?? [])
         .map((url) => url.expanded_url ?? url.url)
         .filter((url): url is string => Boolean(url)),
+      mediaDescriptions: [],
     };
 
     results.push(await input.product.createMentionRun({

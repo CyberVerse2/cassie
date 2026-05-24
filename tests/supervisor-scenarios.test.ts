@@ -19,6 +19,9 @@ const sourcePost: SourcePost = {
   authorName: "Example",
   text: "Solana ETF approval is basically inevitable now. Market is asleep.",
   createdAt: "2026-05-20T12:00:00Z",
+  quotedPostText: null,
+  linkedUrls: [],
+  mediaDescriptions: [],
 };
 
 const baseSettings: UserSettings = {
@@ -36,11 +39,27 @@ const baseSettings: UserSettings = {
 };
 
 const marketSelection: MarketSelection = {
+  decision: "select_market",
   selectedMarket: {
     venue: "hyperliquid",
     instrument: "perp",
     side: "long",
     symbol: "SOL",
+    conditionId: null,
+    outcomeTokenId: null,
+    yesOutcomeTokenId: null,
+    noOutcomeTokenId: null,
+    marketQuestion: null,
+    marketSlug: null,
+    outcome: null,
+    yesPrice: null,
+    noPrice: null,
+    heldSidePrice: null,
+    volumeUsd: null,
+    liquidityUsd: null,
+    endDate: null,
+    warnings: [],
+    markPrice: null,
     liquidityScore: 0.9,
     spreadBps: 10,
     estimatedSlippageBps: 10,
@@ -48,6 +67,9 @@ const marketSelection: MarketSelection = {
     thesisFit: 0.82,
     reason: "Direct liquid SOL expression.",
   },
+  selectedCandidateId: "hyperliquid|SOL|long",
+  rejectionReason: null,
+  rankedCandidates: [],
   rejectedCandidates: [],
   noTradeReason: null,
 };
@@ -103,6 +125,9 @@ const tradeExpression: TradeExpressionPlan = {
     },
   ],
   rankedCandidates: [],
+  candidateExpressions: [],
+  discardedExpressions: [],
+  noTradeCase: null,
   decision: "route_to_market_router",
   reason: "The asset is liquid and directly maps to the catalyst.",
   insufficiency: null,
@@ -212,7 +237,11 @@ describe("supervisor scenario coverage", () => {
   it("finalizes no-trade market routing without preserving stale route language", async () => {
     const { store, run, tools } = await createScenario("@Cassie get me in");
     const noTradeMarketSelection: MarketSelection = {
+      decision: "no_selection",
       selectedMarket: null,
+      selectedCandidateId: null,
+      rejectionReason: "No configured venue candidate matched the trade expression.",
+      rankedCandidates: [],
       rejectedCandidates: [],
       noTradeReason: "No configured venue candidate matched the trade expression.",
     };

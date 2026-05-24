@@ -12,6 +12,9 @@ const sourcePost: SourcePost = {
   authorName: "Example",
   text: "Solana ETF approval is basically inevitable now. Market is asleep.",
   createdAt: "2026-05-20T12:00:00Z",
+  quotedPostText: null,
+  linkedUrls: [],
+  mediaDescriptions: [],
 };
 
 const settings: UserSettings = {
