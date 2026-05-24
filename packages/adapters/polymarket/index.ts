@@ -7,4 +7,8 @@ export {
   type PolymarketDiscoveryQueryPlanner,
   type PolymarketMarketFinder,
 } from "../selection.ts";
-export { PolymarketMarketDataProvider } from "../index.ts";
+export {
+  PolymarketMarketDataProvider,
+  PolymarketSdkSearchClient,
+  type PolymarketSearchClient,
+} from "../index.ts";

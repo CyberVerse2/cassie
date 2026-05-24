@@ -4,6 +4,7 @@ import {
 } from "../packages/adapters/hyperliquid/index.ts";
 import {
   PolymarketMarketDataProvider,
+  PolymarketSdkSearchClient,
 } from "../packages/adapters/polymarket/index.ts";
 import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
 import type { Thesis } from "../packages/core/schemas/index.ts";
@@ -25,6 +26,33 @@ const staticPolymarketQueryPlanner = {
     return ["Solana ETF", "Zcash price"];
   },
 };
+
+const staticPolymarketSearchClient = {
+  async searchMarkets(query: string) {
+    if (query !== "Solana ETF") return [];
+    return [
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 600000,
+        clobTokenIds: JSON.stringify(["123", "456"]),
+        outcomePrices: JSON.stringify(["0.62", "0.38"]),
+        conditionId: "condition_1",
+      },
+    ];
+  },
+};
+
+function polymarketSearchClientFor(markets: any[]) {
+  return {
+    async searchMarkets() {
+      return markets;
+    },
+  };
+}
 
 function catalogAsset(input: {
   symbol: string;
@@ -395,24 +423,10 @@ describe("market data connectors", () => {
         );
       }
 
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 600000,
-            clobTokenIds: JSON.stringify(["123", "456"]),
-            outcomePrices: JSON.stringify(["0.62", "0.38"]),
-            conditionId: "condition_1",
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    const candidates = await new PolymarketMarketDataProvider(staticPolymarketSearchClient, "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     });
 
@@ -426,7 +440,7 @@ describe("market data connectors", () => {
   });
 
   it("requires an AI query planner for Polymarket semantic discovery", async () => {
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets").findCandidates({
+    await expect(new PolymarketMarketDataProvider().findCandidates({
       thesis,
     })).rejects.toBeInstanceOf(MissingConnectorConfigError);
   });
@@ -445,11 +459,13 @@ describe("market data connectors", () => {
         );
       }
 
-      const search = url.searchParams.get("search") ?? "";
-      searches.push(search);
-
-      return new Response(JSON.stringify(search === "Zcash price"
-        ? [
+      return new Response("unexpected discovery fetch", { status: 500 });
+    });
+    const searchClient = {
+      async searchMarkets(query: string) {
+        searches.push(query);
+        if (query !== "Zcash price") return [];
+        return [
           {
             id: "asset-price-event",
             slug: "what-price-will-zcash-hit-before-2027",
@@ -461,11 +477,11 @@ describe("market data connectors", () => {
             outcomePrices: JSON.stringify(["0.54", "0.46"]),
             conditionId: "condition_asset_price",
           },
-        ]
-        : []));
-    });
+        ];
+      },
+    };
 
-    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://example.test", staticPolymarketQueryPlanner).findCandidates({
+    const candidates = await new PolymarketMarketDataProvider(searchClient, "https://example.test", staticPolymarketQueryPlanner).findCandidates({
       thesis: {
         claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%, moonshot flippening.",
         direction: "bullish",
@@ -529,6 +545,59 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("searches Polymarket through the beta SDK public search surface", async () => {
+    const requests: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : String(input));
+      requests.push(url.toString());
+
+      expect(url.pathname).toBe("/public-search");
+      expect(url.searchParams.get("q")).toBe("ethereum researchers");
+      expect(url.searchParams.get("events_status")).toBe("active");
+      expect(url.searchParams.get("optimized")).toBe("false");
+      expect(url.searchParams.get("limit_per_type")).toBe("7");
+      expect(url.searchParams.get("search")).toBeNull();
+
+      return new Response(JSON.stringify({
+        events: [
+          {
+            id: "event_1",
+            slug: "ethereum-price-event",
+            title: "Ethereum price event",
+            state: { active: true, closed: false },
+            markets: [
+              {
+                id: "market_1",
+                slug: "will-ethereum-researchers-resign",
+                question: "Will Ethereum researchers resign?",
+                conditionId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+                active: true,
+                closed: false,
+                endDate: "2026-06-01T00:00:00Z",
+                outcomes: ["Yes", "No"],
+                outcomePrices: ["0.42", "0.58"],
+                clobTokenIds: ["yes_token", "no_token"],
+                marketMakerAddress: "0x0000000000000000000000000000000000000000",
+                liquidityNum: "12000",
+                volumeNum: "50000",
+              },
+            ],
+          },
+        ],
+        tags: [],
+        profiles: [],
+        pagination: { hasMore: false, totalResults: 1 },
+      }));
+    });
+
+    const markets = await new PolymarketSdkSearchClient().searchMarkets("ethereum researchers", 7);
+
+    expect(requests).toHaveLength(1);
+    expect(markets[0]?.slug).toBe("will-ethereum-researchers-resign");
+    expect(markets[0]?.clobTokenIds).toBe(JSON.stringify(["yes_token", "no_token"]));
+    fetchMock.mockRestore();
+  });
+
   it("surfaces Polymarket order book failures instead of dropping the venue", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = new URL(String(input));
@@ -537,24 +606,10 @@ describe("market data connectors", () => {
         return new Response("upstream unavailable", { status: 503 });
       }
 
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 600000,
-            clobTokenIds: JSON.stringify(["123", "456"]),
-            outcomePrices: JSON.stringify(["0.62", "0.38"]),
-            conditionId: "condition_1",
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(staticPolymarketSearchClient, "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toBeInstanceOf(ConnectorRequestError);
     fetchMock.mockRestore();
@@ -573,23 +628,21 @@ describe("market data connectors", () => {
         );
       }
 
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 600000,
-            clobTokenIds: JSON.stringify(["123", "456"]),
-            outcomePrices: JSON.stringify(["0.62", "0.38"]),
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(polymarketSearchClientFor([
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 600000,
+        clobTokenIds: JSON.stringify(["123", "456"]),
+        outcomePrices: JSON.stringify(["0.62", "0.38"]),
+      },
+    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("condition_id");
     fetchMock.mockRestore();
@@ -597,26 +650,22 @@ describe("market data connectors", () => {
 
   it("rejects malformed Polymarket token ID arrays with provider-field context", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = new URL(String(input));
-
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 600000,
-            clobTokenIds: "[\"123\",",
-            outcomePrices: JSON.stringify(["0.62", "0.38"]),
-            conditionId: "condition_1",
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(polymarketSearchClientFor([
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 600000,
+        clobTokenIds: "[\"123\",",
+        outcomePrices: JSON.stringify(["0.62", "0.38"]),
+        conditionId: "condition_1",
+      },
+    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -624,26 +673,22 @@ describe("market data connectors", () => {
 
   it("rejects malformed Polymarket outcome price arrays with provider-field context", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = new URL(String(input));
-
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 600000,
-            clobTokenIds: JSON.stringify(["123", "456"]),
-            outcomePrices: "[\"0.62\",",
-            conditionId: "condition_1",
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(polymarketSearchClientFor([
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 600000,
+        clobTokenIds: JSON.stringify(["123", "456"]),
+        outcomePrices: "[\"0.62\",",
+        conditionId: "condition_1",
+      },
+    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -651,26 +696,22 @@ describe("market data connectors", () => {
 
   it("rejects parsed Polymarket arrays containing non-string values", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = new URL(String(input));
-
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 600000,
-            clobTokenIds: ["123", 456],
-            outcomePrices: JSON.stringify(["0.62", "0.38"]),
-            conditionId: "condition_1",
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    await expect(new PolymarketMarketDataProvider("https://example.test/markets", "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(polymarketSearchClientFor([
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 600000,
+        clobTokenIds: ["123", 456],
+        outcomePrices: JSON.stringify(["0.62", "0.38"]),
+        conditionId: "condition_1",
+      },
+    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -689,26 +730,24 @@ describe("market data connectors", () => {
         );
       }
 
-      return new Response(JSON.stringify(url.searchParams.get("search") === "Solana ETF"
-        ? [
-          {
-            id: "1",
-            slug: "solana-etf-approved",
-            question: "Will a Solana ETF be approved?",
-            active: true,
-            closed: false,
-            liquidityNum: 9000,
-            volumeNum: 12000,
-            clobTokenIds: JSON.stringify(["yes-token", "no-token"]),
-            outcomePrices: JSON.stringify(["0.37", "0.63"]),
-            conditionId: "condition_1",
-            endDate: "2026-09-01T00:00:00Z",
-          },
-        ]
-        : []));
+      return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    const candidates = await new PolymarketMarketDataProvider("https://example.test/markets", "https://example.test", staticPolymarketQueryPlanner).findPolymarketMarkets({
+    const candidates = await new PolymarketMarketDataProvider(polymarketSearchClientFor([
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 9000,
+        volumeNum: 12000,
+        clobTokenIds: JSON.stringify(["yes-token", "no-token"]),
+        outcomePrices: JSON.stringify(["0.37", "0.63"]),
+        conditionId: "condition_1",
+        endDate: "2026-09-01T00:00:00Z",
+      },
+    ]), "https://example.test", staticPolymarketQueryPlanner).findPolymarketMarkets({
       thesis: {
         ...thesis,
         direction: "bearish",

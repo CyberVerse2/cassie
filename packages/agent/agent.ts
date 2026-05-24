@@ -202,7 +202,7 @@ function defaultDependencies(): CassieDependencies {
     marketData: new CompositeMarketDataProvider(),
     sourceResolver: new GrokXSourceResolver(),
     polymarketMarketFinder: new PolymarketMarketDataProvider(
-      "https://gamma-api.polymarket.com/markets",
+      undefined,
       "https://clob.polymarket.com",
       new AiPolymarketDiscoveryQueryPlanner(ai),
     ),

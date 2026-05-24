@@ -1,3 +1,4 @@
+import type { PublicClient } from "@polymarket/client";
 import type {
   MarketCandidate,
   PolymarketMarketAssessment,
@@ -56,6 +57,57 @@ type PolymarketMarket = {
   endDate?: string;
 };
 
+type PolymarketSdkEvent = {
+  markets?: PolymarketSdkMarket[];
+};
+
+type PolymarketSdkMarket = {
+  id?: string;
+  question?: string | null;
+  slug?: string | null;
+  conditionId?: string | null;
+  state?: {
+    active?: boolean;
+    closed?: boolean;
+    endDate?: string | null;
+  } | null;
+  metrics?: {
+    liquidity?: string | number | null;
+    liquidityNum?: string | number | null;
+    volume?: string | number | null;
+    volumeNum?: string | number | null;
+  } | null;
+  outcomes?: {
+    yes?: { label?: string | null; tokenId?: string | null; price?: string | number | null } | null;
+    no?: { label?: string | null; tokenId?: string | null; price?: string | number | null } | null;
+  } | null;
+};
+
+export interface PolymarketSearchClient {
+  searchMarkets(query: string, limit: number): Promise<PolymarketMarket[]>;
+}
+
+export class PolymarketSdkSearchClient implements PolymarketSearchClient {
+  constructor(private client?: PublicClient) {}
+
+  async searchMarkets(query: string, limit: number): Promise<PolymarketMarket[]> {
+    const client = await this.getClient();
+    const page = await client.search({
+      q: query,
+      pageSize: limit,
+      eventsStatus: "active",
+      optimized: false,
+    }).firstPage();
+    const events = page.items.events as PolymarketSdkEvent[];
+    return events.flatMap((event) => (event.markets ?? []).map(polymarketMarketFromSdkMarket));
+  }
+
+  private async getClient(): Promise<PublicClient> {
+    this.client ??= (await import("@polymarket/client")).createPublicClient();
+    return this.client;
+  }
+}
+
 type NormalizedPolymarketMarket = {
   id: string | null;
   question: string;
@@ -67,11 +119,6 @@ type NormalizedPolymarketMarket = {
   volumeUsd: number;
   liquidityUsd: number;
   endDate: string | null;
-};
-
-type PolymarketMarketsResponse = PolymarketMarket[] | {
-  data?: PolymarketMarket[];
-  markets?: PolymarketMarket[];
 };
 
 type PolymarketBook = {
@@ -268,7 +315,7 @@ function isExactSymbolAnchor(value: string): boolean {
 
 export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {
   constructor(
-    private readonly endpoint = "https://gamma-api.polymarket.com/markets",
+    private readonly searchClient: PolymarketSearchClient = new PolymarketSdkSearchClient(),
     private readonly clobEndpoint = "https://clob.polymarket.com",
     private readonly queryPlanner?: PolymarketDiscoveryQueryPlanner,
   ) {}
@@ -284,19 +331,9 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
 
     const queries = await this.queryPlanner.planPolymarketSearchQueries(input);
     const marketResponses = await Promise.all(queries.map(async (query) => {
-      const url = new URL(this.endpoint);
-      url.searchParams.set("limit", String(input.limit ?? 10));
-      url.searchParams.set("active", "true");
-      url.searchParams.set("closed", "false");
-      url.searchParams.set("search", query);
-
-      const response = await fetch(url);
-      const marketsResponse = await readJsonResponse<PolymarketMarketsResponse>("Polymarket market data", response);
-      return Array.isArray(marketsResponse)
-        ? marketsResponse
-        : marketsResponse.data ?? marketsResponse.markets ?? [];
+      return this.searchClient.searchMarkets(query, input.limit ?? 10);
     }));
-    const markets = uniquePolymarketMarkets(marketResponses.flat());
+    const markets = uniquePolymarketMarkets(marketResponses.flat()).slice(0, input.limit ?? 10);
 
     const candidates = await Promise.all(markets
       .filter((market) => market.active !== false && market.closed !== true)
@@ -552,6 +589,41 @@ function parseNumberArray(value: string | string[] | undefined, context: { field
 function malformedPolymarketStringArrayError(context: { field: string; market: string }, cause?: unknown): Error {
   const causeMessage = cause instanceof Error ? ` ${cause.message}` : "";
   return new Error(`Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of strings or string[].${causeMessage}`);
+}
+
+function polymarketMarketFromSdkMarket(market: PolymarketSdkMarket): PolymarketMarket {
+  return {
+    id: market.id,
+    slug: market.slug ?? undefined,
+    question: market.question ?? undefined,
+    active: market.state?.active,
+    closed: market.state?.closed,
+    liquidityNum: numberFromSdkValue(market.metrics?.liquidityNum ?? market.metrics?.liquidity),
+    volumeNum: numberFromSdkValue(market.metrics?.volumeNum ?? market.metrics?.volume),
+    outcomes: JSON.stringify([
+      market.outcomes?.yes?.label ?? "Yes",
+      market.outcomes?.no?.label ?? "No",
+    ]),
+    outcomePrices: JSON.stringify([
+      stringFromSdkValue(market.outcomes?.yes?.price),
+      stringFromSdkValue(market.outcomes?.no?.price),
+    ]),
+    clobTokenIds: JSON.stringify([
+      market.outcomes?.yes?.tokenId ?? "",
+      market.outcomes?.no?.tokenId ?? "",
+    ]),
+    conditionId: market.conditionId ?? undefined,
+    endDate: market.state?.endDate ?? undefined,
+  };
+}
+
+function numberFromSdkValue(value: string | number | null | undefined): number | undefined {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function stringFromSdkValue(value: string | number | null | undefined): string {
+  return value == null ? "" : String(value);
 }
 
 function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymarketMarket {
