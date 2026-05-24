@@ -1,12 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS,
   IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS,
   CassieStructuredClient,
   MissingAiDependencyError,
   extractModelThinkingTrace,
+  openAiModelForStructuredCall,
   providerOptionsForRoute,
   routeStructuredModel,
+  structuredToolsForCall,
 } from "../packages/ai/client.ts";
 
 describe("structured AI model routing", () => {
@@ -45,6 +47,45 @@ describe("structured AI model routing", () => {
       reasoning: [{ type: "reasoning", text: "A provider reasoning part." }],
     })).toBe("A provider reasoning part.");
     expect(extractModelThinkingTrace({ reasoning: [] })).toBeNull();
+  });
+
+  it("allows frame opportunity to use OpenAI built-in web search", () => {
+    const webSearch = vi.fn(() => ({ id: "openai.web_search" }));
+    const route = routeStructuredModel({ name: "cassie_opportunity_frame" });
+
+    expect(structuredToolsForCall({
+      name: "cassie_opportunity_frame",
+      route,
+      openai: { tools: { webSearch } },
+    })).toEqual({
+      web_search: { id: "openai.web_search" },
+    });
+    expect(webSearch).toHaveBeenCalledWith({
+      externalWebAccess: true,
+      searchContextSize: "low",
+    });
+    expect(structuredToolsForCall({
+      name: "cassie_trade_expressions",
+      route: routeStructuredModel({ name: "cassie_trade_expressions" }),
+      openai: { tools: { webSearch } },
+    })).toBeUndefined();
+  });
+
+  it("uses the OpenAI Responses API when built-in tools are enabled", () => {
+    const openai = Object.assign(
+      vi.fn((model: string) => ({ kind: "responses", model })),
+      { chat: vi.fn((model: string) => ({ kind: "chat", model })) },
+    );
+    const route = routeStructuredModel({ name: "cassie_opportunity_frame" });
+
+    expect(openAiModelForStructuredCall({ route, openai, hasOpenAiBuiltInTools: true })).toEqual({
+      kind: "responses",
+      model: "gpt-5.4-mini",
+    });
+    expect(openAiModelForStructuredCall({ route, openai, hasOpenAiBuiltInTools: false })).toEqual({
+      kind: "chat",
+      model: "gpt-5.4-mini",
+    });
   });
 
   it("allows explicit tier overrides for structured calls", () => {

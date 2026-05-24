@@ -130,6 +130,44 @@ export function withThinkingTraceCapture(
   };
 }
 
+type OpenAiProviderForStructuredCall = {
+  (model: string): unknown;
+  chat: (model: string) => unknown;
+  tools: {
+    webSearch: (input: {
+      externalWebAccess: true;
+      searchContextSize: "low" | "medium" | "high";
+    }) => unknown;
+  };
+};
+
+export function structuredToolsForCall(input: {
+  name: string;
+  route: ModelRoute;
+  openai: Pick<OpenAiProviderForStructuredCall, "tools">;
+}): Record<string, unknown> | undefined {
+  if (input.route.provider !== "openai" || input.name !== "cassie_opportunity_frame") {
+    return undefined;
+  }
+
+  return {
+    web_search: input.openai.tools.webSearch({
+      externalWebAccess: true,
+      searchContextSize: "low",
+    }),
+  };
+}
+
+export function openAiModelForStructuredCall(input: {
+  route: ModelRoute;
+  openai: Pick<OpenAiProviderForStructuredCall, "chat"> & ((model: string) => unknown);
+  hasOpenAiBuiltInTools: boolean;
+}): unknown {
+  return input.hasOpenAiBuiltInTools
+    ? input.openai(input.route.model)
+    : input.openai.chat(input.route.model);
+}
+
 export class CassieStructuredClient implements StructuredAiClient {
   private readonly expensiveModelName: string;
   private readonly cheapModelName: string;
@@ -188,9 +226,20 @@ export class CassieStructuredClient implements StructuredAiClient {
       const openai = createOpenAI({
         apiKey: openAiKey,
       });
+      const tools = route.provider === "openai"
+        ? structuredToolsForCall({
+          name: input.name,
+          route,
+          openai,
+        })
+        : undefined;
       const result = await generateText({
         model: route.provider === "openai"
-          ? openai.chat(route.model)
+          ? openAiModelForStructuredCall({
+            route,
+            openai,
+            hasOpenAiBuiltInTools: Boolean(tools),
+          }) as never
           : deepseek.chat(route.model),
         output: Output.object({
           schema: input.schema,
@@ -200,6 +249,7 @@ export class CassieStructuredClient implements StructuredAiClient {
         maxRetries: structuredMaxRetries(),
         maxOutputTokens: maxOutputTokensForTier(route.tier),
         providerOptions: providerOptionsForRoute(route),
+        tools: tools as never,
       });
 
       finishTrace?.({
