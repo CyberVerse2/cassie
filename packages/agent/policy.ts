@@ -64,24 +64,28 @@ export function selectActiveTools(
       return ["finalize_run"];
     }
 
-    const fitAssessment = objectRecord(latestToolOutput(steps, "assess_expression_fit"));
-    if (!fitAssessment.fitStatus) {
+    const fitAssessments = toolOutputsAfterLatest(steps, "assess_expression_fit", "search_venues")
+      .map(objectRecord)
+      .filter((assessment) => typeof assessment.fitStatus === "string");
+    if (fitAssessments.length < marketCandidates.length) {
       return ["assess_expression_fit"];
     }
 
-    if (fitAssessment.fitStatus !== "validated") {
+    const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+    if (validatedFitAssessments.length === 0) {
       return ["finalize_run"];
     }
 
-    const quote = latestToolOutput(steps, "quote_expression");
+    const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
+    if (quotes.length < validatedFitAssessments.length) {
+      return ["quote_expression"];
+    }
+
     const xSentiment = latestToolOutput(steps, "check_x_sentiment");
-    if (quote && !xSentiment) {
+    if (!xSentiment) {
       return ["check_x_sentiment"];
     }
-    if (quote && xSentiment) {
-      return ["rank_expressions"];
-    }
-    return ["quote_expression"];
+    return ["rank_expressions"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
@@ -123,6 +127,29 @@ function latestToolOutput(
     }
   }
   return undefined;
+}
+
+function toolOutputsAfterLatest(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  toolName: string,
+  afterToolName: string,
+): unknown[] {
+  const flattened = steps.flatMap((step) => step.toolResults);
+  const afterIndex = latestToolResultIndex(flattened, afterToolName);
+  return flattened
+    .slice(afterIndex + 1)
+    .filter((result) => result.toolName === toolName)
+    .map((result) => result.output);
+}
+
+function latestToolResultIndex(
+  toolResults: Array<{ toolName: string }>,
+  toolName: string,
+): number {
+  for (let index = toolResults.length - 1; index >= 0; index -= 1) {
+    if (toolResults[index]?.toolName === toolName) return index;
+  }
+  return -1;
 }
 
 function latestToolError(steps: Array<{ content: Array<{ type: string; toolName?: string; error?: unknown }> }>): { toolName: string; error: string; recoverable: boolean } | null {
@@ -252,6 +279,7 @@ function buildSupervisorState(
   return {
     activeTools,
     nextTool: activeTools.length === 1 ? activeTools[0] : null,
+    venueDiscoveryProgress: buildVenueDiscoveryProgress(steps),
     latestToolResults: Object.fromEntries(
       ([
         "resolve_source",
@@ -269,6 +297,39 @@ function buildSupervisorState(
         .filter(([, output]) => output !== undefined)
         .map(([toolName, output]) => [toolName, summarizeToolOutput(output)]),
     ),
+  };
+}
+
+function buildVenueDiscoveryProgress(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+) {
+  const candidates = latestToolOutput(steps, "search_venues");
+  if (!Array.isArray(candidates) || candidates.length === 0) return null;
+
+  const fitAssessments = toolOutputsAfterLatest(steps, "assess_expression_fit", "search_venues")
+    .map(objectRecord)
+    .filter((assessment) => typeof assessment.fitStatus === "string");
+  const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+  const validatedCandidateIndexes = fitAssessments
+    .map((assessment, index) => assessment.fitStatus === "validated" ? index : null)
+    .filter((index): index is number => index !== null);
+  const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
+  const nextUnquotedCandidateIndex = validatedCandidateIndexes[quotes.length] ?? null;
+
+  return {
+    candidateCount: candidates.length,
+    fitAssessmentCount: fitAssessments.length,
+    validatedFitCount: validatedFitAssessments.length,
+    quoteCount: quotes.length,
+    nextUnassessedCandidate: fitAssessments.length < candidates.length
+      ? summarizeToolOutput(candidates[fitAssessments.length])
+      : null,
+    nextUnquotedCandidate: fitAssessments.length >= candidates.length && quotes.length < validatedFitAssessments.length
+      ? summarizeToolOutput(candidates[nextUnquotedCandidateIndex ?? quotes.length])
+      : null,
+    readyToRank: fitAssessments.length >= candidates.length
+      && validatedFitAssessments.length > 0
+      && quotes.length >= validatedFitAssessments.length,
   };
 }
 

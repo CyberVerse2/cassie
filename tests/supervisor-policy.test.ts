@@ -137,6 +137,69 @@ describe("supervisor step policy", () => {
     expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "search_venues" });
   });
 
+  it("keeps assessing venue candidates before quoting or ranking", () => {
+    const opportunity = step("frame_opportunity", {});
+    const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
+    const candidates = step("search_venues", [
+      { venue: "hyperliquid", symbol: "BTC", side: "short" },
+      { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+    ]);
+    const firstFit = step("assess_expression_fit", {
+      candidateId: "hyperliquid:BTC:short",
+      fitStatus: "validated",
+      venue: "hyperliquid",
+    });
+
+    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["assess_expression_fit"]);
+  });
+
+  it("injects venue discovery progress for the next candidate", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", { decision: "needs_market_check" }),
+        step("search_venues", [
+          { venue: "hyperliquid", symbol: "BTC", side: "short" },
+          { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+        ]),
+        step("assess_expression_fit", {
+          candidateId: "hyperliquid:BTC:short",
+          fitStatus: "validated",
+          venue: "hyperliquid",
+        }),
+      ],
+      messages: [],
+    } as never) as { activeTools: string[]; messages: unknown[] };
+
+    const serialized = JSON.stringify(prepared.messages);
+    expect(prepared.activeTools).toEqual(["assess_expression_fit"]);
+    expect(serialized).toContain("venueDiscoveryProgress");
+    expect(serialized).toContain("nextUnassessedCandidate");
+    expect(serialized).toContain("btc-price-market");
+  });
+
+  it("quotes every validated venue candidate before ranking", () => {
+    const opportunity = step("frame_opportunity", {});
+    const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
+    const candidates = step("search_venues", [
+      { venue: "hyperliquid", symbol: "BTC", side: "short" },
+      { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+    ]);
+    const firstFit = step("assess_expression_fit", {
+      candidateId: "hyperliquid:BTC:short",
+      fitStatus: "validated",
+      venue: "hyperliquid",
+    });
+    const secondFit = step("assess_expression_fit", {
+      candidateId: "polymarket:condition_1:token_no:buy_no",
+      fitStatus: "validated",
+      venue: "polymarket",
+    });
+    const firstQuote = step("quote_expression", { venue: "hyperliquid", symbol: "BTC", side: "short" });
+
+    expect(selectActiveTools([opportunity, expression, candidates, firstFit, secondFit, firstQuote])).toEqual(["quote_expression"]);
+  });
+
   it("forces the exact next tool and injects authoritative persisted state", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [

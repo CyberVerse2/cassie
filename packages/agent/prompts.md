@@ -358,6 +358,8 @@ If expression_rail is "pre_ipo":
 If expression_rail is "prediction_market":
 - Search configured prediction-market venues.
 - Search by event terms, entity names, aliases, deadline terms, acquirer/target terms, legal terms, regulatory terms, sports terms, product launch terms, and outcome terms.
+- Search exact markets first, then entity-adjacent, asset-adjacent, and narrative-adjacent markets when the exact event market is not found.
+- Keep adjacent markets visible as proxies; do not present them as exact matches.
 - Return binary and multi-outcome markets if relevant.
 - Include outcomes, close date, and rules if available.
 
@@ -1390,6 +1392,8 @@ If market_type is "pre_ipo":
 If market_type is "prediction_market":
 - Search Polymarket-style venues.
 - Search by event terms, entity names, aliases, deadlines, acquirer/target terms, regulatory terms, election terms, launch terms, legal terms, sports terms, and outcome terms.
+- Search exact markets first, then entity-adjacent, asset-adjacent, and narrative-adjacent markets when the exact event market is not found.
+- Keep adjacent markets visible as proxies; do not present them as exact matches.
 - Return binary and multi-outcome markets if relevant.
 - Include close date, outcomes, description/rules if available.
 

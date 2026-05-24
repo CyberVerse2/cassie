@@ -295,6 +295,76 @@ describe("AI SDK supervisor agent", () => {
     expect(state.executionJobs).toHaveLength(0);
   });
 
+  it("uses the selected market thesis when creating a trade ticket", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie trade this",
+      sourcePost,
+    });
+    const selectedMarket: MarketSelection = {
+      ...marketSelection,
+      selectedMarket: {
+        ...marketSelection.selectedMarket!,
+        symbol: "BTC",
+        side: "short",
+        reason: "BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.",
+      },
+      selectedCandidateId: "hyperliquid:BTC:short",
+    };
+    const expressionWithHigherPriorityEventMarket: TradeExpressionPlan = {
+      ...tradeExpression,
+      directAsset: "BTC",
+      candidateExpressions: [
+        {
+          expressionId: "strategy_sale_no",
+          expressionRail: "prediction_market",
+          expressionType: "event_probability",
+          abstractMarket: "Strategy sells Bitcoin this year",
+          intendedSide: "no",
+          primaryEntityOrEvent: "Strategy Bitcoin sale",
+          relatedEntities: ["Strategy"],
+          thesis: "Buy No on an exact Strategy-sells-BTC event market.",
+          whyThisExpressesTheOpportunity: "The event market would directly resolve the literal claim.",
+          directness: "direct",
+          whatMustBeTrue: ["An exact event market exists"],
+          searchTerms: ["Strategy sells Bitcoin"],
+          requiredMarketFeatures: ["Exact event market"],
+          requiredRuleOrContractFeatures: ["Rules must resolve on Strategy selling BTC"],
+          keyRisks: ["No exact market exists"],
+          expectedTimeHorizon: "days",
+          priority: "high",
+          confidence: 0.8,
+        },
+      ],
+    };
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [selectedMarket.selectedMarket!];
+          },
+        },
+      },
+    });
+
+    await executeTool(tools.create_trade_ticket, {
+      tradeExpression: expressionWithHigherPriorityEventMarket,
+      marketSelection: selectedMarket,
+      riskDecision: { decision: "create_ticket_only", reason: "Needs approval." },
+      sizeUsd: null,
+    });
+
+    const state = await store.load();
+    expect(state.tradeTickets[0]?.thesis).toBe("BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.");
+  });
+
   it("resolves an explicit X source URL before framing opportunity", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
@@ -732,6 +802,54 @@ describe("AI SDK supervisor agent", () => {
       quotes: [persistedCandidate],
     });
     expect(ai.calls).toContain("cassie_market_selection");
+  });
+
+  it("rejects ranking before every discovered venue candidate has fit and quote coverage", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie rank only after full discovery",
+      sourcePost,
+    });
+    const firstCandidate = marketSelection.selectedMarket!;
+    const secondCandidate: MarketCandidate = {
+      ...firstCandidate,
+      symbol: "ETH",
+      reason: "Second discovered candidate.",
+    };
+    await seedMarketCandidates(store, run.runId, [firstCandidate, secondCandidate]);
+    await seedFitAssessment(store, run.runId, expressionFitAssessment);
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_quote",
+      status: "succeeded",
+      input: {},
+      output: firstCandidate,
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      thinkingTrace: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {
+      tradeExpression,
+    })).rejects.toThrow("rank_expressions requires fit assessments for every persisted venue candidate.");
   });
 
 });

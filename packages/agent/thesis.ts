@@ -1,4 +1,4 @@
-import type { TradeExpressionPlan } from "../core/schemas/index.ts";
+import type { MarketSelection, TradeExpressionPlan } from "../core/schemas/index.ts";
 
 export function thesisFromTradeExpression(tradeExpression: TradeExpressionPlan) {
   const candidateExpressions = tradeExpression.candidateExpressions ?? [];
@@ -29,6 +29,27 @@ export function thesisFromTradeExpression(tradeExpression: TradeExpressionPlan) 
     evidenceQuality: "unknown" as const,
     manipulationRisk: "unknown" as const,
     confidence: tradeExpression.tradeExpressionConfidence ?? 0.5,
+  };
+}
+
+export function thesisForMarketSelection(
+  tradeExpression: TradeExpressionPlan,
+  marketSelection: MarketSelection,
+) {
+  const thesis = thesisFromTradeExpression(tradeExpression);
+  const market = marketSelection.selectedMarket;
+  if (!market) return thesis;
+
+  return {
+    ...thesis,
+    claim: market.reason || `${market.side} ${market.symbol} on ${market.venue}.`,
+    impliedTradeThesis: market.reason || thesis.impliedTradeThesis,
+    direction: directionFromSide(market.side) ?? thesis.direction,
+    mentionedAssets: Array.from(new Set([
+      market.symbol,
+      market.instrument,
+      ...thesis.mentionedAssets,
+    ].filter((value): value is string => Boolean(value)))),
   };
 }
 

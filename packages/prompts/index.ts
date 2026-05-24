@@ -51,7 +51,7 @@ Core behavior:
 - Consider direct, proxy, contrarian, and no-trade expressions.
 - Prefer direct expressions over proxy expressions.
 - Proxy trades are allowed only when the causal path is strong.
-- Do not create or search instruments when the direct asset is not tradable through an allowed rail.
+- Do not create or search direct-asset crypto or pre-IPO instruments when the direct asset is not tradable through that rail; prediction-market discovery may still search exact or adjacent event markets.
 - A good tweet can still produce no trade if there is no clean expression.
 - A true claim can still be a bad trade if it is stale or already priced.
 - A relevant market can still be a bad trade if the rules or contract do not match the thesis.
@@ -200,6 +200,8 @@ Generate semantic search queries for real prediction markets after the opportuni
 
 Rules:
 - Search from event terms, affected entities, aliases, deadlines, legal/regulatory terms, acquirer/target terms, launch terms, outcome terms, and likely rule wording.
+- Generate a mix of exact, entity-adjacent, asset-adjacent, and narrative-adjacent prediction-market search queries when no exact market is guaranteed.
+- Exact queries should target the literal event; entity-adjacent queries should target the same person, company, protocol, or issuer; asset-adjacent queries should target the main price/read-through asset; narrative-adjacent queries should target the broader event class.
 - Do not invent markets.
 - Do not include price, probability, or liquidity claims.
 - Return at most ${input.limit} concise reusable queries.`,

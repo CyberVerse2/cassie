@@ -93,7 +93,7 @@ describe("venue search", () => {
     expect(candidates).toEqual([polymarketCandidate]);
   });
 
-  it("does not search venues when the trade expression has no directly tradable asset", async () => {
+  it("still searches prediction venues when the direct asset is not tradable", async () => {
     let marketSearches = 0;
     let polymarketSearches = 0;
     const candidates = await searchVenues({
@@ -129,8 +129,8 @@ describe("venue search", () => {
       venues: ["hyperliquid", "polymarket"],
     });
 
-    expect(candidates).toEqual([]);
+    expect(candidates).toEqual([polymarketCandidate]);
     expect(marketSearches).toBe(0);
-    expect(polymarketSearches).toBe(0);
+    expect(polymarketSearches).toBe(1);
   });
 });

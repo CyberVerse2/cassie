@@ -32,7 +32,7 @@ import { prepareFinalInput } from "./public-summary.ts";
 import { createRunStepCache } from "./tool-cache.ts";
 import { frameOpportunity, generateTradeExpressions } from "./reasoning.ts";
 import { assessExpressionFit, quoteExpression, searchVenues } from "./venues.ts";
-import { thesisFromTradeExpression } from "./thesis.ts";
+import { thesisForMarketSelection, thesisFromTradeExpression } from "./thesis.ts";
 import {
   FinalizeRunInputSchema,
   assertNonRejectedRiskDecision,
@@ -319,8 +319,15 @@ export function createCassieSupervisorTools(input: {
         const persistedXSentiment = xSentiment
           ?? await latestPersistedXSentiment(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : quotes;
+        if (persistedCandidates.length > 0 && persistedFitAssessments.length < persistedCandidates.length) {
+          throw new Error("rank_expressions requires fit assessments for every persisted venue candidate.");
+        }
+        const validatedFitAssessments = persistedFitAssessments.filter((assessment) => assessment.fitStatus === "validated");
         if (groundedQuotes.length === 0) {
           throw new Error("rank_expressions requires a persisted or supplied market quote.");
+        }
+        if (validatedFitAssessments.length > groundedQuotes.length) {
+          throw new Error("rank_expressions requires quotes for every validated venue candidate.");
         }
 
         return runStepOnce(
@@ -407,7 +414,7 @@ export function createCassieSupervisorTools(input: {
         async () => {
           assertUsableMarketSelection(marketSelection);
           assertNonRejectedRiskDecision(riskDecision);
-          const thesis = thesisFromTradeExpression(tradeExpression);
+          const thesis = thesisForMarketSelection(tradeExpression, marketSelection);
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,

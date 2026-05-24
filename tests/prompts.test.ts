@@ -145,6 +145,11 @@ describe("prompts", () => {
     expect(prompts.join("\n")).toContain("Do not invent tickers");
     expect(prompts.join("\n")).toContain("Generate candidateExpressions first");
     expect(prompts.join("\n")).toContain("Do not assume a real market exists");
+    expect(polymarketDiscoveryQueryPrompt({
+      thesis,
+      tradeExpression,
+      limit: 5,
+    })).toContain("exact, entity-adjacent, asset-adjacent, and narrative-adjacent");
   });
 
   it("exposes stage prompts as AI SDK-ready specs", () => {

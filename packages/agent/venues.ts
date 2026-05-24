@@ -38,17 +38,13 @@ export async function searchVenues(input: {
   venues?: Array<"hyperliquid" | "polymarket">;
   limit?: number;
 }): Promise<VenueMarketCandidate[]> {
-  if (!input.tradeExpression.directAssetTradable) {
-    return [];
-  }
-
   const searchIntent = buildVenueSearchIntent(input);
   const venues = searchIntent.venues;
   const candidateBatches: VenueMarketCandidate[][] = [];
   const failures: string[] = [];
   let attemptedVenues = 0;
 
-  if (venues.includes("hyperliquid")) {
+  if (venues.includes("hyperliquid") && input.tradeExpression.directAssetTradable) {
     attemptedVenues += 1;
     try {
       candidateBatches.push(await input.marketData.findCandidates({
@@ -75,6 +71,10 @@ export async function searchVenues(input: {
     } catch (error) {
       failures.push(`polymarket: ${errorMessage(error)}`);
     }
+  }
+
+  if (attemptedVenues === 0) {
+    return [];
   }
 
   if (failures.length > 0 && failures.length === attemptedVenues) {
