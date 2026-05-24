@@ -710,11 +710,17 @@ describe("AI SDK supervisor agent", () => {
         },
       },
     });
+    const rankInputSchema = tools.rank_expressions.inputSchema as {
+      safeParse: (value: unknown) => { success: boolean };
+    };
+    expect(rankInputSchema.safeParse({
+      tradeExpression,
+      fitAssessments: [expressionFitAssessment],
+    }).success).toBe(true);
 
     await expect(executeTool(tools.rank_expressions, {
       tradeExpression,
       fitAssessments: [expressionFitAssessment],
-      quotes: [{ symbol: "MODEL_WRITTEN_QUOTE" }],
     })).resolves.toMatchObject({
       selectedMarket: persistedCandidate,
       noTradeReason: null,

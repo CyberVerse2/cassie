@@ -305,7 +305,7 @@ export function createCassieSupervisorTools(input: {
         tradeExpression: TradeExpressionPlanSchema,
         candidates: MarketCandidateSchema.array().optional(),
         fitAssessments: ExpressionFitAssessmentSchema.array().optional(),
-        quotes: z.array(z.unknown()).min(1),
+        quotes: z.array(z.unknown()).default([]),
         xSentiment: XSentimentAssessmentSchema.optional(),
       }),
       execute: async ({ tradeExpression, candidates, fitAssessments, quotes, xSentiment }) => {
@@ -319,6 +319,9 @@ export function createCassieSupervisorTools(input: {
         const persistedXSentiment = xSentiment
           ?? await latestPersistedXSentiment(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : quotes;
+        if (groundedQuotes.length === 0) {
+          throw new Error("rank_expressions requires a persisted or supplied market quote.");
+        }
 
         return runStepOnce(
           "market_selection",
