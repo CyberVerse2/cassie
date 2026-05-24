@@ -94,7 +94,7 @@ export function createCassieSupervisorTools(input: {
       }),
     }),
     resolve_source: tool({
-      description: "Resolve a real X/Twitter status URL into Cassie's SourcePost text shape before opportunity framing.",
+      description: "Resolve a real X/Twitter status URL into Cassie's SourcePost text shape",
       inputSchema: z.object({
         url: z.string().url(),
       }),

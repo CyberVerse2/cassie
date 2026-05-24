@@ -216,8 +216,6 @@ export function buildSupervisorInstructions(): string {
     "Required staged architecture:",
     "resolve source -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
     "",
-    "If the run only contains a mention or command with an X/Twitter status URL, call resolve_source first and pass the resolved SourcePost into frame_opportunity.",
-    "",
     "Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity. First identify the market opportunity, then let candidate expression generation decide which expression rails deserve venue search.",
     "",
     "Use the AI-backed semantic tools for opportunity framing, trade-expression generation, expression-fit assessment, and expression ranking. Do not replace those judgments with keyword scoring, regex matching, hardcoded lookup tables, or term-overlap heuristics.",
