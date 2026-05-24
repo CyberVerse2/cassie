@@ -8,7 +8,6 @@ import {
 } from "../packages/adapters/polymarket/index.ts";
 import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
 import type { Thesis } from "../packages/core/schemas/index.ts";
-import type { HyperliquidCatalogAsset } from "../packages/adapters/hyperliquid/catalog.ts";
 
 const thesis: Thesis = {
   claim: "SOL may rally because Solana ETF approval odds are increasing.",
@@ -80,61 +79,58 @@ function polymarketSearchClientFor(markets: any[], book = {
   };
 }
 
-function catalogAsset(input: {
-  symbol: string;
-  baseSymbol?: string;
-  displayName?: string;
-  aliases?: string[];
-  dex?: string | null;
-  instrumentType?: HyperliquidCatalogAsset["instrumentType"];
-  surface?: HyperliquidCatalogAsset["surface"];
-}): HyperliquidCatalogAsset {
-  const baseSymbol = input.baseSymbol ?? input.symbol.split(":").at(-1) ?? input.symbol;
-  return {
-    venue: "hyperliquid",
-    catalogId: `hyperliquid:${input.dex ?? "perp"}:${baseSymbol}`,
-    symbol: input.symbol,
-    baseSymbol,
-    displayName: input.displayName ?? baseSymbol,
-    surface: input.surface ?? (input.dex ? "hip3_perp" : "native_perp"),
-    instrumentType: input.instrumentType ?? "perp",
-    dex: input.dex ?? null,
-    aliases: input.aliases ?? [baseSymbol],
-    searchText: [input.symbol, baseSymbol, input.displayName, ...(input.aliases ?? [])].filter(Boolean).join(" "),
-    maxLeverage: null,
-    onlyIsolated: false,
-    marginMode: null,
-    source: "hyperliquid_metaAndAssetCtxs",
-    raw: { name: input.symbol },
-    lastSeenAt: "2026-05-23T00:00:00.000Z",
-  };
+function hyperliquidInfoFetchMock(input: {
+  dexes?: Array<null | { name: string }>;
+  metas: Record<string, {
+    universe: Array<{ name: string; maxLeverage?: number; onlyIsolated?: boolean; marginMode?: string }>;
+    ctxs: Array<{ dayNtlVlm?: string; markPx?: string; midPx?: string; funding?: string }>;
+  }>;
+  books: Record<string, { levels: [Array<{ px: string; sz: string }>, Array<{ px: string; sz: string }>] }>;
+}) {
+  return vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+    const body = JSON.parse(String(init?.body ?? "{}")) as { type: string; dex?: string; coin?: string };
+
+    if (body.type === "perpDexs") {
+      return new Response(JSON.stringify(input.dexes ?? [null]));
+    }
+
+    if (body.type === "metaAndAssetCtxs") {
+      const key = body.dex ?? "main";
+      const meta = input.metas[key];
+      if (!meta) throw new Error(`Unexpected Hyperliquid metadata request: ${JSON.stringify(body)}`);
+      return new Response(JSON.stringify([{ universe: meta.universe }, meta.ctxs]));
+    }
+
+    if (body.type === "l2Book" && body.coin) {
+      const book = input.books[body.coin];
+      if (!book) throw new Error(`Unexpected Hyperliquid book request: ${JSON.stringify(body)}`);
+      return new Response(JSON.stringify(book));
+    }
+
+    throw new Error(`Unexpected Hyperliquid request: ${JSON.stringify(body)}`);
+  });
 }
 
 describe("market data connectors", () => {
   it("maps Hyperliquid asset contexts into market candidates", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([
-            { universe: [{ name: "SOL" }, { name: "BTC" }] },
-            [{ dayNtlVlm: "100000000" }, { dayNtlVlm: "1000000000" }],
-          ]),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            levels: [
-              [{ px: "99.9", sz: "100" }],
-              [{ px: "100.1", sz: "100" }],
-            ],
-          }),
-        ),
-      );
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "SOL" }, { name: "BTC" }],
+          ctxs: [{ dayNtlVlm: "100000000" }, { dayNtlVlm: "1000000000" }],
+        },
+      },
+      books: {
+        SOL: {
+          levels: [
+            [{ px: "99.9", sz: "100" }],
+            [{ px: "100.1", sz: "100" }],
+          ],
+        },
+      },
+    });
 
-    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info", [
-      catalogAsset({ symbol: "SOL", aliases: ["SOL", "Solana"] }),
-    ]).findCandidates({
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
       thesis,
     });
 
@@ -146,26 +142,19 @@ describe("market data connectors", () => {
   });
 
   it("does not return Hyperliquid candidates without a quoted l2 book", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([
-            { universe: [{ name: "AI" }] },
-            [{ dayNtlVlm: "1000000", markPx: "0.42" }],
-          ]),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            levels: [[], []],
-          }),
-        ),
-      );
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "AI" }],
+          ctxs: [{ dayNtlVlm: "1000000", markPx: "0.42" }],
+        },
+      },
+      books: {
+        AI: { levels: [[], []] },
+      },
+    });
 
-    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info", [
-      catalogAsset({ symbol: "AI", aliases: ["AI", "Sleepless AI"] }),
-    ]).findCandidates({
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
       thesis: {
         ...thesis,
         claim: "AI may rally after the headline.",
@@ -178,40 +167,27 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
-  it("checks Hyperliquid pre-stock aliases for private-company signals", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
-      const body = JSON.parse(String(init?.body ?? "{}")) as { type: string; dex?: string; coin?: string };
-
-      if (body.type === "metaAndAssetCtxs" && body.dex === "vntl") {
-        return new Response(JSON.stringify([
-          { universe: [{ name: "vntl:SPACEX" }, { name: "vntl:OPENAI" }] },
-          [{ dayNtlVlm: "7500000", markPx: "74.5" }, { dayNtlVlm: "25000000" }],
-        ]));
-      }
-
-      if (body.type === "l2Book" && body.coin === "vntl:SPACEX") {
-        return new Response(JSON.stringify({
+  it("uses live Hyperliquid dex discovery for private-company signals", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      dexes: [null, { name: "vntl" }],
+      metas: {
+        main: { universe: [], ctxs: [] },
+        vntl: {
+          universe: [{ name: "vntl:SPACEX" }, { name: "vntl:OPENAI" }],
+          ctxs: [{ dayNtlVlm: "7500000", markPx: "74.5" }, { dayNtlVlm: "25000000" }],
+        },
+      },
+      books: {
+        "vntl:SPACEX": {
           levels: [
             [{ px: "74.5", sz: "10" }],
             [{ px: "75.5", sz: "10" }],
           ],
-        }));
-      }
-
-      throw new Error(`Unexpected Hyperliquid request: ${JSON.stringify(body)}`);
+        },
+      },
     });
 
-    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info", [
-      catalogAsset({
-        symbol: "vntl:SPACEX",
-        baseSymbol: "SPACEX",
-        displayName: "SpaceX",
-        aliases: ["SpaceX", "SPCX", "pre-stock", "private company"],
-        dex: "vntl",
-        instrumentType: "pre_stock_perp",
-        surface: "hip3_perp",
-      }),
-    ]).findCandidates({
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
       thesis: {
         claim: "SpaceX IPO valuation may be too rich for a clean public trade.",
         direction: "bearish",
@@ -254,49 +230,34 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
-  it("uses the Hyperliquid catalog to discover HIP-3 deployer markets", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
-      const body = JSON.parse(String(init?.body ?? "{}")) as { type: string; dex?: string; coin?: string };
-
-      if (body.type === "metaAndAssetCtxs" && body.dex === "vntl") {
-        return new Response(JSON.stringify([
-          {
-            universe: [
-              {
-                name: "vntl:ANTHROPIC",
-                maxLeverage: 3,
-                onlyIsolated: true,
-                marginMode: "strictIsolated",
-              },
-            ],
-          },
-          [{ dayNtlVlm: "71177.6532", markPx: "1381.2", midPx: "1401.95" }],
-        ]));
-      }
-
-      if (body.type === "l2Book" && body.coin === "vntl:ANTHROPIC") {
-        return new Response(JSON.stringify({
+  it("discovers HIP-3 deployer markets from live Hyperliquid dex metadata", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      dexes: [null, { name: "vntl" }],
+      metas: {
+        main: { universe: [], ctxs: [] },
+        vntl: {
+          universe: [
+            {
+              name: "vntl:ANTHROPIC",
+              maxLeverage: 3,
+              onlyIsolated: true,
+              marginMode: "strictIsolated",
+            },
+          ],
+          ctxs: [{ dayNtlVlm: "71177.6532", markPx: "1381.2", midPx: "1401.95" }],
+        },
+      },
+      books: {
+        "vntl:ANTHROPIC": {
           levels: [
             [{ px: "1390", sz: "1" }],
             [{ px: "1410", sz: "1" }],
           ],
-        }));
-      }
-
-      throw new Error(`Unexpected Hyperliquid request: ${JSON.stringify(body)}`);
+        },
+      },
     });
 
-    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info", [
-      catalogAsset({
-        symbol: "vntl:ANTHROPIC",
-        baseSymbol: "ANTHROPIC",
-        displayName: "Anthropic",
-        aliases: ["Anthropic", "Claude", "ANTHROPIC"],
-        dex: "vntl",
-        instrumentType: "pre_stock_perp",
-        surface: "hip3_perp",
-      }),
-    ]).findCandidates({
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
       thesis: {
         claim: "Anthropic valuation looks too rich after the latest private-market mark.",
         direction: "bearish",
@@ -341,40 +302,30 @@ describe("market data connectors", () => {
   });
 
   it("checks Hyperliquid quoted asset symbols for crypto thesis assets", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify([
-            { universe: [{ name: "ZEC-USDC" }, { name: "ZEC/USDC" }] },
-            [{ dayNtlVlm: "230936177" }, { dayNtlVlm: "7006750" }],
-          ]),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            levels: [
-              [{ px: "642.9", sz: "100" }],
-              [{ px: "643.1", sz: "100" }],
-            ],
-          }),
-        ),
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            levels: [
-              [{ px: "643.2", sz: "100" }],
-              [{ px: "643.4", sz: "100" }],
-            ],
-          }),
-        ),
-      );
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "ZEC-USDC" }, { name: "ZEC/USDC" }],
+          ctxs: [{ dayNtlVlm: "230936177" }, { dayNtlVlm: "7006750" }],
+        },
+      },
+      books: {
+        "ZEC-USDC": {
+          levels: [
+            [{ px: "642.9", sz: "100" }],
+            [{ px: "643.1", sz: "100" }],
+          ],
+        },
+        "ZEC/USDC": {
+          levels: [
+            [{ px: "643.2", sz: "100" }],
+            [{ px: "643.4", sz: "100" }],
+          ],
+        },
+      },
+    });
 
-    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info", [
-      catalogAsset({ symbol: "ZEC-USDC", baseSymbol: "ZEC", aliases: ["ZEC", "Zcash"] }),
-      catalogAsset({ symbol: "ZEC/USDC", baseSymbol: "ZEC", aliases: ["ZEC", "Zcash"] }),
-    ]).findCandidates({
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
       thesis: {
         claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%.",
         direction: "bullish",

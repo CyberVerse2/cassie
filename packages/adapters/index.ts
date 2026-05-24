@@ -8,11 +8,6 @@ import type {
 } from "../core/schemas/index.ts";
 import type { MarketDataProvider, PolymarketDiscoveryQueryPlanner, PolymarketMarketFinder } from "./selection.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/index.ts";
-import {
-  loadHyperliquidCatalog,
-  searchHyperliquidCatalog,
-  type HyperliquidCatalogAsset,
-} from "./hyperliquid/catalog.ts";
 
 type HyperliquidMetaAndCtxs = [
   {
@@ -34,12 +29,20 @@ type HyperliquidMetaAndCtxs = [
 
 type HyperliquidUniverseAsset = HyperliquidMetaAndCtxs[0]["universe"][number];
 type HyperliquidAssetCtx = HyperliquidMetaAndCtxs[1][number];
+type HyperliquidPerpDexs = (null | { name: string })[];
 
 type HyperliquidL2Book = {
   levels?: [
     Array<{ px: string; sz: string }>,
     Array<{ px: string; sz: string }>,
   ];
+};
+
+type HyperliquidLiveAssetMatch = {
+  asset: HyperliquidUniverseAsset;
+  ctx?: HyperliquidAssetCtx;
+  dex: string | null;
+  instrument: string;
 };
 
 type PolymarketMarket = {
@@ -165,14 +168,28 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
 }
 
 export class HyperliquidMarketDataProvider implements MarketDataProvider {
-  constructor(
-    private readonly endpoint = "https://api.hyperliquid.xyz/info",
-    private readonly catalog?: HyperliquidCatalogAsset[],
-  ) {}
+  constructor(private readonly endpoint = "https://api.hyperliquid.xyz/info") {}
 
   async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
-    const catalogMatches = await this.findCatalogMatches(input);
-    return this.marketCandidatesFromCatalogAssets(catalogMatches, input.thesis);
+    const exactSymbolAnchors = hyperliquidExactSymbolTokens(input.thesis, input.tradeExpression);
+    if (exactSymbolAnchors.length === 0) return [];
+
+    const liveMatches = await this.findLiveAssetMatches(input, exactSymbolAnchors);
+    const candidates = await Promise.all(liveMatches.map((match) => this.marketCandidateFromLiveAsset({
+      ...match,
+      thesis: input.thesis,
+    })));
+    return candidates.filter((candidate): candidate is MarketCandidate => Boolean(candidate));
+  }
+
+  private async getPerpDexs(): Promise<HyperliquidPerpDexs> {
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "perpDexs" }),
+    });
+
+    return readJsonResponse<HyperliquidPerpDexs>("Hyperliquid perp dex discovery", response);
   }
 
   private async getMetaAndAssetCtxs(dex?: string | null): Promise<HyperliquidMetaAndCtxs> {
@@ -188,50 +205,35 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     return readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
   }
 
-  private async findCatalogMatches(input: {
+  private async findLiveAssetMatches(input: {
     thesis: Thesis;
     tradeExpression?: TradeExpressionPlan;
-  }): Promise<HyperliquidCatalogAsset[]> {
-    const catalog = this.catalog ?? await loadHyperliquidCatalog().catch(() => []);
-    const query = hyperliquidCatalogQuery(input.thesis, input.tradeExpression);
+  }, exactSymbolAnchors: string[]): Promise<HyperliquidLiveAssetMatch[]> {
+    const dexes = uniqueHyperliquidDexes(await this.getPerpDexs());
+    const liveMetas = await Promise.all(dexes.map(async (dex) => ({
+      dex,
+      data: await this.getMetaAndAssetCtxs(dex),
+    })));
+    const matches: HyperliquidLiveAssetMatch[] = [];
+    const seen = new Set<string>();
 
-    return searchHyperliquidCatalog(catalog, query, 10, {
-      exactSymbolTokens: hyperliquidExactSymbolTokens(input.thesis, input.tradeExpression),
-    })
-      .filter((asset) => asset.surface !== "spot");
-  }
+    for (const { dex, data: [meta, ctxs] } of liveMetas) {
+      for (const [index, asset] of meta.universe.entries()) {
+        if (!hyperliquidAssetMatchesExactAnchors(asset.name, exactSymbolAnchors)) continue;
 
-  private async marketCandidatesFromCatalogAssets(
-    catalogAssets: HyperliquidCatalogAsset[],
-    thesis: Thesis,
-  ): Promise<MarketCandidate[]> {
-    const byDex = new Map<string, HyperliquidCatalogAsset[]>();
-    for (const asset of catalogAssets) {
-      const key = asset.dex ?? "";
-      byDex.set(key, [...(byDex.get(key) ?? []), asset]);
-    }
-
-    const candidates: MarketCandidate[] = [];
-    for (const [dexKey, assets] of byDex) {
-      const dex = dexKey || null;
-      const [meta, ctxs] = await this.getMetaAndAssetCtxs(dex);
-      for (const catalogAsset of assets) {
-        const index = meta.universe.findIndex((asset) => asset.name === catalogAsset.symbol);
-        if (index < 0) {
-          throw new Error(`Hyperliquid catalog asset ${catalogAsset.symbol} was not found in live ${catalogAsset.dex ?? "native"} metadata.`);
-        }
-
-        const candidate = await this.marketCandidateFromLiveAsset({
-          asset: meta.universe[index]!,
+        const key = `${dex ?? "main"}:${asset.name}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        matches.push({
+          asset,
           ctx: ctxs[index],
-          instrument: catalogAsset.instrumentType,
-          thesis,
+          dex,
+          instrument: hyperliquidInstrumentForLiveAsset(dex, input.tradeExpression),
         });
-        if (candidate) candidates.push(candidate);
       }
     }
 
-    return candidates;
+    return matches;
   }
 
   private async marketCandidateFromLiveAsset(input: {
@@ -273,7 +275,7 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
       estimatedSlippageBps: bookMetrics.estimatedSlippageBps,
       minOrderSizeUsd: 10,
       thesisFit: input.thesis.confidence,
-      reason: `${input.asset.name} ${input.instrument} directly maps to the thesis asset.`,
+      reason: `${input.asset.name} ${input.instrument} was found in live Hyperliquid metadata and directly maps to the thesis asset.`,
     } satisfies MarketCandidate;
   }
 
@@ -288,31 +290,6 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
   }
 }
 
-function hyperliquidCatalogQuery(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string {
-  return [
-    thesis.claim,
-    thesis.literalClaim,
-    thesis.impliedTradeThesis,
-    thesis.sourceOrMetaSignal,
-    ...thesis.mentionedAssets,
-    ...thesis.topics,
-    tradeExpression?.signal,
-    tradeExpression?.coreInterpretation,
-    tradeExpression?.directAsset,
-    tradeExpression?.highestPurityExpression,
-    tradeExpression?.marketRouterInstructions,
-    ...(tradeExpression?.candidates.flatMap((candidate) => [
-      candidate.instrument,
-      candidate.symbol,
-      candidate.venueQuery,
-      candidate.thesis,
-      ...(candidate.venueChecks ?? []),
-    ]) ?? []),
-  ]
-    .filter((value): value is string => Boolean(value))
-    .join(" ");
-}
-
 function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
   return [
     ...thesis.mentionedAssets,
@@ -320,6 +297,10 @@ function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExp
     ...(tradeExpression?.candidates.flatMap((candidate) => [
       candidate.symbol,
       candidate.instrument,
+    ]) ?? []),
+    ...(tradeExpression?.candidateExpressions.flatMap((candidate) => [
+      candidate.primaryEntityOrEvent,
+      ...candidate.relatedEntities,
     ]) ?? []),
   ]
     .filter((value): value is string => Boolean(value))
@@ -330,6 +311,46 @@ function isExactSymbolAnchor(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   if (!normalized || normalized.includes("unknown") || normalized.includes("proxy")) return false;
   return /^[a-z0-9:_/-]+$/i.test(value.trim());
+}
+
+function uniqueHyperliquidDexes(perpDexs: HyperliquidPerpDexs): Array<string | null> {
+  const dexes = [null, ...perpDexs.map((dex) => dex?.name ?? null).filter((name): name is string => Boolean(name))];
+  const seen = new Set<string>();
+  return dexes.filter((dex) => {
+    const key = dex ?? "";
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function hyperliquidAssetMatchesExactAnchors(assetName: string, exactSymbolAnchors: string[]): boolean {
+  const normalizedAnchors = new Set(exactSymbolAnchors.map(normalizeHyperliquidSymbolAnchor).filter(Boolean));
+  const symbolCandidates = [
+    assetName,
+    hyperliquidBaseSymbol(assetName),
+  ].map(normalizeHyperliquidSymbolAnchor);
+
+  return symbolCandidates.some((symbol) => normalizedAnchors.has(symbol));
+}
+
+function normalizeHyperliquidSymbolAnchor(value: string): string {
+  return value
+    .trim()
+    .replace(/^\$/u, "")
+    .replace(/-perp$/iu, "")
+    .replace(/[^a-z0-9]/giu, "")
+    .toLowerCase();
+}
+
+function hyperliquidBaseSymbol(value: string): string {
+  return (value.split(":").at(-1) ?? value).split("/")[0]!.split("-")[0]!;
+}
+
+function hyperliquidInstrumentForLiveAsset(dex: string | null, tradeExpression?: TradeExpressionPlan): string {
+  if (!dex) return "perp";
+  if (tradeExpression?.directAssetTradable === false) return "pre_stock_perp";
+  return "synthetic_perp";
 }
 
 export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {
