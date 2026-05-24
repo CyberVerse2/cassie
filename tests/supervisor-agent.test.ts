@@ -230,6 +230,38 @@ async function seedFitAssessment(store: InMemoryCassieStore, runId: string, fitA
   });
 }
 
+async function seedMarketSelection(store: InMemoryCassieStore, runId: string, selection: MarketSelection) {
+  await store.addRunStep({
+    runId,
+    stepType: "market_selection",
+    status: "succeeded",
+    input: {},
+    output: selection,
+    error: null,
+    model: "gpt-5.4-mini",
+    promptName: "cassie_market_selection",
+    promptVersion: "2026-05-24",
+    thinkingTrace: null,
+    completedAt: new Date().toISOString(),
+  });
+}
+
+async function seedRiskDecision(store: InMemoryCassieStore, runId: string, riskDecision: unknown) {
+  await store.addRunStep({
+    runId,
+    stepType: "risk",
+    status: "succeeded",
+    input: {},
+    output: riskDecision,
+    error: null,
+    model: null,
+    promptName: null,
+    promptVersion: null,
+    thinkingTrace: null,
+    completedAt: new Date().toISOString(),
+  });
+}
+
 describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
@@ -363,6 +395,48 @@ describe("AI SDK supervisor agent", () => {
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.thesis).toBe("BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.");
+  });
+
+  it("creates trade tickets from persisted market selection and risk when supervisor omits them", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie trade this",
+      sourcePost,
+    });
+    await seedMarketSelection(store, run.runId, marketSelection);
+    await seedRiskDecision(store, run.runId, { decision: "create_ticket_only", reason: "Needs approval." });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+      },
+    });
+
+    const ticketInputSchema = tools.create_trade_ticket.inputSchema as {
+      safeParse: (value: unknown) => { success: boolean };
+    };
+    expect(ticketInputSchema.safeParse({ tradeExpression }).success).toBe(true);
+
+    await expect(executeTool(tools.create_trade_ticket, {
+      tradeExpression,
+    })).resolves.toMatchObject({
+      instrument: "perp",
+      side: "long",
+    });
+
+    const state = await store.load();
+    expect(state.tradeTickets[0]?.instrument).toBe("perp");
+    expect(state.tradeTickets[0]?.venueData?.symbol).toBe("SOL");
   });
 
   it("resolves an explicit X source URL before framing opportunity", async () => {
