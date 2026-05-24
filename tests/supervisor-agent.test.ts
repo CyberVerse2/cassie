@@ -23,6 +23,17 @@ const sourcePost: SourcePost = {
   createdAt: null,
 };
 
+const resolvedSourcePost: SourcePost = {
+  platform: "x",
+  postId: "2057246023974875269",
+  url: "https://x.com/example/status/2057246023974875269",
+  authorHandle: "example",
+  authorName: "Example",
+  text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
+  createdAt: "2026-05-24T00:00:00.000Z",
+  linkedUrls: ["https://example.com/source"],
+};
+
 const settings: UserSettings = {
   userId: "user_1",
   walletAddress: "0x0000000000000000000000000000000000000000",
@@ -159,7 +170,7 @@ describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
-    expect(instructions).toContain("Tweet -> frame opportunity -> generate candidate trade expressions");
+    expect(instructions).toContain("resolve source -> frame opportunity -> generate candidate trade expressions");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
     expect(instructions).toContain("Use deterministic risk checks only after ranking a real validated candidate");
   });
@@ -217,6 +228,50 @@ describe("AI SDK supervisor agent", () => {
       expect.arrayContaining(["risk", "ticket", "final"]),
     );
     expect(state.executionJobs).toHaveLength(0);
+  });
+
+  it("resolves an explicit X source URL before framing opportunity", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie analyze this https://x.com/example/status/2057246023974875269",
+      sourcePost,
+    });
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+        sourceResolver: {
+          async resolveSource(input) {
+            expect(input.url).toBe("https://x.com/example/status/2057246023974875269");
+            return resolvedSourcePost;
+          },
+        },
+      },
+    });
+
+    const resolved = await executeTool<SourcePost>(tools.resolve_source, {
+      url: "https://x.com/example/status/2057246023974875269",
+    });
+    await executeTool(tools.frame_opportunity, {
+      sourcePost: resolved,
+    });
+
+    expect(resolved.text).toContain("OpenAI revenue growth");
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.map((step) => step.stepType)).toEqual(
+      expect.arrayContaining(["intake", "opportunity"]),
+    );
+    expect(steps.find((step) => step.stepType === "opportunity")?.input).toMatchObject({
+      sourcePost: resolvedSourcePost,
+    });
   });
 
   it("does not require account state before tools need risk evaluation", async () => {

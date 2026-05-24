@@ -12,6 +12,7 @@ import {
   MarketSelectionSchema,
   OpportunityFrameSchema,
   ExpressionFitAssessmentSchema,
+  SourcePostSchema,
   RiskDecisionSchema,
   TradeTicketSchema,
   TradeExpressionPlanSchema,
@@ -67,8 +68,11 @@ export function createCassieSupervisorTools(input: {
   return {
     frame_opportunity: tool({
       description: "Frame the market opportunity implied by the source post without choosing the final trade.",
-      inputSchema: z.object({}),
-      execute: async () => runStepOnce("opportunity", {}, async () => {
+      inputSchema: z.object({
+        sourcePost: SourcePostSchema.optional(),
+      }),
+      execute: async ({ sourcePost }) => runStepOnce("opportunity", { sourcePost }, async () => {
+        const source = sourcePost ?? input.run.sourcePost;
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -78,13 +82,31 @@ export function createCassieSupervisorTools(input: {
           model: importantModel,
           stepInput: {
             userCommand: input.run.userCommand,
-            sourcePost: input.run.sourcePost,
+            sourcePost: source,
           },
           execute: () => frameOpportunity({
             ai: importantAi,
-            sourcePost: input.run.sourcePost,
+            sourcePost: source,
             userCommand: input.run.userCommand,
           }),
+        });
+      }),
+    }),
+    resolve_source: tool({
+      description: "Resolve a real X/Twitter status URL into Cassie's SourcePost text shape before opportunity framing.",
+      inputSchema: z.object({
+        url: z.string().url(),
+      }),
+      execute: async ({ url }) => runStepOnce("intake", { url }, async () => {
+        if (!input.deps.sourceResolver) {
+          throw new Error("resolve_source requires a configured source resolver dependency.");
+        }
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "intake",
+          stepInput: { url },
+          execute: () => input.deps.sourceResolver!.resolveSource({ url }),
         });
       }),
     }),

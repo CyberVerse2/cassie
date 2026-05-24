@@ -33,7 +33,9 @@ describe("supervisor step policy", () => {
     });
     const risk = step("risk_check", { decision: "approve", adjustedSizeUsd: 50 });
 
-    expect(selectActiveTools([])).toEqual(["frame_opportunity"]);
+    expect(selectActiveTools([])).toEqual(["resolve_source", "frame_opportunity"]);
+    const source = step("resolve_source", { text: "OpenAI revenue growth is accelerating." });
+    expect(selectActiveTools([source])).toEqual(["frame_opportunity"]);
     expect(selectActiveTools([opportunity])).toEqual(["generate_trade_expressions"]);
     expect(selectActiveTools([opportunity, expression])).toEqual([
       "generate_trade_expressions",
@@ -147,7 +149,7 @@ describe("supervisor step policy", () => {
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
-    expect(prepared.activeTools).toEqual(["frame_opportunity"]);
+    expect(prepared.activeTools).toEqual(["resolve_source", "frame_opportunity"]);
     expect(prepared.toolChoice).toBe("auto");
   });
 

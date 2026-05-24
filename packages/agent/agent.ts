@@ -18,6 +18,7 @@ import type { ControlRun } from "../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../core/schemas/index.ts";
 import { formatErrorForLog } from "../core/helpers/index.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
+import { XApiSourceResolver, type SourceResolver } from "./source.ts";
 import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
@@ -33,6 +34,7 @@ export interface CassieDependencies {
   importantAi?: StructuredAiClient;
   marketData: MarketDataProvider;
   polymarketMarketFinder?: PolymarketMarketFinder;
+  sourceResolver?: SourceResolver;
 }
 
 export async function runCassieSupervisorForRun(input: {
@@ -187,6 +189,7 @@ function defaultDependencies(): CassieDependencies {
     cheapAi: ai,
     importantAi: ai,
     marketData: new CompositeMarketDataProvider(),
+    sourceResolver: new XApiSourceResolver(),
     polymarketMarketFinder: new PolymarketMarketDataProvider(
       "https://gamma-api.polymarket.com/markets",
       "https://clob.polymarket.com",
@@ -200,7 +203,9 @@ export function buildSupervisorInstructions(): string {
     "You are Cassie's governed supervisor for tagged-tweet trade research.",
     "",
     "Required staged architecture:",
-    "Tweet -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
+    "Tweet URL when present -> resolve source -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
+    "",
+    "If the run only contains a mention or command with an X/Twitter status URL, call resolve_source first and pass the resolved SourcePost into frame_opportunity.",
     "",
     "Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity. First identify the market opportunity, then let candidate expression generation decide which expression rails deserve venue search.",
     "",

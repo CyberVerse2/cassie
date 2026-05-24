@@ -87,7 +87,11 @@ export function selectActiveTools(
     return ["generate_trade_expressions"];
   }
 
-  return ["frame_opportunity"];
+  if (latestToolOutput(steps, "resolve_source")) {
+    return ["frame_opportunity"];
+  }
+
+  return ["resolve_source", "frame_opportunity"];
 }
 
 function hasSucceeded(
