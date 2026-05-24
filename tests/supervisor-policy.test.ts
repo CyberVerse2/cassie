@@ -134,7 +134,47 @@ describe("supervisor step policy", () => {
     expect(prepared.activeTools).toEqual([
       "search_venues",
     ]);
-    expect(prepared.toolChoice).toBe("required");
+    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "search_venues" });
+  });
+
+  it("forces the exact next tool and injects authoritative persisted state", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("frame_opportunity", {
+          userIntent: "trade",
+          opportunity: "SOL ETF approval could reprice SOL.",
+        }),
+        step("generate_trade_expressions", {
+          decision: "needs_market_check",
+          directAsset: "SOL",
+          highestPurityExpression: "Long SOL perp.",
+        }),
+        step("search_venues", [{
+          venue: "hyperliquid",
+          symbol: "SOL",
+          side: "long",
+          markPrice: 100,
+          liquidityScore: 1,
+          reason: "SOL perp was found in live Hyperliquid metadata.",
+        }]),
+        step("assess_expression_fit", {
+          candidateId: "hyperliquid:SOL:long",
+          expressionId: "expr-sol-long",
+          fitStatus: "validated",
+          venue: "hyperliquid",
+          fitScore: 0.96,
+        }),
+      ],
+      messages: [],
+    } as never) as { activeTools: string[]; toolChoice: unknown; messages: unknown[] };
+
+    expect(prepared.activeTools).toEqual(["quote_expression"]);
+    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "quote_expression" });
+    expect(JSON.stringify(prepared.messages)).toContain("Authoritative persisted supervisor state");
+    expect(JSON.stringify(prepared.messages)).toContain("SOL perp was found in live Hyperliquid metadata");
+    expect(JSON.stringify(prepared.messages)).toContain("hyperliquid:SOL:long");
+    expect(JSON.stringify(prepared.messages)).toContain("fitStatus");
+    expect(JSON.stringify(prepared.messages)).toContain("validated");
   });
 
   it("uses finalize and step-count stop conditions", () => {
@@ -163,6 +203,41 @@ describe("supervisor step policy", () => {
 
     expect(JSON.stringify(prepared.messages)).toContain("The cleanest route is the prediction market");
     expect(JSON.stringify(prepared.messages)).toContain("Buy YES on the listed event market");
+  });
+
+  it("keeps venue candidate arrays when compressing large tool messages", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", { decision: "needs_market_check" }),
+        step("search_venues", [{
+          venue: "hyperliquid",
+          symbol: "ETH",
+          side: "long",
+          markPrice: 2121.3,
+          reason: "ETH perp was found in live Hyperliquid metadata.",
+        }]),
+      ],
+      messages: [{
+        role: "tool",
+        content: [{
+          type: "tool-result",
+          toolCallId: "search_venues_call",
+          toolName: "search_venues",
+          output: Array.from({ length: 40 }, (_, index) => ({
+            venue: "hyperliquid",
+            symbol: index === 0 ? "ETH" : `TEST${index}`,
+            side: "long",
+            reason: index === 0 ? "ETH perp was found in live Hyperliquid metadata." : "Extra candidate.",
+          })),
+        }],
+      }],
+    } as never) as { messages: unknown[] };
+
+    const serialized = JSON.stringify(prepared.messages);
+    expect(serialized).toContain("ETH perp was found in live Hyperliquid metadata");
+    expect(serialized).toContain("\"count\":40");
+    expect(serialized).toContain("\"omittedItems\":32");
   });
 
   it("preserves every tool result part when compressing large tool messages", () => {

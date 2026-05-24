@@ -25,10 +25,11 @@ export const prepareCassieSupervisorStep: PrepareStepFunction<CassieSupervisorTo
   }
 
   const activeTools = selectActiveTools(steps);
+  const compressedMessages = compressSupervisorMessages(messages);
   return {
     activeTools,
-    messages: compressSupervisorMessages(messages) as never,
-    toolChoice: activeTools.length === 0 ? "none" : "required",
+    messages: appendSupervisorStateMessage(compressedMessages, steps, activeTools) as never,
+    toolChoice: toolChoiceForActiveTools(activeTools),
   };
 };
 
@@ -177,7 +178,8 @@ function summarizeToolPart(part: unknown, originalChars: number) {
     return null;
   }
 
-  const output = isRecord(part.output) ? part.output : isRecord(part.result) ? part.result : null;
+  const rawOutput = part.output ?? part.result;
+  const output = isRecord(rawOutput) ? rawOutput : null;
   return {
     type: part.type,
     toolCallId: part.toolCallId,
@@ -187,6 +189,7 @@ function summarizeToolPart(part: unknown, originalChars: number) {
       value: {
         compressed: true,
         originalChars,
+        result: summarizeToolOutput(rawOutput),
         status: output?.status,
         sentimentDirection: output?.sentimentDirection,
         attentionLevel: output?.attentionLevel,
@@ -209,6 +212,99 @@ function summarizeToolPart(part: unknown, originalChars: number) {
       },
     },
   };
+}
+
+function toolChoiceForActiveTools(activeTools: CassieSupervisorToolName[]) {
+  if (activeTools.length === 0) return "none";
+  if (activeTools.length === 1) {
+    return { type: "tool" as const, toolName: activeTools[0]! };
+  }
+  return "required";
+}
+
+function appendSupervisorStateMessage(
+  messages: unknown[],
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  activeTools: CassieSupervisorToolName[],
+): unknown[] {
+  const state = buildSupervisorState(steps, activeTools);
+  if (!state) return messages;
+
+  return [
+    ...messages,
+    {
+      role: "user",
+      content: [
+        "Authoritative persisted supervisor state for the next tool call.",
+        "Use these tool results as real Cassie outputs when forming the next tool input.",
+        JSON.stringify(state),
+      ].join("\n"),
+    },
+  ];
+}
+
+function buildSupervisorState(
+  steps: Array<Pick<StepResult<ToolSet>, "toolResults">>,
+  activeTools: CassieSupervisorToolName[],
+) {
+  if (activeTools.length === 0) return null;
+
+  return {
+    activeTools,
+    nextTool: activeTools.length === 1 ? activeTools[0] : null,
+    latestToolResults: Object.fromEntries(
+      ([
+        "resolve_source",
+        "frame_opportunity",
+        "generate_trade_expressions",
+        "search_venues",
+        "assess_expression_fit",
+        "quote_expression",
+        "check_x_sentiment",
+        "rank_expressions",
+        "risk_check",
+        "create_trade_ticket",
+      ] satisfies CassieSupervisorToolName[])
+        .map((toolName) => [toolName, latestToolOutput(steps, toolName)] as const)
+        .filter(([, output]) => output !== undefined)
+        .map(([toolName, output]) => [toolName, summarizeToolOutput(output)]),
+    ),
+  };
+}
+
+function summarizeToolOutput(output: unknown): unknown {
+  if (Array.isArray(output)) {
+    return {
+      count: output.length,
+      items: output.slice(0, 8).map((item) => summarizeToolOutput(item)),
+      omittedItems: Math.max(0, output.length - 8),
+    };
+  }
+
+  if (!isRecord(output)) {
+    return typeof output === "string" ? truncate(output, 800) : output ?? null;
+  }
+
+  return Object.fromEntries(
+    Object.entries(output)
+      .filter(([, value]) => value !== undefined)
+      .map(([key, value]) => [key, summarizeToolValue(value)]),
+  );
+}
+
+function summarizeToolValue(value: unknown): unknown {
+  if (typeof value === "string") return truncate(value, 800);
+  if (Array.isArray(value)) {
+    return value.length <= 8
+      ? value.map((item) => summarizeToolOutput(item))
+      : {
+        count: value.length,
+        items: value.slice(0, 8).map((item) => summarizeToolOutput(item)),
+        omittedItems: value.length - 8,
+      };
+  }
+  if (isRecord(value)) return summarizeToolOutput(value);
+  return value ?? null;
 }
 
 function truncate(value: string | null, length: number) {
