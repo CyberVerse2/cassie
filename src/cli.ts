@@ -2,7 +2,7 @@ import "dotenv/config";
 import { inspect } from "node:util";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/adapters/index.ts";
-import { XApiSourceResolver } from "../packages/agent/source.ts";
+import { GrokXSourceResolver } from "../packages/agent/source.ts";
 import { sourcePostFromInput } from "../packages/helpers/source-post-input.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
@@ -430,7 +430,7 @@ async function sourcePostFromFlags(
   options: { useRoundRobin?: boolean } = {},
 ): Promise<SourcePost> {
   return sourcePostFromInput({
-    sourceResolver: new XApiSourceResolver(),
+    sourceResolver: new GrokXSourceResolver(),
     tweetUrl: nullableFlag(args, "tweet-url"),
     tweetsFile: nullableFlag(args, "tweets-file"),
     postText: nullableFlag(args, "post"),

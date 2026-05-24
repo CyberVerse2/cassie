@@ -18,7 +18,7 @@ import type { ControlRun } from "../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../core/schemas/index.ts";
 import { formatErrorForLog } from "../core/helpers/index.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
-import { XApiSourceResolver, type SourceResolver } from "./source.ts";
+import { GrokXSourceResolver, type SourceResolver } from "./source.ts";
 import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
@@ -189,7 +189,7 @@ function defaultDependencies(): CassieDependencies {
     cheapAi: ai,
     importantAi: ai,
     marketData: new CompositeMarketDataProvider(),
-    sourceResolver: new XApiSourceResolver(),
+    sourceResolver: new GrokXSourceResolver(),
     polymarketMarketFinder: new PolymarketMarketDataProvider(
       "https://gamma-api.polymarket.com/markets",
       "https://clob.polymarket.com",
@@ -221,7 +221,7 @@ export function buildSupervisorInstructions(): string {
 
 function buildSupervisorPrompt(run: ControlRun): string {
   return [
-    "Analyze this tagged tweet through the staged architecture. Start with frame_opportunity.",
+    "Analyze this tagged tweet through the staged architecture. Resolve the source first when the run only contains an X/Twitter status URL; otherwise use the provided SourcePost for frame_opportunity.",
     "",
     `Run ID: ${run.runId}`,
     `User command: ${run.userCommand}`,

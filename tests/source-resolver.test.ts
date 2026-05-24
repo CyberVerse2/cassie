@@ -1,8 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
-import { XApiSourceResolver, parseXStatusUrl } from "../packages/agent/source.ts";
+import {
+  GrokXSourceResolutionError,
+  GrokXSourceResolver,
+  buildGrokSourceResolutionPrompt,
+  parseXStatusUrl,
+} from "../packages/agent/source.ts";
 
-describe("X API source resolver", () => {
+describe("Grok X source resolver", () => {
   it("parses X and Twitter status URLs into canonical locators", () => {
     expect(parseXStatusUrl("https://x.com/example/status/2057246023974875269?s=20")).toEqual({
       handle: "example",
@@ -16,38 +21,47 @@ describe("X API source resolver", () => {
     });
   });
 
-  it("looks up a tweet and normalizes it into SourcePost", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({
-        data: {
-          id: "2057246023974875269",
-          text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
-          author_id: "user_1",
-          created_at: "2026-05-24T00:00:00.000Z",
-          entities: {
-            urls: [{ expanded_url: "https://example.com/source" }],
-          },
-        },
-        includes: {
-          users: [{ id: "user_1", username: "example", name: "Example" }],
-        },
-      }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      }),
-    );
+  it("builds a prompt that requires exact post resolution without invention", () => {
+    const prompt = buildGrokSourceResolutionPrompt({
+      handle: "example",
+      postId: "2057246023974875269",
+      canonicalUrl: "https://x.com/example/status/2057246023974875269",
+    });
 
-    const source = await new XApiSourceResolver("bearer-token", "https://api.x.test/2/tweets")
+    expect(prompt).toContain("https://x.com/example/status/2057246023974875269");
+    expect(prompt).toContain("2057246023974875269");
+    expect(prompt).toContain("Do not infer, summarize, embellish, or invent");
+  });
+
+  it("uses Grok X search to resolve a tweet and normalizes known locator fields", async () => {
+    const generate = vi.fn(async () => ({
+      found: true,
+      reason: null,
+      sourcePost: {
+        platform: "x" as const,
+        postId: null,
+        url: null,
+        authorHandle: null,
+        authorName: "Example",
+        text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
+        createdAt: "2026-05-24T00:00:00.000Z",
+        linkedUrls: ["https://example.com/source"],
+        mediaDescriptions: ["Chart showing revenue acceleration."],
+      },
+    }));
+
+    const source = await new GrokXSourceResolver("xai-key", "grok-test", undefined, generate)
       .resolveSource({ url: "https://x.com/example/status/2057246023974875269" });
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        href: expect.stringContaining("https://api.x.test/2/tweets/2057246023974875269"),
-      }),
-      expect.objectContaining({
-        headers: { Authorization: "Bearer bearer-token" },
-      }),
-    );
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      apiKey: "xai-key",
+      model: "grok-test",
+      locator: {
+        handle: "example",
+        postId: "2057246023974875269",
+        canonicalUrl: "https://x.com/example/status/2057246023974875269",
+      },
+    }));
     expect(source).toMatchObject({
       platform: "x",
       postId: "2057246023974875269",
@@ -57,14 +71,25 @@ describe("X API source resolver", () => {
       text: "OpenAI revenue growth is accelerating ahead of a potential IPO.",
       createdAt: "2026-05-24T00:00:00.000Z",
       linkedUrls: ["https://example.com/source"],
+      mediaDescriptions: ["Chart showing revenue acceleration."],
     });
-
-    fetchMock.mockRestore();
   });
 
-  it("surfaces missing X bearer token configuration", async () => {
-    await expect(new XApiSourceResolver(undefined).resolveSource({
+  it("surfaces missing XAI configuration", async () => {
+    await expect(new GrokXSourceResolver(undefined).resolveSource({
       url: "https://x.com/example/status/2057246023974875269",
     })).rejects.toBeInstanceOf(MissingConnectorConfigError);
+  });
+
+  it("fails when Grok cannot resolve the exact post", async () => {
+    const generate = vi.fn(async () => ({
+      found: false,
+      reason: "The exact status was not available to X search.",
+      sourcePost: null,
+    }));
+
+    await expect(new GrokXSourceResolver("xai-key", "grok-test", undefined, generate)
+      .resolveSource({ url: "https://x.com/example/status/2057246023974875269" }))
+      .rejects.toThrow(GrokXSourceResolutionError);
   });
 });
