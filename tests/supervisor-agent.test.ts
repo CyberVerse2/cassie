@@ -138,24 +138,7 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 
 describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
-    const instructions = buildSupervisorInstructions();
-
-    expect(instructions).toContain("You may choose tools dynamically");
-    expect(instructions).toContain("Treat the user's command as execution intent");
-    expect(instructions).toContain("Do not ask the user follow-up questions mid-run");
-    expect(instructions).toContain("Treat ambiguity conservatively");
-    expect(instructions).toContain("Never invent market candidates, prices, account state, or risk approvals");
-    expect(instructions).toContain("Always use finalize_run");
-    expect(instructions).toContain("Once you have made the grounded decision for this run, call finalize_run next");
-    expect(instructions).toContain("Start with frame_opportunity");
-    expect(instructions).toContain("Use generate_trade_expressions to create competing expression families");
-    expect(instructions).toContain("Use search_venues to find real supported venue candidates");
-    expect(instructions).toContain("Use rank_expressions to choose the best grounded expression");
-    expect(instructions).toContain("Mode policy:");
-    expect(instructions).toContain("trade:");
-    expect(instructions).toContain("critic:");
-    expect(instructions).toContain("countertrade:");
-    expect(instructions).toContain("watch:");
+    expect(() => buildSupervisorInstructions()).toThrow("Cassie supervisor prompts have been removed");
   });
 
   it("records bounded tool steps and creates a pending trade ticket", async () => {
@@ -188,24 +171,13 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
-    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
-      opportunityFrame: frame,
-    });
-    const candidates = await executeTool(tools.search_venues, {
-      tradeExpression: expression,
-    });
-    const selected = await executeTool<MarketSelection>(tools.rank_expressions, {
-      tradeExpression: expression,
-      candidates,
-    });
     const risk = await executeTool(tools.risk_check, {
-      marketSelection: selected,
+      marketSelection,
       sizeUsd: null,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
-      tradeExpression: expression,
-      marketSelection: selected,
+      tradeExpression,
+      marketSelection,
       riskDecision: risk,
       sizeUsd: null,
     });
@@ -219,7 +191,7 @@ describe("AI SDK supervisor agent", () => {
     const state = await store.load();
     expect(state.tradeTickets[0]?.approvalState).toBe("pending");
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["opportunity", "trade_expression", "market_candidates", "market_selection", "risk", "ticket", "final"]),
+      expect.arrayContaining(["risk", "ticket", "final"]),
     );
     expect(state.executionJobs).toHaveLength(0);
   });
@@ -247,14 +219,6 @@ describe("AI SDK supervisor agent", () => {
       accountStateProvider: new ThrowingAccountStateProvider(),
     });
 
-    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
-    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
-      opportunityFrame: frame,
-    });
-    await executeTool(tools.rank_expressions, {
-      tradeExpression: expression,
-      candidates: [marketSelection.selectedMarket!],
-    });
     await expect(executeTool(tools.risk_check, {
       marketSelection,
       sizeUsd: null,
@@ -321,16 +285,8 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
-    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
-      opportunityFrame: frame,
-    });
-    await executeTool(tools.rank_expressions, {
-      tradeExpression: expression,
-      candidates: [marketSelection.selectedMarket!],
-    });
     await expect(executeTool(tools.create_trade_ticket, {
-      tradeExpression: expression,
+      tradeExpression,
       marketSelection,
       sizeUsd: null,
     })).rejects.toThrow("Trade ticket creation requires a non-rejected risk decision.");
@@ -358,15 +314,10 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
-    const expression = await executeTool<TradeExpressionPlan>(tools.generate_trade_expressions, {
-      opportunityFrame: frame,
-    });
-
     await expect(executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "No clean trade yet; evidence remains capped.",
-      tradeExpression: expression,
+      tradeExpression,
     })).resolves.toMatchObject({
       responseType: "analysis",
       publicSummary: expect.stringContaining("asset is liquid"),
@@ -404,40 +355,6 @@ describe("AI SDK supervisor agent", () => {
       responseType: "trade_ticket",
       ticketId: "missing_ticket",
     });
-  });
-
-  it("deduplicates duplicate supervisor tool calls for the same step", async () => {
-    const store = new InMemoryCassieStore();
-    const ai = new FakeAi();
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie critic this",
-      sourcePost,
-    });
-
-    const tools = createCassieSupervisorTools({
-      store,
-      run,
-      userSettings: settings,
-      deps: {
-        ai,
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-    });
-
-    const [first, second] = await Promise.all([
-      executeTool<OpportunityFrame>(tools.frame_opportunity, {}),
-      executeTool<OpportunityFrame>(tools.frame_opportunity, {}),
-    ]);
-
-    expect(first).toEqual(second);
-    expect(ai.calls.filter((call) => call === "cassie_opportunity_frame")).toHaveLength(1);
-    const steps = await store.getRunSteps(run.runId);
-    expect(steps.filter((step) => step.stepType === "opportunity")).toHaveLength(1);
   });
 
   it("does not reuse cached tool output for different inputs of the same step type", async () => {
@@ -481,87 +398,4 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
   });
 
-  it("uses important AI for trade expression, but cheap AI for market selection", async () => {
-    const store = new InMemoryCassieStore();
-    const cheapAi = new FakeAi();
-    const importantAi = new FakeAi();
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie critic this and find the market",
-      sourcePost,
-    });
-
-    const tools = createCassieSupervisorTools({
-      store,
-      run,
-      userSettings: settings,
-      accountState: {
-        userId: "user_1",
-        availableBalanceUsd: 500,
-        openExposureUsd: 0,
-        dailyLossUsd: 0,
-        openOrdersUsd: 0,
-      },
-      deps: {
-        cheapAi,
-        importantAi,
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-    });
-
-    const frame = await executeTool<OpportunityFrame>(tools.frame_opportunity, {});
-    await executeTool(tools.generate_trade_expressions, {
-      opportunityFrame: frame,
-    });
-    await executeTool(tools.rank_expressions, {
-      tradeExpression,
-      candidates: [marketSelection.selectedMarket!],
-    });
-
-    expect(importantAi.calls).toEqual([
-      "cassie_opportunity_frame",
-      "cassie_trade_expressions",
-    ]);
-    expect(cheapAi.calls).toEqual(["cassie_market_selection"]);
-    const steps = await store.getRunSteps(run.runId);
-    expect(steps.map((step) => ({ type: step.stepType, model: step.model }))).toEqual([
-      { type: "opportunity", model: "gpt-5.4-mini" },
-      { type: "trade_expression", model: "gpt-5.4-mini" },
-      { type: "market_selection", model: "deepseek-v4-flash" },
-    ]);
-  });
-
-  it("uses the source post and command directly for trade expression", async () => {
-    const store = new InMemoryCassieStore();
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie critic this",
-      sourcePost,
-    });
-    const tools = createCassieSupervisorTools({
-      store,
-      run,
-      userSettings: settings,
-      deps: {
-        ai: new FakeAi(),
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-    });
-
-    await executeTool(tools.frame_opportunity, {});
-
-    const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "opportunity")?.input).toMatchObject({
-      userCommand: "@Cassie critic this",
-      sourcePost,
-    });
-  });
 });

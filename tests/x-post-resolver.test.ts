@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import {
-  buildXPostResolutionPrompt,
   parseXPostUrl,
   XPostResolutionError,
 } from "../packages/helpers/x-post-resolver.ts";
@@ -24,18 +23,5 @@ describe("X post resolver", () => {
 
   it("rejects non-X URLs", () => {
     expect(() => parseXPostUrl("https://example.com/post/123")).toThrow(XPostResolutionError);
-  });
-
-  it("builds a prompt that requires X Search and exact target resolution", () => {
-    const prompt = buildXPostResolutionPrompt({
-      handle: "_proxystudio",
-      postId: "2057246023974875269",
-      canonicalUrl: "https://x.com/_proxystudio/status/2057246023974875269",
-    });
-
-    expect(prompt).toContain("Use X Search");
-    expect(prompt).toContain("Do not answer from memory");
-    expect(prompt).toContain("2057246023974875269");
-    expect(prompt).toContain("Fill the structured response schema directly");
   });
 });

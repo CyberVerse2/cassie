@@ -130,16 +130,6 @@ export function parseXPostUrl(tweetUrl: string): XPostLocator {
 }
 
 export function buildXPostResolutionPrompt(locator: XPostLocator): string {
-  return `You are Cassie's X post resolver.
-
-Use X Search to resolve the exact target post below. Do not answer from memory.
-Fill the structured response schema directly.
-
-Target URL: ${locator.canonicalUrl}
-Target status ID: ${locator.postId}
-Target handle: ${locator.handle ?? "unknown"}
-
-If found, preserve the author's meaning and include only URLs/media directly attached to the target post.
-If the exact target post cannot be found, set found false, sourcePost null, and give a brief reason.
-Only resolve the target post. Do not include unrelated search results.`;
+  void locator;
+  throw new Error("Cassie X post resolver prompt has been removed and must be rewritten before AI runs.");
 }
