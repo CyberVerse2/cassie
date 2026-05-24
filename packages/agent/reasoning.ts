@@ -38,7 +38,7 @@ export async function generateTradeExpressions(input: {
     ? MarketCandidateSchema.array().parse(input.marketCandidates)
     : undefined;
 
-  return TradeExpressionPlanSchema.parse(await input.ai.generateObject({
+  const tradeExpression = TradeExpressionPlanSchema.parse(await input.ai.generateObject({
     ...structuredPromptInput(singleStepTradeExpressionPromptSpec({
       sourcePost: input.sourcePost,
       userCommand: input.userCommand,
@@ -46,4 +46,29 @@ export async function generateTradeExpressions(input: {
       marketCandidates,
     })),
   }));
+
+  return normalizeTradeExpressionDecision(tradeExpression);
+}
+
+function normalizeTradeExpressionDecision(tradeExpression: TradeExpressionPlan): TradeExpressionPlan {
+  if (tradeExpression.decision !== "no_trade" || !hasSearchableExpression(tradeExpression)) {
+    return tradeExpression;
+  }
+
+  return {
+    ...tradeExpression,
+    decision: "needs_market_check",
+    reason: tradeExpression.reason || "Venue discovery is required before finalizing no-trade.",
+    marketRouterInstructions: tradeExpression.marketRouterInstructions
+      ?? "Search configured venues for the non-no-trade candidate expressions before finalizing no-trade.",
+  };
+}
+
+function hasSearchableExpression(tradeExpression: TradeExpressionPlan): boolean {
+  return tradeExpression.candidateExpressions.some((candidate) =>
+    candidate.expressionRail !== "no_trade"
+      && candidate.intendedSide !== "avoid"
+      && candidate.searchTerms.length > 0
+      && candidate.requiredMarketFeatures.length > 0,
+  );
 }

@@ -76,6 +76,21 @@ describe("supervisor step policy", () => {
     ])).toEqual(["finalize_run"]);
   });
 
+  it("searches venues when a no-trade expression still contains searchable candidates", () => {
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", {
+        decision: "no_trade",
+        candidateExpressions: [{
+          expressionRail: "pre_ipo",
+          intendedSide: "long",
+          searchTerms: ["turbopuffer pre-IPO"],
+          requiredMarketFeatures: ["Configured private-company listing"],
+        }],
+      }),
+    ])).toEqual(["search_venues"]);
+  });
+
   it("exposes finalization around risk and ticket terminal states", () => {
     expect(selectActiveTools([
       step("frame_opportunity", {}),

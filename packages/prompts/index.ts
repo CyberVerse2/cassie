@@ -351,7 +351,8 @@ Rules:
 - If the user command asks to trade, preserve that as trade intent; use noTradeCase to block bad trades, not to rewrite the user's intent as watch.
 - If at least one independent secondary source corroborates the source claim, treat the claim as sufficiently confirmed for expression generation and stop asking for primary-source proof.
 - For crypto market-structure claims, influential or politically important sellers can create reflexive selling pressure; consider direct crypto expressions when the direct asset is tradable and the cascade path is plausible.
-- Set directAssetTradable to true only when at least one direct expression can be searched on allowed configured rails. If directAssetTradable is false, venue search should not be warranted.
+- Set directAssetTradable to true when at least one direct expression can be searched on allowed configured rails, even before a real venue listing is confirmed.
+- Do not use no_trade when a non-no_trade candidateExpression still needs venue discovery; use needs_market_check so configured venues can confirm or reject the expression.
 - Do not generate DJT, equity, or stock-proxy instruments unless they are directly tradable on an allowed configured rail.
 - Include noTradeCase when the opportunity is weak, vague, unverified, stale, already priced, or has no clean allowed expression.
 - Include proxy expressions only when causal linkage is strong.

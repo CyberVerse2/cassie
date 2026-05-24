@@ -259,6 +259,7 @@ Rules:
 - Include proxy expressions only if causal linkage is strong.
 - Include No/contrarian prediction-market expressions when hype or rule mismatch may be overpricing Yes.
 - Include a no-trade expression when opportunity quality is low or uncertain.
+- Do not make the final decision no_trade when a non-no_trade candidate expression still needs venue discovery; use needs_market_check so configured venues can confirm or reject it.
 - Do not quote prices.
 - Do not rank final trades.
 
@@ -1285,6 +1286,7 @@ Rules:
 - Include direct trades before proxy trades.
 - Proxy trades are allowed only if causal link is strong.
 - Always include a no-trade expression if the opportunity is weak, vague, unverified, stale, or not mapped to allowed markets.
+- Do not make the final decision no_trade when a non-no_trade candidate expression still needs venue discovery; use needs_market_check so configured venues can confirm or reject it.
 - Consider both bullish and bearish/contrarian versions when relevant.
 - For prediction markets, consider whether the better trade may be No due to overpricing or rule mismatch.
 - For crypto, consider whether the tweet affects:

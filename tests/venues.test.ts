@@ -133,4 +133,55 @@ describe("venue search", () => {
     expect(marketSearches).toBe(0);
     expect(polymarketSearches).toBe(1);
   });
+
+  it("searches configured direct rails when candidate expressions need venue discovery", async () => {
+    let marketSearches = 0;
+    const candidates = await searchVenues({
+      marketData: {
+        async findCandidates() {
+          marketSearches += 1;
+          return [polymarketCandidate];
+        },
+      },
+      thesis: {
+        claim: "Private AI infrastructure signal.",
+        direction: "bullish",
+        mentionedAssets: ["turbopuffer"],
+        topics: ["AI infrastructure"],
+        timeHorizon: "weeks",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.5,
+      },
+      tradeExpression: {
+        ...nonTradableExpression,
+        directAsset: "turbopuffer",
+        decision: "needs_market_check",
+        candidateExpressions: [{
+          expressionId: "turbopuffer_private_long",
+          expressionRail: "pre_ipo",
+          expressionType: "directional",
+          abstractMarket: "turbopuffer private-company valuation exposure",
+          intendedSide: "long",
+          primaryEntityOrEvent: "turbopuffer",
+          relatedEntities: [],
+          thesis: "Search for a direct private-company listing.",
+          whyThisExpressesTheOpportunity: "A listing would directly express the private-market read-through.",
+          directness: "direct",
+          whatMustBeTrue: ["A listing exists."],
+          searchTerms: ["turbopuffer pre-IPO"],
+          requiredMarketFeatures: ["Configured private-company listing"],
+          requiredRuleOrContractFeatures: ["Direct valuation exposure"],
+          keyRisks: ["No listing exists."],
+          expectedTimeHorizon: "weeks",
+          priority: "medium",
+          confidence: 0.24,
+        }],
+      },
+      venues: ["hyperliquid"],
+    });
+
+    expect(candidates).toEqual([polymarketCandidate]);
+    expect(marketSearches).toBe(1);
+  });
 });

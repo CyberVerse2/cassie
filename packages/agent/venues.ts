@@ -44,7 +44,7 @@ export async function searchVenues(input: {
   const failures: string[] = [];
   let attemptedVenues = 0;
 
-  if (venues.includes("hyperliquid") && input.tradeExpression.directAssetTradable) {
+  if (venues.includes("hyperliquid") && shouldSearchDirectVenue(input.tradeExpression)) {
     attemptedVenues += 1;
     try {
       candidateBatches.push(await input.marketData.findCandidates({
@@ -82,6 +82,15 @@ export async function searchVenues(input: {
   }
 
   return uniqueMarketCandidates(candidateBatches.flat());
+}
+
+function shouldSearchDirectVenue(tradeExpression: TradeExpressionPlan): boolean {
+  return tradeExpression.directAssetTradable
+    || tradeExpression.candidateExpressions.some((candidate) =>
+      (candidate.expressionRail === "crypto" || candidate.expressionRail === "pre_ipo")
+        && candidate.intendedSide !== "avoid"
+        && candidate.searchTerms.length > 0,
+    );
 }
 
 function buildVenueSearchIntent(input: {

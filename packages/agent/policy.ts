@@ -90,7 +90,7 @@ export function selectActiveTools(
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
   if (tradeExpression.decision) {
-    return tradeExpression.decision === "no_trade"
+    return tradeExpression.decision === "no_trade" && !hasSearchableCandidateExpression(tradeExpression)
       ? ["finalize_run"]
       : ["search_venues"];
   }
@@ -378,6 +378,21 @@ function objectRecord(value: unknown): Record<string, unknown> {
 
 function hasOwn(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
+}
+
+function hasSearchableCandidateExpression(tradeExpression: Record<string, unknown>): boolean {
+  const candidates = Array.isArray(tradeExpression.candidateExpressions)
+    ? tradeExpression.candidateExpressions
+    : [];
+  return candidates.some((candidate) => {
+    const expression = objectRecord(candidate);
+    const searchTerms = Array.isArray(expression.searchTerms) ? expression.searchTerms : [];
+    const marketFeatures = Array.isArray(expression.requiredMarketFeatures) ? expression.requiredMarketFeatures : [];
+    return expression.expressionRail !== "no_trade"
+      && expression.intendedSide !== "avoid"
+      && searchTerms.length > 0
+      && marketFeatures.length > 0;
+  });
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

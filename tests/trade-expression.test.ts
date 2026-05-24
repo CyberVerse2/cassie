@@ -183,4 +183,69 @@ describe("trade expression planning", () => {
     expect(parsed.rankedCandidates?.[0]?.expressionConfidence).toBe(0.9);
     expect(parsed.rankedCandidates?.[0]?.expectedEdge).toBe(-0.1);
   });
+
+  it("keeps plausible unverified expressions in market-check mode", async () => {
+    const ai = {
+      async generateObject<T>(): Promise<T> {
+        return {
+          signal: "Private AI infrastructure traction.",
+          coreInterpretation: "The tweet is a soft positive private-market signal.",
+          directAsset: "turbopuffer",
+          directAssetTradable: false,
+          evidenceConfidence: 0.61,
+          marketDiscoveryConfidence: 0.14,
+          tradeExpressionConfidence: 0.19,
+          highestPurityExpression: "no_trade",
+          publicMarketReadThrough: "weak",
+          candidates: [],
+          rankedCandidates: [],
+          candidateExpressions: [{
+            expressionId: "turbopuffer_private_long",
+            expressionRail: "pre_ipo",
+            expressionType: "directional",
+            abstractMarket: "turbopuffer private-company valuation exposure",
+            intendedSide: "long",
+            primaryEntityOrEvent: "turbopuffer",
+            relatedEntities: ["SID AI"],
+            thesis: "Customer-validation signal could support turbopuffer valuation if a real private-market instrument exists.",
+            whyThisExpressesTheOpportunity: "A direct private-market listing would capture the valuation read-through.",
+            directness: "direct",
+            whatMustBeTrue: ["A real configured venue lists turbopuffer."],
+            searchTerms: ["turbopuffer pre-IPO", "turbopuffer private market"],
+            requiredMarketFeatures: ["Configured private-company listing"],
+            requiredRuleOrContractFeatures: ["Direct exposure to turbopuffer valuation"],
+            keyRisks: ["No listing exists"],
+            expectedTimeHorizon: "weeks",
+            priority: "medium",
+            confidence: 0.24,
+          }],
+          discardedExpressions: [],
+          noTradeCase: {
+            shouldConsiderNoTrade: true,
+            reason: "No trade if venue search finds no real listing.",
+            whatWouldChangeThis: ["Confirmed private-market listing."],
+          },
+          decision: "no_trade",
+          reason: "No confirmed venue yet.",
+          insufficiency: {
+            score: 0.24,
+            requiredThreshold: 0.7,
+            failedDimensions: ["market_discovery", "venue_confirmation"],
+            summary: "Venue discovery is missing.",
+            evidenceNeededToClear: ["Confirmed configured-venue listing."],
+          },
+          marketRouterInstructions: null,
+        } as T;
+      },
+    };
+
+    await expect(generateTradeExpressions({
+      ai,
+      sourcePost,
+      userCommand: "@Cassie trade this",
+    })).resolves.toMatchObject({
+      decision: "needs_market_check",
+      marketRouterInstructions: expect.stringContaining("Search configured venues"),
+    });
+  });
 });
