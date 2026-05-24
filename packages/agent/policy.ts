@@ -57,9 +57,18 @@ export function selectActiveTools(
 
   const marketCandidates = latestToolOutput(steps, "search_venues");
   if (marketCandidates) {
-    return Array.isArray(marketCandidates) && marketCandidates.length > 0
-      ? ["search_venues", "assess_expression_fit", "quote_expression", "rank_expressions"]
-      : ["generate_trade_expressions", "search_venues", "finalize_run"];
+    if (!Array.isArray(marketCandidates) || marketCandidates.length === 0) {
+      return ["generate_trade_expressions", "search_venues", "finalize_run"];
+    }
+
+    const fitAssessment = objectRecord(latestToolOutput(steps, "assess_expression_fit"));
+    if (!fitAssessment.fitStatus) {
+      return ["search_venues", "assess_expression_fit"];
+    }
+
+    return fitAssessment.fitStatus === "validated"
+      ? ["assess_expression_fit", "quote_expression", "rank_expressions"]
+      : ["search_venues", "assess_expression_fit", "finalize_run"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));

@@ -54,6 +54,24 @@ const marketSelection: MarketSelection = {
   noTradeReason: null,
 };
 
+const expressionFitAssessment = {
+  candidateId: "hyperliquid:SOL:long",
+  expressionId: "expr_crypto_sol",
+  expressionRail: "crypto",
+  venue: "hyperliquid",
+  fitStatus: "validated",
+  intendedSide: "long",
+  sideFit: "correct",
+  directness: "direct",
+  fitScore: 0.86,
+  semanticFitSummary: "SOL perp is direct exposure to a Solana ETF catalyst.",
+  ruleOrContractFitSummary: "The perpetual references SOL and supports the intended long side.",
+  basisRisks: ["Perp funding and broad crypto beta can dominate the catalyst."],
+  mismatchReasons: [],
+  requiredFollowUp: [],
+  confidence: 0.84,
+};
+
 const opportunityFrame: OpportunityFrame = {
   literalClaim: "Solana ETF approval is basically inevitable now. Market is asleep.",
   opportunity: "The post implies SOL exposure may be underpriced if ETF approval odds are materially higher than the market believes.",
@@ -119,6 +137,7 @@ class FakeAi implements StructuredAiClient {
     const outputs: Record<string, unknown> = {
       cassie_opportunity_frame: opportunityFrame,
       cassie_trade_expressions: tradeExpression,
+      cassie_expression_fit: expressionFitAssessment,
       cassie_market_selection: marketSelection,
     };
     return outputs[input.name] as T;
@@ -138,7 +157,11 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 
 describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
-    expect(() => buildSupervisorInstructions()).toThrow("Cassie supervisor prompts have been removed");
+    const instructions = buildSupervisorInstructions();
+
+    expect(instructions).toContain("Tweet -> frame opportunity -> generate candidate trade expressions");
+    expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
+    expect(instructions).toContain("Use deterministic risk checks only after ranking a real validated candidate");
   });
 
   it("records bounded tool steps and creates a pending trade ticket", async () => {
@@ -387,15 +410,53 @@ describe("AI SDK supervisor agent", () => {
 
     const first = await executeTool<MarketCandidate>(tools.quote_expression, {
       candidate: firstCandidate,
+      fitAssessment: expressionFitAssessment,
     });
     const second = await executeTool<MarketCandidate>(tools.quote_expression, {
       candidate: secondCandidate,
+      fitAssessment: {
+        ...expressionFitAssessment,
+        candidateId: "hyperliquid:ETH:long",
+      },
     });
 
     expect(first.symbol).toBe("SOL");
     expect(second.symbol).toBe("ETH");
     const steps = await store.getRunSteps(run.runId);
     expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
+  });
+
+  it("uses AI-backed fit assessment for non-Polymarket candidates instead of auto-validating them", async () => {
+    const ai = new FakeAi();
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie check the SOL expression",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.assess_expression_fit, {
+      tradeExpression,
+      candidate: marketSelection.selectedMarket!,
+    })).resolves.toMatchObject({
+      fitStatus: "validated",
+      semanticFitSummary: expect.stringContaining("direct exposure"),
+    });
+    expect(ai.calls).toContain("cassie_expression_fit");
   });
 
 });

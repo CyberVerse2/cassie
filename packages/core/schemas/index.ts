@@ -173,6 +173,63 @@ export const MarketSelectionSchema = z.object({
   noTradeReason: z.string().nullable(),
 });
 
+export const CandidateTradeExpressionSchema = z.object({
+  expressionId: z.string(),
+  expressionRail: z.enum(["crypto", "pre_ipo", "prediction_market", "no_trade"]),
+  expressionType: z.enum([
+    "directional",
+    "event_probability",
+    "proxy",
+    "relative_value",
+    "rules_mismatch",
+    "no_trade",
+  ]),
+  abstractMarket: z.string(),
+  intendedSide: z.enum(["long", "short", "yes", "no", "avoid"]),
+  primaryEntityOrEvent: z.string().nullable(),
+  relatedEntities: z.array(z.string()),
+  thesis: z.string(),
+  whyThisExpressesTheOpportunity: z.string(),
+  directness: z.enum(["direct", "strong_proxy", "weak_proxy", "none"]),
+  whatMustBeTrue: z.array(z.string()),
+  searchTerms: z.array(z.string()),
+  requiredMarketFeatures: z.array(z.string()),
+  requiredRuleOrContractFeatures: z.array(z.string()),
+  keyRisks: z.array(z.string()),
+  expectedTimeHorizon: z.enum(["minutes", "hours", "days", "weeks", "months", "year_plus", "unknown"]),
+  priority: z.enum(["high", "medium", "low"]),
+  confidence: z.number().min(0).max(1),
+});
+
+export const DiscardedTradeExpressionSchema = z.object({
+  idea: z.string(),
+  reasonDiscarded: z.string(),
+});
+
+export const NoTradeCaseSchema = z.object({
+  shouldConsiderNoTrade: z.boolean(),
+  reason: z.string(),
+  whatWouldChangeThis: z.array(z.string()),
+});
+
+export const ExpressionFitAssessmentSchema = z.object({
+  candidateId: z.string(),
+  expressionId: z.string(),
+  expressionRail: z.enum(["crypto", "pre_ipo", "prediction_market"]),
+  venue: z.string(),
+  fitStatus: z.enum(["validated", "rejected", "needs_more_info"]),
+  intendedSide: z.string(),
+  sideFit: z.enum(["correct", "opposite", "ambiguous", "unknown"]),
+  directness: z.enum(["direct", "strong_proxy", "weak_proxy", "unrelated", "unknown"]),
+  fitScore: z.number().min(0).max(1),
+  semanticFitSummary: z.string(),
+  ruleOrContractFitSummary: z.string(),
+  basisRisks: z.array(z.string()),
+  mismatchReasons: z.array(z.string()),
+  requiredFollowUp: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+});
+
 export const TradeExpressionCandidateSchema = z.object({
   instrument: z.string(),
   venue: z.enum(["hyperliquid", "polymarket"]).nullable(),
@@ -249,6 +306,9 @@ export const TradeExpressionPlanSchema = z.object({
   publicMarketReadThrough: z.enum(["none", "weak", "moderate", "strong"]),
   candidates: z.array(TradeExpressionCandidateSchema),
   rankedCandidates: z.array(RankedTradeExpressionCandidateSchema),
+  candidateExpressions: z.array(CandidateTradeExpressionSchema).optional(),
+  discardedExpressions: z.array(DiscardedTradeExpressionSchema).optional(),
+  noTradeCase: NoTradeCaseSchema.optional(),
   decision: z.enum([
     "route_to_market_router",
     "needs_market_check",
@@ -417,6 +477,8 @@ export type OpportunityFrame = z.infer<typeof OpportunityFrameSchema>;
 export type PolymarketMarketAssessment = z.infer<typeof PolymarketMarketAssessmentSchema>;
 export type PolymarketQuote = z.infer<typeof PolymarketQuoteSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
+export type CandidateTradeExpression = z.infer<typeof CandidateTradeExpressionSchema>;
+export type ExpressionFitAssessment = z.infer<typeof ExpressionFitAssessmentSchema>;
 export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSchema>;
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type RiskDecision = z.infer<typeof RiskDecisionSchema>;

@@ -1,21 +1,21 @@
+import type { StructuredAiClient } from "../ai/client.ts";
 import {
+  ExpressionFitAssessmentSchema,
   MarketCandidateSchema,
-  PolymarketMarketAssessmentSchema,
   PolymarketQuoteSchema,
+  type ExpressionFitAssessment,
   type MarketCandidate,
-  type PolymarketMarketAssessment,
   type PolymarketQuote,
   type Thesis,
   type TradeExpressionPlan,
 } from "../core/schemas/index.ts";
 import {
-  assessPolymarketMarket,
   findPolymarketMarkets,
   quotePolymarketMarket,
   type MarketDataProvider,
   type PolymarketMarketFinder,
 } from "../adapters/selection.ts";
-import { thesisFromTradeExpression } from "./thesis.ts";
+import { expressionFitPrompt } from "../prompts/index.ts";
 
 export type TradeExpressionIntent = {
   thesis: Thesis;
@@ -98,28 +98,21 @@ function buildVenueSearchIntent(input: {
 }
 
 export async function assessExpressionFit(input: {
+  ai: StructuredAiClient;
   polymarket?: PolymarketMarketFinder;
   tradeExpression: TradeExpressionPlan;
   candidate: MarketCandidate;
   side?: "yes" | "no";
-}): Promise<MarketCandidate | PolymarketMarketAssessment> {
-  if (input.candidate.venue !== "polymarket") {
-    return MarketCandidateSchema.parse(input.candidate);
-  }
-  if (!input.polymarket) {
-    throw new Error("assess_expression_fit requires a configured Polymarket market finder dependency.");
-  }
-  const thesis = thesisFromTradeExpression(input.tradeExpression);
-  return PolymarketMarketAssessmentSchema.parse(await assessPolymarketMarket({
-    polymarket: input.polymarket,
-    thesis,
-    tradeExpression: input.tradeExpression,
-    market: {
-      conditionId: input.candidate.conditionId,
-      marketSlug: input.candidate.marketSlug,
-      question: input.candidate.marketQuestion,
-    },
-    side: input.side ?? polymarketSideFromCandidate(input.candidate),
+}): Promise<ExpressionFitAssessment> {
+  const candidate = MarketCandidateSchema.parse(input.candidate);
+  return ExpressionFitAssessmentSchema.parse(await input.ai.generateObject({
+    schema: ExpressionFitAssessmentSchema,
+    name: "cassie_expression_fit",
+    prompt: expressionFitPrompt({
+      tradeExpression: input.tradeExpression,
+      candidate,
+      side: input.side,
+    }),
   }));
 }
 

@@ -7,6 +7,7 @@ import {
   PolymarketQuoteSchema,
   type MarketCandidate,
   type MarketSelection,
+  type ExpressionFitAssessment,
   type PolymarketMarketAssessment,
   type PolymarketQuote,
   type Thesis,
@@ -88,6 +89,8 @@ export async function selectMarket(input: {
   thesis: Thesis;
   tradeExpression?: TradeExpressionPlan;
   candidates?: MarketCandidate[];
+  fitAssessments?: ExpressionFitAssessment[];
+  quotes?: unknown[];
 }): Promise<MarketSelection> {
   const providerCandidates = input.candidates === undefined
     ? await input.marketData.findCandidates({
@@ -115,6 +118,8 @@ export async function selectMarket(input: {
       thesis: input.thesis,
       tradeExpression: input.tradeExpression,
       candidates,
+      fitAssessments: input.fitAssessments ?? [],
+      quotes: input.quotes ?? [],
     }),
   });
 }

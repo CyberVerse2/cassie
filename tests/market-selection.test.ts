@@ -56,7 +56,7 @@ describe("market selection", () => {
     });
   });
 
-  it("blocks AI market selection until prompts are rewritten", async () => {
+  it("uses AI ranking only after real venue candidates are supplied", async () => {
     const polymarketCandidate: MarketCandidate = {
       venue: "polymarket",
       instrument: "spacex-ipo-in-2026",
@@ -73,9 +73,11 @@ describe("market selection", () => {
       reason: "Question maps to the IPO thesis.",
     };
 
+    const calls: string[] = [];
     await expect(selectMarket({
       ai: {
-        async generateObject() {
+        async generateObject(input) {
+          calls.push(input.prompt);
           return {
             selectedMarket: polymarketCandidate,
             rejectedCandidates: [],
@@ -91,7 +93,12 @@ describe("market selection", () => {
       thesis,
       tradeExpression,
       candidates: [polymarketCandidate],
-    })).rejects.toThrow("Cassie prompts have been removed");
+    })).resolves.toMatchObject({
+      selectedMarket: polymarketCandidate,
+      noTradeReason: null,
+    });
+    expect(calls[0]).toContain("Rank real venue candidates");
+    expect(calls[0]).toContain("Do not select a trade just because the tweet is interesting");
   });
 
   it("finds Polymarket markets through the configured finder dependency", async () => {

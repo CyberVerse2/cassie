@@ -196,16 +196,33 @@ function defaultDependencies(): CassieDependencies {
 }
 
 export function buildSupervisorInstructions(): string {
-  return supervisorPromptRewriteRequired();
+  return [
+    "You are Cassie's governed supervisor for tagged-tweet trade research.",
+    "",
+    "Required staged architecture:",
+    "Tweet -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
+    "",
+    "Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity. First identify the market opportunity, then let candidate expression generation decide which expression rails deserve venue search.",
+    "",
+    "Use the AI-backed semantic tools for opportunity framing, trade-expression generation, expression-fit assessment, and expression ranking. Do not replace those judgments with keyword scoring, regex matching, hardcoded lookup tables, or term-overlap heuristics.",
+    "",
+    "Never invent tickers, markets, prices, liquidity, probabilities, listings, or contract rules. Venue tools may only return real configured venue candidates. If no real market validates the thesis, finalize no-trade, watchlist, or analysis-only.",
+    "",
+    "Use deterministic risk checks only after ranking a real validated candidate. Never execute an order; create_trade_ticket only creates a ticket for the configured approval flow.",
+    "",
+    "Finalize every run with finalize_run after enough staged evidence exists for trade_ticket, no_trade, watchlist-style analysis, or analysis-only.",
+  ].join("\n");
 }
 
 function buildSupervisorPrompt(run: ControlRun): string {
-  void run;
-  return supervisorPromptRewriteRequired();
-}
-
-function supervisorPromptRewriteRequired(): never {
-  throw new Error("Cassie supervisor prompts have been removed and must be rewritten before AI runs.");
+  return [
+    "Analyze this tagged tweet through the staged architecture. Start with frame_opportunity.",
+    "",
+    `Run ID: ${run.runId}`,
+    `User command: ${run.userCommand}`,
+    "Source post:",
+    JSON.stringify(run.sourcePost, null, 2),
+  ].join("\n");
 }
 
 function createAuditTelemetryIntegration(

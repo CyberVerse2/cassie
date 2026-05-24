@@ -11,6 +11,7 @@ import {
   MarketCandidateSchema,
   MarketSelectionSchema,
   OpportunityFrameSchema,
+  ExpressionFitAssessmentSchema,
   RiskDecisionSchema,
   TradeTicketSchema,
   TradeExpressionPlanSchema,
@@ -41,7 +42,7 @@ export {
   finalizeRunFromPersistedSteps,
 } from "./finalization.ts";
 
-const promptVersion = "2026-05-20";
+const promptVersion = "2026-05-24";
 
 export function createCassieSupervisorTools(input: {
   store: CassieStore;
@@ -151,7 +152,7 @@ export function createCassieSupervisorTools(input: {
       ),
     }),
     assess_expression_fit: tool({
-      description: "Assess Polymarket side semantics for a candidate; non-Polymarket candidates are validated and returned unchanged.",
+      description: "Use AI semantic judgment to assess whether a real venue candidate fits the framed opportunity and intended expression.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema,
         candidate: MarketCandidateSchema,
@@ -165,8 +166,12 @@ export function createCassieSupervisorTools(input: {
             store: input.store,
             runId: input.run.runId,
             stepType: "market_assessment",
+            promptName: "cassie_expression_fit",
+            promptVersion,
+            model: importantModel,
             stepInput: { tradeExpression, candidate, side },
             execute: () => assessExpressionFit({
+              ai: importantAi,
               polymarket: input.deps.polymarketMarketFinder,
               tradeExpression,
               candidate,
@@ -177,20 +182,24 @@ export function createCassieSupervisorTools(input: {
       ),
     }),
     quote_expression: tool({
-      description: "Refresh Polymarket quote data for a promising candidate; non-Polymarket candidates are validated and returned unchanged.",
+      description: "Refresh quote data for a validated candidate. Do not quote rejected or unassessed expressions.",
       inputSchema: z.object({
         candidate: MarketCandidateSchema,
+        fitAssessment: ExpressionFitAssessmentSchema,
         side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ candidate, side }) => runStepOnce(
+      execute: async ({ candidate, fitAssessment, side }) => runStepOnce(
         "market_quote",
-        { candidate, side },
+        { candidate, fitAssessment, side },
         async () => {
+          if (fitAssessment.fitStatus !== "validated") {
+            throw new Error("quote_expression requires a validated fit assessment.");
+          }
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,
             stepType: "market_quote",
-            stepInput: { candidate, side },
+            stepInput: { candidate, fitAssessment, side },
             execute: () => quoteExpression({
               polymarket: input.deps.polymarketMarketFinder,
               candidate,
@@ -205,10 +214,12 @@ export function createCassieSupervisorTools(input: {
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema,
         candidates: MarketCandidateSchema.array().optional(),
+        fitAssessments: ExpressionFitAssessmentSchema.array().optional(),
+        quotes: z.array(z.unknown()).optional(),
       }),
-      execute: async ({ tradeExpression, candidates }) => runStepOnce(
+      execute: async ({ tradeExpression, candidates, fitAssessments, quotes }) => runStepOnce(
         "market_selection",
-        { tradeExpression, candidates },
+        { tradeExpression, candidates, fitAssessments, quotes },
         async () => {
           const thesis = thesisFromTradeExpression(tradeExpression);
           return recordRunStep({
@@ -218,13 +229,15 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_market_selection",
             promptVersion,
             model: cheapModel,
-            stepInput: { tradeExpression, candidates },
+            stepInput: { tradeExpression, candidates, fitAssessments, quotes },
             execute: () => selectMarket({
               ai: cheapAi,
               marketData: input.deps.marketData,
               thesis,
               tradeExpression,
               candidates: candidates ?? [],
+              fitAssessments,
+              quotes,
             }),
           });
         },

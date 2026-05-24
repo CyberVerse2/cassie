@@ -31,10 +31,70 @@ const zecCandidate: MarketCandidate = {
 };
 
 describe("trade expression planning", () => {
-  it("blocks AI trade expression until prompts are rewritten", async () => {
+  it("runs AI-backed opportunity framing and expression generation with rewritten prompts", async () => {
+    const calls: Array<{ name: string; prompt: string }> = [];
     const ai = {
-      async generateObject() {
-        throw new Error("AI should not run while prompts are removed.");
+      async generateObject<T>(input: { name: string; prompt: string }): Promise<T> {
+        calls.push(input);
+        const outputs: Record<string, unknown> = {
+          cassie_opportunity_frame: {
+            literalClaim: "ZEC relative to BTC could rerate.",
+            opportunity: "The tweet implies ZEC may have underpriced relative upside.",
+            marketImplication: "Potential bullish ZEC expression if a real liquid market exists.",
+            userIntent: "trade",
+            affectedEntities: ["Zcash"],
+            affectedAssets: ["ZEC"],
+            expressionFamilies: ["long ZEC perp", "no trade if edge is already priced"],
+            signalVerificationRisk: "medium",
+            shouldVerifyTruthBeforeTrading: true,
+            reason: "The tweet is a thesis, not a venue-confirmed trade.",
+            confidence: 0.62,
+          },
+          cassie_trade_expressions: {
+            signal: "ZEC relative strength thesis",
+            coreInterpretation: "ZEC may rerate if the market is underpricing privacy-coin demand.",
+            directAsset: "ZEC",
+            directAssetTradable: false,
+            evidenceConfidence: 0.5,
+            marketDiscoveryConfidence: 0.2,
+            tradeExpressionConfidence: 0.55,
+            highestPurityExpression: "Long ZEC if a real liquid venue validates the expression.",
+            publicMarketReadThrough: "none",
+            candidates: [],
+            rankedCandidates: [],
+            candidateExpressions: [{
+              expressionId: "expr_zec_long",
+              expressionRail: "crypto",
+              expressionType: "directional",
+              abstractMarket: "ZEC perp or spot",
+              intendedSide: "long",
+              primaryEntityOrEvent: "ZEC",
+              relatedEntities: ["Zcash"],
+              thesis: "ZEC rerates versus broader crypto if demand is underpriced.",
+              whyThisExpressesTheOpportunity: "A direct ZEC market maps to the tweet's relative-value claim.",
+              directness: "direct",
+              whatMustBeTrue: ["A real ZEC market exists with acceptable liquidity."],
+              searchTerms: ["ZEC", "Zcash"],
+              requiredMarketFeatures: ["listed ZEC spot or perp"],
+              requiredRuleOrContractFeatures: [],
+              keyRisks: ["The thesis may already be priced."],
+              expectedTimeHorizon: "weeks",
+              priority: "high",
+              confidence: 0.55,
+            }],
+            discardedExpressions: [],
+            noTradeCase: {
+              shouldConsiderNoTrade: true,
+              reason: "No trade if no real venue validates ZEC exposure.",
+              whatWouldChangeThis: ["A real liquid venue candidate with validated fit."],
+            },
+            decision: "needs_market_check",
+            reason: "Venue confirmation is required before any trade.",
+            insufficiency: null,
+            marketRouterInstructions: "Search real venues for ZEC exposure.",
+          },
+        };
+        return outputs[input.name] as T;
       },
     };
 
@@ -42,14 +102,24 @@ describe("trade expression planning", () => {
       ai,
       sourcePost,
       userCommand: "what's the trade here?",
-    })).rejects.toThrow("Cassie prompts have been removed");
+    })).resolves.toMatchObject({
+      opportunity: expect.stringContaining("ZEC"),
+    });
 
     await expect(generateTradeExpressions({
       ai,
       sourcePost,
       userCommand: "what's the trade here?",
       marketCandidates: [zecCandidate],
-    })).rejects.toThrow("Cassie prompts have been removed");
+    })).resolves.toMatchObject({
+      candidateExpressions: [expect.objectContaining({ expressionRail: "crypto" })],
+    });
+    expect(calls.map((call) => call.name)).toEqual([
+      "cassie_opportunity_frame",
+      "cassie_trade_expressions",
+    ]);
+    expect(calls[1]?.prompt).toContain("Do not assume a real market exists");
+    expect(calls[1]?.prompt).toContain("Do not invent tickers");
   });
 
   it("validates ranked trade-expression candidates separately from expected edge", () => {

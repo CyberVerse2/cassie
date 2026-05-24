@@ -42,6 +42,10 @@ describe("supervisor step policy", () => {
     expect(selectActiveTools([opportunity, expression, candidates])).toEqual([
       "search_venues",
       "assess_expression_fit",
+    ]);
+    const fit = step("assess_expression_fit", { fitStatus: "validated", candidateId: "hyperliquid:SOL:long" });
+    expect(selectActiveTools([opportunity, expression, candidates, fit])).toEqual([
+      "assess_expression_fit",
       "quote_expression",
       "rank_expressions",
     ]);
