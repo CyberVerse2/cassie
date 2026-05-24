@@ -14,7 +14,7 @@ export type CassieSupervisorToolName = keyof CassieSupervisorTools;
 export function createCassieStopConditions(): StopCondition<CassieSupervisorTools>[] {
   return [
     hasToolCall("finalize_run"),
-    stepCountIs(12),
+    stepCountIs(16),
   ];
 }
 
@@ -73,8 +73,7 @@ export function selectActiveTools(
       if (quotes.length < validatedDirectFitAssessments.length) {
         return ["quote_expression"];
       }
-      const xSentiment = latestToolOutput(steps, "check_x_sentiment");
-      return xSentiment ? ["rank_expressions"] : ["check_x_sentiment"];
+      return ["rank_expressions"];
     }
 
     if (fitAssessments.length < marketCandidates.length) {
@@ -90,10 +89,6 @@ export function selectActiveTools(
       return ["quote_expression"];
     }
 
-    const xSentiment = latestToolOutput(steps, "check_x_sentiment");
-    if (!xSentiment) {
-      return ["check_x_sentiment"];
-    }
     return ["rank_expressions"];
   }
 
@@ -104,12 +99,20 @@ export function selectActiveTools(
       : ["search_venues"];
   }
 
-  if (latestToolOutput(steps, "frame_opportunity")) {
+  if (latestToolOutput(steps, "check_x_sentiment")) {
     return ["generate_trade_expressions"];
+  }
+
+  if (latestToolOutput(steps, "frame_opportunity")) {
+    return ["check_x_sentiment"];
   }
 
   if (latestToolOutput(steps, "resolve_source")) {
     return ["frame_opportunity"];
+  }
+
+  if (!latestToolOutput(steps, "preflight_user_policy")) {
+    return ["preflight_user_policy"];
   }
 
   return ["resolve_source", "frame_opportunity"];
@@ -292,6 +295,7 @@ function buildSupervisorState(
     latestToolResults: Object.fromEntries(
       ([
         "resolve_source",
+        "preflight_user_policy",
         "frame_opportunity",
         "generate_trade_expressions",
         "search_venues",

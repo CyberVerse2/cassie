@@ -31,9 +31,9 @@ export interface XSentimentProvider {
   checkXSentiment(input: {
     sourcePost: SourcePost;
     opportunityFrame: OpportunityFrame;
-    tradeExpression: TradeExpressionPlan;
-    fitAssessment: ExpressionFitAssessment;
-    candidate: MarketCandidate;
+    tradeExpression: TradeExpressionPlan | null;
+    fitAssessment: ExpressionFitAssessment | null;
+    candidate: MarketCandidate | null;
     onThinkingTrace?: (thinkingTrace: string | null) => void;
   }): Promise<XSentimentAssessment>;
 }
@@ -47,9 +47,9 @@ const GrokSourceResolutionSchema = z.object({
 const GrokXSentimentInputSchema = z.object({
   sourcePost: SourcePostSchema,
   opportunityFrame: OpportunityFrameSchema,
-  tradeExpression: TradeExpressionPlanSchema,
-  fitAssessment: ExpressionFitAssessmentSchema,
-  candidate: MarketCandidateSchema,
+  tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
+  fitAssessment: ExpressionFitAssessmentSchema.nullable().default(null),
+  candidate: MarketCandidateSchema.nullable().default(null),
 });
 
 type GrokSourceResolution = z.infer<typeof GrokSourceResolutionSchema>;
@@ -98,9 +98,9 @@ export class GrokXSentimentProvider implements XSentimentProvider {
   async checkXSentiment(input: {
     sourcePost: SourcePost;
     opportunityFrame: OpportunityFrame;
-    tradeExpression: TradeExpressionPlan;
-    fitAssessment: ExpressionFitAssessment;
-    candidate: MarketCandidate;
+    tradeExpression: TradeExpressionPlan | null;
+    fitAssessment: ExpressionFitAssessment | null;
+    candidate: MarketCandidate | null;
     onThinkingTrace?: (thinkingTrace: string | null) => void;
   }): Promise<XSentimentAssessment> {
     if (!this.apiKey) {
@@ -314,10 +314,11 @@ export function buildGrokSourceResolutionPrompt(locator: XSourceLocator): string
 
 export function buildGrokXSentimentPrompt(input: GrokXSentimentInput): string {
   return [
-    "Check X-only social sentiment for a validated trade expression before ranking.",
+    "Check X-only social sentiment for the framed opportunity before trade-expression generation.",
     "",
     "Use the x_search tool. Do not use generic web search. Do not use keyword counts, regex, or deterministic term overlap as a substitute for semantic judgment.",
-    "Assess current X conversation around the source claim, affected asset/event, candidate instrument, and credible corrections or disagreement.",
+    "Assess current X conversation around the source claim, affected asset/event, market implication, and credible corrections or disagreement.",
+    "If trade-expression, fit, or candidate context is supplied, use it only as additional context; do not require it.",
     "",
     "Source post:",
     JSON.stringify({
@@ -333,13 +334,13 @@ export function buildGrokXSentimentPrompt(input: GrokXSentimentInput): string {
     "Framed opportunity:",
     JSON.stringify(input.opportunityFrame, null, 2),
     "",
-    "Trade expression:",
+    "Trade expression context:",
     JSON.stringify(input.tradeExpression, null, 2),
     "",
-    "Validated fit assessment:",
+    "Fit assessment context:",
     JSON.stringify(input.fitAssessment, null, 2),
     "",
-    "Candidate:",
+    "Candidate context:",
     JSON.stringify(input.candidate, null, 2),
     "",
     "Return an XSentimentAssessment.",

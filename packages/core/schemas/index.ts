@@ -456,6 +456,7 @@ export const RunStepStatusSchema = z.enum([
 
 export const RunStepTypeSchema = z.enum([
   "intake",
+  "preflight",
   "opportunity",
   "trade_expression",
   "market_candidates",

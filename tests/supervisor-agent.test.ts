@@ -266,10 +266,10 @@ describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
-    expect(instructions).toContain("resolve source -> frame opportunity -> generate candidate trade expressions");
-    expect(instructions).toContain("check X sentiment -> rank expressions");
+    expect(instructions).toContain("preflight user policy -> resolve source -> frame opportunity -> check X sentiment -> generate candidate trade expressions");
+    expect(instructions).toContain("quote validated candidates -> rank expressions");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
-    expect(instructions).toContain("Use deterministic risk checks only after ranking a real validated candidate");
+    expect(instructions).toContain("Use deterministic risk_check only after ranking a real validated candidate");
   });
 
   it("records bounded tool steps and creates a pending trade ticket", async () => {
@@ -701,7 +701,7 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
   });
 
-  it("checks X sentiment for validated quoted candidates before ranking", async () => {
+  it("checks X sentiment for a framed opportunity before trade expression generation", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -742,9 +742,9 @@ describe("AI SDK supervisor agent", () => {
           async checkXSentiment(input) {
             expect(input.sourcePost).toBe(sourcePost);
             expect(input.opportunityFrame).toBe(opportunityFrame);
-            expect(input.tradeExpression).toBe(tradeExpression);
-            expect(input.fitAssessment).toBe(expressionFitAssessment);
-            expect(input.candidate).toBe(marketSelection.selectedMarket);
+            expect(input.tradeExpression).toBeNull();
+            expect(input.fitAssessment).toBeNull();
+            expect(input.candidate).toBeNull();
             input.onThinkingTrace?.("Grok summarized X sentiment.");
             return sentiment;
           },
@@ -754,9 +754,6 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool<XSentimentAssessment>(tools.check_x_sentiment, {
       opportunityFrame,
-      tradeExpression,
-      fitAssessment: expressionFitAssessment,
-      candidate: marketSelection.selectedMarket!,
     })).resolves.toMatchObject({
       sentimentDirection: "mixed",
       crowdingRisk: "high",

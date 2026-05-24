@@ -52,6 +52,23 @@ export {
 
 const promptVersion = "2026-05-24";
 
+const PreflightUserPolicySchema = z.object({
+  status: z.literal("ok"),
+  warnings: z.array(z.string()),
+  policy: z.object({
+    allowedVenues: z.array(z.string()),
+    defaultTradeSizeUsd: z.number(),
+    maxTradeSizeUsd: z.number(),
+    maxDailyLossUsd: z.number(),
+    minConfidence: z.number(),
+    maxSpreadBps: z.number(),
+    maxSlippageBps: z.number(),
+    maxPositionUsd: z.number(),
+    autoTradeEnabled: z.boolean(),
+    hasWalletAddress: z.boolean(),
+  }),
+});
+
 export function createCassieSupervisorTools(input: {
   store: CassieStore;
   deps: CassieDependencies;
@@ -73,6 +90,19 @@ export function createCassieSupervisorTools(input: {
   const { runStepOnce } = createRunStepCache();
 
   return {
+    preflight_user_policy: tool({
+      description: "Run deterministic user-policy preflight before semantic opportunity analysis.",
+      inputSchema: z.object({}),
+      execute: async () => runStepOnce("preflight", {}, async () => recordRunStep({
+        store: input.store,
+        runId: input.run.runId,
+        stepType: "preflight",
+        stepInput: {
+          userId: input.userSettings.userId,
+        },
+        execute: async () => preflightUserPolicy(input.userSettings),
+      })),
+    }),
     frame_opportunity: tool({
       description: "Frame the market opportunity implied by the source post without choosing the final trade.",
       inputSchema: z.object({
@@ -265,25 +295,31 @@ export function createCassieSupervisorTools(input: {
       },
     }),
     check_x_sentiment: tool({
-      description: "Check X-only sentiment, novelty, crowding, and correction risk for a validated and quoted candidate.",
+      description: "Check X-only sentiment, novelty, crowding, and correction risk for the framed opportunity.",
       inputSchema: z.object({
-        sourcePost: SourcePostSchema.optional(),
+        sourcePost: SourcePostSchema.nullable().default(null),
         opportunityFrame: OpportunityFrameSchema,
-        tradeExpression: TradeExpressionPlanSchema,
-        fitAssessment: ExpressionFitAssessmentSchema,
-        candidate: MarketCandidateSchema,
+        tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
+        fitAssessment: ExpressionFitAssessmentSchema.nullable().default(null),
+        candidate: MarketCandidateSchema.nullable().default(null),
       }),
       execute: async ({ sourcePost, opportunityFrame, tradeExpression, fitAssessment, candidate }) => runStepOnce(
         "x_sentiment",
-        { sourcePost, opportunityFrame, tradeExpression, fitAssessment, candidate },
+        {
+          sourcePost,
+          opportunityFrame,
+          tradeExpression: tradeExpression ?? null,
+          fitAssessment: fitAssessment ?? null,
+          candidate: candidate ?? null,
+        },
         async () => {
-          if (fitAssessment.fitStatus !== "validated") {
-            throw new Error("check_x_sentiment requires a validated fit assessment.");
-          }
           if (!input.deps.xSentimentProvider) {
             throw new Error("check_x_sentiment requires a configured X sentiment provider dependency.");
           }
           const source = sourcePost ?? input.run.sourcePost;
+          const expressionContext = tradeExpression ?? null;
+          const fitContext = fitAssessment ?? null;
+          const candidateContext = candidate ?? null;
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,
@@ -291,13 +327,19 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_x_sentiment",
             promptVersion,
             model: config.ai.grokXSearchModel,
-            stepInput: { sourcePost: source, opportunityFrame, tradeExpression, fitAssessment, candidate },
+            stepInput: {
+              sourcePost: source,
+              opportunityFrame,
+              tradeExpression: expressionContext,
+              fitAssessment: fitContext,
+              candidate: candidateContext,
+            },
             execute: ({ setThinkingTrace }) => input.deps.xSentimentProvider!.checkXSentiment({
               sourcePost: source,
               opportunityFrame,
-              tradeExpression,
-              fitAssessment,
-              candidate,
+              tradeExpression: expressionContext,
+              fitAssessment: fitContext,
+              candidate: candidateContext,
               onThinkingTrace: setThinkingTrace,
             }),
           });
@@ -629,4 +671,40 @@ function marketCandidateLookupKey(candidate: MarketCandidate): string {
 
 function predictionMarketSideForCandidate(candidate: MarketCandidate, side?: "yes" | "no") {
   return candidate.venue === "polymarket" ? side : undefined;
+}
+
+function preflightUserPolicy(userSettings: UserSettings) {
+  const warnings: string[] = [];
+  if (userSettings.allowedVenues.length === 0) {
+    warnings.push("No allowed venues are configured; venue search cannot produce executable candidates.");
+  }
+  if (!userSettings.walletAddress) {
+    warnings.push("No wallet address is configured; approved tickets may not be executable until wallet setup is complete.");
+  }
+  if (userSettings.defaultTradeSizeUsd > userSettings.maxTradeSizeUsd) {
+    warnings.push("Default trade size exceeds max trade size; deterministic risk check will cap or reject ticket sizing.");
+  }
+  if (userSettings.defaultTradeSizeUsd > userSettings.maxPositionUsd) {
+    warnings.push("Default trade size exceeds max position size; deterministic risk check will cap or reject ticket sizing.");
+  }
+  if (!userSettings.autoTradeEnabled) {
+    warnings.push("Autotrade is disabled; Cassie will create approval tickets only.");
+  }
+
+  return PreflightUserPolicySchema.parse({
+    status: "ok",
+    warnings,
+    policy: {
+      allowedVenues: userSettings.allowedVenues,
+      defaultTradeSizeUsd: userSettings.defaultTradeSizeUsd,
+      maxTradeSizeUsd: userSettings.maxTradeSizeUsd,
+      maxDailyLossUsd: userSettings.maxDailyLossUsd,
+      minConfidence: userSettings.minConfidence,
+      maxSpreadBps: userSettings.maxSpreadBps,
+      maxSlippageBps: userSettings.maxSlippageBps,
+      maxPositionUsd: userSettings.maxPositionUsd,
+      autoTradeEnabled: userSettings.autoTradeEnabled,
+      hasWalletAddress: Boolean(userSettings.walletAddress),
+    },
+  });
 }
