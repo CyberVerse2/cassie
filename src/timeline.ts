@@ -112,7 +112,7 @@ function formatModelUsageTable(records: ModelCallUsageRecord[], theme: TerminalT
 function summarizeStepOutput(output: unknown): string | null {
   const record = objectOrNull(output);
   if (!record) return null;
-  const fields = ["userIntent", "literalClaim", "opportunity", "decision", "approvalState", "responseType", "publicSummary"];
+  const fields = ["userIntent", "literalClaim", "opportunity", "decision", "sentimentDirection", "attentionLevel", "crowdingRisk", "correctionRisk", "approvalState", "responseType", "publicSummary"];
   const parts = fields
     .map((field) => {
       const value = record[field];

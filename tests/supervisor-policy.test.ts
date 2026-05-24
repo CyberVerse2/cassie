@@ -53,6 +53,11 @@ describe("supervisor step policy", () => {
     const quote = step("quote_expression", { venue: "hyperliquid", symbol: "SOL", markPrice: 100 });
     expect(selectActiveTools([opportunity, expression, candidates, fit, quote])).toEqual([
       "quote_expression",
+      "check_x_sentiment",
+    ]);
+    const xSentiment = step("check_x_sentiment", { status: "available", sentimentDirection: "mixed" });
+    expect(selectActiveTools([opportunity, expression, candidates, fit, quote, xSentiment])).toEqual([
+      "check_x_sentiment",
       "rank_expressions",
     ]);
     expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual([

@@ -235,6 +235,27 @@ export const ExpressionFitAssessmentSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
+export const XSentimentEvidenceSchema = z.object({
+  url: z.string().nullable(),
+  authorName: z.string().nullable(),
+  text: z.string().min(1),
+  observedAt: z.string().nullable(),
+  relevance: z.string(),
+});
+
+export const XSentimentAssessmentSchema = z.object({
+  status: z.enum(["available", "insufficient_evidence"]),
+  sourcesChecked: z.array(z.literal("x")),
+  sentimentDirection: z.enum(["bullish", "bearish", "mixed", "neutral"]),
+  attentionLevel: z.enum(["low", "medium", "high", "unclear"]),
+  novelty: z.enum(["new", "already_widespread", "unclear"]),
+  crowdingRisk: z.enum(["low", "medium", "high", "unclear"]),
+  correctionRisk: z.enum(["low", "medium", "high", "unclear"]),
+  summary: z.string(),
+  evidence: z.array(XSentimentEvidenceSchema).max(10),
+  limitations: z.array(z.string()),
+});
+
 export const TradeExpressionCandidateSchema = z.object({
   instrument: z.string(),
   venue: z.enum(["hyperliquid", "polymarket"]).nullable(),
@@ -440,6 +461,7 @@ export const RunStepTypeSchema = z.enum([
   "market_candidates",
   "market_assessment",
   "market_quote",
+  "x_sentiment",
   "market_selection",
   "risk",
   "ticket",
@@ -485,6 +507,7 @@ export type PolymarketQuote = z.infer<typeof PolymarketQuoteSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
 export type CandidateTradeExpression = z.infer<typeof CandidateTradeExpressionSchema>;
 export type ExpressionFitAssessment = z.infer<typeof ExpressionFitAssessmentSchema>;
+export type XSentimentAssessment = z.infer<typeof XSentimentAssessmentSchema>;
 export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSchema>;
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type RiskDecision = z.infer<typeof RiskDecisionSchema>;

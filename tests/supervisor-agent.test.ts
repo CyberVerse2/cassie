@@ -11,6 +11,7 @@ import type {
   SourcePost,
   TradeExpressionPlan,
   UserSettings,
+  XSentimentAssessment,
 } from "../packages/core/schemas/index.ts";
 
 const sourcePost: SourcePost = {
@@ -202,6 +203,7 @@ describe("AI SDK supervisor agent", () => {
     const instructions = buildSupervisorInstructions();
 
     expect(instructions).toContain("resolve source -> frame opportunity -> generate candidate trade expressions");
+    expect(instructions).toContain("check X sentiment -> rank expressions");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
     expect(instructions).toContain("Use deterministic risk checks only after ranking a real validated candidate");
   });
@@ -515,6 +517,75 @@ describe("AI SDK supervisor agent", () => {
     expect(second.symbol).toBe("ETH");
     const steps = await store.getRunSteps(run.runId);
     expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
+  });
+
+  it("checks X sentiment for validated quoted candidates before ranking", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie check X sentiment",
+      sourcePost,
+    });
+    const sentiment: XSentimentAssessment = {
+      status: "available",
+      sourcesChecked: ["x"],
+      sentimentDirection: "mixed",
+      attentionLevel: "high",
+      novelty: "already_widespread",
+      crowdingRisk: "high",
+      correctionRisk: "medium",
+      summary: "X attention is high and one-sided, with some credible pushback.",
+      evidence: [{
+        url: "https://x.com/example/status/1",
+        authorName: "Example",
+        text: "SOL ETF approval odds are being debated heavily.",
+        observedAt: "2026-05-24T00:00:00.000Z",
+        relevance: "Shows broad attention and crowding risk.",
+      }],
+      limitations: ["X search may not see all posts."],
+    };
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+        xSentimentProvider: {
+          async checkXSentiment(input) {
+            expect(input.sourcePost).toBe(sourcePost);
+            expect(input.opportunityFrame).toBe(opportunityFrame);
+            expect(input.tradeExpression).toBe(tradeExpression);
+            expect(input.fitAssessment).toBe(expressionFitAssessment);
+            expect(input.candidate).toBe(marketSelection.selectedMarket);
+            input.onThinkingTrace?.("Grok summarized X sentiment.");
+            return sentiment;
+          },
+        },
+      },
+    });
+
+    await expect(executeTool<XSentimentAssessment>(tools.check_x_sentiment, {
+      opportunityFrame,
+      tradeExpression,
+      fitAssessment: expressionFitAssessment,
+      candidate: marketSelection.selectedMarket!,
+    })).resolves.toMatchObject({
+      sentimentDirection: "mixed",
+      crowdingRisk: "high",
+    });
+
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.find((step) => step.stepType === "x_sentiment")).toMatchObject({
+      promptName: "cassie_x_sentiment",
+      thinkingTrace: "Grok summarized X sentiment.",
+      output: sentiment,
+    });
   });
 
   it("uses AI-backed fit assessment for non-Polymarket candidates instead of auto-validating them", async () => {

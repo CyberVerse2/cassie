@@ -17,6 +17,7 @@ import {
   RiskDecisionSchema,
   TradeTicketSchema,
   TradeExpressionPlanSchema,
+  XSentimentAssessmentSchema,
   type AccountState,
   type ControlRun,
   type UserSettings,
@@ -237,6 +238,46 @@ export function createCassieSupervisorTools(input: {
         },
       ),
     }),
+    check_x_sentiment: tool({
+      description: "Check X-only sentiment, novelty, crowding, and correction risk for a validated and quoted candidate.",
+      inputSchema: z.object({
+        sourcePost: SourcePostSchema.optional(),
+        opportunityFrame: OpportunityFrameSchema,
+        tradeExpression: TradeExpressionPlanSchema,
+        fitAssessment: ExpressionFitAssessmentSchema,
+        candidate: MarketCandidateSchema,
+      }),
+      execute: async ({ sourcePost, opportunityFrame, tradeExpression, fitAssessment, candidate }) => runStepOnce(
+        "x_sentiment",
+        { sourcePost, opportunityFrame, tradeExpression, fitAssessment, candidate },
+        async () => {
+          if (fitAssessment.fitStatus !== "validated") {
+            throw new Error("check_x_sentiment requires a validated fit assessment.");
+          }
+          if (!input.deps.xSentimentProvider) {
+            throw new Error("check_x_sentiment requires a configured X sentiment provider dependency.");
+          }
+          const source = sourcePost ?? input.run.sourcePost;
+          return recordRunStep({
+            store: input.store,
+            runId: input.run.runId,
+            stepType: "x_sentiment",
+            promptName: "cassie_x_sentiment",
+            promptVersion,
+            model: config.ai.grokXSearchModel,
+            stepInput: { sourcePost: source, opportunityFrame, tradeExpression, fitAssessment, candidate },
+            execute: ({ setThinkingTrace }) => input.deps.xSentimentProvider!.checkXSentiment({
+              sourcePost: source,
+              opportunityFrame,
+              tradeExpression,
+              fitAssessment,
+              candidate,
+              onThinkingTrace: setThinkingTrace,
+            }),
+          });
+        },
+      ),
+    }),
     rank_expressions: tool({
       description: "Rank real venue candidates and choose the best grounded trade expression; do not invent markets.",
       inputSchema: z.object({
@@ -244,10 +285,11 @@ export function createCassieSupervisorTools(input: {
         candidates: MarketCandidateSchema.array().optional(),
         fitAssessments: ExpressionFitAssessmentSchema.array().optional(),
         quotes: z.array(z.unknown()).min(1),
+        xSentiment: XSentimentAssessmentSchema.optional(),
       }),
-      execute: async ({ tradeExpression, candidates, fitAssessments, quotes }) => runStepOnce(
+      execute: async ({ tradeExpression, candidates, fitAssessments, quotes, xSentiment }) => runStepOnce(
         "market_selection",
-        { tradeExpression, candidates, fitAssessments, quotes },
+        { tradeExpression, candidates, fitAssessments, quotes, xSentiment },
         async () => {
           const thesis = thesisFromTradeExpression(tradeExpression);
           return recordRunStep({
@@ -257,7 +299,7 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_market_selection",
             promptVersion,
             model: cheapModel,
-            stepInput: { tradeExpression, candidates, fitAssessments, quotes },
+            stepInput: { tradeExpression, candidates, fitAssessments, quotes, xSentiment },
             execute: ({ setThinkingTrace }) => selectMarket({
               ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
               marketData: input.deps.marketData,
@@ -266,6 +308,7 @@ export function createCassieSupervisorTools(input: {
               candidates: candidates ?? [],
               fitAssessments,
               quotes,
+              xSentiment,
             }),
           });
         },

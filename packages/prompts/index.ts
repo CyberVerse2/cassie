@@ -136,6 +136,7 @@ export function marketSelectionPrompt(input: {
   tradeExpression?: unknown;
   fitAssessments?: unknown[];
   quotes?: unknown[];
+  xSentiment?: unknown;
 }): string {
   return renderPromptSpec(marketSelectionPromptSpec(input));
 }
@@ -146,6 +147,7 @@ export function marketSelectionPromptSpec(input: {
   tradeExpression?: unknown;
   fitAssessments?: unknown[];
   quotes?: unknown[];
+  xSentiment?: unknown;
 }): CassiePromptSpec<MarketSelection> {
   return makePromptSpec({
     name: "cassie_market_selection",
@@ -163,6 +165,7 @@ Rules:
 - Do not select rejected candidates.
 - Do not select a weak proxy if a direct expression exists.
 - Do not select a trade just because the tweet is interesting.
+- Use xSentiment only as evidence about X novelty, attention, crowding, and correction risk. Do not use it to validate source truth, venue existence, prices, liquidity, probabilities, or rules.
 - Return noTradeReason when no candidate has clear semantic fit and acceptable execution.
 - Use selectedMarket only for a real validated candidate.
 - Never execute orders.`,

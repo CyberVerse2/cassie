@@ -71,9 +71,14 @@ export function selectActiveTools(
     }
 
     const quote = latestToolOutput(steps, "quote_expression");
-    return quote
-      ? ["quote_expression", "rank_expressions"]
-      : ["assess_expression_fit", "quote_expression"];
+    const xSentiment = latestToolOutput(steps, "check_x_sentiment");
+    if (quote && !xSentiment) {
+      return ["quote_expression", "check_x_sentiment"];
+    }
+    if (quote && xSentiment) {
+      return ["check_x_sentiment", "rank_expressions"];
+    }
+    return ["assess_expression_fit", "quote_expression"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
@@ -181,6 +186,11 @@ function summarizeToolPart(part: unknown, originalChars: number) {
         compressed: true,
         originalChars,
         status: output?.status,
+        sentimentDirection: output?.sentimentDirection,
+        attentionLevel: output?.attentionLevel,
+        novelty: output?.novelty,
+        crowdingRisk: output?.crowdingRisk,
+        correctionRisk: output?.correctionRisk,
         intent: output?.intent,
         signalType: output?.signalType,
         stance: output?.stance,
