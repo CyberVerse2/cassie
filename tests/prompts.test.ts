@@ -202,6 +202,12 @@ describe("prompts", () => {
         searchContextSize: "low",
       },
     });
+    expect(JSON.parse(String(opportunityFramePromptSpec({
+      sourcePost,
+      userCommand: "@cassie trade this",
+    }).messages[0]?.content)).source).toMatchObject({
+      author: "Example",
+    });
     expect(marketSelectionPromptSpec({
       thesis,
       tradeExpression,

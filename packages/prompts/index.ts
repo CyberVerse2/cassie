@@ -62,7 +62,7 @@ function sourceForPrompt(sourcePost: SourcePost) {
   return {
     url: sourcePost.url,
     text: sourcePost.text,
-    author: sourcePost.authorHandle ?? sourcePost.authorName,
+    author: sourcePost.authorName,
     created_at: sourcePost.createdAt,
     media_text: sourcePost.mediaDescriptions?.join("\n") ?? null,
     quoted_tweet_text: sourcePost.quotedPostText ?? null,
