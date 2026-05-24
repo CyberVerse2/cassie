@@ -326,22 +326,25 @@ export function createCassieSupervisorTools(input: {
         const persistedXSentiment = xSentiment
           ?? await latestPersistedXSentiment(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : parseSuppliedRankQuotes(quotes);
-        if (persistedCandidates.length > 0 && persistedFitAssessments.length < persistedCandidates.length) {
-          throw new Error("rank_expressions requires fit assessments for every persisted venue candidate.");
-        }
         const validatedFitAssessments = persistedFitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+        const rankingCandidates = persistedCandidates
+          .slice(0, persistedFitAssessments.length)
+          .filter((_, index) => persistedFitAssessments[index]?.fitStatus === "validated");
         if (groundedQuotes.length === 0) {
           throw new Error("rank_expressions requires a persisted or supplied market quote.");
         }
         if (validatedFitAssessments.length > groundedQuotes.length) {
           throw new Error("rank_expressions requires quotes for every validated venue candidate.");
         }
+        if (rankingCandidates.length === 0) {
+          throw new Error("rank_expressions requires at least one validated venue candidate.");
+        }
 
         return runStepOnce(
           "market_selection",
           {
             tradeExpression,
-            candidates: persistedCandidates,
+            candidates: rankingCandidates,
             fitAssessments: persistedFitAssessments,
             quotes: groundedQuotes,
             xSentiment: persistedXSentiment,
@@ -357,7 +360,7 @@ export function createCassieSupervisorTools(input: {
             model: cheapModel,
             stepInput: {
               tradeExpression,
-              candidates: persistedCandidates,
+              candidates: rankingCandidates,
               fitAssessments: persistedFitAssessments,
               quotes: groundedQuotes,
               xSentiment: persistedXSentiment,
@@ -367,7 +370,7 @@ export function createCassieSupervisorTools(input: {
               marketData: input.deps.marketData,
               thesis,
               tradeExpression,
-              candidates: persistedCandidates,
+              candidates: rankingCandidates,
               fitAssessments: persistedFitAssessments,
               quotes: groundedQuotes,
               xSentiment: persistedXSentiment,

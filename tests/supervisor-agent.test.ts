@@ -887,7 +887,7 @@ describe("AI SDK supervisor agent", () => {
     expect(ai.calls).toContain("cassie_market_selection");
   });
 
-  it("rejects ranking before every discovered venue candidate has fit and quote coverage", async () => {
+  it("ranks a validated direct candidate before every adjacent candidate has fit coverage", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -932,7 +932,16 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool(tools.rank_expressions, {
       tradeExpression,
-    })).rejects.toThrow("rank_expressions requires fit assessments for every persisted venue candidate.");
+    })).resolves.toMatchObject({
+      selectedMarket: firstCandidate,
+      noTradeReason: null,
+    });
+
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
+      candidates: [firstCandidate],
+      quotes: [firstCandidate],
+    });
   });
 
 });

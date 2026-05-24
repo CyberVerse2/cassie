@@ -152,7 +152,7 @@ describe("supervisor step policy", () => {
     expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "search_venues" });
   });
 
-  it("keeps assessing venue candidates before quoting or ranking", () => {
+  it("quotes a direct validated candidate before assessing weak adjacent candidates", () => {
     const opportunity = step("frame_opportunity", {});
     const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
     const candidates = step("search_venues", [
@@ -163,6 +163,24 @@ describe("supervisor step policy", () => {
       candidateId: "hyperliquid:BTC:short",
       fitStatus: "validated",
       venue: "hyperliquid",
+      directness: "direct",
+    });
+
+    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["quote_expression"]);
+  });
+
+  it("keeps assessing venue candidates when no direct candidate has validated", () => {
+    const opportunity = step("frame_opportunity", {});
+    const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
+    const candidates = step("search_venues", [
+      { venue: "hyperliquid", symbol: "BTC", side: "short" },
+      { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+    ]);
+    const firstFit = step("assess_expression_fit", {
+      candidateId: "hyperliquid:BTC:short",
+      fitStatus: "needs_more_info",
+      venue: "hyperliquid",
+      directness: "strong_proxy",
     });
 
     expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["assess_expression_fit"]);
@@ -181,16 +199,17 @@ describe("supervisor step policy", () => {
           candidateId: "hyperliquid:BTC:short",
           fitStatus: "validated",
           venue: "hyperliquid",
+          directness: "direct",
         }),
       ],
       messages: [],
     } as never) as { activeTools: string[]; messages: unknown[] };
 
     const serialized = JSON.stringify(prepared.messages);
-    expect(prepared.activeTools).toEqual(["assess_expression_fit"]);
+    expect(prepared.activeTools).toEqual(["quote_expression"]);
     expect(serialized).toContain("venueDiscoveryProgress");
-    expect(serialized).toContain("nextUnassessedCandidate");
-    expect(serialized).toContain("btc-price-market");
+    expect(serialized).toContain("nextUnquotedCandidate");
+    expect(serialized).toContain("BTC");
   });
 
   it("quotes every validated venue candidate before ranking", () => {

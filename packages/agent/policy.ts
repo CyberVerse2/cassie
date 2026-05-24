@@ -67,6 +67,16 @@ export function selectActiveTools(
     const fitAssessments = toolOutputsAfterLatest(steps, "assess_expression_fit", "search_venues")
       .map(objectRecord)
       .filter((assessment) => typeof assessment.fitStatus === "string");
+    const validatedDirectFitAssessments = fitAssessments.filter(isValidatedDirectFitAssessment);
+    const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
+    if (validatedDirectFitAssessments.length > 0) {
+      if (quotes.length < validatedDirectFitAssessments.length) {
+        return ["quote_expression"];
+      }
+      const xSentiment = latestToolOutput(steps, "check_x_sentiment");
+      return xSentiment ? ["rank_expressions"] : ["check_x_sentiment"];
+    }
+
     if (fitAssessments.length < marketCandidates.length) {
       return ["assess_expression_fit"];
     }
@@ -76,7 +86,6 @@ export function selectActiveTools(
       return ["finalize_run"];
     }
 
-    const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
     if (quotes.length < validatedFitAssessments.length) {
       return ["quote_expression"];
     }
@@ -310,8 +319,12 @@ function buildVenueDiscoveryProgress(
     .map(objectRecord)
     .filter((assessment) => typeof assessment.fitStatus === "string");
   const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+  const validatedDirectFitAssessments = fitAssessments.filter(isValidatedDirectFitAssessment);
+  const activeValidatedFitAssessments = validatedDirectFitAssessments.length > 0
+    ? validatedDirectFitAssessments
+    : validatedFitAssessments;
   const validatedCandidateIndexes = fitAssessments
-    .map((assessment, index) => assessment.fitStatus === "validated" ? index : null)
+    .map((assessment, index) => activeValidatedFitAssessments.includes(assessment) ? index : null)
     .filter((index): index is number => index !== null);
   const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
   const nextUnquotedCandidateIndex = validatedCandidateIndexes[quotes.length] ?? null;
@@ -322,15 +335,21 @@ function buildVenueDiscoveryProgress(
     validatedFitCount: validatedFitAssessments.length,
     quoteCount: quotes.length,
     nextUnassessedCandidate: fitAssessments.length < candidates.length
+      && validatedDirectFitAssessments.length === 0
       ? summarizeToolOutput(candidates[fitAssessments.length])
       : null,
-    nextUnquotedCandidate: fitAssessments.length >= candidates.length && quotes.length < validatedFitAssessments.length
+    nextUnquotedCandidate: quotes.length < activeValidatedFitAssessments.length
       ? summarizeToolOutput(candidates[nextUnquotedCandidateIndex ?? quotes.length])
       : null,
-    readyToRank: fitAssessments.length >= candidates.length
-      && validatedFitAssessments.length > 0
-      && quotes.length >= validatedFitAssessments.length,
+    readyToRank: activeValidatedFitAssessments.length > 0
+      && quotes.length >= activeValidatedFitAssessments.length
+      && (fitAssessments.length >= candidates.length || validatedDirectFitAssessments.length > 0),
   };
+}
+
+function isValidatedDirectFitAssessment(assessment: Record<string, unknown>): boolean {
+  return assessment.fitStatus === "validated"
+    && (assessment.directness === "direct" || assessment.directness === "strong_proxy");
 }
 
 function summarizeToolOutput(output: unknown): unknown {
