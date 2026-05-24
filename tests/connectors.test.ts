@@ -44,12 +44,38 @@ const staticPolymarketSearchClient = {
       },
     ];
   },
+  async fetchOrderBook() {
+    return {
+      bids: [{ price: "0.61", size: "100" }],
+      asks: [{ price: "0.63", size: "100" }],
+    };
+  },
+  async fetchBuyPrice() {
+    return 0.63;
+  },
+  async fetchSpread() {
+    return 0.02;
+  },
 };
 
-function polymarketSearchClientFor(markets: any[]) {
+function polymarketSearchClientFor(markets: any[], book = {
+  bids: [{ price: "0.53", size: "100" }],
+  asks: [{ price: "0.55", size: "100" }],
+}) {
   return {
     async searchMarkets() {
       return markets;
+    },
+    async fetchOrderBook() {
+      return book;
+    },
+    async fetchBuyPrice() {
+      return Number(book.asks[0]?.price ?? 0) || null;
+    },
+    async fetchSpread() {
+      const bid = Number(book.bids[0]?.price ?? 0);
+      const ask = Number(book.asks[0]?.price ?? 0);
+      return bid > 0 && ask > 0 ? ask - bid : null;
     },
   };
 }
@@ -426,7 +452,7 @@ describe("market data connectors", () => {
       return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    const candidates = await new PolymarketMarketDataProvider(staticPolymarketSearchClient, "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    const candidates = await new PolymarketMarketDataProvider(staticPolymarketSearchClient, staticPolymarketQueryPlanner).findCandidates({
       thesis,
     });
 
@@ -479,9 +505,21 @@ describe("market data connectors", () => {
           },
         ];
       },
+      async fetchOrderBook() {
+        return {
+          bids: [{ price: "0.53", size: "100" }],
+          asks: [{ price: "0.55", size: "100" }],
+        };
+      },
+      async fetchBuyPrice() {
+        return 0.55;
+      },
+      async fetchSpread() {
+        return 0.02;
+      },
     };
 
-    const candidates = await new PolymarketMarketDataProvider(searchClient, "https://example.test", staticPolymarketQueryPlanner).findCandidates({
+    const candidates = await new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner).findCandidates({
       thesis: {
         claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%, moonshot flippening.",
         direction: "bullish",
@@ -599,20 +637,16 @@ describe("market data connectors", () => {
   });
 
   it("surfaces Polymarket order book failures instead of dropping the venue", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-      const url = new URL(String(input));
+    const searchClient = {
+      ...staticPolymarketSearchClient,
+      async fetchOrderBook() {
+        throw new ConnectorRequestError("Polymarket order book", 503, "upstream unavailable");
+      },
+    };
 
-      if (url.pathname === "/book") {
-        return new Response("upstream unavailable", { status: 503 });
-      }
-
-      return new Response("unexpected discovery fetch", { status: 500 });
-    });
-
-    await expect(new PolymarketMarketDataProvider(staticPolymarketSearchClient, "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toBeInstanceOf(ConnectorRequestError);
-    fetchMock.mockRestore();
   });
 
   it("rejects Polymarket markets without condition IDs", async () => {
@@ -642,7 +676,7 @@ describe("market data connectors", () => {
         clobTokenIds: JSON.stringify(["123", "456"]),
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
       },
-    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("condition_id");
     fetchMock.mockRestore();
@@ -665,7 +699,7 @@ describe("market data connectors", () => {
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
         conditionId: "condition_1",
       },
-    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -688,7 +722,7 @@ describe("market data connectors", () => {
         outcomePrices: "[\"0.62\",",
         conditionId: "condition_1",
       },
-    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -711,7 +745,7 @@ describe("market data connectors", () => {
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
         conditionId: "condition_1",
       },
-    ]), "https://clob.polymarket.com", staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -747,7 +781,10 @@ describe("market data connectors", () => {
         conditionId: "condition_1",
         endDate: "2026-09-01T00:00:00Z",
       },
-    ]), "https://example.test", staticPolymarketQueryPlanner).findPolymarketMarkets({
+    ], {
+      bids: [{ price: "0.63", size: "100" }],
+      asks: [{ price: "0.65", size: "100" }],
+    }), staticPolymarketQueryPlanner).findPolymarketMarkets({
       thesis: {
         ...thesis,
         direction: "bearish",

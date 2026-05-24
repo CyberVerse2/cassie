@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { SignatureTypeV2 } from "@polymarket/clob-client-v2";
 import {
   assertPolymarketExecutionEnv,
   readAiProviderEnv,
@@ -26,6 +25,8 @@ describe("Polymarket env", () => {
       POLYMARKET_SIGNATURE_TYPE: "2",
       POLYMARKET_FUNDER_ADDRESS: "0x193c2109089dD260811f1852C9B1521D6CCF1c6B",
       POLYMARKET_BUILDER_CODE: `0x${"a".repeat(64)}`,
+      POLYMARKET_RELAYER_API_KEY: "relayer-key",
+      POLYMARKET_RELAYER_API_KEY_ADDRESS: "0x193c2109089dD260811f1852C9B1521D6CCF1c6B",
     });
 
     expect(config).toEqual({
@@ -37,9 +38,11 @@ describe("Polymarket env", () => {
       },
       host: "https://example.com",
       rpcUrl: "https://rpc.example.com",
-      signatureType: SignatureTypeV2.POLY_GNOSIS_SAFE,
+      signatureType: 2,
       funderAddress: "0x193c2109089dD260811f1852C9B1521D6CCF1c6B",
       builderCode: `0x${"a".repeat(64)}`,
+      relayerApiKey: "relayer-key",
+      relayerApiKeyAddress: "0x193c2109089dD260811f1852C9B1521D6CCF1c6B",
     });
   });
 
@@ -182,7 +185,6 @@ describe("Polymarket env", () => {
       POLYMARKET_CLOB_API_KEY: "poly-key",
       POLYMARKET_CLOB_SECRET: "poly-secret",
       POLYMARKET_CLOB_PASS_PHRASE: "poly-passphrase",
-      POLYMARKET_GAMMA_MARKETS_URL: "https://gamma.example.com/markets",
       CASSIE_STRUCTURED_MAX_RETRIES: "4",
       CASSIE_CONNECTOR_CALL_TIMEOUT_MS: "120000",
       CASSIE_SUPERVISOR_TIMEOUT_MS: "240000",
@@ -229,9 +231,6 @@ describe("Polymarket env", () => {
             passphrase: "poly-passphrase",
           },
         },
-      },
-      polymarket: {
-        gammaMarketsUrl: "https://gamma.example.com/markets",
       },
     });
   });

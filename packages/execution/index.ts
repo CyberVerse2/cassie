@@ -10,12 +10,11 @@ import {
   type HyperliquidExecutionEnvOptions,
   type PolymarketExecutionEnv,
   type PolymarketExecutionEnvOptions,
+  type RequiredPolymarketExecutionEnv,
 } from "../core/config.ts";
-import { Chain, ClobClient, OrderType, Side, type ClobClientOptions, type CreateOrderOptions } from "@polymarket/clob-client-v2";
+import type { OrderResponse, OrderSide, OrderType, SecureClient } from "@polymarket/client";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
-import { createWalletClient, http } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
 import { formatDecimal } from "./helpers/index.ts";
 
 export * from "./helpers/index.ts";
@@ -139,34 +138,32 @@ export class HyperliquidExecutionClient implements ExecutionClient {
   }
 }
 
-export interface PolymarketClobClientLike {
-  getTickSize(tokenId: string): Promise<CreateOrderOptions["tickSize"]>;
-  getNegRisk(tokenId: string): Promise<boolean>;
-  createAndPostMarketOrder(
-    order: {
-      tokenID: string;
-      amount: number;
-      side: Side;
-      orderType: OrderType.FAK;
-    },
-    options: Partial<CreateOrderOptions>,
-    orderType: OrderType.FAK,
-  ): Promise<{ orderID?: string | null; id?: string | null; [key: string]: unknown }>;
+export interface PolymarketSdkTradingClientLike {
+  isGaslessReady(): Promise<boolean>;
+  setupGaslessWallet(): Promise<PolymarketSdkTradingClientLike>;
+  setupTradingApprovals(): Promise<{ wait(): Promise<unknown> }>;
+  placeMarketOrder(order: {
+    tokenId: string;
+    amount: number;
+    side: OrderSide.BUY;
+    orderType: OrderType.FAK;
+    builderCode?: `0x${string}`;
+  }): Promise<OrderResponse>;
 }
 
-export type PolymarketClobClientFactory = (options: ClobClientOptions) => PolymarketClobClientLike;
+export type PolymarketSdkTradingClientFactory = (config: RequiredPolymarketExecutionEnv) => Promise<PolymarketSdkTradingClientLike>;
 
 export type PolymarketExecutionClientOptions = PolymarketExecutionEnvOptions & {
-  factory?: PolymarketClobClientFactory;
+  factory?: PolymarketSdkTradingClientFactory;
 };
 
 export class PolymarketExecutionClient implements ExecutionClient {
   private readonly config: PolymarketExecutionEnv;
-  private readonly factory: PolymarketClobClientFactory;
+  private readonly factory: PolymarketSdkTradingClientFactory;
 
   constructor(options: PolymarketExecutionClientOptions = {}) {
     this.config = readPolymarketExecutionEnv(undefined, options);
-    this.factory = options.factory ?? ((clientOptions) => new ClobClient(clientOptions));
+    this.factory = options.factory ?? createPolymarketSdkTradingClient;
   }
 
   async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
@@ -176,38 +173,79 @@ export class PolymarketExecutionClient implements ExecutionClient {
       throw new Error("Polymarket execution requires venueData.outcomeTokenId.");
     }
 
-    const account = privateKeyToAccount(config.privateKey);
-    const signer = createWalletClient({ account, transport: http(config.rpcUrl) });
-    const client = this.factory({
-      host: config.host,
-      chain: Chain.POLYGON,
-      signer,
-      creds: config.creds,
-      signatureType: config.signatureType,
-      funderAddress: config.funderAddress,
-      builderConfig: config.builderCode ? { builderCode: config.builderCode } : undefined,
+    if (ticket.side !== "buy_no" && ticket.side !== "buy_yes" && ticket.side !== "buy") {
+      throw new Error("Polymarket execution only supports buy-side market orders.");
+    }
+
+    const client = await preparePolymarketTradingClient(await this.factory(config), config);
+    const { OrderSide, OrderType } = await import("@polymarket/client");
+    const response = await client.placeMarketOrder({
+      tokenId,
+      amount: ticket.sizeUsd,
+      side: OrderSide.BUY,
+      orderType: OrderType.FAK,
+      builderCode: config.builderCode as `0x${string}` | undefined,
     });
-    const side = ticket.side === "buy_no" || ticket.side === "buy_yes" || ticket.side === "buy"
-      ? Side.BUY
-      : Side.SELL;
-    const tickSize = await client.getTickSize(tokenId);
-    const negRisk = await client.getNegRisk(tokenId);
-    const response = await client.createAndPostMarketOrder(
-      {
-        tokenID: tokenId,
-        amount: ticket.sizeUsd,
-        side,
-        orderType: OrderType.FAK,
-      },
-      { tickSize, negRisk },
-      OrderType.FAK,
-    );
 
     return {
-      venueOrderId: response?.orderID ?? response?.id ?? null,
+      venueOrderId: response.ok ? response.orderId : null,
       filledSizeUsd: ticket.sizeUsd,
       averagePrice: null,
       raw: response,
     };
   }
+}
+
+async function createPolymarketSdkTradingClient(
+  config: RequiredPolymarketExecutionEnv,
+): Promise<PolymarketSdkTradingClientLike> {
+  const [{ createSecureClient, relayerApiKey }, { privateKey }] = await Promise.all([
+    import("@polymarket/client"),
+    import("@polymarket/client/viem"),
+  ]);
+
+  const client = await createSecureClient({
+    apiKey: config.relayerApiKey && config.relayerApiKeyAddress
+      ? relayerApiKey({
+        key: config.relayerApiKey,
+        address: config.relayerApiKeyAddress,
+      })
+      : undefined,
+    credentials: config.creds,
+    signer: privateKey(config.privateKey),
+    wallet: config.funderAddress,
+  });
+  return adaptPolymarketSecureClient(client);
+}
+
+function adaptPolymarketSecureClient(client: SecureClient): PolymarketSdkTradingClientLike {
+  return {
+    isGaslessReady: () => client.isGaslessReady(),
+    setupGaslessWallet: async () => adaptPolymarketSecureClient(await client.setupGaslessWallet()),
+    setupTradingApprovals: () => client.setupTradingApprovals(),
+    placeMarketOrder: (order) => client.placeMarketOrder(order),
+  };
+}
+
+async function preparePolymarketTradingClient(
+  client: PolymarketSdkTradingClientLike,
+  config: RequiredPolymarketExecutionEnv,
+): Promise<PolymarketSdkTradingClientLike> {
+  if (!config.funderAddress) {
+    return client;
+  }
+
+  if (!config.relayerApiKey || !config.relayerApiKeyAddress) {
+    throw new MissingConnectorConfigError(
+      "Polymarket gasless trading setup",
+      "POLYMARKET_RELAYER_API_KEY, POLYMARKET_RELAYER_API_KEY_ADDRESS",
+    );
+  }
+
+  const gaslessClient = await client.isGaslessReady()
+    ? client
+    : await client.setupGaslessWallet();
+  const approvals = await gaslessClient.setupTradingApprovals();
+  await approvals.wait();
+  return gaslessClient;
 }

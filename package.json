@@ -24,7 +24,6 @@
     "@ai-sdk/xai": "^3.0.91",
     "@nktkas/hyperliquid": "^0.32.2",
     "@polymarket/client": "^0.1.0-beta.2",
-    "@polymarket/clob-client-v2": "^1.0.6",
     "@types/node": "^25.9.1",
     "@types/pg": "^8.20.0",
     "ai": "^6.0.185",

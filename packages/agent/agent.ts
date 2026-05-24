@@ -203,7 +203,6 @@ function defaultDependencies(): CassieDependencies {
     sourceResolver: new GrokXSourceResolver(),
     polymarketMarketFinder: new PolymarketMarketDataProvider(
       undefined,
-      "https://clob.polymarket.com",
       new AiPolymarketDiscoveryQueryPlanner(ai),
     ),
   };

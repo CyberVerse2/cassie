@@ -1,4 +1,4 @@
-import type { PublicClient } from "@polymarket/client";
+import type { OrderBook, PublicClient } from "@polymarket/client";
 import type {
   MarketCandidate,
   PolymarketMarketAssessment,
@@ -85,6 +85,9 @@ type PolymarketSdkMarket = {
 
 export interface PolymarketSearchClient {
   searchMarkets(query: string, limit: number): Promise<PolymarketMarket[]>;
+  fetchOrderBook(tokenId: string): Promise<PolymarketBook>;
+  fetchBuyPrice(tokenId: string): Promise<number | null>;
+  fetchSpread(tokenId: string): Promise<number | null>;
 }
 
 export class PolymarketSdkSearchClient implements PolymarketSearchClient {
@@ -100,6 +103,22 @@ export class PolymarketSdkSearchClient implements PolymarketSearchClient {
     }).firstPage();
     const events = page.items.events as PolymarketSdkEvent[];
     return events.flatMap((event) => (event.markets ?? []).map(polymarketMarketFromSdkMarket));
+  }
+
+  async fetchOrderBook(tokenId: string): Promise<PolymarketBook> {
+    const client = await this.getClient();
+    return polymarketBookFromSdkBook(await client.fetchOrderBook({ tokenId }));
+  }
+
+  async fetchBuyPrice(tokenId: string): Promise<number | null> {
+    const client = await this.getClient();
+    const { OrderSide } = await import("@polymarket/client");
+    return nullableNumber(await client.fetchPrice({ tokenId, side: OrderSide.BUY }));
+  }
+
+  async fetchSpread(tokenId: string): Promise<number | null> {
+    const client = await this.getClient();
+    return nullableNumber(await client.fetchSpread({ tokenId }));
   }
 
   private async getClient(): Promise<PublicClient> {
@@ -316,7 +335,6 @@ function isExactSymbolAnchor(value: string): boolean {
 export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {
   constructor(
     private readonly searchClient: PolymarketSearchClient = new PolymarketSdkSearchClient(),
-    private readonly clobEndpoint = "https://clob.polymarket.com",
     private readonly queryPlanner?: PolymarketDiscoveryQueryPlanner,
   ) {}
 
@@ -446,7 +464,11 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     yesPrice?: number | null;
     noPrice?: number | null;
   }): Promise<PolymarketQuote> {
-    const book = await this.getBook(input.outcomeTokenId);
+    const [book, buyPrice, quotedSpread] = await Promise.all([
+      this.getBook(input.outcomeTokenId),
+      this.searchClient.fetchBuyPrice(input.outcomeTokenId),
+      this.searchClient.fetchSpread(input.outcomeTokenId),
+    ]);
     const metrics = orderBookMetrics(book.bids ?? [], book.asks ?? []);
     if (!metrics) {
       throw new Error(`Polymarket order book is empty for token ${input.outcomeTokenId}.`);
@@ -456,7 +478,7 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     if (!bid || !ask) {
       throw new Error(`Polymarket order book is empty for token ${input.outcomeTokenId}.`);
     }
-    const heldSidePrice = metrics.mid;
+    const heldSidePrice = buyPrice ?? metrics.mid;
 
     return {
       conditionId: input.conditionId ?? null,
@@ -467,8 +489,8 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
       heldSidePrice,
       bid,
       ask,
-      midPrice: heldSidePrice,
-      spreadBps: metrics.spreadBps,
+      midPrice: metrics.mid,
+      spreadBps: quotedSpread ? quotedSpread * 10_000 : metrics.spreadBps,
       timestamp: new Date().toISOString(),
     };
   }
@@ -497,11 +519,7 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
   }
 
   private async getBook(tokenId: string): Promise<PolymarketBook> {
-    const url = new URL(`/book`, this.clobEndpoint);
-    url.searchParams.set("token_id", tokenId);
-    const response = await fetch(url);
-
-    return readJsonResponse<PolymarketBook>("Polymarket order book", response);
+    return this.searchClient.fetchOrderBook(tokenId);
   }
 }
 
@@ -615,6 +633,24 @@ function polymarketMarketFromSdkMarket(market: PolymarketSdkMarket): PolymarketM
     conditionId: market.conditionId ?? undefined,
     endDate: market.state?.endDate ?? undefined,
   };
+}
+
+function polymarketBookFromSdkBook(book: OrderBook): PolymarketBook {
+  return {
+    bids: book.bids?.map((level) => ({
+      price: String(level.price),
+      size: String(level.size),
+    })) ?? [],
+    asks: book.asks?.map((level) => ({
+      price: String(level.price),
+      size: String(level.size),
+    })) ?? [],
+  };
+}
+
+function nullableNumber(value: string | number | null | undefined): number | null {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function numberFromSdkValue(value: string | number | null | undefined): number | undefined {

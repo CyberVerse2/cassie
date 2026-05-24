@@ -1,4 +1,4 @@
-import { SignatureTypeV2, type ApiKeyCreds } from "@polymarket/clob-client-v2";
+import type { ApiKeyCreds, SignatureType } from "@polymarket/client";
 import { z } from "zod";
 import { MissingConnectorConfigError } from "./helpers/index.ts";
 
@@ -72,9 +72,6 @@ export type CassieRuntimeConfig = {
     webhookUrl?: string;
     hyperliquid: HyperliquidExecutionEnv;
     polymarket: PolymarketExecutionEnv;
-  };
-  polymarket: {
-    gammaMarketsUrl: string;
   };
   terminal: {
     debug: boolean;
@@ -166,9 +163,6 @@ export function readCassieConfig(
       hyperliquid: readHyperliquidExecutionEnv(env),
       polymarket: readPolymarketExecutionEnv(env),
     },
-    polymarket: {
-      gammaMarketsUrl: optionalEnv("POLYMARKET_GAMMA_MARKETS_URL", env) ?? "https://gamma-api.polymarket.com/markets",
-    },
     terminal: {
       debug: optionalEnv("DEBUG", env) != null,
       noColor: optionalEnv("NO_COLOR", env) != null,
@@ -245,9 +239,11 @@ export type PolymarketExecutionEnvOptions = {
   apiPassphrase?: string;
   host?: string;
   rpcUrl?: string;
-  signatureType?: SignatureTypeV2;
+  signatureType?: SignatureType;
   funderAddress?: string;
   builderCode?: string;
+  relayerApiKey?: string;
+  relayerApiKeyAddress?: string;
 };
 
 export type HyperliquidExecutionEnvOptions = {
@@ -301,9 +297,11 @@ export type PolymarketExecutionEnv = {
   creds?: ApiKeyCreds;
   host: string;
   rpcUrl: string;
-  signatureType?: SignatureTypeV2;
+  signatureType?: SignatureType;
   funderAddress?: string;
   builderCode?: string;
+  relayerApiKey?: string;
+  relayerApiKeyAddress?: string;
 };
 
 export type RequiredPolymarketExecutionEnv = PolymarketExecutionEnv & {
@@ -325,6 +323,8 @@ export function readPolymarketExecutionEnv(
     POLYMARKET_SIGNATURE_TYPE: configuredStringSchema,
     POLYMARKET_FUNDER_ADDRESS: configuredStringSchema,
     POLYMARKET_BUILDER_CODE: configuredStringSchema,
+    POLYMARKET_RELAYER_API_KEY: configuredStringSchema,
+    POLYMARKET_RELAYER_API_KEY_ADDRESS: configuredStringSchema,
   }).transform((values) => {
     const privateKey = firstConfigured(options.privateKey, values.POLYMARKET_PRIVATE_KEY);
     const apiKey = firstConfigured(options.apiKey, values.POLYMARKET_CLOB_API_KEY);
@@ -334,13 +334,15 @@ export function readPolymarketExecutionEnv(
     return {
       privateKey: privateKey ? normalizePrivateKey(privateKey) : undefined,
       creds: apiKey && apiSecret && apiPassphrase
-        ? { key: apiKey, secret: apiSecret, passphrase: apiPassphrase }
+        ? { key: apiKey as ApiKeyCreds["key"], secret: apiSecret, passphrase: apiPassphrase }
         : undefined,
       host: firstConfigured(options.host, values.POLYMARKET_CLOB_HOST) ?? "https://clob.polymarket.com",
       rpcUrl: firstConfigured(options.rpcUrl, values.POLYMARKET_RPC_URL) ?? "https://polygon-rpc.com",
       signatureType: options.signatureType ?? parsePolymarketSignatureType(values.POLYMARKET_SIGNATURE_TYPE),
       funderAddress: firstConfigured(options.funderAddress, values.POLYMARKET_FUNDER_ADDRESS),
       builderCode: firstConfigured(options.builderCode, values.POLYMARKET_BUILDER_CODE),
+      relayerApiKey: firstConfigured(options.relayerApiKey, values.POLYMARKET_RELAYER_API_KEY),
+      relayerApiKeyAddress: firstConfigured(options.relayerApiKeyAddress, values.POLYMARKET_RELAYER_API_KEY_ADDRESS),
     };
   });
 
@@ -369,16 +371,11 @@ export function normalizePrivateKey(privateKey: string, variable = "POLYMARKET_P
   return parsed.data;
 }
 
-export function parsePolymarketSignatureType(value: string | undefined): SignatureTypeV2 | undefined {
+export function parsePolymarketSignatureType(value: string | undefined): SignatureType | undefined {
   if (value == null || value.trim() === "") return undefined;
   const parsed = Number(value);
-  if (
-    parsed === SignatureTypeV2.EOA ||
-    parsed === SignatureTypeV2.POLY_PROXY ||
-    parsed === SignatureTypeV2.POLY_GNOSIS_SAFE ||
-    parsed === SignatureTypeV2.POLY_1271
-  ) {
-    return parsed;
+  if (parsed === 0 || parsed === 1 || parsed === 2 || parsed === 3) {
+    return parsed as SignatureType;
   }
   throw new Error("POLYMARKET_SIGNATURE_TYPE must be 0, 1, 2, or 3.");
 }
