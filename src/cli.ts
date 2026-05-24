@@ -1,7 +1,5 @@
 import "dotenv/config";
 import { inspect } from "node:util";
-import { GrokXPostResolver } from "../packages/helpers/x-post-resolver.ts";
-import { selectNextTweetUrl } from "../packages/helpers/tweet-round-robin.ts";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
 import { CompositeMarketDataProvider } from "../packages/adapters/index.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
@@ -131,7 +129,6 @@ Useful examples:
   npm run cli -- settings:set --user local-user --size 50
   npm run cli -- state
   npm run cli -- run
-  npm run cli -- run --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
   npm run cli -- run --post "SOL looks underpriced into ETF approval."
   npm run cli -- run --post "Exa raised $250M" --audit
   npm run cli -- run-supervisor <runId>
@@ -327,17 +324,7 @@ async function mentionRequestFromArgs(args: ParsedArgs) {
 }
 
 async function mentionSourcePostFromArgs(args: ParsedArgs): Promise<SourcePost> {
-  if (nullableFlag(args, "tweet-url") || typeof args.flags.post === "string") {
-    return sourcePostFromFlags(args);
-  }
-
-  return sourcePostFromFlags({
-    ...args,
-    flags: {
-      ...args.flags,
-      "tweet-url": await selectNextTweetUrl(nullableFlag(args, "tweets-file") ?? undefined),
-    },
-  });
+  return sourcePostFromFlags(args);
 }
 
 function summarizeState(snapshot: CassieStoreSnapshot) {
@@ -438,11 +425,7 @@ function truncateTerminal(value: string, maxLength: number): string {
 async function sourcePostFromFlags(args: ParsedArgs): Promise<SourcePost> {
   const tweetUrl = nullableFlag(args, "tweet-url");
   if (tweetUrl) {
-    if (typeof args.flags.post === "string") {
-      throw new CliError("Use either --tweet-url or --post, not both.");
-    }
-
-    return new GrokXPostResolver(undefined, undefined, args.trace).resolve(tweetUrl);
+    throw new CliError("Tweet URL resolution is not supported. Pass tweet text with --post.");
   }
 
   return {
