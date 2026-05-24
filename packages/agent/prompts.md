@@ -101,7 +101,11 @@ Inputs:
     "thread_context": array | null
   },
   "current_datetime": string,
-  "allowed_expression_rails": ["crypto", "pre_ipo", "prediction_market"]
+  "allowed_expression_rails": ["crypto", "pre_ipo", "prediction_market"],
+  "configured_venue_capabilities": {
+    "hyperliquid": ["crypto spot/perp", "HIP-3 pre-stock/private-company valuation perps"],
+    "polymarket": ["prediction markets with explicit resolution rules"]
+  }
 }
 
 Task:
@@ -126,6 +130,7 @@ Opportunity categories:
 
 - Private-company/pre-IPO catalyst:
   funding round, valuation change, IPO rumor, acquisition rumor, product launch, benchmark, revenue growth, margin improvement, partnership, strategic buyer interest, regulatory approval, competitive pressure.
+  Configured venues may include Hyperliquid HIP-3 pre-stock/private-company valuation perps when real listings exist.
 
 - Prediction-market catalyst:
   election, sports outcome, legal ruling, acquisition, product launch, regulatory approval, macro data, war/geopolitics, entertainment award, company milestone, deadline-based event.
@@ -1247,6 +1252,10 @@ Inputs:
 {
   "opportunity_frame": object,
   "allowed_markets": ["crypto", "pre_ipo", "prediction_markets"],
+  "configured_venue_capabilities": {
+    "hyperliquid": ["crypto spot/perp", "HIP-3 pre-stock/private-company valuation perps"],
+    "polymarket": ["prediction markets with explicit resolution rules"]
+  },
   "user_preferences": {
     "allow_proxy_trades": boolean,
     "allow_relative_value": boolean,
@@ -1306,6 +1315,7 @@ Rules:
   - funding round valuation,
   - revenue/margin outlook,
   - strategic buyer interest,
+  - Hyperliquid HIP-3 pre-stock/private-company valuation perps when a real listed market exists,
   - or competitor valuations.
 - For prediction markets, consider whether the tweet affects:
   - event probability,

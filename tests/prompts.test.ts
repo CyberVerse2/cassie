@@ -146,6 +146,7 @@ describe("prompts", () => {
     expect(prompts.join("\n")).toContain("Generate candidateExpressions first");
     expect(prompts.join("\n")).toContain("Do not assume a real market exists");
     expect(prompts.join("\n")).toContain("Do not use no_trade when a non-no_trade candidateExpression still needs venue discovery");
+    expect(prompts.join("\n")).toContain("Hyperliquid HIP-3 pre-stock/private-company valuation perps");
     expect(polymarketDiscoveryQueryPrompt({
       thesis,
       tradeExpression,

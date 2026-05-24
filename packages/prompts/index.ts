@@ -39,7 +39,7 @@ Users tag you on arbitrary tweets. Analyze the tweet and determine whether there
 
 Allowed tradable markets:
 1. Crypto markets: crypto spot, perps, or derivatives available through configured crypto venues.
-2. Pre-IPO/private-company markets: private-company valuation markets, pre-IPO markets, or valuation perps available through configured venues.
+2. Pre-IPO/private-company markets: private-company valuation markets, pre-IPO markets, or valuation perps available through configured venues, including Hyperliquid HIP-3 pre-stock/private-company valuation perps when listed.
 3. Prediction markets: event markets with explicit resolution rules.
 
 Core behavior:
@@ -287,6 +287,10 @@ export function opportunityFramePromptSpec(input: {
       userCommand: input.userCommand,
       current_datetime: new Date().toISOString(),
       allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
+      configured_venue_capabilities: {
+        hyperliquid: ["crypto spot/perp", "HIP-3 pre-stock/private-company valuation perps"],
+        polymarket: ["prediction markets with explicit resolution rules"],
+      },
     },
     tools: {
       webSearch: {
@@ -337,6 +341,10 @@ export function singleStepTradeExpressionPromptSpec(input: {
       opportunityFrame: input.opportunityFrame ?? null,
       marketCandidates: input.marketCandidates ?? null,
       allowed_expression_rails: ["crypto", "pre_ipo", "prediction_market"],
+      configured_venue_capabilities: {
+        hyperliquid: ["crypto spot/perp", "HIP-3 pre-stock/private-company valuation perps"],
+        polymarket: ["prediction markets with explicit resolution rules"],
+      },
     },
     stage: `Tool name: generate_trade_expressions
 Prompt version: ${PROMPT_VERSION}

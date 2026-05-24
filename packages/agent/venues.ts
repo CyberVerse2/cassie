@@ -40,48 +40,64 @@ export async function searchVenues(input: {
 }): Promise<VenueMarketCandidate[]> {
   const searchIntent = buildVenueSearchIntent(input);
   const venues = searchIntent.venues;
-  const candidateBatches: VenueMarketCandidate[][] = [];
-  const failures: string[] = [];
-  let attemptedVenues = 0;
+  const tasks: Array<{ venue: "hyperliquid" | "polymarket"; run: () => Promise<VenueMarketCandidate[]> }> = [];
 
   if (venues.includes("hyperliquid") && shouldSearchDirectVenue(input.tradeExpression)) {
-    attemptedVenues += 1;
-    try {
-      candidateBatches.push(await input.marketData.findCandidates({
+    tasks.push({
+      venue: "hyperliquid",
+      run: () => input.marketData.findCandidates({
         thesis: searchIntent.thesis,
         tradeExpression: searchIntent.tradeExpression,
-      }));
-    } catch (error) {
-      failures.push(`hyperliquid: ${errorMessage(error)}`);
-    }
+      }),
+    });
   }
 
   if (venues.includes("polymarket")) {
-    attemptedVenues += 1;
-    try {
-      if (!input.polymarket) {
-        throw new Error("search_venues requires a configured Polymarket market finder dependency.");
-      }
-      candidateBatches.push(await findPolymarketMarkets({
-        polymarket: input.polymarket,
-        thesis: searchIntent.thesis,
-        tradeExpression: searchIntent.tradeExpression,
-        limit: searchIntent.limit,
-      }));
-    } catch (error) {
-      failures.push(`polymarket: ${errorMessage(error)}`);
-    }
+    tasks.push({
+      venue: "polymarket",
+      run: () => {
+        if (!input.polymarket) {
+          throw new Error("search_venues requires a configured Polymarket market finder dependency.");
+        }
+        return findPolymarketMarkets({
+          polymarket: input.polymarket,
+          thesis: searchIntent.thesis,
+          tradeExpression: searchIntent.tradeExpression,
+          limit: searchIntent.limit,
+        });
+      },
+    });
   }
 
-  if (attemptedVenues === 0) {
+  if (tasks.length === 0) {
     return [];
   }
 
-  if (failures.length > 0 && failures.length === attemptedVenues) {
+  const results = await Promise.all(tasks.map(async (task) => {
+    try {
+      return {
+        venue: task.venue,
+        candidates: await task.run(),
+        error: null,
+      };
+    } catch (error) {
+      return {
+        venue: task.venue,
+        candidates: [],
+        error: errorMessage(error),
+      };
+    }
+  }));
+
+  const failures = results
+    .filter((result) => result.error)
+    .map((result) => `${result.venue}: ${result.error}`);
+
+  if (failures.length > 0 && failures.length === tasks.length) {
     throw new Error(`Venue search failed across all requested venues: ${failures.join("; ")}`);
   }
 
-  return uniqueMarketCandidates(candidateBatches.flat());
+  return uniqueMarketCandidates(results.flatMap((result) => result.candidates));
 }
 
 function shouldSearchDirectVenue(tradeExpression: TradeExpressionPlan): boolean {

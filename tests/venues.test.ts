@@ -93,6 +93,54 @@ describe("venue search", () => {
     expect(candidates).toEqual([polymarketCandidate]);
   });
 
+  it("searches Hyperliquid and Polymarket concurrently when both are requested", async () => {
+    const calls: string[] = [];
+    let releaseHyperliquid!: () => void;
+    const hyperliquidGate = new Promise<void>((resolve) => {
+      releaseHyperliquid = resolve;
+    });
+
+    const candidates = await searchVenues({
+      marketData: {
+        async findCandidates() {
+          calls.push("hyperliquid:start");
+          await hyperliquidGate;
+          calls.push("hyperliquid:end");
+          return [];
+        },
+      },
+      polymarket: {
+        async findPolymarketMarkets() {
+          calls.push("polymarket:start");
+          releaseHyperliquid();
+          calls.push("polymarket:end");
+          return [polymarketCandidate];
+        },
+        async assessPolymarketMarket() {
+          throw new Error("not used");
+        },
+        async quotePolymarketMarket() {
+          throw new Error("not used");
+        },
+      },
+      thesis: {
+        claim: "Bittensor was named in an AI inference post.",
+        direction: "bullish",
+        mentionedAssets: ["Bittensor"],
+        topics: ["AI inference"],
+        timeHorizon: "event_based",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.7,
+      },
+      tradeExpression,
+      venues: ["hyperliquid", "polymarket"],
+    });
+
+    expect(candidates).toEqual([polymarketCandidate]);
+    expect(calls.slice(0, 2)).toEqual(["hyperliquid:start", "polymarket:start"]);
+  });
+
   it("still searches prediction venues when the direct asset is not tradable", async () => {
     let marketSearches = 0;
     let polymarketSearches = 0;
