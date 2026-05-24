@@ -6,11 +6,12 @@ import { config } from "../core/config.ts";
 import { SourcePostSchema, type SourcePost } from "../core/schemas/index.ts";
 import type { TraceRecorder } from "../core/trace.ts";
 import { configureAiSdkWarningLogging } from "../ai/helpers/index.ts";
+import { extractModelThinkingTrace } from "../ai/client.ts";
 
 configureAiSdkWarningLogging();
 
 export interface SourceResolver {
-  resolveSource(input: { url: string }): Promise<SourcePost>;
+  resolveSource(input: { url: string; onThinkingTrace?: (thinkingTrace: string | null) => void }): Promise<SourcePost>;
 }
 
 const GrokSourceResolutionSchema = z.object({
@@ -32,6 +33,7 @@ export type GrokSourceGenerationInput = {
   model: string;
   locator: XSourceLocator;
   prompt: string;
+  onThinkingTrace?: (thinkingTrace: string | null) => void;
 };
 
 export type GrokSourceGenerator = (input: GrokSourceGenerationInput) => Promise<GrokSourceResolution>;
@@ -51,7 +53,10 @@ export class GrokXSourceResolver implements SourceResolver {
     private readonly generate: GrokSourceGenerator = generateGrokSourceResolution,
   ) {}
 
-  async resolveSource(input: { url: string }): Promise<SourcePost> {
+  async resolveSource(input: {
+    url: string;
+    onThinkingTrace?: (thinkingTrace: string | null) => void;
+  }): Promise<SourcePost> {
     if (!this.apiKey) {
       throw new MissingConnectorConfigError("Grok X source resolver", "XAI_API_KEY");
     }
@@ -72,6 +77,7 @@ export class GrokXSourceResolver implements SourceResolver {
         model: this.model,
         locator,
         prompt,
+        onThinkingTrace: input.onThinkingTrace,
       });
       if (!resolution.found || !resolution.sourcePost) {
         throw new GrokXSourceResolutionError(
@@ -125,6 +131,7 @@ export async function generateGrokSourceResolution(
     maxRetries: config.structuredAi.maxRetries,
   });
 
+  input.onThinkingTrace?.(extractModelThinkingTrace(result));
   return result.output;
 }
 

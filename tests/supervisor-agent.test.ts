@@ -143,8 +143,12 @@ const tradeExpression: TradeExpressionPlan = {
 class FakeAi implements StructuredAiClient {
   readonly calls: string[] = [];
 
-  async generateObject<T>(input: { name: string }): Promise<T> {
+  async generateObject<T>(input: {
+    name: string;
+    onThinkingTrace?: (thinkingTrace: string | null) => void;
+  }): Promise<T> {
     this.calls.push(input.name);
+    input.onThinkingTrace?.(`Model reasoning summary for ${input.name}.`);
     const outputs: Record<string, unknown> = {
       cassie_opportunity_frame: opportunityFrame,
       cassie_trade_expressions: tradeExpression,
@@ -251,6 +255,7 @@ describe("AI SDK supervisor agent", () => {
         sourceResolver: {
           async resolveSource(input) {
             expect(input.url).toBe("https://x.com/example/status/2057246023974875269");
+            input.onThinkingTrace?.("Grok returned a source-resolution reasoning summary.");
             return resolvedSourcePost;
           },
         },
@@ -272,6 +277,10 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.find((step) => step.stepType === "opportunity")?.input).toMatchObject({
       sourcePost: resolvedSourcePost,
     });
+    expect(steps.find((step) => step.stepType === "intake")?.thinkingTrace)
+      .toBe("Grok returned a source-resolution reasoning summary.");
+    expect(steps.find((step) => step.stepType === "opportunity")?.thinkingTrace)
+      .toBe("Model reasoning summary for cassie_opportunity_frame.");
   });
 
   it("does not require account state before tools need risk evaluation", async () => {

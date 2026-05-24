@@ -7,6 +7,7 @@ import {
   type AccountStateProvider,
 } from "../adapters/hyperliquid/account-state.ts";
 import { config } from "../core/config.ts";
+import { withThinkingTraceCapture } from "../ai/client.ts";
 import {
   MarketCandidateSchema,
   MarketSelectionSchema,
@@ -84,8 +85,8 @@ export function createCassieSupervisorTools(input: {
             userCommand: input.run.userCommand,
             sourcePost: source,
           },
-          execute: () => frameOpportunity({
-            ai: importantAi,
+          execute: ({ setThinkingTrace }) => frameOpportunity({
+            ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
             sourcePost: source,
             userCommand: input.run.userCommand,
           }),
@@ -106,7 +107,10 @@ export function createCassieSupervisorTools(input: {
           runId: input.run.runId,
           stepType: "intake",
           stepInput: { url },
-          execute: () => input.deps.sourceResolver!.resolveSource({ url }),
+          execute: ({ setThinkingTrace }) => input.deps.sourceResolver!.resolveSource({
+            url,
+            onThinkingTrace: setThinkingTrace,
+          }),
         });
       }),
     }),
@@ -133,8 +137,8 @@ export function createCassieSupervisorTools(input: {
               opportunityFrame,
               marketCandidates,
             },
-            execute: () => generateTradeExpressions({
-              ai: importantAi,
+            execute: ({ setThinkingTrace }) => generateTradeExpressions({
+              ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
               sourcePost: input.run.sourcePost,
               userCommand: input.run.userCommand,
               opportunityFrame,
@@ -193,8 +197,8 @@ export function createCassieSupervisorTools(input: {
             promptVersion,
             model: importantModel,
             stepInput: { opportunityFrame, tradeExpression, candidate, side },
-            execute: () => assessExpressionFit({
-              ai: importantAi,
+            execute: ({ setThinkingTrace }) => assessExpressionFit({
+              ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
               polymarket: input.deps.polymarketMarketFinder,
               opportunityFrame,
               tradeExpression,
@@ -254,8 +258,8 @@ export function createCassieSupervisorTools(input: {
             promptVersion,
             model: cheapModel,
             stepInput: { tradeExpression, candidates, fitAssessments, quotes },
-            execute: () => selectMarket({
-              ai: cheapAi,
+            execute: ({ setThinkingTrace }) => selectMarket({
+              ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
               marketData: input.deps.marketData,
               thesis,
               tradeExpression,

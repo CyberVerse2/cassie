@@ -464,6 +464,7 @@ export const RunStepSchema = z.object({
   model: z.string().nullable(),
   promptName: z.string().nullable(),
   promptVersion: z.string().nullable(),
+  thinkingTrace: z.string().nullable().optional(),
   startedAt: z.string(),
   completedAt: z.string().nullable(),
 });

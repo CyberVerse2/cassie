@@ -98,6 +98,7 @@ export const runSteps = pgTable("run_steps", {
   model: text("model"),
   promptName: text("prompt_name"),
   promptVersion: text("prompt_version"),
+  thinkingTrace: text("thinking_trace"),
   startedAt: text("started_at").notNull(),
   completedAt: text("completed_at"),
 }, (table) => [
@@ -121,6 +122,7 @@ export const modelCallUsage = pgTable("model_call_usage", {
   totalTokens: integer("total_tokens"),
   estimatedCostUsd: real("estimated_cost_usd"),
   latencyMs: integer("latency_ms"),
+  thinkingTrace: text("thinking_trace"),
   status: text("status").$type<ModelCallUsageRecord["status"]>().notNull(),
   error: text("error"),
   createdAt: text("created_at").notNull(),

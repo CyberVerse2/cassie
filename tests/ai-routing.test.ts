@@ -4,6 +4,7 @@ import {
   IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS,
   CassieStructuredClient,
   MissingAiDependencyError,
+  extractModelThinkingTrace,
   providerOptionsForRoute,
   routeStructuredModel,
 } from "../packages/ai/client.ts";
@@ -29,9 +30,21 @@ describe("structured AI model routing", () => {
     expect(providerOptionsForRoute(routeStructuredModel({ name: "cassie_trade_expressions" }))).toEqual({
       openai: {
         reasoningEffort: "medium",
+        reasoningSummary: "auto",
       },
     });
     expect(providerOptionsForRoute(routeStructuredModel({ name: "cassie_market_selection" }))).toBeUndefined();
+  });
+
+  it("extracts only model-provided thinking trace text", () => {
+    expect(extractModelThinkingTrace({
+      reasoningText: "The model returned a reasoning summary.",
+      reasoning: [],
+    })).toBe("The model returned a reasoning summary.");
+    expect(extractModelThinkingTrace({
+      reasoning: [{ type: "reasoning", text: "A provider reasoning part." }],
+    })).toBe("A provider reasoning part.");
+    expect(extractModelThinkingTrace({ reasoning: [] })).toBeNull();
   });
 
   it("allows explicit tier overrides for structured calls", () => {

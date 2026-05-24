@@ -33,6 +33,7 @@ export interface ModelCallUsageRecord {
   totalTokens: number | null;
   estimatedCostUsd: number | null;
   latencyMs: number | null;
+  thinkingTrace?: string | null;
   status: "succeeded" | "failed";
   error: string | null;
   createdAt: string;
@@ -148,6 +149,7 @@ export class InMemoryCassieStore implements CassieStore {
     const step: RunStep = {
       ...input,
       stepId: randomUUID(),
+      thinkingTrace: input.thinkingTrace ?? null,
       startedAt: new Date().toISOString(),
       completedAt: input.completedAt ?? null,
     };
@@ -187,6 +189,7 @@ export class InMemoryCassieStore implements CassieStore {
     const record: ModelCallUsageRecord = {
       ...input,
       id: randomUUID(),
+      thinkingTrace: input.thinkingTrace ?? null,
       createdAt: new Date().toISOString(),
     };
     this.snapshot.modelCallUsage.push(record);

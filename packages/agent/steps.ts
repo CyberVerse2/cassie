@@ -2,6 +2,10 @@ import type { RunStepType } from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { formatErrorForLog } from "../core/helpers/index.ts";
 
+export type RunStepExecutionContext = {
+  setThinkingTrace: (thinkingTrace: string | null) => void;
+};
+
 export async function recordRunStep<T>(input: {
   store: CassieStore;
   runId: string;
@@ -9,9 +13,11 @@ export async function recordRunStep<T>(input: {
   promptName?: string | null;
   promptVersion?: string | null;
   model?: string | null;
+  thinkingTrace?: string | null;
   stepInput: unknown;
-  execute: () => Promise<T>;
+  execute: (context: RunStepExecutionContext) => Promise<T>;
 }): Promise<T> {
+  let thinkingTrace = input.thinkingTrace ?? null;
   const started = await input.store.addRunStep({
     runId: input.runId,
     stepType: input.stepType,
@@ -22,14 +28,20 @@ export async function recordRunStep<T>(input: {
     model: input.model ?? null,
     promptName: input.promptName ?? null,
     promptVersion: input.promptVersion ?? null,
+    thinkingTrace,
   });
 
   try {
-    const output = await input.execute();
+    const output = await input.execute({
+      setThinkingTrace: (value) => {
+        thinkingTrace = value;
+      },
+    });
     await input.store.updateRunStep({
       ...started,
       status: "succeeded",
       output,
+      thinkingTrace,
       completedAt: new Date().toISOString(),
     });
     return output;
@@ -38,6 +50,7 @@ export async function recordRunStep<T>(input: {
       ...started,
       status: "failed",
       error: formatErrorForLog(error),
+      thinkingTrace,
       completedAt: new Date().toISOString(),
     });
     throw error;

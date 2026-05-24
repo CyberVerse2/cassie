@@ -79,7 +79,9 @@ function formatRunStep(step: RunStep, theme: TerminalTheme): string[] {
   if (step.promptName) {
     lines.push(`|   |-- ${theme.label("prompt")} ${step.promptName}@${step.promptVersion ?? "unknown"}`);
   }
-  lines.push(...indentWrap({ text: `${theme.label("thinking")} ${visibleThinkingForStep(step)}`, indent: "|   |-- ", theme }));
+  if (step.thinkingTrace) {
+    lines.push(...indentWrap({ text: `${theme.label("thinking")} ${step.thinkingTrace}`, indent: "|   |-- ", theme }));
+  }
   const summary = summarizeStepOutput(step.output);
   if (summary) {
     lines.push(...indentWrap({ text: `${theme.label("output")} ${summary}`, indent: "|   |-- ", theme }));
@@ -105,31 +107,6 @@ function formatModelUsageTable(records: ModelCallUsageRecord[], theme: TerminalT
     ]),
     theme,
   }).map((line) => `|-- ${line}`);
-}
-
-function visibleThinkingForStep(step: RunStep): string {
-  switch (step.stepType) {
-    case "intake":
-      return "Persist the incoming mention as a durable control-plane run before doing agent work.";
-    case "opportunity":
-      return "Frame the raw verifiable signal into a market opportunity before expression generation.";
-    case "trade_expression":
-      return "Generate competing trade expressions from the framed opportunity.";
-    case "market_candidates":
-      return "Fetch real market candidates from configured venues.";
-    case "market_assessment":
-      return "Assess whether a prediction market directly expresses the thesis.";
-    case "market_quote":
-      return "Refresh prediction-market outcome pricing before selection or ticketing.";
-    case "market_selection":
-      return "Select the best real market expression without inventing instruments.";
-    case "risk":
-      return "Evaluate deterministic risk limits against settings and account state.";
-    case "ticket":
-      return "Create a ticket only after market selection and risk checks allow it.";
-    case "final":
-      return "Persist the user-facing final result and run status.";
-  }
 }
 
 function summarizeStepOutput(output: unknown): string | null {

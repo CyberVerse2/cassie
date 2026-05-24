@@ -70,6 +70,7 @@ export class DrizzleCassieStore implements CassieStore {
         ...row,
         input: row.input ?? null,
         output: row.output ?? null,
+        thinkingTrace: row.thinkingTrace ?? null,
       })),
       modelCallUsage: modelCallUsageRows.map((row) => ({
         ...row,
@@ -83,6 +84,7 @@ export class DrizzleCassieStore implements CassieStore {
         totalTokens: row.totalTokens ?? null,
         estimatedCostUsd: row.estimatedCostUsd ?? null,
         latencyMs: row.latencyMs ?? null,
+        thinkingTrace: row.thinkingTrace ?? null,
         error: row.error ?? null,
       })),
     };
@@ -166,6 +168,7 @@ export class DrizzleCassieStore implements CassieStore {
     const step: RunStep = {
       ...input,
       stepId: randomUUID(),
+      thinkingTrace: input.thinkingTrace ?? null,
       startedAt: new Date().toISOString(),
       completedAt: input.completedAt ?? null,
     };
@@ -185,6 +188,7 @@ export class DrizzleCassieStore implements CassieStore {
         model: step.model,
         promptName: step.promptName,
         promptVersion: step.promptVersion,
+        thinkingTrace: step.thinkingTrace ?? null,
         completedAt: step.completedAt,
       })
       .where(eq(runSteps.stepId, step.stepId));
@@ -202,6 +206,7 @@ export class DrizzleCassieStore implements CassieStore {
       ...row,
       input: row.input ?? null,
       output: row.output ?? null,
+      thinkingTrace: row.thinkingTrace ?? null,
     }));
   }
 
@@ -228,6 +233,7 @@ export class DrizzleCassieStore implements CassieStore {
     const record = {
       ...input,
       id: randomUUID(),
+      thinkingTrace: input.thinkingTrace ?? null,
       createdAt: new Date().toISOString(),
     };
     await this.db.insert(modelCallUsage).values(record);

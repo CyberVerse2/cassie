@@ -45,6 +45,7 @@ const snapshot: CassieStoreSnapshot = {
       model: "deepseek-v4-pro",
       promptName: "cassie_opportunity_frame",
       promptVersion: "2026-05-20",
+      thinkingTrace: "The model says this is the relevant opportunity summary.",
       startedAt: "2026-05-21T00:00:01.000Z",
       completedAt: "2026-05-21T00:00:02.000Z",
     },
@@ -81,7 +82,7 @@ describe("run timeline", () => {
     expect(timeline).toContain("[ok] run_1 ok");
     expect(timeline).toContain("|-- [ai] opportunity [ok] 1.0s");
     expect(timeline).toContain("|   |-- model deepseek-v4-pro");
-    expect(timeline).toContain("|   |-- thinking Frame the raw verifiable signal into a market opportunity");
+    expect(timeline).toContain("|   |-- thinking The model says this is the relevant opportunity summary.");
     expect(timeline).toContain("model");
     expect(timeline).toContain("deepseek-v4-pro");
     expect(timeline).toContain("|-- [tokens] total=150 input=100 output=50 reasoning=20 cache=0");

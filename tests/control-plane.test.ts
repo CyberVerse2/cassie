@@ -60,6 +60,7 @@ describe("control plane run persistence", () => {
       model: "deepseek-v4-pro",
       promptName: "cassie_opportunity_frame",
       promptVersion: "2026-05-20",
+      thinkingTrace: "The model returned a concise reasoning summary.",
     });
 
     await store.updateRunStep({
@@ -74,6 +75,7 @@ describe("control plane run persistence", () => {
     expect(state.runSteps).toHaveLength(1);
     expect(state.runSteps[0]?.stepType).toBe("opportunity");
     expect(state.runSteps[0]?.output).toEqual({ userIntent: "trade" });
+    expect(state.runSteps[0]?.thinkingTrace).toBe("The model returned a concise reasoning summary.");
   });
 
   it("mention intake creates a queued run without executing the supervisor synchronously", async () => {

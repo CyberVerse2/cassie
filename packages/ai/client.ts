@@ -32,6 +32,7 @@ export interface StructuredAiClient {
     prompt: string;
     name: string;
     tier?: ModelTier;
+    onThinkingTrace?: (thinkingTrace: string | null) => void;
   }): Promise<T>;
 }
 
@@ -90,9 +91,43 @@ export function providerOptionsForRoute(route: ModelRoute) {
     ? {
       openai: {
         reasoningEffort: IMPORTANT_OPENAI_REASONING_EFFORT,
+        reasoningSummary: "auto",
       },
     }
     : undefined;
+}
+
+export function extractModelThinkingTrace(result: {
+  reasoningText?: string;
+  reasoning?: unknown[];
+}): string | null {
+  if (typeof result.reasoningText === "string" && result.reasoningText.trim().length > 0) {
+    return result.reasoningText;
+  }
+
+  const reasoningText = (result.reasoning ?? [])
+    .map((part) => {
+      const record = part && typeof part === "object" ? part as Record<string, unknown> : {};
+      return typeof record.text === "string" ? record.text : "";
+    })
+    .join("")
+    .trim();
+  return reasoningText.length > 0 ? reasoningText : null;
+}
+
+export function withThinkingTraceCapture(
+  ai: StructuredAiClient,
+  onThinkingTrace: (thinkingTrace: string | null) => void,
+): StructuredAiClient {
+  return {
+    generateObject: (input) => ai.generateObject({
+      ...input,
+      onThinkingTrace: (thinkingTrace) => {
+        onThinkingTrace(thinkingTrace);
+        input.onThinkingTrace?.(thinkingTrace);
+      },
+    }),
+  };
 }
 
 export class CassieStructuredClient implements StructuredAiClient {
@@ -113,6 +148,7 @@ export class CassieStructuredClient implements StructuredAiClient {
     prompt: string;
     name: string;
     tier?: ModelTier;
+    onThinkingTrace?: (thinkingTrace: string | null) => void;
   }): Promise<T> {
     const route = routeStructuredModel({
       name: input.name,
@@ -170,6 +206,7 @@ export class CassieStructuredClient implements StructuredAiClient {
         output: result.output,
         usage: result.totalUsage,
       });
+      input.onThinkingTrace?.(extractModelThinkingTrace(result));
 
       return result.output;
     } catch (error) {

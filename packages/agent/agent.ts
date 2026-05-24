@@ -1,6 +1,11 @@
 import { ToolLoopAgent, type TelemetryIntegration } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
-import { CassieStructuredClient, type StructuredAiClient } from "../ai/client.ts";
+import {
+  CassieStructuredClient,
+  extractModelThinkingTrace,
+  providerOptionsForRoute,
+  type StructuredAiClient,
+} from "../ai/client.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
@@ -73,6 +78,11 @@ export async function runCassieSupervisorForRun(input: {
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
       model: openai.chat(config.ai.importantModel),
+      providerOptions: providerOptionsForRoute({
+        provider: "openai",
+        tier: "expensive",
+        model: config.ai.importantModel,
+      }),
       stopWhen: createCassieStopConditions(),
       tools,
       prepareStep: prepareCassieSupervisorStep,
@@ -93,6 +103,7 @@ export async function runCassieSupervisorForRun(input: {
           totalTokens: usage.totalTokens,
           estimatedCostUsd: null,
           latencyMs: null,
+          thinkingTrace: extractModelThinkingTrace(step),
           status: "succeeded",
           error: null,
         });
