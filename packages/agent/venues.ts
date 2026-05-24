@@ -38,6 +38,10 @@ export async function searchVenues(input: {
   venues?: Array<"hyperliquid" | "polymarket">;
   limit?: number;
 }): Promise<VenueMarketCandidate[]> {
+  if (!input.tradeExpression.directAssetTradable) {
+    return [];
+  }
+
   const searchIntent = buildVenueSearchIntent(input);
   const venues = searchIntent.venues;
   const candidateBatches: VenueMarketCandidate[][] = [];

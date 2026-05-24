@@ -167,6 +167,38 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("does not default unclear Hyperliquid thesis direction to long", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "BTC" }],
+          ctxs: [{ dayNtlVlm: "100000000", markPx: "76728" }],
+        },
+      },
+      books: {
+        BTC: {
+          levels: [
+            [{ px: "76727", sz: "1" }],
+            [{ px: "76729", sz: "1" }],
+          ],
+        },
+      },
+    });
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        ...thesis,
+        claim: "BTC may move, but direction is unclear.",
+        direction: "unclear",
+        mentionedAssets: ["BTC"],
+        topics: ["Bitcoin"],
+      },
+    });
+
+    expect(candidates).toEqual([]);
+    fetchMock.mockRestore();
+  });
+
   it("uses live Hyperliquid dex discovery for private-company signals", async () => {
     const fetchMock = hyperliquidInfoFetchMock({
       dexes: [null, { name: "vntl" }],
@@ -210,7 +242,28 @@ describe("market data connectors", () => {
         publicMarketReadThrough: "weak",
         candidates: [],
         rankedCandidates: [],
-        candidateExpressions: [],
+        candidateExpressions: [
+          {
+            expressionId: "spacex_preipo",
+            expressionRail: "pre_ipo",
+            expressionType: "directional",
+            abstractMarket: "SpaceX pre-stock perp",
+            intendedSide: "short",
+            primaryEntityOrEvent: "SpaceX",
+            relatedEntities: ["SpaceX"],
+            thesis: "Short SpaceX private-market valuation.",
+            whyThisExpressesTheOpportunity: "A SpaceX pre-stock perp directly tracks the private-company valuation thesis.",
+            directness: "direct",
+            whatMustBeTrue: ["SpaceX pre-stock market exists"],
+            searchTerms: ["SpaceX pre-stock perp"],
+            requiredMarketFeatures: ["tradable perp"],
+            requiredRuleOrContractFeatures: ["instrument tracks SpaceX valuation"],
+            keyRisks: ["basis risk"],
+            expectedTimeHorizon: "days",
+            priority: "high",
+            confidence: 0.5,
+          },
+        ],
         discardedExpressions: [],
         noTradeCase: null,
         decision: "route_to_market_router",
@@ -280,7 +333,28 @@ describe("market data connectors", () => {
         publicMarketReadThrough: "weak",
         candidates: [],
         rankedCandidates: [],
-        candidateExpressions: [],
+        candidateExpressions: [
+          {
+            expressionId: "anthropic_preipo",
+            expressionRail: "pre_ipo",
+            expressionType: "directional",
+            abstractMarket: "Anthropic pre-stock perp",
+            intendedSide: "short",
+            primaryEntityOrEvent: "Anthropic",
+            relatedEntities: ["Anthropic"],
+            thesis: "Short Anthropic private-market valuation.",
+            whyThisExpressesTheOpportunity: "An Anthropic pre-stock perp directly tracks the private-company valuation thesis.",
+            directness: "direct",
+            whatMustBeTrue: ["Anthropic pre-stock market exists"],
+            searchTerms: ["Anthropic pre-stock perp"],
+            requiredMarketFeatures: ["tradable perp"],
+            requiredRuleOrContractFeatures: ["instrument tracks Anthropic valuation"],
+            keyRisks: ["basis risk"],
+            expectedTimeHorizon: "days",
+            priority: "high",
+            confidence: 0.5,
+          },
+        ],
         discardedExpressions: [],
         noTradeCase: null,
         decision: "needs_market_check",

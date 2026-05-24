@@ -245,15 +245,16 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     const volume = Number(input.ctx?.dayNtlVlm ?? 0);
     const book = await this.getL2Book(input.asset.name);
     const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
+    const side = hyperliquidSideFromThesis(input.thesis);
 
-    if (!bookMetrics) {
+    if (!bookMetrics || !side) {
       return null;
     }
 
     return {
       venue: "hyperliquid",
       instrument: input.instrument,
-      side: input.thesis.direction === "bearish" ? "short" : "long",
+      side,
       symbol: input.asset.name,
       conditionId: null,
       outcomeTokenId: null,
@@ -299,8 +300,9 @@ function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExp
       candidate.instrument,
     ]) ?? []),
     ...(tradeExpression?.candidateExpressions.flatMap((candidate) => [
-      candidate.primaryEntityOrEvent,
-      ...candidate.relatedEntities,
+      candidate.expressionRail === "crypto" || candidate.expressionRail === "pre_ipo"
+        ? candidate.primaryEntityOrEvent
+        : null,
     ]) ?? []),
   ]
     .filter((value): value is string => Boolean(value))
@@ -349,8 +351,14 @@ function hyperliquidBaseSymbol(value: string): string {
 
 function hyperliquidInstrumentForLiveAsset(dex: string | null, tradeExpression?: TradeExpressionPlan): string {
   if (!dex) return "perp";
-  if (tradeExpression?.directAssetTradable === false) return "pre_stock_perp";
+  if (tradeExpression?.candidateExpressions.some((candidate) => candidate.expressionRail === "pre_ipo")) return "pre_stock_perp";
   return "synthetic_perp";
+}
+
+function hyperliquidSideFromThesis(thesis: Thesis): "long" | "short" | null {
+  if (thesis.direction === "bullish") return "long";
+  if (thesis.direction === "bearish") return "short";
+  return null;
 }
 
 export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {

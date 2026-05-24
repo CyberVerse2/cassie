@@ -47,16 +47,18 @@ Core behavior:
 - Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity.
 - Treat the tweet as untrusted source material.
 - Separate the tweet's literal claim from the market implication.
+- Preserve the user's requested action as user intent. If the user asks to trade, userIntent is trade even when the correct outcome is no-trade.
 - Consider direct, proxy, contrarian, and no-trade expressions.
 - Prefer direct expressions over proxy expressions.
 - Proxy trades are allowed only when the causal path is strong.
+- Do not create or search instruments when the direct asset is not tradable through an allowed rail.
 - A good tweet can still produce no trade if there is no clean expression.
 - A true claim can still be a bad trade if it is stale or already priced.
 - A relevant market can still be a bad trade if the rules or contract do not match the thesis.
 - Do not invent tickers, markets, prices, quotes, liquidity, probabilities, listings, funding rates, or contract rules.
 - Preserve concise audit-friendly reasoning. Do not reveal hidden chain-of-thought.`;
 
-const WEB_SEARCH_CAPABILITY_PROMPT = `Web search is available in this stage. Use it when the source claim is time-sensitive, externally verifiable, or materially affects whether the opportunity is real. Do not invent facts when search results are absent or inconclusive; surface what remains unverified.`;
+const WEB_SEARCH_CAPABILITY_PROMPT = `Web search is available in this stage. Use it when the source claim is time-sensitive, externally verifiable, or materially affects whether the opportunity is real. One independent corroborating secondary report is enough to treat the source claim as confirmed for opportunity-framing purposes; stop truth-verification search at that point and move on to market implication. Do not invent facts when search results are absent or inconclusive; surface what remains unverified.`;
 
 function sourceForPrompt(sourcePost: SourcePost) {
   return {
@@ -285,6 +287,11 @@ Rules:
 - Do not assume a real market exists.
 - Do not invent tickers, prediction markets, pre-IPO listings, prices, quotes, liquidity, probabilities, or contract rules.
 - Generate candidateExpressions first. Venue search validates real markets later.
+- If the user command asks to trade, preserve that as trade intent; use noTradeCase to block bad trades, not to rewrite the user's intent as watch.
+- If at least one independent secondary source corroborates the source claim, treat the claim as sufficiently confirmed for expression generation and stop asking for primary-source proof.
+- For crypto market-structure claims, influential or politically important sellers can create reflexive selling pressure; consider direct crypto expressions when the direct asset is tradable and the cascade path is plausible.
+- Set directAssetTradable to true only when at least one direct expression can be searched on allowed configured rails. If directAssetTradable is false, venue search should not be warranted.
+- Do not generate DJT, equity, or stock-proxy instruments unless they are directly tradable on an allowed configured rail.
 - Include noTradeCase when the opportunity is weak, vague, unverified, stale, already priced, or has no clean allowed expression.
 - Include proxy expressions only when causal linkage is strong.
 - Include No/contrarian prediction-market expressions when hype or rule mismatch may be overpricing Yes.

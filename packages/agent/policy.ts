@@ -52,13 +52,13 @@ export function selectActiveTools(
   if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
     return marketSelection.selectedMarket && !marketSelection.noTradeReason
       ? ["rank_expressions", "risk_check"]
-      : ["search_venues", "rank_expressions", "finalize_run"];
+      : ["finalize_run"];
   }
 
   const marketCandidates = latestToolOutput(steps, "search_venues");
   if (marketCandidates) {
     if (!Array.isArray(marketCandidates) || marketCandidates.length === 0) {
-      return ["generate_trade_expressions", "search_venues", "finalize_run"];
+      return ["finalize_run"];
     }
 
     const fitAssessment = objectRecord(latestToolOutput(steps, "assess_expression_fit"));
