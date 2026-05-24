@@ -150,7 +150,23 @@ describe("supervisor step policy", () => {
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
     expect(prepared.activeTools).toEqual(["resolve_source", "frame_opportunity"]);
-    expect(prepared.toolChoice).toBe("auto");
+    expect(prepared.toolChoice).toBe("required");
+  });
+
+  it("requires tool calls while staged work remains active", () => {
+    const prepared = prepareCassieSupervisorStep({
+      steps: [
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", { decision: "needs_market_check" }),
+      ],
+      messages: [],
+    } as never) as { activeTools: string[]; toolChoice: unknown };
+
+    expect(prepared.activeTools).toEqual([
+      "generate_trade_expressions",
+      "search_venues",
+    ]);
+    expect(prepared.toolChoice).toBe("required");
   });
 
   it("keeps trade-expression substance when compressing tool messages before finalization", () => {
