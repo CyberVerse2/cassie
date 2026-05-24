@@ -244,4 +244,85 @@ describe("prompts", () => {
       schema: spec.outputSchema,
     });
   });
+
+  it("uses a slim rank-focused trade-expression payload for market selection", () => {
+    const verboseTradeExpression: TradeExpressionPlan = {
+      ...tradeExpression,
+      candidates: [{
+        instrument: "BTC perp",
+        venue: "hyperliquid",
+        symbol: "BTC",
+        instrumentType: "perp",
+        venueQuery: "BTC perp",
+        expression: "short",
+        thesis: "Verbose candidate text that should not be duplicated in ranking input.",
+        venueChecks: ["Check BTC perp"],
+        currentMarketPriceOrOdds: null,
+        fairValueOrExpectedValue: null,
+        causalDirectness: 0.5,
+        liquidity: 0.9,
+        surprise: 0.4,
+        timing: 0.6,
+        crowdingRisk: 0.4,
+        downsideAsymmetry: 0.4,
+        evidenceQuality: 0.6,
+        expectedEdge: 0.2,
+        tradableNow: true,
+        rejectionReason: null,
+        invalidation: [],
+        evidenceNeeded: [],
+      }],
+      rankedCandidates: [{
+        rank: 1,
+        candidateId: "abstract_btc_short",
+        venue: "hyperliquid",
+        symbol: "BTC",
+        side: "short",
+        expressionConfidence: 0.5,
+        thesisFit: 0.5,
+        causalDirectness: 0.5,
+        liquidity: 0.9,
+        venueConfirmation: 0.5,
+        priceOrOddsConfidence: 0.2,
+        timingFit: 0.5,
+        expectedEdge: 0.2,
+        tradableNow: true,
+        reason: "Abstract rank that should not be mistaken for final market selection.",
+        invalidation: [],
+      }],
+      candidateExpressions: [{
+        expressionId: "btc_short",
+        expressionRail: "crypto",
+        expressionType: "directional",
+        abstractMarket: "BTC price",
+        intendedSide: "short",
+        primaryEntityOrEvent: "Bitcoin",
+        relatedEntities: ["Strategy"],
+        thesis: "BTC short if the market reads through Strategy sale pressure.",
+        whyThisExpressesTheOpportunity: "It expresses the BTC price read-through.",
+        directness: "strong_proxy",
+        whatMustBeTrue: ["Market reacts to Strategy sale pressure"],
+        searchTerms: ["BTC perp"],
+        requiredMarketFeatures: ["Liquid BTC perp"],
+        requiredRuleOrContractFeatures: [],
+        keyRisks: ["Weak proxy"],
+        expectedTimeHorizon: "hours",
+        priority: "medium",
+        confidence: 0.54,
+      }],
+    };
+    const prompt = marketSelectionPrompt({
+      thesis,
+      tradeExpression: verboseTradeExpression,
+      candidates: [marketCandidate],
+      fitAssessments: [],
+      quotes: [marketCandidate],
+    });
+
+    expect(prompt).not.toContain("\"rankedCandidates\"");
+    expect(prompt).not.toContain("Verbose candidate text that should not be duplicated in ranking input.");
+    expect(prompt).not.toContain("Abstract rank that should not be mistaken for final market selection.");
+    expect(prompt).toContain("\"abstractExpressions\"");
+    expect(prompt).toContain("\"expressionId\": \"btc_short\"");
+  });
 });

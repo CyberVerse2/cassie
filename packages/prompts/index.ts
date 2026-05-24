@@ -155,7 +155,7 @@ export function marketSelectionPromptSpec(input: {
     name: "cassie_market_selection",
     tier: "cheap",
     outputSchema: MarketSelectionSchema,
-    payload: input,
+    payload: marketSelectionPayload(input),
     stage: `Tool name: rank_expressions
 Prompt version: ${PROMPT_VERSION}
 
@@ -172,6 +172,65 @@ Rules:
 - Use selectedMarket only for a real validated candidate.
 - Never execute orders.`,
   });
+}
+
+function marketSelectionPayload(input: {
+  thesis: Thesis;
+  candidates: unknown[];
+  tradeExpression?: unknown;
+  fitAssessments?: unknown[];
+  quotes?: unknown[];
+  xSentiment?: unknown;
+}) {
+  return {
+    thesis: input.thesis,
+    tradeExpression: rankFocusedTradeExpression(input.tradeExpression),
+    candidates: input.candidates,
+    fitAssessments: input.fitAssessments ?? [],
+    quotes: input.quotes ?? [],
+    xSentiment: input.xSentiment ?? null,
+  };
+}
+
+function rankFocusedTradeExpression(value: unknown) {
+  const tradeExpression = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Partial<TradeExpressionPlan>
+    : null;
+  if (!tradeExpression) return value ?? null;
+
+  return {
+    signal: tradeExpression.signal,
+    coreInterpretation: tradeExpression.coreInterpretation,
+    directAsset: tradeExpression.directAsset,
+    directAssetTradable: tradeExpression.directAssetTradable,
+    evidenceConfidence: tradeExpression.evidenceConfidence,
+    marketDiscoveryConfidence: tradeExpression.marketDiscoveryConfidence,
+    tradeExpressionConfidence: tradeExpression.tradeExpressionConfidence,
+    highestPurityExpression: tradeExpression.highestPurityExpression,
+    publicMarketReadThrough: tradeExpression.publicMarketReadThrough,
+    decision: tradeExpression.decision,
+    reason: tradeExpression.reason,
+    insufficiency: tradeExpression.insufficiency,
+    marketRouterInstructions: tradeExpression.marketRouterInstructions,
+    abstractExpressions: (tradeExpression.candidateExpressions ?? []).map((candidate) => ({
+      expressionId: candidate.expressionId,
+      expressionRail: candidate.expressionRail,
+      expressionType: candidate.expressionType,
+      intendedSide: candidate.intendedSide,
+      abstractMarket: candidate.abstractMarket,
+      primaryEntityOrEvent: candidate.primaryEntityOrEvent,
+      relatedEntities: candidate.relatedEntities,
+      thesis: candidate.thesis,
+      whyThisExpressesTheOpportunity: candidate.whyThisExpressesTheOpportunity,
+      directness: candidate.directness,
+      priority: candidate.priority,
+      confidence: candidate.confidence,
+      requiredMarketFeatures: candidate.requiredMarketFeatures,
+      requiredRuleOrContractFeatures: candidate.requiredRuleOrContractFeatures,
+      keyRisks: candidate.keyRisks,
+    })),
+    noTradeCase: tradeExpression.noTradeCase,
+  };
 }
 
 export function polymarketDiscoveryQueryPrompt(input: {

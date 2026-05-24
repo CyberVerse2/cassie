@@ -194,9 +194,10 @@ export function createCassieSupervisorTools(input: {
           runId: input.run.runId,
           candidate,
         });
+        const candidateSide = predictionMarketSideForCandidate(persistedCandidate, side);
         return runStepOnce(
           "market_assessment",
-          { opportunityFrame, tradeExpression, candidate: persistedCandidate, side },
+          { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
           async () => {
           return recordRunStep({
             store: input.store,
@@ -205,14 +206,14 @@ export function createCassieSupervisorTools(input: {
             promptName: "cassie_expression_fit",
             promptVersion,
             model: importantModel,
-            stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, side },
+            stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
             execute: ({ setThinkingTrace }) => assessExpressionFit({
               ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
               polymarket: input.deps.polymarketMarketFinder,
               opportunityFrame,
               tradeExpression,
               candidate: persistedCandidate,
-              side,
+              side: candidateSide,
             }),
           });
         },
@@ -237,9 +238,10 @@ export function createCassieSupervisorTools(input: {
           runId: input.run.runId,
           fitAssessment,
         });
+        const candidateSide = predictionMarketSideForCandidate(persistedCandidate, side);
         return runStepOnce(
           "market_quote",
-          { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, side },
+          { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, ...(candidateSide ? { side: candidateSide } : {}) },
           async () => {
           if (persistedFitAssessment.fitStatus !== "validated") {
             throw new Error("quote_expression requires a validated fit assessment.");
@@ -248,11 +250,11 @@ export function createCassieSupervisorTools(input: {
             store: input.store,
             runId: input.run.runId,
             stepType: "market_quote",
-            stepInput: { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, side },
+            stepInput: { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, ...(candidateSide ? { side: candidateSide } : {}) },
             execute: () => quoteExpression({
               polymarket: input.deps.polymarketMarketFinder,
               candidate: persistedCandidate,
-              side,
+              side: candidateSide,
             }),
           });
         },
@@ -561,4 +563,8 @@ function marketCandidateLookupKey(candidate: MarketCandidate): string {
     candidate.symbol,
     candidate.side,
   ].join("|");
+}
+
+function predictionMarketSideForCandidate(candidate: MarketCandidate, side?: "yes" | "no") {
+  return candidate.venue === "polymarket" ? side : undefined;
 }

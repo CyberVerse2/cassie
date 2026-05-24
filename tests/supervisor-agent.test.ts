@@ -731,6 +731,7 @@ describe("AI SDK supervisor agent", () => {
       opportunityFrame,
       tradeExpression,
       candidate: rewrittenCandidate,
+      side: "no",
     })).resolves.toMatchObject({
       fitStatus: "validated",
       semanticFitSummary: expect.stringContaining("direct exposure"),
@@ -740,6 +741,7 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.find((step) => step.stepType === "market_assessment")?.input).toMatchObject({
       candidate: marketSelection.selectedMarket,
     });
+    expect(steps.find((step) => step.stepType === "market_assessment")?.input).not.toHaveProperty("side");
   });
 
   it("hydrates ranking inputs from persisted venue search and quote outputs", async () => {
