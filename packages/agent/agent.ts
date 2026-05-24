@@ -77,7 +77,7 @@ export async function runCassieSupervisorForRun(input: {
     });
     const agent = new ToolLoopAgent({
       id: "cassie-supervisor",
-      model: openai.chat(config.ai.importantModel),
+      model: openai(config.ai.importantModel),
       providerOptions: providerOptionsForRoute({
         provider: "openai",
         tier: "expensive",

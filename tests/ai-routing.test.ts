@@ -71,21 +71,25 @@ describe("structured AI model routing", () => {
     })).toBeUndefined();
   });
 
-  it("uses the OpenAI Responses API when built-in tools are enabled", () => {
+  it("uses the OpenAI Responses API for every OpenAI structured call", () => {
     const openai = Object.assign(
       vi.fn((model: string) => ({ kind: "responses", model })),
       { chat: vi.fn((model: string) => ({ kind: "chat", model })) },
     );
     const route = routeStructuredModel({ name: "cassie_opportunity_frame" });
 
-    expect(openAiModelForStructuredCall({ route, openai, hasOpenAiBuiltInTools: true })).toEqual({
+    expect(openAiModelForStructuredCall({ route, openai })).toEqual({
       kind: "responses",
       model: "gpt-5.4-mini",
     });
-    expect(openAiModelForStructuredCall({ route, openai, hasOpenAiBuiltInTools: false })).toEqual({
-      kind: "chat",
+    expect(openAiModelForStructuredCall({
+      route: routeStructuredModel({ name: "cassie_trade_expressions" }),
+      openai,
+    })).toEqual({
+      kind: "responses",
       model: "gpt-5.4-mini",
     });
+    expect(openai.chat).not.toHaveBeenCalled();
   });
 
   it("allows explicit tier overrides for structured calls", () => {

@@ -132,7 +132,6 @@ export function withThinkingTraceCapture(
 
 type OpenAiProviderForStructuredCall = {
   (model: string): unknown;
-  chat: (model: string) => unknown;
   tools: {
     webSearch: (input: {
       externalWebAccess: true;
@@ -160,12 +159,9 @@ export function structuredToolsForCall(input: {
 
 export function openAiModelForStructuredCall(input: {
   route: ModelRoute;
-  openai: Pick<OpenAiProviderForStructuredCall, "chat"> & ((model: string) => unknown);
-  hasOpenAiBuiltInTools: boolean;
+  openai: (model: string) => unknown;
 }): unknown {
-  return input.hasOpenAiBuiltInTools
-    ? input.openai(input.route.model)
-    : input.openai.chat(input.route.model);
+  return input.openai(input.route.model);
 }
 
 export class CassieStructuredClient implements StructuredAiClient {
@@ -238,7 +234,6 @@ export class CassieStructuredClient implements StructuredAiClient {
           ? openAiModelForStructuredCall({
             route,
             openai,
-            hasOpenAiBuiltInTools: Boolean(tools),
           }) as never
           : deepseek.chat(route.model),
         output: Output.object({
