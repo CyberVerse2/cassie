@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "../packages/app/product.ts";
-import { renderDashboard } from "./dashboard.ts";
+import { renderDashboard, renderDashboardScript } from "./dashboard.ts";
 import { assertRuntimeConfig } from "./config.ts";
 import {
   MemoryRateLimiter,
@@ -58,7 +58,38 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   if (request.method === "GET" && url.pathname === "/dashboard") {
     const state = await product.state();
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-    response.end(renderDashboard(state));
+    response.end(renderDashboard(state, {
+      query: url.searchParams.get("q"),
+      status: url.searchParams.get("status"),
+      model: url.searchParams.get("model"),
+      selectedRunId: url.searchParams.get("run"),
+      refreshSeconds: numberFromQuery(url.searchParams.get("refresh")),
+    }));
+    return;
+  }
+
+  if (request.method === "GET" && url.pathname === "/dashboard.js") {
+    response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+    response.end(renderDashboardScript());
+    return;
+  }
+
+  const runJsonMatch = url.pathname.match(/^\/dashboard\/runs\/([^/]+)\.json$/);
+  if (request.method === "GET" && runJsonMatch) {
+    const state = await product.state();
+    const runId = decodeURIComponent(runJsonMatch[1] as string);
+    const run = state.controlRuns.find((candidate) => candidate.runId === runId);
+    if (!run) {
+      sendJson(response, 404, { error: "Run not found" });
+      return;
+    }
+    sendJson(response, 200, {
+      run,
+      steps: state.runSteps.filter((step) => step.runId === runId),
+      modelCallUsage: state.modelCallUsage.filter((record) => record.controlRunId === runId),
+      tickets: state.tradeTickets.filter((ticket) => ticket.runId === runId),
+      auditEvents: state.auditEvents.filter((event) => event.entityId === runId),
+    });
     return;
   }
 
@@ -116,6 +147,12 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   sendJson(response, 404, { error: "Not found" });
+}
+
+function numberFromQuery(value: string | null): number | null {
+  if (!value) return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 async function readJson(request: IncomingMessage): Promise<unknown> {

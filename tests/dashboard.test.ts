@@ -167,11 +167,86 @@ describe("dashboard", () => {
       ],
     });
 
-    expect(html).toContain("Thinking Traces");
+    expect(html).toContain("Reasoning Summaries");
     expect(html).toContain('class="thinking-trace"');
     expect(html).toContain("market_selection");
     expect(html).toContain("The model selected the SOL ETF market");
     expect(html).toContain("supervisor_step");
     expect(html).toContain("The supervisor decided to create an approval ticket");
+  });
+
+  it("renders control-room filters, triage, spend analytics, waterfall, and actions", () => {
+    const state: CassieStoreSnapshot = {
+      ...snapshot,
+      controlRuns: [
+        ...snapshot.controlRuns,
+        {
+          ...snapshot.controlRuns[0]!,
+          runId: "run_failed",
+          status: "failed",
+          error: "StructuredAiCallError: schema mismatch for candidates.venue",
+          createdAt: "2026-05-23T11:00:00.000Z",
+          updatedAt: "2026-05-23T11:03:00.000Z",
+        },
+      ],
+      runSteps: [
+        ...snapshot.runSteps,
+        {
+          ...snapshot.runSteps[0]!,
+          stepId: "step_failed",
+          runId: "run_failed",
+          stepType: "trade_expression",
+          status: "failed",
+          error: "StructuredAiCallError: schema mismatch for candidates.venue",
+          model: "gpt-5.4-mini",
+          promptName: "cassie_trade_expressions",
+          startedAt: "2026-05-23T11:01:00.000Z",
+          completedAt: "2026-05-23T11:02:00.000Z",
+        },
+      ],
+      modelCallUsage: [
+        ...snapshot.modelCallUsage,
+        {
+          ...snapshot.modelCallUsage[0]!,
+          id: "usage_failed",
+          controlRunId: "run_failed",
+          runStepId: "step_failed",
+          purpose: "trade_expression",
+          provider: "openai",
+          model: "gpt-5.4-mini",
+          promptName: "cassie_trade_expressions",
+          inputTokens: 900,
+          outputTokens: 100,
+          reasoningTokens: 40,
+          cachedTokens: 20,
+          totalTokens: 1_040,
+          status: "failed",
+          error: "StructuredAiCallError: schema mismatch for candidates.venue",
+          createdAt: "2026-05-23T11:02:00.000Z",
+        },
+      ],
+    };
+
+    const html = renderDashboard(state, {
+      query: "schema",
+      status: "failed",
+      selectedRunId: "run_failed",
+      refreshSeconds: 10,
+    });
+
+    expect(html).toContain("Attention Needed");
+    expect(html).toContain("Run Search");
+    expect(html).toContain('value="schema"');
+    expect(html).toContain("Failure Triage");
+    expect(html).toContain("StructuredAiCallError");
+    expect(html).toContain("Spend by Model");
+    expect(html).toContain("Spend by Prompt");
+    expect(html).toContain("Run Waterfall");
+    expect(html).toContain("Reasoning Summaries");
+    expect(html).toContain('data-copy-value="run_failed"');
+    expect(html).toContain("/dashboard/runs/run_failed.json");
+    expect(html).toContain('http-equiv="refresh" content="10"');
+    expect(html).toContain('data-run-status="failed"');
+    expect(html).not.toContain('data-run-row="run_1"');
   });
 });
