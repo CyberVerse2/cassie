@@ -1,104 +1,294 @@
 {
   "tweets": [
     {
-      "url": "https://x.com/maxrumpf/status/2057171304978293039?s=20",
-      "current": false
+      "url": "https://x.com/maxrumpf/status/2057171304978293039",
+      "current": false,
+      "authorName": "Max Rumpf",
+      "handle": "@maxrumpf",
+      "avatarUrl": "https://unavatar.io/x/maxrumpf",
+      "date": "May 20, 2026",
+      "text": "turbopuffer x SID\n\nAn easy way to tell a good from a great AI researcher: how much do they think about infrastructure.\n\nInfra extends beyond what’s running on the GPUs: Slow environments will bottleneck your training steps. More parallel and powerful models make this problem… https://t.co/ishJ6s1D16 pic.twitter.com/iRUvoIZV7J",
+      "cassiePrompt": "trade this",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HIyJk02bsAANsoQ.jpg",
+        "https://pbs.twimg.com/media/HIyJ2ozagAA1uAU.jpg",
+        "https://pbs.twimg.com/media/HIyJ6E1a8AE6VVv.png",
+        "https://pbs.twimg.com/media/HIyKCQUbEAA6Ms2.png"
+      ]
     },
     {
-      "url": "https://x.com/bridgemindai/status/2057096555924947392?s=20",
-      "current": false
+      "url": "https://x.com/bridgemindai/status/2057096555924947392",
+      "current": false,
+      "authorName": "BridgeMind",
+      "handle": "@bridgemindai",
+      "avatarUrl": "https://unavatar.io/x/bridgemindai",
+      "date": "May 20, 2026",
+      "text": "New CursorBench results just dropped. \n\nTwo big takeaways.\n\nComposer 2.5 is way better than most people think. \n\n63.2% score at $0.55 per task. \n\nNearly matching Opus 4.7 Max and GPT 5.5 Extra High at 20x less cost. \n\nThis is insane value.\n\nGemini 3.5 Flash is #10 at 49.8%.… pic.twitter.com/bFB7ugL6vQ",
+      "cassiePrompt": "get me in",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HIxGTqQWsAArZI4.jpg"
+      ]
     },
     {
-      "url": "https://x.com/MTSlive/status/2057575001499599007?s=20",
-      "current": false
+      "url": "https://x.com/MTSlive/status/2057575001499599007",
+      "current": false,
+      "authorName": "MTS",
+      "handle": "@MTSlive",
+      "avatarUrl": "https://unavatar.io/x/MTSlive",
+      "date": "May 21, 2026",
+      "text": "Grok 4.3 stands out for being the most intelligent model in its price range https://t.co/AzCI46ITFV pic.twitter.com/jLCOGKXw94",
+      "cassiePrompt": "critic this",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HI35jzbbIAAMt_n.jpg"
+      ]
     },
     {
-      "url": "https://x.com/0xJeff/status/2057426384969236808?s=20",
-      "current": false
+      "url": "https://x.com/0xJeff/status/2057426384969236808",
+      "current": false,
+      "authorName": "0xJeff",
+      "handle": "@0xJeff",
+      "avatarUrl": "https://unavatar.io/x/0xJeff",
+      "date": "May 21, 2026",
+      "text": "The inference cycle is here\n\n> Token demand is going parabolic\n> 2x increase in token consumption every single quarter\n> Web2 inference players have more than doubled their rev in 3-6 months\n> Web3 players are carving out their moats on privacy, uncensored AI, and cutthroat… https://t.co/opVyiSx7zh pic.twitter.com/UHRirAZvTO",
+      "cassiePrompt": "analyze this",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HIawAZdaoAAO_L5.jpg",
+        "https://pbs.twimg.com/media/HI1yPMAbQAAp9LQ.png"
+      ]
     },
     {
-      "url": "https://x.com/SolanaFloor/status/2057633399712735240?s=20",
-      "current": false
+      "url": "https://x.com/SolanaFloor/status/2057633399712735240",
+      "current": false,
+      "authorName": "SolanaFloor",
+      "handle": "@SolanaFloor",
+      "avatarUrl": "https://unavatar.io/x/SolanaFloor",
+      "date": "May 22, 2026",
+      "text": "📊REPORT: In April 2026, @Solana-based DePIN projects generated $2.9M in revenue.\n\nProjects include:\nHelium, @rendernetwork, Hivemapper, UpRock, NATIX Network, Xnet Mobile, and GEODNET. pic.twitter.com/8OP1E441Qb",
+      "cassiePrompt": "quote both",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HI4uqpbasAA4Bl-.jpg"
+      ]
     },
     {
-      "url": "https://x.com/tokenterminal/status/2057569804265857269?s=20",
-      "current": false
+      "url": "https://x.com/tokenterminal/status/2057569804265857269",
+      "current": false,
+      "authorName": "Token Terminal 📊",
+      "handle": "@tokenterminal",
+      "avatarUrl": "https://unavatar.io/x/tokenterminal",
+      "date": "May 21, 2026",
+      "text": "Ethereum is losing the race among L1s. pic.twitter.com/4ABNkBfkXj",
+      "cassiePrompt": "check X sentiment",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HI30fhbXYAAvGGf.jpg"
+      ]
     },
     {
-      "url": "https://x.com/TrustlessState/status/2057523312821969182?s=20",
-      "current": false
+      "url": "https://x.com/aixbt_agent/status/2057597490518753671",
+      "current": false,
+      "authorName": "aixbt",
+      "handle": "@aixbt_agent",
+      "avatarUrl": "https://unavatar.io/x/aixbt_agent",
+      "date": "May 21, 2026",
+      "text": "aerodrome distributes 100% of protocol fees to veAERO lockers. uniswap has been debating whether to turn on a fee switch for 3 years and still hasn't done it. AERO at $438m market cap generating more revenue than protocols 5x its size on base. then they added ignition, a…",
+      "cassiePrompt": "check the SOL expression",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/aixbt_agent/status/2057597490518753671?s=20",
-      "current": false
+      "url": "https://x.com/Delphi_Digital/status/2057495213418111425",
+      "current": false,
+      "authorName": "Delphi Digital",
+      "handle": "@Delphi_Digital",
+      "avatarUrl": "https://unavatar.io/x/Delphi_Digital",
+      "date": "May 21, 2026",
+      "text": "Hyperliquid is becoming the financial supercenter of crypto.\n\nTradfi splits brokerage, exchange, and custody across separate institutions. Hyperliquid is collapsing all of them into one venue with HIP-4 as its latest move.\n\nHIP-4 lets traders express views perps cannot capture. A… pic.twitter.com/NK7iRehgN9",
+      "cassiePrompt": "rank the validated candidate",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HI2w_LPaMAA2Upm.jpg"
+      ]
     },
     {
-      "url": "https://x.com/Delphi_Digital/status/2057495213418111425?s=20",
-      "current": false
+      "url": "https://x.com/SuiNetwork/status/2057560872390885473",
+      "current": true,
+      "authorName": "Sui",
+      "handle": "@SuiNetwork",
+      "avatarUrl": "https://unavatar.io/x/SuiNetwork",
+      "date": "May 21, 2026",
+      "text": "Now live and fully rolled out on mainnet: Stablecoin transfers on Sui are free.\n\nNo $SUI, no problem.\n\nJust send. pic.twitter.com/oWy7ofwYnb",
+      "cassiePrompt": "trade this",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/SuiNetwork/status/2057560872390885473?s=20",
-      "current": false
+      "url": "https://x.com/TrustlessState/status/2053174322655641967",
+      "current": false,
+      "authorName": "David Hoffman",
+      "handle": "@TrustlessState",
+      "avatarUrl": "https://unavatar.io/x/TrustlessState",
+      "date": "May 9, 2026",
+      "text": "$ZEC $HYPE $VVV $NEAR \n\nMost alive tokens in crypto rn",
+      "cassiePrompt": "get me in",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/TrustlessState/status/2053174322655641967?s=20",
-      "current": false
+      "url": "https://x.com/Kalshi_Crypto/status/2057551380701757886",
+      "current": false,
+      "authorName": "Kalshi Crypto",
+      "handle": "@Kalshi_Crypto",
+      "avatarUrl": "https://unavatar.io/x/Kalshi_Crypto",
+      "date": "May 21, 2026",
+      "text": "JUST IN: Ethereum Foundation researchers announce resignations amid ongoing exits",
+      "cassiePrompt": "critic this",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/Kalshi_Crypto/status/2057551380701757886?s=20",
-      "current": false
+      "url": "https://x.com/lookonchain/status/2057648353681485873",
+      "current": false,
+      "authorName": "Lookonchain",
+      "handle": "@lookonchain",
+      "avatarUrl": "https://unavatar.io/x/lookonchain",
+      "date": "May 22, 2026",
+      "text": "Trump Media just sold 2,650 $BTC($205M)?\n\nTrump Media bought 11,542 $BTC($1.37B) at an average cost of $118,522.\n\n4 months ago, they transferred out 2,000 $BTC($175M) at $87,378.\n\nAn hour ago, they deposited another 2,650 $BTC($205M) into https://t.co/INIxikglp6.\n\nTrump Media is… pic.twitter.com/unfYm1o70m",
+      "cassiePrompt": "analyze this",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HI48QidbYAAxjx6.jpg"
+      ]
     },
     {
-      "url": "https://x.com/lookonchain/status/2057648353681485873?s=20",
-      "current": true
+      "url": "https://x.com/coinbase/status/2057536026676232372",
+      "current": false,
+      "authorName": "Coinbase 🛡️",
+      "handle": "@coinbase",
+      "avatarUrl": "https://unavatar.io/x/coinbase",
+      "date": "May 21, 2026",
+      "text": "#1 in distribution ✔\nOG status since 2018 ✔\nFull stack infrastructure  ✔\nCapturing 50% of USDC revenue ✔\n\nYeah, we're bullish on stablecoins. pic.twitter.com/E9HPyfyWxg",
+      "cassiePrompt": "quote both",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/coinbase/status/2057536026676232372?s=20",
-      "current": false
+      "url": "https://x.com/QwQiao/status/2057429323607314794",
+      "current": false,
+      "authorName": "qw",
+      "handle": "@QwQiao",
+      "avatarUrl": "https://unavatar.io/x/QwQiao",
+      "date": "May 21, 2026",
+      "text": "a conservative target for zec is to reach ~3-5% of btc, as  bitcoin holders rebalance a bit into zec as a hedge.\n\nan aggressive target is 15-20%. thats where silver is relative to gold.\n\nthe moonshot target is the flippening, in the unlikely event that something catastrophic…",
+      "cassiePrompt": "check X sentiment",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/QwQiao/status/2057429323607314794?s=20",
-      "current": false
+      "url": "https://x.com/cryptogoos/status/2057405540477665634",
+      "current": false,
+      "authorName": "CryptoGoos",
+      "handle": "@cryptogoos",
+      "avatarUrl": "https://unavatar.io/x/cryptogoos",
+      "date": "May 21, 2026",
+      "text": "This is INSANE!   \n\n🇺🇸 ELON MUSK IS ABOUT TO BECOME THE FIRST TRILLIONAIRE IN HUMAN HISTORY.\n\nSpaceX pre-IPO is closing in on $900 a share.  \n\nElon owns roughly 42% of the equity.  79–85% voting control depending on share class.  \n\nAt this price, he doesn't just cross a trillion.… pic.twitter.com/CmiZ2O1BKq",
+      "cassiePrompt": "check the SOL expression",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/cryptogoos/status/2057405540477665634?s=20",
-      "current": false
+      "url": "https://x.com/iruletrenches/status/2057609835038846996",
+      "current": false,
+      "authorName": "Miyamoto",
+      "handle": "@iruletrenches",
+      "avatarUrl": "https://unavatar.io/x/iruletrenches",
+      "date": "May 21, 2026",
+      "text": "AI compute is the oil of the agent economy\n\nInference = actual thinking & execution agents do every second. Every decision, action, trade, generation = compute consumed\n\ncompute demand is exploding, huge amounts of capacity sit underutilized that now can be traded on $surplus https://t.co/hXsKI04vzA pic.twitter.com/pH3fcjv6Lu",
+      "cassiePrompt": "rank the validated candidate",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HI4YaS5XkAA8yAX.jpg"
+      ]
     },
     {
-      "url": "https://x.com/iruletrenches/status/2057609835038846996?s=20",
-      "current": false
+      "url": "https://x.com/CoinbaseDuck/status/2057639502177321097",
+      "current": false,
+      "authorName": "CBduck",
+      "handle": "@CoinbaseDuck",
+      "avatarUrl": "https://unavatar.io/x/CoinbaseDuck",
+      "date": "May 22, 2026",
+      "text": "IMHO - after 2021-2022 bear market, there are three main forces of Ethereum “residual” holding it back;\n\n1.) new retail who hoped 2024-2025 cycle had similar return, got disappointed and needed to get out.\n2.) people from 2021 who didn’t sell and needed to go out\n3.) launch token…",
+      "cassiePrompt": "trade this",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/CoinbaseDuck/status/2057639502177321097?s=20",
-      "current": false
+      "url": "https://x.com/notthreadguy/status/2057528585066262939",
+      "current": false,
+      "authorName": "threadguy",
+      "handle": "@notthreadguy",
+      "avatarUrl": "https://unavatar.io/x/notthreadguy",
+      "date": "May 21, 2026",
+      "text": "the thing about crypto is the market caps of the good coins are so disgustingly small. i watched google add $500b of marketcap in one trading day",
+      "cassiePrompt": "get me in",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/notthreadguy/status/2057528585066262939?s=20",
-      "current": false
+      "url": "https://x.com/andyyy/status/2057346400594330038",
+      "current": false,
+      "authorName": "Andy",
+      "handle": "@andyyy",
+      "avatarUrl": "https://unavatar.io/x/andyyy",
+      "date": "May 21, 2026",
+      "text": "People are still sleeping on ethereum:0x56072c95faa701256059aa122697b133aded9279 big time. \n\n$90M revenue per year. $USDS on a fast track to $20B in outstanding supply. If you love Hyperliquid, you'll like Sky too. pic.twitter.com/QtVtO0Bsvo",
+      "cassiePrompt": "critic this",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HIyyI6xX0AETLhH.jpg"
+      ]
     },
     {
-      "url": "https://x.com/andyyy/status/2057346400594330038?s=20",
-      "current": false
+      "url": "https://x.com/Kalshi_Crypto/status/2057447510235299970",
+      "current": false,
+      "authorName": "Kalshi Crypto",
+      "handle": "@Kalshi_Crypto",
+      "avatarUrl": "https://unavatar.io/x/Kalshi_Crypto",
+      "date": "May 21, 2026",
+      "text": "BREAKING: Michael Saylor says 'Strategy' will likely sell Bitcoin this year",
+      "cassiePrompt": "analyze this",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/Kalshi_Crypto/status/2057447510235299970?s=20",
-      "current": false
+      "url": "https://x.com/EmanAbio/status/2057930279629602924",
+      "current": false,
+      "authorName": "Adeniyi.sui",
+      "handle": "@EmanAbio",
+      "avatarUrl": "https://unavatar.io/x/EmanAbio",
+      "date": "May 22, 2026",
+      "text": "BREAKING💥\n\nPRIVATE TRANSACTIONS ARE COMING TO SUI MAINNET VERY, VERY SOON pic.twitter.com/2LxDIx3xXC",
+      "cassiePrompt": "quote both",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/emanabio/status/2057930279629602924?s=46",
-      "current": false
+      "url": "https://x.com/MTSlive/status/2058251131239952819",
+      "current": false,
+      "authorName": "MTS",
+      "handle": "@MTSlive",
+      "avatarUrl": "https://unavatar.io/x/MTSlive",
+      "date": "May 23, 2026",
+      "text": "AI adoption by industry, over time https://t.co/AzCI46ITFV pic.twitter.com/g5hDnzs56I",
+      "cassiePrompt": "check X sentiment",
+      "mediaUrls": [
+        "https://pbs.twimg.com/media/HJBgfxfbgAAAgs7.jpg"
+      ]
     },
     {
-      "url": "https://x.com/mtslive/status/2058251131239952819?s=46",
-      "current": false
+      "url": "https://x.com/icobeast/status/2058336375905108182",
+      "current": false,
+      "authorName": "IcoBeast.eth🦇🔊",
+      "handle": "@icobeast",
+      "avatarUrl": "https://unavatar.io/x/icobeast",
+      "date": "May 23, 2026",
+      "text": "Mental model for the next week or so:\n\nETH-based privacy coins keep going parabolic (RAIL already caught a bid, VEIL seems to be forgotten so far)\n\nAI-based winners keep running (NEAR/VVV-even if i dont like it/TAO/probably a bunch of ai-related shitters)\n\nKnicks win. Lose game…",
+      "cassiePrompt": "check the SOL expression",
+      "mediaUrls": []
     },
     {
-      "url": "https://x.com/icobeast/status/2058336375905108182?s=46",
-      "current": false
-    },
-    {
-      "url": "https://x.com/sjdedic/status/2058137246436327728?s=46",
-      "current": false
+      "url": "https://x.com/sjdedic/status/2058137246436327728",
+      "current": false,
+      "authorName": "Simon Dedic",
+      "handle": "@sjdedic",
+      "avatarUrl": "https://unavatar.io/x/sjdedic",
+      "date": "May 23, 2026",
+      "text": "I've been an Ethereum supporter since the early days and I still believe it's one of the most important pieces of infrastructure in crypto. The tech is great, my conviction hasn't changed in that respect.\n\nBut watching 9 senior researchers and key operators leave the Ethereum…",
+      "cassiePrompt": "rank the validated candidate",
+      "mediaUrls": []
     }
   ]
 }
