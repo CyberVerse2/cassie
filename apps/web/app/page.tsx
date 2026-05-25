@@ -1,53 +1,199 @@
-const runs = [
-  { label: "Queued mentions", value: "18", tone: "steady" },
-  { label: "Pending tickets", value: "4", tone: "warm" },
-  { label: "Execution audits", value: "129", tone: "cool" },
+import tweetRun from "../../../docs/test-run-tweets.json";
+
+const replyUsers = [
+  {
+    name: "maya",
+    handle: "@maya_trades",
+    avatarUrl: "https://api.dicebear.com/9.x/notionists/svg?seed=maya-trades",
+  },
+  {
+    name: "noah",
+    handle: "@noah_eth",
+    avatarUrl: "https://api.dicebear.com/9.x/notionists/svg?seed=noah-eth",
+  },
+  {
+    name: "ira",
+    handle: "@ira_markets",
+    avatarUrl: "https://api.dicebear.com/9.x/notionists/svg?seed=ira-markets",
+  },
+  {
+    name: "leo",
+    handle: "@leo_perps",
+    avatarUrl: "https://api.dicebear.com/9.x/notionists/svg?seed=leo-perps",
+  },
 ];
 
-const timeline = [
-  "Mention captured from X",
-  "Supervisor framed opportunity",
-  "Venue candidates ranked",
-  "Ticket waiting for approval",
-];
+const streamTweets = tweetRun.tweets.map((tweet) => ({
+  ...tweet,
+  preview: shortenTweet(tweet.text, tweet.mediaUrls.length > 0),
+}));
+
+const midpoint = Math.ceil(streamTweets.length / 2);
+const tweetsLeft = streamTweets.slice(0, midpoint);
+const tweetsRight = streamTweets.slice(midpoint);
 
 export default function Home() {
   return (
-    <main className="shell">
-      <section className="hero" aria-labelledby="page-title">
-        <div>
-          <p className="section-label">Cassie Control</p>
-          <h1 id="page-title">Trade expression review, without the fog.</h1>
-          <p className="lede">
-            A production-ready Next.js surface for reviewing Cassie runs,
-            pending tickets, and execution audit trails.
-          </p>
-        </div>
-        <a className="primary-action" href="/dashboard">
-          Open dashboard
-        </a>
-      </section>
+    <main className="page">
+      <SiteNav />
 
-      <section className="metric-grid" aria-label="Current Cassie activity">
-        {runs.map((run) => (
-          <article className={`metric metric-${run.tone}`} key={run.label}>
-            <p>{run.label}</p>
-            <strong>{run.value}</strong>
-          </article>
-        ))}
-      </section>
+      <section className="hero-chapter" aria-label="hero">
+        <Painting />
 
-      <section className="workspace" aria-label="Supervisor timeline preview">
-        <div>
-          <p className="section-label">Supervisor Loop</p>
-          <h2>Every decision stays visible.</h2>
+        <div className="hero-grid">
+          <Stream side="left" tweets={tweetsLeft} />
+
+          <div className="hero-content">
+            <HeroBrand />
+            <h1 className="display display-1">
+              Turn a <em>tweet</em>
+              <br />
+              into a <em>trade</em>.
+            </h1>
+            <p className="lede">
+              Cassie turns tweets into executable trade ideas. Mention
+              her under any post - she makes a trade for you.
+            </p>
+            <div className="cta-row">
+              <a className="btn btn-gold" href="/dashboard">
+                Continue with X
+                <span className="arrow" aria-hidden>→</span>
+              </a>
+            </div>
+          </div>
+
+          <Stream side="right" tweets={tweetsRight} />
         </div>
-        <ol>
-          {timeline.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ol>
       </section>
     </main>
   );
+}
+
+function SiteNav() {
+  return (
+    <header className="nav" aria-label="Primary">
+      <div className="right">
+        <a className="nav-link" href="#">Docs</a>
+        <a className="nav-action" href="/dashboard">Dashboard</a>
+      </div>
+    </header>
+  );
+}
+
+function HeroBrand() {
+  return (
+    <a className="hero-brand" href="/" aria-label="Cassie home">
+      <img src="/cassie-logo-transparent.png" alt="" aria-hidden />
+      <span>Cassie</span>
+    </a>
+  );
+}
+
+function Painting() {
+  return (
+    <div className="chapter-canvas" aria-hidden>
+      <div className="chapter-painting boat" />
+      <div className="chapter-vignette" />
+      <div className="chapter-grain" />
+    </div>
+  );
+}
+
+type TweetData = {
+  authorName: string;
+  handle: string;
+  avatarUrl: string;
+  date: string;
+  preview: string;
+  url: string;
+  current: boolean;
+  cassiePrompt: string;
+  mediaUrls: string[];
+};
+
+function Stream({ side, tweets }: { side: "left" | "right"; tweets: TweetData[] }) {
+  /* double the list so the keyframe loop is seamless */
+  const loop = [...tweets, ...tweets];
+  return (
+    <div className={`stream stream-${side}`} aria-hidden>
+      <div className="stream-track">
+        {loop.map((t, i) => {
+          const replyUser = replyUsers[i % replyUsers.length];
+          return <TweetCard key={`${side}-${i}`} {...t} replyUser={replyUser} />;
+        })}
+      </div>
+    </div>
+  );
+}
+
+type ReplyUser = (typeof replyUsers)[number];
+
+function TweetCard({
+  authorName,
+  handle,
+  avatarUrl,
+  date,
+  preview,
+  url,
+  current,
+  cassiePrompt,
+  mediaUrls,
+  replyUser,
+}: TweetData & { replyUser: ReplyUser }) {
+  const [mediaUrl] = mediaUrls;
+
+  return (
+    <article className={`tweet${current ? " tweet-current" : ""}`}>
+      <header className="tweet-head">
+        <img className="tweet-avatar" src={avatarUrl} alt="" aria-hidden />
+        <div className="tweet-id">
+          <span className="tweet-name">{authorName}</span>
+          <span className="tweet-meta">
+            {handle} · {date}
+          </span>
+        </div>
+      </header>
+      <p className="tweet-body">{preview}</p>
+      {mediaUrl && (
+        <img
+          className="tweet-media"
+          src={mediaUrl}
+          alt=""
+          aria-hidden
+          loading="lazy"
+        />
+      )}
+      <div className="tweet-reply">
+        <img
+          className="reply-avatar"
+          src={replyUser.avatarUrl}
+          alt=""
+          aria-hidden
+        />
+        <div className="reply-id">
+          <span className="reply-name">
+            {replyUser.name} <span className="reply-handle">{replyUser.handle}</span>
+          </span>
+          <p className="reply-body">
+            <span className="reply-mention">@cassie</span> {cassiePrompt}
+          </p>
+        </div>
+      </div>
+      <a className="tweet-link" href={url} aria-label={`Open tweet by ${authorName}`} />
+    </article>
+  );
+}
+
+function shortenTweet(text: string, hasMedia: boolean) {
+  const clean = text
+    .replace(/https:\/\/t\.co\/\S+/g, "")
+    .replace(/pic\.twitter\.com\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const maxLength = hasMedia ? 118 : 170;
+
+  return clean.length > maxLength
+    ? `${clean.slice(0, maxLength - 3).trim()}...`
+    : clean;
 }
