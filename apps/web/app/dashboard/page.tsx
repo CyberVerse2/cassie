@@ -31,6 +31,7 @@ const trades = [
     confidence: "82%",
     position: "Bought $80 -> $91.40",
     price: "YES 63c · entry 58c",
+    holding: "$91.40",
     tone: "up",
   },
   {
@@ -42,6 +43,7 @@ const trades = [
     confidence: "76%",
     position: "Bought $120 -> $124.70",
     price: "$3,108 · entry $3,052",
+    holding: "$124.70",
     tone: "up",
   },
   {
@@ -53,6 +55,7 @@ const trades = [
     confidence: "73%",
     position: "Bought $60 -> $57.80",
     price: "YES 41c · entry 43c",
+    holding: "$57.80",
     tone: "down",
   },
   {
@@ -64,6 +67,7 @@ const trades = [
     confidence: "48%",
     position: "Bought $0 -> $0",
     price: "$101,840 · no entry",
+    holding: null,
     tone: "neutral",
   },
   {
@@ -75,9 +79,12 @@ const trades = [
     confidence: "81%",
     position: "Bought $95 -> $103.74",
     price: "$36.40 · entry $33.92",
+    holding: "$103.74",
     tone: "up",
   },
 ];
+
+const boughtAssets = trades.filter((trade) => trade.holding);
 
 const taggedTweets = tweetRun.tweets.slice(0, 6).map((tweet, index) => ({
   ...tweet,
@@ -231,9 +238,14 @@ function Center() {
             <LineChart />
           </div>
           <div className={s.chartFoot}>
-            <div className={s.legend}>
-              <span><span className="swatch sw-a" /> Base USDC</span>
-              <span><span className="swatch sw-b" /> Open trade value</span>
+            <div className={s.legend} aria-label="Assets bought">
+              {boughtAssets.map((asset) => (
+                <span key={asset.id}>
+                  <span className={`swatch asset-${asset.id.toLowerCase()}`} />
+                  {asset.id}
+                  <span className="asset-value">{asset.holding}</span>
+                </span>
+              ))}
             </div>
             <div className={s.ranges}>
               {ranges.map((r) => (
