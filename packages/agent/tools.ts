@@ -459,29 +459,36 @@ export function createCassieSupervisorTools(input: {
     create_trade_ticket: tool({
       description: "Create a trade ticket from a non-rejected risk decision. This never executes the order.",
       inputSchema: z.object({
-        tradeExpression: TradeExpressionPlanSchema,
+        tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
         marketSelection: z.unknown().nullable().default(null),
         riskDecision: z.unknown().nullable().default(null),
         sizeUsd: z.number().positive().nullable().optional(),
       }),
       execute: async ({ tradeExpression, marketSelection, riskDecision, sizeUsd }) => {
+        const persistedTradeExpression = await latestPersistedTradeExpression(input.store, input.run.runId)
+          ?? parseSuppliedTradeExpression(tradeExpression);
         const persistedMarketSelection = await latestPersistedMarketSelection(input.store, input.run.runId)
           ?? parseSuppliedMarketSelection(marketSelection);
         const persistedRiskDecision = await latestPersistedRiskDecision(input.store, input.run.runId)
           ?? parseSuppliedRiskDecision(riskDecision);
         return runStepOnce(
           "ticket",
-          { tradeExpression, marketSelection: persistedMarketSelection, riskDecision: persistedRiskDecision, sizeUsd },
+          {
+            tradeExpression: persistedTradeExpression,
+            marketSelection: persistedMarketSelection,
+            riskDecision: persistedRiskDecision,
+            sizeUsd,
+          },
           async () => {
           assertUsableMarketSelection(persistedMarketSelection);
           assertNonRejectedRiskDecision(persistedRiskDecision);
-          const thesis = thesisForMarketSelection(tradeExpression, persistedMarketSelection);
+          const thesis = thesisForMarketSelection(persistedTradeExpression, persistedMarketSelection);
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,
             stepType: "ticket",
             stepInput: {
-              tradeExpression,
+              tradeExpression: persistedTradeExpression,
               marketSelection: persistedMarketSelection,
               riskDecision: persistedRiskDecision,
               sizeUsd,
@@ -571,6 +578,13 @@ async function latestPersistedMarketSelection(store: CassieStore, runId: string)
     : null;
 }
 
+async function latestPersistedTradeExpression(store: CassieStore, runId: string) {
+  const latestStep = await latestSucceededStep(store, runId, "trade_expression");
+  return latestStep
+    ? TradeExpressionPlanSchema.safeParse(latestStep.output).data ?? null
+    : null;
+}
+
 async function latestPersistedRiskDecision(store: CassieStore, runId: string): Promise<RiskDecision | null> {
   const latestStep = await latestSucceededStep(store, runId, "risk");
   return latestStep
@@ -617,6 +631,12 @@ function parseSuppliedRiskDecision(value: unknown): RiskDecision {
   throw new Error("Trade ticket creation requires a non-rejected risk decision.");
 }
 
+function parseSuppliedTradeExpression(value: unknown) {
+  const parsed = TradeExpressionPlanSchema.safeParse(value);
+  if (parsed.success) return parsed.data;
+  throw new Error("Trade ticket creation requires a persisted or supplied trade expression.");
+}
+
 async function latestPersistedXSentiment(store: CassieStore, runId: string) {
   const latestStep = await latestSucceededStep(store, runId, "x_sentiment");
   return latestStep
@@ -627,7 +647,7 @@ async function latestPersistedXSentiment(store: CassieStore, runId: string) {
 async function latestSucceededStep(
   store: CassieStore,
   runId: string,
-  stepType: "market_candidates" | "market_selection" | "risk" | "x_sentiment",
+  stepType: "market_candidates" | "market_selection" | "risk" | "x_sentiment" | "trade_expression",
 ) {
   const steps = await store.getRunSteps(runId);
   return steps

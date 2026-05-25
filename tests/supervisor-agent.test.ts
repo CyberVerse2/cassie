@@ -214,6 +214,22 @@ async function seedMarketCandidates(store: InMemoryCassieStore, runId: string, c
   });
 }
 
+async function seedTradeExpression(store: InMemoryCassieStore, runId: string, expression: TradeExpressionPlan) {
+  await store.addRunStep({
+    runId,
+    stepType: "trade_expression",
+    status: "succeeded",
+    input: {},
+    output: expression,
+    error: null,
+    model: "gpt-5.4-mini",
+    promptName: "cassie_trade_expressions",
+    promptVersion: "2026-05-24",
+    thinkingTrace: null,
+    completedAt: new Date().toISOString(),
+  });
+}
+
 async function seedFitAssessment(store: InMemoryCassieStore, runId: string, fitAssessment: typeof expressionFitAssessment) {
   await store.addRunStep({
     runId,
@@ -405,6 +421,7 @@ describe("AI SDK supervisor agent", () => {
       userCommand: "@Cassie trade this",
       sourcePost,
     });
+    await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketSelection(store, run.runId, marketSelection);
     await seedRiskDecision(store, run.runId, { decision: "create_ticket_only", reason: "Needs approval." });
 
@@ -425,10 +442,9 @@ describe("AI SDK supervisor agent", () => {
     const ticketInputSchema = tools.create_trade_ticket.inputSchema as {
       safeParse: (value: unknown) => { success: boolean };
     };
-    expect(ticketInputSchema.safeParse({ tradeExpression }).success).toBe(true);
+    expect(ticketInputSchema.safeParse({}).success).toBe(true);
 
     await expect(executeTool(tools.create_trade_ticket, {
-      tradeExpression,
     })).resolves.toMatchObject({
       instrument: "perp",
       side: "long",
