@@ -1,14 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import QRCode from "qrcode";
 
 import tweetRun from "../../../../docs/test-run-tweets.json";
 import s from "./dashboard.module.css";
 
 const baseDepositAddress = "0x193c2109089dd260811f1852c9b1521d6ccf1c6b";
 const baseDepositUri = `ethereum:${baseDepositAddress}@8453`;
-const qrSrc = `https://api.qrserver.com/v1/create-qr-code/?size=184x184&margin=8&data=${encodeURIComponent(baseDepositUri)}`;
 const basescanUrl = `https://basescan.org/address/${baseDepositAddress}`;
+
+const tickerImages: Record<string, string> = {
+  SOL: "https://assets.dub.co/companies/polymarket.svg",
+  ETH: "https://assets.coingecko.com/coins/images/279/large/ethereum.png",
+  AI16Z: "https://assets.coingecko.com/coins/images/51322/large/ai16z.png",
+  FED: "https://assets.dub.co/companies/polymarket.svg",
+  BTC: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
+  HYPE: "https://app.hyperliquid.xyz/coins/HYPE.svg",
+  AVNT: "https://assets.dub.co/companies/polymarket.svg",
+  GOLD: "https://assets.dub.co/companies/polymarket.svg",
+};
+
+const tokenImages: Record<string, string> = {
+  SOL: "https://assets.dub.co/companies/polymarket.svg",
+  ETH: "https://assets.coingecko.com/coins/images/279/large/ethereum.png",
+  FED: "https://assets.dub.co/companies/polymarket.svg",
+  BTC: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
+  HYPE: "https://app.hyperliquid.xyz/coins/HYPE.svg",
+};
 
 const tickerStrip = [
   { sym: "SOL", label: "22 trades", letter: "S" },
@@ -34,6 +53,7 @@ const trades = [
     sideTone: "yes",
     entry: "58c",
     current: "63c",
+    pnlPct: "+8.6%",
     value: "$91.40",
     pnl: "+$11.40",
     tone: "up",
@@ -50,6 +70,7 @@ const trades = [
     sideTone: "long",
     entry: "$3,052",
     current: "$3,108",
+    pnlPct: "+1.8%",
     value: "$124.70",
     pnl: "+$4.70",
     tone: "up",
@@ -66,6 +87,7 @@ const trades = [
     sideTone: "yes",
     entry: "43c",
     current: "41c",
+    pnlPct: "-4.7%",
     value: "$57.80",
     pnl: "-$2.20",
     tone: "down",
@@ -82,6 +104,7 @@ const trades = [
     sideTone: "short",
     entry: "$103,200",
     current: "$101,840",
+    pnlPct: "+1.3%",
     value: "$74.20",
     pnl: "+$5.90",
     tone: "up",
@@ -98,6 +121,7 @@ const trades = [
     sideTone: "long",
     entry: "$33.92",
     current: "$36.40",
+    pnlPct: "+7.3%",
     value: "$103.74",
     pnl: "+$8.74",
     tone: "up",
@@ -117,6 +141,99 @@ const taggedTweets = tweetRun.tweets.slice(0, 6).map((tweet, index) => ({
 }));
 
 const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
+
+const usdcIcon = "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
+
+type ActivityCommand = "trade" | "watch" | "counter";
+
+type ActivityAsset = {
+  sym: string;
+  amount: string;
+  value: string;
+  icon: string;
+};
+
+type ActivityRow = {
+  time: string;
+  command: ActivityCommand;
+  source: "cassie" | "x";
+  from?: ActivityAsset;
+  to?: ActivityAsset;
+  target?: string;
+  note?: string;
+};
+
+type ActivityGroup = {
+  date: string;
+  items: ActivityRow[];
+};
+
+const activityFeed: ActivityGroup[] = [
+  {
+    date: "May 26, 2026",
+    items: [
+      {
+        time: "11:18am",
+        command: "trade",
+        source: "x",
+        from: { sym: "USDC", amount: "-91.40", value: "$91.40", icon: usdcIcon },
+        to: { sym: "SOL YES", amount: "+157.59", value: "$91.40", icon: tokenImages.SOL },
+      },
+      {
+        time: "10:42am",
+        command: "watch",
+        source: "cassie",
+        target: "BTC over $104,000",
+        note: "Enter on clean liquidity break",
+      },
+    ],
+  },
+  {
+    date: "May 25, 2026",
+    items: [
+      {
+        time: "3:14pm",
+        command: "counter",
+        source: "x",
+        from: { sym: "USDC", amount: "-57.80", value: "$57.80", icon: usdcIcon },
+        to: { sym: "FED NO", amount: "+128.44", value: "$57.80", icon: tokenImages.FED },
+      },
+      {
+        time: "1:50pm",
+        command: "trade",
+        source: "x",
+        from: { sym: "USDC", amount: "-124.70", value: "$124.70", icon: usdcIcon },
+        to: { sym: "ETH LONG", amount: "+0.040", value: "$124.70", icon: tokenImages.ETH },
+      },
+    ],
+  },
+  {
+    date: "May 23, 2026",
+    items: [
+      {
+        time: "2:13pm",
+        command: "counter",
+        source: "cassie",
+        from: { sym: "USDC", amount: "-74.20", value: "$74.20", icon: usdcIcon },
+        to: { sym: "BTC SHORT", amount: "+0.0007", value: "$74.20", icon: tokenImages.BTC },
+      },
+      {
+        time: "9:31am",
+        command: "watch",
+        source: "x",
+        target: "AI16Z mention spike",
+        note: "Above 40 mentions / 15min",
+      },
+      {
+        time: "8:08am",
+        command: "trade",
+        source: "x",
+        from: { sym: "USDC", amount: "-103.74", value: "$103.74", icon: usdcIcon },
+        to: { sym: "HYPE LONG", amount: "+2.852", value: "$103.74", icon: tokenImages.HYPE },
+      },
+    ],
+  },
+];
 
 export default function Dashboard() {
   return (
@@ -139,75 +256,58 @@ function Aside() {
 
   return (
     <aside className={s.aside}>
-      <a className={s.brand} href="/">
+      <a className={s.brand} href="/" aria-label="Cassie home">
         <img className="mark" src="/cassie-logo-transparent.png" alt="" aria-hidden />
-        <span>Cassie</span>
       </a>
 
-      <div className={s.profile}>
-        <span className={s.avatar}>C</span>
-        <div className={s.profileText}>
-          <span className="name">Celestine</span>
-          <span className="handle">@thecyberverse1</span>
-        </div>
+      <div className={s.identity}>
+        <span className={s.identityName}>Celestine</span>
+        <span className={s.identityMeta}>@thecyberverse1 · Base</span>
       </div>
 
       <div className={s.depositCard} id="deposit">
         <div className={s.qrFrame}>
-          <img src={qrSrc} alt="Base deposit QR code" />
+          <StyledQR data={baseDepositUri} />
         </div>
       </div>
 
       <div className={s.mentionRow}>
         <a className={`${s.btn} ${s.btnPrimary}`} href="#deposit">
+          <ActionIcon name="deposit" />
           Deposit
         </a>
         <button
-          className={`${s.btn} ${s.btnIcon}`}
+          className={`${s.btn} ${s.copyDepositBtn}`}
           type="button"
-          aria-label="Copy Base deposit address"
           onClick={copyAddress}
+          aria-label="Copy Base deposit address"
+          title={copied ? "Copied" : "Copy address"}
         >
-          {copied ? (
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ color: "var(--up)" }}>
-              <polyline points="20 6 9 17 4 12" />
-            </svg>
-          ) : (
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-            </svg>
-          )}
+          <ActionIcon name={copied ? "check" : "copy"} />
         </button>
       </div>
 
-      <div className={s.addr}>
-        <span>{shortAddress(baseDepositAddress)} · Base</span>
-        <a href={basescanUrl} target="_blank" rel="noreferrer" aria-label="View wallet on Basescan">
-          ↗
-        </a>
-      </div>
-
       <nav className={s.nav} aria-label="Wallet actions">
-        <a className={s.navLink} href="#deposit">
-          Add money
-          <span className="glyph">＋</span>
-        </a>
+        <span className={s.navSection}>Move</span>
         <a className={s.navLink} href="#send">
-          Send money
-          <span className="glyph">↗</span>
+          <ActionIcon name="send" />
+          <span>Send</span>
         </a>
         <a className={s.navLink} href="#swap">
-          Swap money
-          <span className="glyph">⇄</span>
+          <ActionIcon name="swap" />
+          <span>Swap</span>
         </a>
+
+        <span className={s.navSection}>Connect</span>
         <a className={s.navLink} href="#telegram">
-          Telegram notifications
-          <span className="glyph">✈</span>
+          <ActionIcon name="telegram" />
+          <span>Telegram alerts</span>
         </a>
+
+        <span className={s.navSection}>Wallet</span>
         <a className={s.navLink} href="#export-wallet">
-          Export wallet
-          <span className="glyph">↓</span>
+          <ActionIcon name="export" />
+          <span>Export keys</span>
         </a>
       </nav>
 
@@ -306,6 +406,7 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
 function Center() {
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
+  const [activeTab, setActiveTab] = useState<"wallet" | "configure" | "activity">("wallet");
 
   const rangeData = generateDataForRange(selectedRange);
   const currentValPoint = rangeData[rangeData.length - 1];
@@ -317,7 +418,9 @@ function Center() {
         <div className={s.tickerStrip}>
           {[...tickerStrip, ...tickerStrip].map((t, i) => (
             <span className={s.tickerPill} key={`${t.sym}-${i}`}>
-              <span className="tk-icon">{t.letter}</span>
+              <span className="tk-icon" style={{ overflow: "hidden", background: "none" }}>
+                <img src={tickerImages[t.sym]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              </span>
               <span className="tk-sym">${t.sym}</span>
               <span className="tk-count">{t.label}</span>
             </span>
@@ -326,19 +429,40 @@ function Center() {
       </div>
 
       <div className={s.tabs} role="tablist">
-        <button className={`${s.tab} ${s.tabActive}`} role="tab" aria-selected="true">
+        <button
+          type="button"
+          className={`${s.tab} ${activeTab === "wallet" ? s.tabActive : ""}`}
+          role="tab"
+          aria-selected={activeTab === "wallet"}
+          onClick={() => setActiveTab("wallet")}
+        >
           Wallet
           <span className="tab-count">$1,284</span>
         </button>
-        <button className={s.tab} role="tab" aria-selected="false">
-          Trades
-          <span className="tab-count">31</span>
+        <button
+          type="button"
+          className={`${s.tab} ${activeTab === "configure" ? s.tabActive : ""}`}
+          role="tab"
+          aria-selected={activeTab === "configure"}
+          onClick={() => setActiveTab("configure")}
+        >
+          Configure
         </button>
-        <button className={s.tab} role="tab" aria-selected="false">
+        <button
+          type="button"
+          className={`${s.tab} ${activeTab === "activity" ? s.tabActive : ""}`}
+          role="tab"
+          aria-selected={activeTab === "activity"}
+          onClick={() => setActiveTab("activity")}
+        >
           Activity
+          <span className="tab-count">{activityFeed.reduce((n, g) => n + g.items.length, 0)}</span>
         </button>
       </div>
 
+      {activeTab === "activity" && <ActivityPanel />}
+
+      {activeTab === "wallet" && (
       <div className={s.content}>
         <header className={s.sectionHeader}>
           <h2>Wallet balance</h2>
@@ -364,14 +488,13 @@ function Center() {
             >
               <div className={s.moverHeader}>
                 <span className={s.moverLabel}>Largest position move</span>
-                <span className={`side ${largestPortfolioMover.sideTone}`}>
-                  {largestPortfolioMover.side}
-                </span>
               </div>
               <div className={s.moverBody}>
                 <div className={s.moverAssetInfo}>
                   <span className={s.tokenCell} style={{ position: "relative", width: "24px", height: "24px", display: "inline-flex", verticalAlign: "middle", margin: 0 }}>
-                    <span className="tk" style={{ width: "24px", height: "24px", fontSize: "11px", fontWeight: "700" }}>{largestPortfolioMover.id[0]}</span>
+                    <span className="tk" style={{ width: "24px", height: "24px", fontSize: "11px", fontWeight: "700", overflow: "hidden", background: "none" }}>
+                      <img src={tokenImages[largestPortfolioMover.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "2px" }} />
+                    </span>
                     <span className={`tk-venue ${largestPortfolioMover.venue}`} style={{ width: "12px", height: "12px", bottom: "-2px", left: "14px", border: "1.5px solid var(--bg-deep)" }}>
                       <VenueIcon venue={largestPortfolioMover.venue} size={7} />
                     </span>
@@ -383,9 +506,18 @@ function Center() {
                 </div>
                 <div className="mover-value">
                   <strong className={largestPortfolioMover.tone}>
-                    {largestPortfolioMover.pnl}
+                    <span className="mover-delta-icon" aria-hidden>
+                      {largestPortfolioMover.tone === "up" ? "▲" : "▼"}
+                    </span>
+                    {largestPortfolioMover.pnl.replace(/^[+-]/, "")}
                   </strong>
-                  <span>{largestPortfolioMover.value} current</span>
+                  <span>
+                    <span className={`mover-side ${largestPortfolioMover.sideTone}`}>
+                      {largestPortfolioMover.side}
+                    </span>
+                    <span className="mover-sep" aria-hidden>·</span>
+                    {largestPortfolioMover.value}
+                  </span>
                 </div>
               </div>
             </div>
@@ -435,20 +567,23 @@ function Center() {
         </div>
 
         <div className={s.tableHeader}>
-          <p>Recent trades</p>
+          <p>Trade history</p>
         </div>
 
         <div className={s.table}>
           <div className={`${s.tr} ${s.thead}`} role="row">
             <span>Asset</span>
             <span>Trade</span>
-            <span>Position</span>
+            <span className={s.amountHead}>Amount</span>
+            <span className={s.amountHead}>Value</span>
             <span />
           </div>
           {trades.map((trade) => (
             <div className={s.tr} role="row" key={trade.title}>
               <span className={s.tokenCell}>
-                <span className="tk">{trade.id[0]}</span>
+                <span className="tk" style={{ overflow: "hidden", background: "none" }}>
+                  <img src={tokenImages[trade.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "4px" }} />
+                </span>
                 <span className={`tk-venue ${trade.venue}`} title={trade.venueLabel}>
                   <VenueIcon venue={trade.venue} size={11} />
                 </span>
@@ -458,13 +593,21 @@ function Center() {
                 <strong>{trade.title}</strong>
                 <span>{trade.description}</span>
               </span>
-              <span className={s.positionCell}>
-                <strong>
-                  <span className={`side ${trade.sideTone}`}>{trade.side}</span>
-                  {trade.value}
-                </strong>
-                <span>
-                  {trade.current} current · {trade.entry} entry
+              <span className={s.amountCell}>
+                <span className={s.amountValue}>{trade.current.replace("c", "¢")}</span>
+                <span
+                  className={`${s.valueDelta} ${trade.tone === "up" ? s.amountUp : s.amountDown}`}
+                >
+                  <span className={s.amountDeltaIcon} aria-hidden>
+                    {trade.tone === "up" ? "▲" : "▼"}
+                  </span>
+                  {trade.pnlPct.replace(/^[+-]/, "")}
+                </span>
+              </span>
+              <span className={s.valueCell}>
+                <span className={s.valuePrice}>{trade.value}</span>
+                <span className={`${s.amountSide} ${s[`amountSide_${trade.sideTone}`]}`}>
+                  {trade.side}
                 </span>
               </span>
               <button className={s.menuBtn} aria-label="Open trade menu">⋯</button>
@@ -472,7 +615,127 @@ function Center() {
           ))}
         </div>
       </div>
+      )}
     </section>
+  );
+}
+
+function ActivityPanel() {
+  return (
+    <div className={s.activity}>
+      <header className={s.activityHeader}>
+        <div className={s.activityIntro}>
+          <h2>Activity</h2>
+          <p>History of your interactions with Cassie.</p>
+        </div>
+        <button type="button" className={s.activityFilter}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <line x1="3" y1="6" x2="21" y2="6" />
+            <line x1="6" y1="12" x2="18" y2="12" />
+            <line x1="10" y1="18" x2="14" y2="18" />
+          </svg>
+          Transactions
+        </button>
+      </header>
+
+      <div className={s.activityFeed}>
+        {activityFeed.map((group) => (
+          <section className={s.activityGroup} key={group.date}>
+            <h3 className={s.activityDate}>{group.date}</h3>
+            <ul className={s.activityList}>
+              {group.items.map((row, i) => (
+                <ActivityItem row={row} key={`${group.date}-${i}`} />
+              ))}
+            </ul>
+          </section>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ActivityItem({ row }: { row: ActivityRow }) {
+  return (
+    <li className={s.activityRow}>
+      <span className={`${s.activityCmdBadge} ${s[`activityCmd_${row.command}`]}`} aria-hidden>
+        <CommandGlyph command={row.command} />
+      </span>
+      <div className={s.activityLabel}>
+        <span className={s.activityCmd}>{row.command}</span>
+        <span className={s.activityTime}>{row.time}</span>
+      </div>
+
+      {row.from && row.to ? (
+        <>
+          <div className={s.activityAsset}>
+            <span className={s.activityAssetIcon}>
+              <img src={row.from.icon} alt="" aria-hidden />
+            </span>
+            <div className={s.activityAssetText}>
+              <strong>
+                {row.from.amount} <span className={s.activityAssetSym}>{row.from.sym}</span>
+              </strong>
+              <span>{row.from.value}</span>
+            </div>
+          </div>
+          <span className={s.activityArrow} aria-hidden>→</span>
+          <div className={s.activityAsset}>
+            <span className={s.activityAssetIcon}>
+              <img src={row.to.icon} alt="" aria-hidden />
+            </span>
+            <div className={s.activityAssetText}>
+              <strong className={s.activityAssetTo}>
+                {row.to.amount} <span className={s.activityAssetSym}>{row.to.sym}</span>
+              </strong>
+              <span>{row.to.value}</span>
+            </div>
+          </div>
+        </>
+      ) : (
+        <div className={s.activityWatch}>
+          <strong>{row.target}</strong>
+          {row.note && <span>{row.note}</span>}
+        </div>
+      )}
+
+      <span className={s.activitySources}>
+        <span className={s.activitySourceChip} title="Cassie">
+          <img src="/cassie-logo-transparent.png" alt="Cassie" />
+        </span>
+        {row.source === "x" && (
+          <span className={s.activitySourceChip} title="X">
+            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </span>
+        )}
+      </span>
+    </li>
+  );
+}
+
+function CommandGlyph({ command }: { command: ActivityCommand }) {
+  if (command === "trade") {
+    return (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M7 17 17 7" />
+        <path d="M9 7h8v8" />
+      </svg>
+    );
+  }
+  if (command === "watch") {
+    return (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+        <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
+      </svg>
+    );
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M7 7h10l-3-3" />
+      <path d="M17 17H7l3 3" />
+    </svg>
   );
 }
 
@@ -708,6 +971,84 @@ interface VenueIconProps {
   style?: React.CSSProperties;
 }
 
+type ActionIconName = "deposit" | "copy" | "check" | "send" | "swap" | "telegram" | "export";
+
+function ActionIcon({ name }: { name: ActionIconName }) {
+  const common = {
+    className: s.actionIcon,
+    width: 16,
+    height: 16,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    xmlns: "http://www.w3.org/2000/svg",
+    "aria-hidden": true,
+  };
+
+  if (name === "deposit") {
+    return (
+      <svg {...common}>
+        <path d="M12 4v10" />
+        <path d="m8 10 4 4 4-4" />
+        <path d="M5 18h14" />
+      </svg>
+    );
+  }
+
+  if (name === "copy") {
+    return (
+      <svg {...common}>
+        <rect x="9" y="9" width="10" height="10" rx="2" />
+        <path d="M5 15V7a2 2 0 0 1 2-2h8" />
+      </svg>
+    );
+  }
+
+  if (name === "check") {
+    return (
+      <svg {...common}>
+        <path d="m5 12 4 4L19 6" />
+      </svg>
+    );
+  }
+
+  if (name === "send") {
+    return (
+      <svg {...common}>
+        <path d="M7 17 17 7" />
+        <path d="M8 7h9v9" />
+      </svg>
+    );
+  }
+
+  if (name === "swap") {
+    return (
+      <svg {...common}>
+        <path d="M7 7h11" />
+        <path d="m15 4 3 3-3 3" />
+        <path d="M17 17H6" />
+        <path d="m9 14-3 3 3 3" />
+      </svg>
+    );
+  }
+
+  if (name === "telegram") {
+    return (
+      <svg {...common}>
+        <path d="M20 4 4 11l6 2 2 6 8-15Z" />
+        <path d="m10 13 4-4" />
+      </svg>
+    );
+  }
+
+  return (
+    <svg {...common}>
+      <path d="M12 14V4" />
+      <path d="m8 8 4-4 4 4" />
+      <path d="M5 18h14" />
+    </svg>
+  );
+}
+
 function VenueIcon({ venue, size = 16, className, style }: VenueIconProps) {
   if (venue === "hyper") {
     return (
@@ -766,6 +1107,109 @@ function shortenTweet(text: string, maxLength: number) {
 
 function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function StyledQR({ data, size = 132 }: { data: string; size?: number }) {
+  const matrix = useMemo(() => {
+    const qr = QRCode.create(data, { errorCorrectionLevel: "H" });
+    return { modules: qr.modules, count: qr.modules.size };
+  }, [data]);
+
+  const { modules, count } = matrix;
+  const cell = size / count;
+  const r = cell * 0.42;
+
+  const finders = [
+    { x: 0, y: 0 },
+    { x: count - 7, y: 0 },
+    { x: 0, y: count - 7 },
+  ];
+  const inFinder = (x: number, y: number) =>
+    finders.some((f) => x >= f.x && x < f.x + 7 && y >= f.y && y < f.y + 7);
+
+  const logoModules = Math.max(5, Math.round(count * 0.18));
+  const logoStart = Math.floor((count - logoModules) / 2);
+  const logoEnd = logoStart + logoModules;
+  const inLogo = (x: number, y: number) =>
+    x >= logoStart && x < logoEnd && y >= logoStart && y < logoEnd;
+
+  const dots: JSX.Element[] = [];
+  for (let y = 0; y < count; y++) {
+    for (let x = 0; x < count; x++) {
+      if (inFinder(x, y) || inLogo(x, y)) continue;
+      if (modules.get(x, y)) {
+        dots.push(
+          <circle
+            key={`${x}-${y}`}
+            cx={(x + 0.5) * cell}
+            cy={(y + 0.5) * cell}
+            r={r}
+            fill="#0a0a0a"
+          />,
+        );
+      }
+    }
+  }
+
+  const logoX = logoStart * cell;
+  const logoY = logoStart * cell;
+  const logoW = logoModules * cell;
+  const pad = cell * 0.7;
+
+  return (
+    <svg
+      viewBox={`0 0 ${size} ${size}`}
+      width={size}
+      height={size}
+      role="img"
+      aria-label="Base deposit QR code"
+    >
+      <rect width={size} height={size} rx={size * 0.06} fill="#ffffff" />
+      {finders.map((f, i) => {
+        const fx = f.x * cell;
+        const fy = f.y * cell;
+        const fs = 7 * cell;
+        return (
+          <g key={`finder-${i}`}>
+            <rect x={fx} y={fy} width={fs} height={fs} rx={fs * 0.26} fill="#0a0a0a" />
+            <rect
+              x={fx + cell}
+              y={fy + cell}
+              width={fs - 2 * cell}
+              height={fs - 2 * cell}
+              rx={(fs - 2 * cell) * 0.24}
+              fill="#ffffff"
+            />
+            <rect
+              x={fx + 2 * cell}
+              y={fy + 2 * cell}
+              width={fs - 4 * cell}
+              height={fs - 4 * cell}
+              rx={(fs - 4 * cell) * 0.26}
+              fill="#0a0a0a"
+            />
+          </g>
+        );
+      })}
+      {dots}
+      <rect
+        x={logoX - pad}
+        y={logoY - pad}
+        width={logoW + pad * 2}
+        height={logoW + pad * 2}
+        rx={cell * 0.6}
+        fill="#ffffff"
+      />
+      <rect
+        x={logoX}
+        y={logoY}
+        width={logoW}
+        height={logoW}
+        rx={cell * 0.35}
+        fill="#0052FF"
+      />
+    </svg>
+  );
 }
 
 function moneyToNumber(value: string) {
