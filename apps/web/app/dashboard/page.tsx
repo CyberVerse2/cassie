@@ -309,14 +309,6 @@ function Aside() {
         <span>Cassie</span>
       </a>
 
-      <div className={s.identity}>
-        <span className={s.identityAvatar}>C</span>
-        <div className={s.identityText}>
-          <span className={s.identityName}>Celestine</span>
-          <span className={s.identityMeta}>@thecyberverse1 · Base</span>
-        </div>
-      </div>
-
       <div className={s.depositCard} id="deposit">
         <div className={s.qrFrame}>
           <StyledQR data={baseDepositUri} />
@@ -364,6 +356,14 @@ function Aside() {
           <span>Export keys</span>
         </a>
       </nav>
+
+      <div className={`${s.identity} ${s.identityDock}`}>
+        <span className={s.identityAvatar}>C</span>
+        <div className={s.identityText}>
+          <span className={s.identityName}>Celestine</span>
+          <span className={s.identityMeta}>@thecyberverse</span>
+        </div>
+      </div>
     </aside>
   );
 }

@@ -102,6 +102,16 @@
   border-bottom: 1px solid var(--line-soft);
 }
 
+.identityDock {
+  grid-template-columns: 60px 1fr;
+  gap: 16px;
+  margin-top: auto;
+  padding-top: var(--space-md);
+  padding-bottom: 0;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 0;
+}
+
 .identityAvatar {
   display: grid;
   place-items: center;
@@ -121,6 +131,12 @@
     0 10px 22px -16px color-mix(in oklab, var(--gilt) 60%, transparent);
 }
 
+.identityDock .identityAvatar {
+  width: 60px;
+  height: 60px;
+  font-size: 1.45rem;
+}
+
 .identityText {
   display: flex;
   min-width: 0;
@@ -138,12 +154,21 @@
   line-height: 1.1;
 }
 
+.identityDock .identityName {
+  font-size: 1.55rem;
+}
+
 .identityMeta {
   font-family: var(--font-sans), var(--stack-sans);
   font-size: 11.5px;
   font-weight: 500;
   letter-spacing: 0.02em;
   color: var(--ink-mute);
+}
+
+.identityDock .identityMeta {
+  font-size: 1rem;
+  line-height: 1.2;
 }
 
 .depositCard {
