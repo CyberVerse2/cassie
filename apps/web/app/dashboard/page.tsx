@@ -306,6 +306,7 @@ function Aside() {
     <aside className={s.aside}>
       <a className={s.brand} href="/" aria-label="Cassie home">
         <img className="mark" src="/cassie-logo-transparent.png" alt="" aria-hidden />
+        <span>Cassie</span>
       </a>
 
       <div className={s.identity}>

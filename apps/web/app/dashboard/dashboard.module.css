@@ -71,10 +71,16 @@
 
 .brand {
   display: inline-flex;
+  gap: 10px;
   align-items: center;
-  justify-content: center;
-  width: 38px;
+  width: fit-content;
   height: 38px;
+  color: var(--ink);
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-size: 1.2rem;
+  font-weight: 500;
+  letter-spacing: -0.005em;
   text-decoration: none;
   margin-bottom: var(--space-2xs);
 }
