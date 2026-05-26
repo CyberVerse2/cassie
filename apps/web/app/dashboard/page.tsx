@@ -201,14 +201,22 @@ type ActivityAsset = {
   icon: string;
 };
 
+type ActivityWatchAsset = {
+  sym: string;
+  icon: string;
+  side: string;
+  sideTone: "long" | "short" | "yes";
+};
+
 type ActivityRow = {
   time: string;
   command: ActivityCommand;
   source: "cassie" | "x";
   from?: ActivityAsset;
   to?: ActivityAsset;
-  target?: string;
-  note?: string;
+  asset?: ActivityWatchAsset;
+  watchedAt?: string;
+  via?: string;
 };
 
 type ActivityGroup = {
@@ -230,9 +238,10 @@ const activityFeed: ActivityGroup[] = [
       {
         time: "10:42am",
         command: "watch",
-        source: "cassie",
-        target: "BTC over $104,000",
-        note: "Enter on clean liquidity break",
+        source: "x",
+        asset: { sym: "BTC", icon: tokenImages.BTC, side: "LONG", sideTone: "long" },
+        watchedAt: "$101,840",
+        via: "@maya_trades",
       },
     ],
   },
@@ -269,8 +278,9 @@ const activityFeed: ActivityGroup[] = [
         time: "9:31am",
         command: "watch",
         source: "x",
-        target: "AI16Z mention spike",
-        note: "Above 40 mentions / 15min",
+        asset: { sym: "SOL YES", icon: tokenImages.SOL, side: "YES", sideTone: "yes" },
+        watchedAt: "61¢",
+        via: "@ira_markets",
       },
       {
         time: "8:08am",
@@ -311,7 +321,17 @@ function Aside() {
 
       <div className={s.depositCard} id="deposit">
         <div className={s.qrFrame}>
-          <StyledQR data={baseDepositUri} />
+          <div className={s.qrSurface}>
+            <StyledQR data={baseDepositUri} />
+            <span className={`${s.qrCorner} ${s.qrCornerTopLeft}`} aria-hidden />
+            <span className={`${s.qrCorner} ${s.qrCornerTopRight}`} aria-hidden />
+            <span className={`${s.qrCorner} ${s.qrCornerBottomLeft}`} aria-hidden />
+            <span className={`${s.qrCorner} ${s.qrCornerBottomRight}`} aria-hidden />
+          </div>
+          <div className={s.qrMetaLine}>
+            <span>Base USDC</span>
+            <code>{shortAddress(baseDepositAddress)}</code>
+          </div>
         </div>
       </div>
 
@@ -374,8 +394,8 @@ function Defaults() {
   return (
     <label className={s.defaults}>
       <div className={s.defaultsHead}>
-        <span className={s.defaultsLabel}>Default trade size</span>
-        <span className={s.defaultsCaption}>per @cassie command</span>
+        <span className={s.defaultsLabel}>Configure</span>
+        <span className={s.defaultsCaption}>default cassie will trade</span>
       </div>
       <span className={s.defaultsField}>
         <span className={s.defaultsCurrency}>$</span>
@@ -544,7 +564,7 @@ function Center() {
             </span>
           </div>
           <div className={s.chartBody}>
-            <LineChart data={rangeData} onHover={setHoveredData} />
+            <LineChart key={selectedRange} data={rangeData} onHover={setHoveredData} />
           </div>
           <div className={s.chartFoot}>
             <div
@@ -831,12 +851,30 @@ function ActivityItem({ row }: { row: ActivityRow }) {
             </div>
           </div>
         </>
-      ) : (
+      ) : row.asset ? (
         <div className={s.activityWatch}>
-          <strong>{row.target}</strong>
-          {row.note && <span>{row.note}</span>}
+          <span className={s.activityAssetIcon}>
+            <img src={row.asset.icon} alt="" aria-hidden />
+          </span>
+          <div className={s.activityWatchText}>
+            <strong>
+              <span className={s.activityAssetSym}>{row.asset.sym}</span>
+              <span className={`${s.amountSide} ${s[`amountSide_${row.asset.sideTone}`]}`}>
+                {row.asset.side}
+              </span>
+            </strong>
+            <span>
+              entry {row.watchedAt}
+              {row.via && (
+                <>
+                  <span className={s.activityWatchSep} aria-hidden> · </span>
+                  via <span className={s.watchingSource}>{row.via}</span>
+                </>
+              )}
+            </span>
+          </div>
         </div>
-      )}
+      ) : null}
 
       <span className={s.activitySources}>
         <span className={s.activitySourceChip} title="Cassie">
@@ -1076,10 +1114,10 @@ function LineChart({ data, onHover }: LineChartProps) {
         <path d={areaPath} className={s.chartFill} />
 
         {/* Thick line glow underlay */}
-        <path d={mainPath} className={s.chartGlow} />
+        <path d={mainPath} className={s.chartGlow} pathLength={100} />
 
         {/* Crisp balance line */}
-        <path d={mainPath} className={s.chartLine} />
+        <path d={mainPath} className={s.chartLine} pathLength={100} />
 
         {/* Cursor & Tracker elements */}
         {hoveredIndex !== null && (

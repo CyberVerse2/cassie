@@ -16,9 +16,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Cassie — Trade anything, anywhere.",
+  title: "Cassie — Turn a tweet into a trade",
   description:
-    "Cassie is an X-native trade agent. Mention her; she frames the opportunity, ranks venues, and hands you a clean trade.",
+    "Cassie is an agent that can find and execute trades based on a tweet.",
 };
 
 export default function RootLayout({

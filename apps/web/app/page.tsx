@@ -55,9 +55,12 @@ export default function Home() {
               her under any post - she makes a trade for you.
             </p>
             <div className="cta-row">
-              <a className="btn btn-gold" href="/dashboard">
-                Continue with X
-                <span className="arrow" aria-hidden>→</span>
+              <a className="btn btn-x" href="/onboarding">
+                <span>Continue with</span>
+                <svg className="x-logo" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true" style={{ marginLeft: "6px", verticalAlign: "-2px" }}>
+                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                </svg>
+                <span className="arrow" aria-hidden="true" style={{ marginLeft: "4px" }}>→</span>
               </a>
             </div>
           </div>
@@ -84,7 +87,6 @@ function HeroBrand() {
   return (
     <a className="hero-brand" href="/" aria-label="Cassie home">
       <img src="/cassie-logo-transparent.png" alt="" aria-hidden />
-      <span>Cassie</span>
     </a>
   );
 }
@@ -92,7 +94,15 @@ function HeroBrand() {
 function Painting() {
   return (
     <div className="chapter-canvas" aria-hidden>
-      <div className="chapter-painting boat" />
+      <video
+        className="chapter-video"
+        src="/cassie-hero-loop.mp4"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+      />
       <div className="chapter-vignette" />
       <div className="chapter-grain" />
     </div>
