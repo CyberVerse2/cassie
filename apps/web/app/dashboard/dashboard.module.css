@@ -103,8 +103,8 @@
 }
 
 .identityDock {
-  grid-template-columns: 60px 1fr;
-  gap: 16px;
+  grid-template-columns: 38px 1fr;
+  gap: 10px;
   margin-top: auto;
   padding-top: var(--space-md);
   padding-bottom: 0;
@@ -132,9 +132,9 @@
 }
 
 .identityDock .identityAvatar {
-  width: 60px;
-  height: 60px;
-  font-size: 1.45rem;
+  width: 38px;
+  height: 38px;
+  font-size: 1rem;
 }
 
 .identityText {
@@ -1999,11 +1999,11 @@
 
 .voiceLogo {
   position: absolute;
-  bottom: -24px;
+  bottom: -18px;
   left: 22px;
-  width: 72px;
-  height: 72px;
-  padding: 8px;
+  width: 56px;
+  height: 56px;
+  padding: 7px;
   background: linear-gradient(135deg, var(--panel) 0%, var(--bg) 100%);
   border-radius: var(--radius-lg);
   border: 1px solid var(--line);
@@ -2021,7 +2021,7 @@
 }
 
 .voiceMeta {
-  padding: 38px 22px 8px;
+  padding: 30px 22px 8px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -2030,7 +2030,7 @@
 
 .voiceTitle {
   display: inline-flex;
-  gap: 6px;
+  gap: 5px;
   align-items: center;
   font-family: var(--font-display);
   font-style: italic;
@@ -2043,14 +2043,16 @@
 .voiceTitle :global(.verified) {
   display: inline-grid;
   place-items: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: var(--gilt);
-  color: oklch(0.18 0.02 80);
-  font-size: 11px;
-  font-style: normal;
-  font-family: var(--font-sans);
+  width: 14px;
+  height: 14px;
+  filter: drop-shadow(0 0 6px color-mix(in oklab, var(--gilt) 18%, transparent));
+  transform: translateY(1px);
+}
+
+.voiceTitle :global(.verified svg) {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .voiceTitle :global(.handle) {
