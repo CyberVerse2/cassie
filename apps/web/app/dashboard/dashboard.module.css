@@ -480,31 +480,6 @@
   color: var(--gilt-glow);
 }
 
-.asideFoot {
-  margin-top: auto;
-  padding: var(--space-sm) 12px 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: var(--ink-mute);
-  font-family: var(--font-sans), var(--stack-sans);
-  font-style: normal;
-  font-weight: 500;
-}
-
-.asideFoot :global(.help) {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  border: 1px solid var(--line);
-  font-style: normal;
-  font-family: var(--font-sans);
-  font-size: 12px;
-}
-
 /* ─── main center column ─────────────────────────────────────── */
 
 .main {

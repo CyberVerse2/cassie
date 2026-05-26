@@ -363,11 +363,6 @@ function Aside() {
           <span>Export keys</span>
         </a>
       </nav>
-
-      <div className={s.asideFoot}>
-        <span>Base wallet</span>
-        <span className="help">?</span>
-      </div>
     </aside>
   );
 }
