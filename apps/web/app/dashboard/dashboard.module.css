@@ -88,11 +88,38 @@
 }
 
 .identity {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+  display: grid;
+  grid-template-columns: 38px 1fr;
+  gap: 10px;
+  align-items: center;
   padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--line-soft);
+}
+
+.identityAvatar {
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 28%, color-mix(in oklab, white 28%, transparent), transparent 34%),
+    linear-gradient(135deg, var(--gilt-glow) 0%, var(--gilt-deep) 100%);
+  color: oklch(0.18 0.02 80);
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-size: 1rem;
+  font-weight: 600;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    0 10px 22px -16px color-mix(in oklab, var(--gilt) 60%, transparent);
+}
+
+.identityText {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .identityName {
@@ -586,7 +613,7 @@
 
 .tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   align-items: stretch;
   padding: 0 var(--space-lg);
   border-bottom: 1px solid var(--line);
@@ -1429,11 +1456,212 @@
   text-transform: uppercase;
 }
 
+.watchingCount {
+  font-family: var(--font-sans), var(--stack-sans);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: oklch(0.82 0.08 245);
+}
+
+/* ─── sidebar defaults block ─────────────────────────────────── */
+
+.defaults {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) 4px;
+  border-top: 1px solid var(--line-soft);
+  border-bottom: 1px solid var(--line-soft);
+  cursor: text;
+}
+
+.defaultsHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.defaultsLabel {
+  font-family: var(--font-sans), var(--stack-sans);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.defaultsCaption {
+  font-family: var(--font-sans), var(--stack-sans);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  color: var(--ink-mute);
+}
+
+.defaultsField {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 2px;
+  color: var(--ink);
+}
+
+.defaultsCurrency {
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--ink-mute);
+}
+
+.defaultsInput {
+  width: 64px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-size: 22px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid transparent;
+  padding: 0 0 2px;
+  transition: border-color 180ms ease, color 180ms ease;
+}
+
+.defaultsInput:hover {
+  border-bottom-color: var(--line);
+}
+
+.defaultsInput:focus {
+  outline: none;
+  border-bottom-color: var(--gilt-glow);
+  color: var(--gilt-glow);
+}
+
+.walletSubtabs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-md);
+  margin: var(--space-2xl) 0 var(--space-sm);
+  padding: 0 0 6px;
+  border-bottom: 1px solid var(--line-soft);
+  width: 100%;
+}
+
+.walletSubtab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 2px;
+  margin-bottom: -7px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-mute);
+  font-family: var(--font-sans), var(--stack-sans);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 180ms ease;
+}
+
+.walletSubtab::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1px;
+  background: transparent;
+  transition: background 180ms ease;
+}
+
+.walletSubtab:hover {
+  color: var(--ink-soft);
+}
+
+.walletSubtabActive {
+  color: var(--ink);
+}
+
+.walletSubtabActive::after {
+  background: var(--gilt-glow);
+}
+
+.walletSubtabCount {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  border: 1px solid var(--line-soft);
+  color: var(--ink-mute);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.walletSubtabActive .walletSubtabCount {
+  color: var(--gilt-glow);
+  border-color: color-mix(in oklab, var(--gilt) 30%, var(--line));
+}
+
+.watchingSource {
+  font-weight: 600;
+  color: var(--ink-soft);
+  letter-spacing: 0.005em;
+}
+
+.watchingPnlUp { color: var(--up) !important; }
+.watchingPnlDown { color: var(--coral) !important; }
+
+.watchTradeBtn {
+  height: 28px;
+  padding: 0 14px;
+  justify-self: end;
+  border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in oklab, var(--gilt) 55%, transparent);
+  background: linear-gradient(180deg, var(--gilt-glow) 0%, var(--gilt) 100%);
+  color: oklch(0.18 0.02 80);
+  font-family: var(--font-sans), var(--stack-sans);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 30%, transparent),
+    0 10px 22px -14px color-mix(in oklab, var(--gilt) 60%, transparent);
+  transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+}
+
+.watchTradeBtn:hover {
+  filter: brightness(1.06);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
+    0 12px 26px -12px color-mix(in oklab, var(--gilt) 70%, transparent);
+}
+
+.watchTradeBtn:active {
+  transform: translateY(0.5px);
+}
+
 .table { display: grid; }
 
 .tr {
   display: grid;
-  grid-template-columns: 64px minmax(200px, 1.4fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) 44px;
+  grid-template-columns: 64px minmax(200px, 1.4fr) minmax(120px, 0.7fr) minmax(120px, 0.7fr) 86px;
   align-items: center;
   gap: var(--space-md);
   padding: 14px var(--space-md);
@@ -1721,6 +1949,7 @@
   place-items: center;
   width: 36px;
   height: 36px;
+  justify-self: end;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
   background: color-mix(in oklab, var(--panel) 70%, transparent);

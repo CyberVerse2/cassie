@@ -134,6 +134,54 @@ const largestPortfolioMover = trades.reduce((largest, trade) =>
     : largest,
 );
 
+const watching = [
+  {
+    id: "BTC",
+    title: "BTC to $120k by quarter end",
+    source: "@maya_trades",
+    venue: "hyper",
+    venueLabel: "Hyperliquid",
+    side: "LONG",
+    sideTone: "long",
+    watchedAt: "$101,840",
+    current: "$104,210",
+    changePct: "+2.3%",
+    hypoPnl: "+$2.33",
+    tone: "up",
+    watchedAge: "2h",
+  },
+  {
+    id: "ETH",
+    title: "ETH back to $2,800",
+    source: "@noah_eth",
+    venue: "hyper",
+    venueLabel: "Hyperliquid",
+    side: "SHORT",
+    sideTone: "short",
+    watchedAt: "$3,108",
+    current: "$3,042",
+    changePct: "+2.1%",
+    hypoPnl: "+$2.12",
+    tone: "up",
+    watchedAge: "5h",
+  },
+  {
+    id: "SOL",
+    title: "SOL ETF approval locks YES",
+    source: "@ira_markets",
+    venue: "poly",
+    venueLabel: "Polymarket",
+    side: "YES",
+    sideTone: "yes",
+    watchedAt: "61¢",
+    current: "63¢",
+    changePct: "+3.3%",
+    hypoPnl: "+$3.27",
+    tone: "up",
+    watchedAge: "1d",
+  },
+];
+
 const taggedTweets = tweetRun.tweets.slice(0, 6).map((tweet, index) => ({
   ...tweet,
   age: ["2h", "5h", "11h", "1d", "2d", "3d"][index] ?? tweet.date,
@@ -261,8 +309,11 @@ function Aside() {
       </a>
 
       <div className={s.identity}>
-        <span className={s.identityName}>Celestine</span>
-        <span className={s.identityMeta}>@thecyberverse1 · Base</span>
+        <span className={s.identityAvatar}>C</span>
+        <div className={s.identityText}>
+          <span className={s.identityName}>Celestine</span>
+          <span className={s.identityMeta}>@thecyberverse1 · Base</span>
+        </div>
       </div>
 
       <div className={s.depositCard} id="deposit">
@@ -286,6 +337,8 @@ function Aside() {
           <ActionIcon name={copied ? "check" : "copy"} />
         </button>
       </div>
+
+      <Defaults />
 
       <nav className={s.nav} aria-label="Wallet actions">
         <span className={s.navSection}>Move</span>
@@ -316,6 +369,30 @@ function Aside() {
         <span className="help">?</span>
       </div>
     </aside>
+  );
+}
+
+function Defaults() {
+  const [trade, setTrade] = useState("50");
+
+  return (
+    <label className={s.defaults}>
+      <div className={s.defaultsHead}>
+        <span className={s.defaultsLabel}>Default trade size</span>
+        <span className={s.defaultsCaption}>per @cassie command</span>
+      </div>
+      <span className={s.defaultsField}>
+        <span className={s.defaultsCurrency}>$</span>
+        <input
+          type="text"
+          inputMode="decimal"
+          className={s.defaultsInput}
+          value={trade}
+          onChange={(e) => setTrade(e.target.value.replace(/[^0-9.]/g, ""))}
+          aria-label="Default trade size in USDC"
+        />
+      </span>
+    </label>
   );
 }
 
@@ -406,7 +483,8 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
 function Center() {
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
-  const [activeTab, setActiveTab] = useState<"wallet" | "configure" | "activity">("wallet");
+  const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
+  const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
 
   const rangeData = generateDataForRange(selectedRange);
   const currentValPoint = rangeData[rangeData.length - 1];
@@ -438,15 +516,6 @@ function Center() {
         >
           Wallet
           <span className="tab-count">$1,284</span>
-        </button>
-        <button
-          type="button"
-          className={`${s.tab} ${activeTab === "configure" ? s.tabActive : ""}`}
-          role="tab"
-          aria-selected={activeTab === "configure"}
-          onClick={() => setActiveTab("configure")}
-        >
-          Configure
         </button>
         <button
           type="button"
@@ -566,10 +635,30 @@ function Center() {
           </div>
         </div>
 
-        <div className={s.tableHeader}>
-          <p>Trade history</p>
+        <div className={s.walletSubtabs} role="tablist" aria-label="Wallet view">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={walletView === "trades"}
+            className={`${s.walletSubtab} ${walletView === "trades" ? s.walletSubtabActive : ""}`}
+            onClick={() => setWalletView("trades")}
+          >
+            Trade history
+            <span className={s.walletSubtabCount}>{trades.length}</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={walletView === "watching"}
+            className={`${s.walletSubtab} ${walletView === "watching" ? s.walletSubtabActive : ""}`}
+            onClick={() => setWalletView("watching")}
+          >
+            Watching
+            <span className={s.walletSubtabCount}>{watching.length}</span>
+          </button>
         </div>
 
+        {walletView === "trades" && (
         <div className={s.table}>
           <div className={`${s.tr} ${s.thead}`} role="row">
             <span>Asset</span>
@@ -614,6 +703,61 @@ function Center() {
             </div>
           ))}
         </div>
+        )}
+
+        {walletView === "watching" && (
+        <div className={s.table}>
+          <div className={`${s.tr} ${s.thead}`} role="row">
+            <span>Asset</span>
+            <span>Idea</span>
+            <span className={s.amountHead}>Now</span>
+            <span className={s.amountHead}>If $100</span>
+            <span />
+          </div>
+          {watching.map((w) => (
+            <div className={s.tr} role="row" key={w.title}>
+              <span className={s.tokenCell}>
+                <span className="tk" style={{ overflow: "hidden", background: "none" }}>
+                  <img src={tokenImages[w.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "4px" }} />
+                </span>
+                <span className={`tk-venue ${w.venue}`} title={w.venueLabel}>
+                  <VenueIcon venue={w.venue} size={11} />
+                </span>
+              </span>
+              <span className={s.tradeCopy}>
+                <strong>{w.title}</strong>
+                <span>
+                  via <span className={s.watchingSource}>{w.source}</span> · watched {w.watchedAge} ago at {w.watchedAt}
+                </span>
+              </span>
+              <span className={s.amountCell}>
+                <span className={s.amountValue}>{w.current}</span>
+                <span
+                  className={`${s.valueDelta} ${w.tone === "up" ? s.amountUp : s.amountDown}`}
+                >
+                  <span className={s.amountDeltaIcon} aria-hidden>
+                    {w.tone === "up" ? "▲" : "▼"}
+                  </span>
+                  {w.changePct.replace(/^[+-]/, "")} since watch
+                </span>
+              </span>
+              <span className={s.valueCell}>
+                <span
+                  className={`${s.amountValue} ${w.tone === "up" ? s.watchingPnlUp : s.watchingPnlDown}`}
+                >
+                  {w.hypoPnl}
+                </span>
+                <span className={`${s.amountSide} ${s[`amountSide_${w.sideTone}`]}`}>
+                  {w.side}
+                </span>
+              </span>
+              <button className={s.watchTradeBtn} aria-label={`Trade ${w.title} now`}>
+                Trade
+              </button>
+            </div>
+          ))}
+        </div>
+        )}
       </div>
       )}
     </section>
