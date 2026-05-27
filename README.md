@@ -8,7 +8,7 @@ Cassie can reason with AI, but she does not directly place orders.
 
 ```mermaid
 flowchart TD
-  User["X mention / API / CLI"] --> Intake["Durable control run"]
+  User["X mention / CLI / dashboard action"] --> Intake["Durable control run"]
   Intake --> Supervisor["Graphile Worker supervisor"]
   Supervisor --> Tools["Bounded AI tools + run steps"]
   Tools --> Router["Trade-expression router"]
@@ -63,7 +63,7 @@ Run the worker in a second terminal:
 npm run worker
 ```
 
-## API
+## Local Control Surface
 
 Create or update user settings:
 
@@ -141,7 +141,7 @@ Implemented:
 - Hyperliquid and Polymarket adapters over real connector candidates
 - Deterministic risk checks
 - Trade-ticket creation
-- Approval endpoint
+- Ticket approval action
 - Graphile Worker supervisor and execution jobs
 - Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events
 - Admin dashboard for pending tickets, runs, and audit trail

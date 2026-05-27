@@ -5,7 +5,7 @@ Cassie is an X-native trade-expression and ticketing agent. A mention creates a 
 Cassie can reason with AI, but trading and execution decisions pass through code-owned gates.
 
 ```text
-X mention / API request / CLI command
+X mention / CLI command / dashboard action
 -> durable control run
 -> Graphile supervisor job
 -> AI SDK ToolLoopAgent
@@ -20,7 +20,7 @@ X mention / API request / CLI command
 ```text
 src/
   cli.ts                  CLI frontend
-  server.ts               HTTP API and dashboard server
+  server.ts               HTTP dashboard and local control-plane server
   worker.ts               Graphile worker entrypoint
   poller.ts               X polling entrypoint
   dashboard.ts            Server-rendered dashboard
