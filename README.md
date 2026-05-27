@@ -1,6 +1,6 @@
 # Cassie
 
-Cassie is an X-native trade-expression and ticketing agent. A mention creates a durable control-plane run, a Graphile Worker supervisor drives bounded AI tools, and approved trade tickets are handed to the execution worker.
+Cassie is an X-native trade-expression and ticketing agent. A mention or CLI test run creates a durable run, a Graphile Worker supervisor drives bounded AI tools, and approved trade tickets are handed to the execution worker.
 
 Cassie can reason with AI, but she does not directly place orders.
 
@@ -8,7 +8,7 @@ Cassie can reason with AI, but she does not directly place orders.
 
 ```mermaid
 flowchart TD
-  User["X mention / CLI / dashboard action"] --> Intake["Durable control run"]
+  User["X mention / CLI test run"] --> Intake["Durable run"]
   Intake --> Supervisor["Graphile Worker supervisor"]
   Supervisor --> Tools["Bounded AI tools + run steps"]
   Tools --> Router["Trade-expression router"]
@@ -21,8 +21,8 @@ flowchart TD
 
 Runtime shape:
 
-- Intake is durable first: every mention becomes a `control_run` before the supervisor starts.
-- The supervisor is the control plane: it calls bounded tools and writes visible `run_steps`.
+- Intake is durable first: every mention or CLI test becomes a `control_run` before the supervisor starts.
+- The supervisor drives the run: it calls bounded tools and writes visible `run_steps`.
 - Cassie treats the source post as raw verifiable signal, frames the opportunity, generates trade expressions, searches supported venues, ranks the cleanest real expression, and finalizes a ticket or no-trade.
 - DeepSeek handles cheap extraction, bookkeeping, analyst judgment, and trade decisions.
 - Ticket creation is downstream of market fit, approval policy, and deterministic risk.
@@ -41,6 +41,8 @@ Dashboard:
 ```text
 http://localhost:3000/dashboard
 ```
+
+The dashboard is a local run viewer for testing and ticket approval.
 
 ## Configuration
 
@@ -79,7 +81,7 @@ npm run cli -- control-run RUN_ID --json
 
 Approve pending tickets from the dashboard.
 
-## Product Surface
+## Current Test Surface
 
 Implemented:
 
@@ -93,7 +95,7 @@ Implemented:
 - Ticket approval action
 - Graphile Worker supervisor and execution jobs
 - Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events
-- Admin dashboard for pending tickets, runs, and audit trail
+- Local dashboard for pending tickets, runs, and audit trail
 
 Not included:
 

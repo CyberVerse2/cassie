@@ -117,7 +117,7 @@ App flow:
   run-supervisor <runId>    Execute an existing queued run.
   control-run <runId>       Show a durable run, recorded steps, and timeline.
   state                     Show the persisted app state summary.
-  runs                      List durable control-plane runs.
+  runs                      List durable runs.
   tickets                   List trade tickets.
   approve <ticketId>        Approve a pending trade ticket and queue execution.
   execute-next --yes        Execute the next queued execution job.
@@ -614,7 +614,7 @@ function liveThinking(stepType: string): string {
     case "final":
       return "Persist the final user-facing result.";
     default:
-      return "Run the next persisted control-plane step.";
+      return "Run the next persisted step.";
   }
 }
 

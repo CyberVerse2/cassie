@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRateLimiter, RateLimitError } from "../src/security.ts";
 
 describe("server route security", () => {
-  it("does not expose API-shaped local control routes", async () => {
+  it("does not expose legacy slash-api routes", async () => {
     const source = await readFile(new URL("../src/server.ts", import.meta.url), "utf8");
 
     expect(source).not.toContain('"/api/');

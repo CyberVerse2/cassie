@@ -44,7 +44,7 @@ class FakeCassieJobQueue implements CassieJobQueue {
   }
 }
 
-describe("control plane run persistence", () => {
+describe("durable run persistence", () => {
   it("creates a durable run and records ordered steps", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({

@@ -1,12 +1,12 @@
 # Cassie Architecture
 
-Cassie is an X-native trade-expression and ticketing agent. A mention creates a durable control-plane run. A Graphile Worker supervisor job then drives bounded AI tools, records every step, and stops at structured analysis, no-trade, or a trade ticket.
+Cassie is an X-native trade-expression and ticketing agent. A mention or CLI test creates a durable run. A Graphile Worker supervisor job then drives bounded AI tools, records every step, and stops at structured analysis, no-trade, or a trade ticket.
 
 Cassie can reason with AI, but trading and execution decisions pass through code-owned gates.
 
 ```text
-X mention / CLI command / dashboard action
--> durable control run
+X mention / CLI test command
+-> durable run
 -> Graphile supervisor job
 -> AI SDK ToolLoopAgent
 -> bounded tools
@@ -20,11 +20,11 @@ X mention / CLI command / dashboard action
 ```text
 src/
   cli.ts                  CLI frontend
-  server.ts               HTTP dashboard and local control-plane server
+  server.ts               Local dashboard test harness
   worker.ts               Graphile worker entrypoint
   poller.ts               X polling entrypoint
   dashboard.ts            Server-rendered dashboard
-  security.ts             Body limit, rate limit, and headers
+  security.ts             Rate limit and headers
   visibility.ts           CLI trace formatting
   helpers/                CLI/runtime helper functions
 
@@ -42,9 +42,9 @@ packages/
   tickets/                ticket creation helpers
 ```
 
-`src` is runtime surface. Package-owned implementation lives under `packages`.
+`src` contains local runtime and testing entrypoints. Package-owned implementation lives under `packages`.
 
-## Control Plane
+## Queued Runs
 
 The canonical mention path is queued.
 
