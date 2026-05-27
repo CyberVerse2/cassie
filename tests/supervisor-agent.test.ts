@@ -255,6 +255,8 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("quote validated candidates -> rank expressions");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
     expect(instructions).toContain("create_trade_ticket creates the ticket with the user's configured default trade size");
+    expect(instructions).toContain("The execution worker handles order submission after ticket creation");
+    expect(instructions).not.toContain("Never execute");
   });
 
   it("records bounded tool steps and creates an executable trade ticket", async () => {

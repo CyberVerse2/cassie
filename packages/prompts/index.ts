@@ -168,9 +168,9 @@ Rules:
 - Do not select a weak proxy if a direct expression exists.
 - Do not select a trade just because the tweet is interesting.
 - Use xSentiment only as evidence about X novelty, source truth, attention, crowding, and correction risk. Do not use it to validate venue existence, prices, liquidity, probabilities, or rules.
-- Return noTradeReason when no candidate has clear semantic fit and acceptable execution.
+- Return noTradeReason when no candidate has clear semantic fit.
 - Use selectedMarket only for a real validated candidate.
-- Never execute orders.`,
+- This tool only ranks markets; the supervisor creates the ticket after selectedMarket is set.`,
   });
 }
 

@@ -616,7 +616,7 @@ function predictionMarketSideForCandidate(candidate: MarketCandidate, side?: "ye
 function preflightUserPolicy(userSettings: UserSettings) {
   const warnings: string[] = [];
   if (!userSettings.walletAddress) {
-    warnings.push("No wallet address is configured; trade tickets may not be executable until wallet setup is complete.");
+    warnings.push("No wallet address is configured; order submission needs wallet setup.");
   }
 
   return PreflightUserPolicySchema.parse({
