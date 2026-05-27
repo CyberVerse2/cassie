@@ -648,12 +648,48 @@ function parseStringArray(value: string | string[] | undefined, context: { field
 }
 
 function parseNumberArray(value: string | string[] | undefined, context: { field: string; market: string }): number[] {
-  return parseStringArray(value, context).map(Number).filter(Number.isFinite);
+  const items = Array.isArray(value)
+    ? value
+    : parseJsonArray(value, context);
+
+  return items
+    .filter((item) => item !== null && item !== "")
+    .map((item) => {
+      if (typeof item !== "string" && typeof item !== "number") {
+        throw malformedPolymarketNumberArrayError(context);
+      }
+      const parsed = Number(item);
+      if (!Number.isFinite(parsed)) {
+        throw malformedPolymarketNumberArrayError(context);
+      }
+      return parsed;
+    });
+}
+
+function parseJsonArray(value: string | undefined, context: { field: string; market: string }): unknown[] {
+  if (!value) return [];
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value) as unknown;
+  } catch (error) {
+    throw malformedPolymarketStringArrayError(context, error);
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw malformedPolymarketStringArrayError(context);
+  }
+
+  return parsed;
 }
 
 function malformedPolymarketStringArrayError(context: { field: string; market: string }, cause?: unknown): Error {
   const causeMessage = cause instanceof Error ? ` ${cause.message}` : "";
   return new Error(`Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of strings or string[].${causeMessage}`);
+}
+
+function malformedPolymarketNumberArrayError(context: { field: string; market: string }): Error {
+  return new Error(`Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of numeric strings or numbers.`);
 }
 
 function polymarketMarketFromSdkMarket(market: PolymarketSdkMarket): PolymarketMarket {
