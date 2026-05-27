@@ -71,6 +71,7 @@ Create or update user settings:
 
 ```bash
 curl -X POST http://localhost:3000/api/settings \
+  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user_1",
@@ -131,7 +132,8 @@ curl -X POST http://localhost:3000/api/tickets/TICKET_ID/approve \
 Inspect state:
 
 ```bash
-curl http://localhost:3000/api/state
+curl http://localhost:3000/api/state \
+  -H "Authorization: Bearer $CASSIE_API_TOKEN"
 ```
 
 ## Product Surface
@@ -141,14 +143,14 @@ Implemented:
 - Single-loop AI supervisor for trade-expression routing
 - Opportunity framing for raw verifiable social signals
 - AI trade-expression generation and ranking
-- Polymarket market discovery using the documented market/search surfaces indexed in `docs/llms/`
+- Polymarket market discovery using SDK public search and CLOB surfaces
 - Hyperliquid and Polymarket adapters over real connector candidates
 - Deterministic risk checks
 - Trade-ticket creation
 - Approval endpoint
 - Graphile Worker supervisor and execution jobs
 - Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events
-- Dashboard for pending tickets, runs, and audit trail
+- Admin dashboard for pending tickets, runs, and audit trail
 
 Not included:
 

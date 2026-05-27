@@ -140,9 +140,6 @@ async function main(): Promise<void> {
     }, null, 2));
     return;
   }
-  if (!market) {
-    throw new Error("No market selected.");
-  }
 
   const tokenId = selectOutcomeToken(market, args.outcome);
   const { OrderSide } = await import("@polymarket/client");
@@ -343,9 +340,17 @@ function parseNonnegativeNumber(raw: string, name: string): number {
 }
 
 function topPrice(levels: Array<{ price: string; size: string }>, side: "bid" | "ask"): number | null {
-  const prices = levels.map((level) => Number(level.price)).filter(Number.isFinite);
-  if (prices.length === 0) return null;
-  return side === "bid" ? Math.max(...prices) : Math.min(...prices);
+  let best: number | null = null;
+  for (const level of levels) {
+    const price = Number(level.price);
+    if (!Number.isFinite(price)) continue;
+    best = best == null
+      ? price
+      : side === "bid"
+        ? Math.max(best, price)
+        : Math.min(best, price);
+  }
+  return best;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
