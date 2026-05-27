@@ -9,7 +9,6 @@ const settings: UserSettings = {
   defaultTradeSizeUsd: 50,
   maxTradeSizeUsd: 100,
   maxDailyLossUsd: 1,
-  minConfidence: 0.75,
   maxSpreadBps: 1,
   maxSlippageBps: 1,
   maxPositionUsd: 10,
@@ -53,7 +52,7 @@ const marketSelection: MarketSelection = {
 };
 
 describe("risk evaluation", () => {
-  it("does not block executable trades on venue allowlists, spread, slippage, daily loss, position caps, or approval mode", () => {
+  it("does not block trades on venue allowlists, spread, slippage, daily loss, position caps, or approval mode", () => {
     expect(evaluateRisk({
       marketSelection,
       userSettings: settings,
@@ -78,7 +77,6 @@ describe("risk evaluation", () => {
       defaultTradeSizeUsd: 50,
       maxTradeSizeUsd: 100,
       maxDailyLossUsd: 100,
-      minConfidence: 0.75,
       maxSpreadBps: 50,
       maxSlippageBps: 100,
       maxPositionUsd: 1_000,
@@ -86,13 +84,14 @@ describe("risk evaluation", () => {
     }).allowedVenues).toEqual(["hyperliquid", "polymarket"]);
   });
 
-  it("rejects low thesis fit instead of creating ticket-only trades", () => {
+  it("does not block trades below venue minimum or low thesis fit", () => {
     expect(evaluateRisk({
       marketSelection: {
         ...marketSelection,
         selectedMarket: {
           ...marketSelection.selectedMarket!,
           thesisFit: 0.2,
+          minOrderSizeUsd: 1_000,
         },
       },
       userSettings: settings,
@@ -105,8 +104,8 @@ describe("risk evaluation", () => {
       },
       sizeUsd: null,
     })).toEqual({
-      decision: "reject",
-      reason: "Thesis fit is below the execution threshold.",
+      decision: "approve",
+      adjustedSizeUsd: 50,
     });
   });
 });

@@ -43,7 +43,6 @@ export const UserSettingsSchema = z.object({
   defaultTradeSizeUsd: z.number().positive(),
   maxTradeSizeUsd: z.number().positive(),
   maxDailyLossUsd: z.number().nonnegative(),
-  minConfidence: z.number().min(0).max(1),
   maxSpreadBps: z.number().nonnegative(),
   maxSlippageBps: z.number().nonnegative().default(100),
   maxPositionUsd: z.number().positive().default(1_000),

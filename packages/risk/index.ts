@@ -20,19 +20,8 @@ export function evaluateRisk(input: {
     };
   }
 
-  if (market.thesisFit < input.userSettings.minConfidence) {
-    return {
-      decision: "reject",
-      reason: "Thesis fit is below the execution threshold.",
-    };
-  }
-
   const requestedSize = input.sizeUsd ?? input.userSettings.defaultTradeSizeUsd;
   const adjustedSizeUsd = Math.min(requestedSize, input.userSettings.maxTradeSizeUsd);
-
-  if (adjustedSizeUsd < market.minOrderSizeUsd) {
-    return { decision: "reject", reason: "Trade size is below venue minimum." };
-  }
 
   if (adjustedSizeUsd > input.accountState.availableBalanceUsd) {
     return { decision: "reject", reason: "Insufficient available balance." };

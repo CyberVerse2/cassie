@@ -12,7 +12,7 @@ X mention / CLI test command
 -> bounded tools
 -> run steps
 -> analysis / no-trade / trade ticket
--> approval + execution worker
+-> execution worker
 ```
 
 ## Code Layout
@@ -71,7 +71,7 @@ create_trade_ticket
 finalize_run
 ```
 
-The supervisor never receives a direct order-placement tool. It can create a trade ticket only after market selection and deterministic risk evaluation.
+The supervisor never receives a direct order-placement tool. It creates a trade ticket after market selection and deterministic risk sizing.
 
 ## Model Routing
 
@@ -97,7 +97,6 @@ untrusted post
 -> expression ranking
 -> deterministic risk check
 -> trade ticket
--> approval state
 -> execution worker
 ```
 

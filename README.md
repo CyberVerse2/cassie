@@ -25,7 +25,7 @@ Runtime shape:
 - The supervisor drives the run: it calls bounded tools and writes visible `run_steps`.
 - Cassie treats the source post as raw verifiable signal, frames the opportunity, generates trade expressions, searches supported venues, ranks the cleanest real expression, and finalizes a ticket or no-trade.
 - DeepSeek handles cheap extraction, bookkeeping, analyst judgment, and trade decisions.
-- Ticket creation is downstream of market fit, approval policy, and deterministic risk.
+- Ticket creation is downstream of market fit and deterministic risk.
 - Full supervisor and model-routing details live in `architecture.md`.
 
 ## Run

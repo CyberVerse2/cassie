@@ -26,7 +26,6 @@ export function buildCliUserSettings(flags: CliSettingsFlags): {
     defaultTradeSizeUsd: numberFlag(flags, "size", 50),
     maxTradeSizeUsd: numberFlag(flags, "max-size", 100),
     maxDailyLossUsd: numberFlag(flags, "max-daily-loss", 100),
-    minConfidence: numberFlag(flags, "min-confidence", 0.75),
     maxSpreadBps: numberFlag(flags, "max-spread-bps", 50),
     maxSlippageBps: numberFlag(flags, "max-slippage-bps", 100),
     maxPositionUsd: numberFlag(flags, "max-position", 1_000),

@@ -31,7 +31,6 @@ const baseSettings: UserSettings = {
   defaultTradeSizeUsd: 50,
   maxTradeSizeUsd: 100,
   maxDailyLossUsd: 100,
-  minConfidence: 0.75,
   maxSpreadBps: 50,
   maxSlippageBps: 100,
   maxPositionUsd: 1_000,
@@ -204,11 +203,14 @@ describe("supervisor scenario coverage", () => {
     );
   });
 
-  it("finalizes non-executable trade requests without creating a ticket", async () => {
-    const { store, run, tools } = await createScenario("@Cassie get me in");
+  it("finalizes insufficient-balance trade requests without creating a ticket", async () => {
+    const { store, run, tools } = await createScenario("@Cassie get me in", {
+      ...baseSettings,
+      maxTradeSizeUsd: 1_000,
+    });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection,
-      sizeUsd: 1,
+      sizeUsd: 1_000,
     });
 
     expect(risk.decision).toBe("reject");
@@ -226,7 +228,7 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "block_trade",
-        publicSummary: expect.stringContaining("Trade size is below venue minimum"),
+        publicSummary: expect.stringContaining("Insufficient available balance"),
       },
     });
   });

@@ -47,7 +47,6 @@ const settings: UserSettings = {
   defaultTradeSizeUsd: 50,
   maxTradeSizeUsd: 100,
   maxDailyLossUsd: 100,
-  minConfidence: 0.75,
   maxSpreadBps: 50,
   maxSlippageBps: 100,
   maxPositionUsd: 1_000,

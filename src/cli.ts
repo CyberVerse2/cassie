@@ -602,7 +602,7 @@ function liveThinking(stepType: string): string {
     case "risk":
       return "Evaluate deterministic user and account risk limits.";
     case "ticket":
-      return "Persist a ticket only after the gates allow it.";
+      return "Persist a trade ticket for execution.";
     case "final":
       return "Persist the final user-facing result.";
     default:

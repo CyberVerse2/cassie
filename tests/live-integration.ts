@@ -74,7 +74,6 @@ liveDescribe("live integration", () => {
       defaultTradeSizeUsd: 25,
       maxTradeSizeUsd: 50,
       maxDailyLossUsd: 50,
-      minConfidence: 0.75,
       maxSpreadBps: 100,
       maxSlippageBps: 100,
       maxPositionUsd: 500,
