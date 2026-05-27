@@ -16,6 +16,7 @@ import {
   type MarketDataProvider,
   type PolymarketMarketFinder,
 } from "../adapters/selection.ts";
+import { formatErrorForLog } from "../core/helpers/index.ts";
 import { expressionFitPromptSpec, structuredPromptInput } from "../prompts/index.ts";
 
 export type TradeExpressionIntent = {
@@ -121,15 +122,14 @@ function buildVenueSearchIntent(input: {
     tradeExpression: input.tradeExpression,
     limit: input.limit,
     venues: input.venues ?? [
-    "hyperliquid",
-    ...(input.polymarket ? ["polymarket" as const] : []),
+      "hyperliquid",
+      ...(input.polymarket ? ["polymarket" as const] : []),
     ],
   };
 }
 
 export async function assessExpressionFit(input: {
   ai: StructuredAiClient;
-  polymarket?: PolymarketMarketFinder;
   opportunityFrame: OpportunityFrame;
   tradeExpression: TradeExpressionPlan;
   candidate: MarketCandidate;
@@ -191,6 +191,4 @@ function uniqueMarketCandidates(candidates: MarketCandidate[]): MarketCandidate[
   });
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
+const errorMessage = formatErrorForLog;

@@ -241,7 +241,6 @@ export function createCassieSupervisorTools(input: {
               stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
               execute: ({ setThinkingTrace }) => assessExpressionFit({
                 ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
-                polymarket: input.deps.polymarketMarketFinder,
                 opportunityFrame,
                 tradeExpression,
                 candidate: persistedCandidate,

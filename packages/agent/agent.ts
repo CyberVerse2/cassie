@@ -259,15 +259,11 @@ function createAuditTelemetryIntegration(
           toolName: event.toolCall.toolName,
           durationMs: event.durationMs,
           success: event.success,
-          error: event.success ? null : errorMessage(event.error),
+          error: event.success ? null : formatErrorForLog(event.error),
         },
       });
     },
   };
-}
-
-function errorMessage(error: unknown): string {
-  return formatErrorForLog(error);
 }
 
 function usageRecord(usage: unknown) {

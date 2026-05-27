@@ -150,7 +150,6 @@ type OpenAiProviderForStructuredCall = {
 };
 
 export function structuredToolsForCall(input: {
-  name: string;
   route: ModelRoute;
   openai: Pick<OpenAiProviderForStructuredCall, "tools">;
   tools?: StructuredToolConfig;
@@ -227,27 +226,23 @@ export class CassieStructuredClient implements StructuredAiClient {
     });
 
     try {
-      const deepseek = createDeepSeek({
-        apiKey: deepSeekKey,
-      });
-      const openai = createOpenAI({
-        apiKey: openAiKey,
-      });
-      const tools = route.provider === "openai"
-        ? structuredToolsForCall({
-          name: input.name,
+      let tools: Record<string, unknown> | undefined;
+      let model: Parameters<typeof generateText>[0]["model"];
+
+      if (route.provider === "openai") {
+        const openai = createOpenAI({ apiKey: openAiKey });
+        model = openAiModelForStructuredCall({ route, openai }) as Parameters<typeof generateText>[0]["model"];
+        tools = structuredToolsForCall({
           route,
           openai,
           tools: input.tools,
-        })
-        : undefined;
+        });
+      } else {
+        model = createDeepSeek({ apiKey: deepSeekKey }).chat(route.model);
+      }
+
       const result = await generateText({
-        model: route.provider === "openai"
-          ? openAiModelForStructuredCall({
-            route,
-            openai,
-          }) as never
-          : deepseek.chat(route.model),
+        model,
         output: Output.object({
           schema: input.schema,
           name: input.name,

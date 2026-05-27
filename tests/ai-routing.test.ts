@@ -55,7 +55,6 @@ describe("structured AI model routing", () => {
     const route = routeStructuredModel({ name: "cassie_opportunity_frame" });
 
     expect(structuredToolsForCall({
-      name: "cassie_opportunity_frame",
       route,
       tools: {
         webSearch: {
@@ -72,7 +71,6 @@ describe("structured AI model routing", () => {
       searchContextSize: "low",
     });
     expect(structuredToolsForCall({
-      name: "cassie_trade_expressions",
       route: routeStructuredModel({ name: "cassie_trade_expressions" }),
       tools: undefined,
       openai: { tools: { webSearch } },
