@@ -16,7 +16,6 @@ import {
   ExpressionFitAssessmentSchema,
   SourcePostSchema,
   RiskDecisionSchema,
-  TradeTicketSchema,
   TradeExpressionPlanSchema,
   XSentimentAssessmentSchema,
   type AccountState,

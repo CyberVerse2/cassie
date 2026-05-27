@@ -9,7 +9,6 @@ import { createCassieDb } from "../packages/core/db/client.ts";
 import {
   auditEvents,
   controlRuns,
-  executionJobs,
   mentions,
   modelCallUsage,
   runSteps,

@@ -1,7 +1,6 @@
 import type { StructuredAiClient } from "../ai/client.ts";
 import {
   MarketCandidateSchema,
-  MarketSelectionSchema,
   PolymarketMarketAssessmentSchema,
   PolymarketQuoteSchema,
   type MarketCandidate,

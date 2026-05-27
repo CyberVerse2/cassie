@@ -14,7 +14,6 @@ configureAiSdkWarningLogging();
 
 export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
 export const IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS = 32_768;
-const DEFAULT_STRUCTURED_MAX_RETRIES = 2;
 
 export type ModelTier = "cheap" | "expensive";
 export type ModelProvider = "deepseek" | "openai";
