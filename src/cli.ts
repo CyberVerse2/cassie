@@ -258,7 +258,6 @@ async function tickets(args: ParsedArgs) {
       side: ticket.side,
       sizeUsd: ticket.sizeUsd,
       thesis: ticket.thesis,
-      riskDecision: ticket.riskDecision.decision,
     }));
 }
 
@@ -576,7 +575,6 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
 
 function liveToolBadge(model: string | null, stepType: string, theme: TerminalTheme): string {
   if (model) return theme.ai("[ai]");
-  if (stepType === "risk") return theme.risk("[risk]");
   if (stepType === "ticket") return theme.ticket("[ticket]");
   return "[tool]";
 }
@@ -597,8 +595,6 @@ function liveThinking(stepType: string): string {
       return "Refresh market quote data.";
     case "market_selection":
       return "Rank real market expressions without inventing instruments.";
-    case "risk":
-      return "Evaluate deterministic user and account risk limits.";
     case "ticket":
       return "Persist a trade ticket for execution.";
     case "final":

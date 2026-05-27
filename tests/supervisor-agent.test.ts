@@ -1,6 +1,5 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import type { AccountStateProvider } from "../packages/adapters/hyperliquid/account-state.ts";
 import { buildSupervisorInstructions } from "../packages/agent/agent.ts";
 import { createCassieSupervisorTools } from "../packages/agent/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
@@ -179,12 +178,6 @@ class FakeAi implements StructuredAiClient {
   }
 }
 
-class ThrowingAccountStateProvider implements AccountStateProvider {
-  async getAccountState(): Promise<never> {
-    throw new Error("account state unavailable");
-  }
-}
-
 async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<T> {
   const execute = (toolDefinition as { execute: (input: unknown, options?: unknown) => Promise<T> }).execute;
   return execute(input, {});
@@ -254,22 +247,6 @@ async function seedMarketSelection(store: InMemoryCassieStore, runId: string, se
   });
 }
 
-async function seedRiskDecision(store: InMemoryCassieStore, runId: string, riskDecision: unknown) {
-  await store.addRunStep({
-    runId,
-    stepType: "risk",
-    status: "succeeded",
-    input: {},
-    output: riskDecision,
-    error: null,
-    model: null,
-    promptName: null,
-    promptVersion: null,
-    thinkingTrace: null,
-    completedAt: new Date().toISOString(),
-  });
-}
-
 describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
@@ -277,7 +254,7 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("preflight user policy -> resolve source -> frame opportunity -> check X sentiment -> generate candidate trade expressions");
     expect(instructions).toContain("quote validated candidates -> rank expressions");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
-    expect(instructions).toContain("Use deterministic risk_check only after ranking a real validated candidate");
+    expect(instructions).toContain("create_trade_ticket creates the ticket with the user's configured default trade size");
   });
 
   it("records bounded tool steps and creates an executable trade ticket", async () => {
@@ -293,13 +270,6 @@ describe("AI SDK supervisor agent", () => {
       store,
       run,
       userSettings: settings,
-      accountState: {
-        userId: "user_1",
-        availableBalanceUsd: 500,
-        openExposureUsd: 0,
-        dailyLossUsd: 0,
-        openOrdersUsd: 0,
-      },
       deps: {
         ai: new FakeAi(),
         marketData: {
@@ -310,26 +280,24 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const risk = await executeTool(tools.risk_check, {
-      marketSelection,
-    });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
-      riskDecision: risk,
     });
     await executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
       publicSummary: "Created a trade ticket for review.",
       tradeTicket: { ticketId: ticket.ticketId },
-      riskDecision: risk,
     });
 
     const state = await store.load();
     expect(state.tradeTickets[0]).not.toHaveProperty("approvalState");
+    expect(state.tradeTickets[0]?.sizeUsd).toBe(settings.defaultTradeSizeUsd);
+    expect(state.tradeTickets[0]).not.toHaveProperty("riskDecision");
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["risk", "ticket", "final"]),
+      expect.arrayContaining(["ticket", "final"]),
     );
+    expect(state.runSteps.map((step) => step.stepType)).not.toContain("risk");
     expect(state.executionJobs).toHaveLength(0);
   });
 
@@ -395,14 +363,13 @@ describe("AI SDK supervisor agent", () => {
     await executeTool(tools.create_trade_ticket, {
       tradeExpression: expressionWithHigherPriorityEventMarket,
       marketSelection: selectedMarket,
-      riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
     });
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.thesis).toBe("BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.");
   });
 
-  it("creates trade tickets from persisted market selection and risk when supervisor omits them", async () => {
+  it("creates trade tickets from persisted market selection when supervisor omits it", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
     const run = await store.createRun({
@@ -412,7 +379,6 @@ describe("AI SDK supervisor agent", () => {
     });
     await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketSelection(store, run.runId, marketSelection);
-    await seedRiskDecision(store, run.runId, { decision: "approve", adjustedSizeUsd: 50 });
 
     const tools = createCassieSupervisorTools({
       store,
@@ -493,110 +459,7 @@ describe("AI SDK supervisor agent", () => {
       .toBe("Model reasoning summary for cassie_opportunity_frame.");
   });
 
-  it("does not require account state before tools need risk evaluation", async () => {
-    const store = new InMemoryCassieStore();
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie critic this",
-      sourcePost,
-    });
-
-    const tools = createCassieSupervisorTools({
-      store,
-      run,
-      userSettings: { ...settings, walletAddress: null },
-      deps: {
-        ai: new FakeAi(),
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-      accountStateProvider: new ThrowingAccountStateProvider(),
-    });
-
-    await expect(executeTool(tools.risk_check, {
-      marketSelection,
-    })).rejects.toThrow("account state unavailable");
-  });
-
-  it("approves executable risk checks from the supplied market selection", async () => {
-    const store = new InMemoryCassieStore();
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie get me in",
-      sourcePost,
-    });
-
-    const tools = createCassieSupervisorTools({
-      store,
-      run,
-      userSettings: settings,
-      accountState: {
-        userId: "user_1",
-        availableBalanceUsd: 500,
-        openExposureUsd: 0,
-        dailyLossUsd: 0,
-        openOrdersUsd: 0,
-      },
-      deps: {
-        ai: new FakeAi(),
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-    });
-
-    await expect(executeTool(tools.risk_check, {
-      marketSelection,
-    })).resolves.toMatchObject({
-      decision: "approve",
-      adjustedSizeUsd: 50,
-    });
-  });
-
-  it("does not let model-supplied trade size affect risk sizing", async () => {
-    const store = new InMemoryCassieStore();
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie trade this",
-      sourcePost,
-    });
-
-    const tools = createCassieSupervisorTools({
-      store,
-      run,
-      userSettings: settings,
-      accountState: {
-        userId: "user_1",
-        availableBalanceUsd: 500,
-        openExposureUsd: 0,
-        dailyLossUsd: 0,
-        openOrdersUsd: 0,
-      },
-      deps: {
-        ai: new FakeAi(),
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-    });
-
-    await expect(executeTool(tools.risk_check, {
-      marketSelection,
-      sizeUsd: 1_000,
-    })).resolves.toMatchObject({
-      decision: "approve",
-      adjustedSizeUsd: 50,
-    });
-  });
-
-  it("rejects trade ticket creation without a supplied approved risk decision", async () => {
+  it("rejects trade ticket creation without a usable market selection", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -620,8 +483,7 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool(tools.create_trade_ticket, {
       tradeExpression,
-      marketSelection,
-    })).rejects.toThrow("Trade ticket creation requires an approved risk decision.");
+    })).rejects.toThrow("Trade ticket creation requires a usable market selection.");
   });
 
   it("allows early grounded analysis finalization without market or risk state", async () => {
@@ -682,7 +544,6 @@ describe("AI SDK supervisor agent", () => {
       responseType: "trade_ticket",
       publicSummary: "Created a ticket.",
       tradeTicket: { ticketId: "missing_ticket" },
-      riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
     })).resolves.toMatchObject({
       responseType: "trade_ticket",
       ticketId: "missing_ticket",

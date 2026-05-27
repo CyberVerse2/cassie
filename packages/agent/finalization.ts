@@ -4,7 +4,6 @@ import {
   ExpressionFitAssessmentSchema,
   MarketCandidateSchema,
   MarketSelectionSchema,
-  RiskDecisionSchema,
   SupervisorFinalResultSchema,
   TradeExpressionPlanSchema,
   TradeTicketSchema,
@@ -14,7 +13,6 @@ import {
   type ExpressionFitAssessment,
   type MarketCandidate,
   type MarketSelection,
-  type RiskDecision,
   type RunStep,
   type RunStepType,
   type TradeExpressionPlan,
@@ -31,7 +29,6 @@ export const FinalizeRunInputSchema = z.object({
   tradeTicket: z.object({ ticketId: z.string() }).optional(),
   marketSelection: MarketSelectionSchema.optional(),
   tradeExpression: TradeExpressionPlanSchema.optional(),
-  riskDecision: RiskDecisionSchema.optional(),
 });
 
 export type FinalizeRunInput = z.infer<typeof FinalizeRunInputSchema>;
@@ -56,7 +53,6 @@ export async function finalizeRunFromPersistedSteps(input: {
   const xSentiment = readPersistedStepOutput<XSentimentAssessment>(steps, "x_sentiment", XSentimentAssessmentSchema);
   const marketSelection = readPersistedStepOutput<MarketSelection>(steps, "market_selection", MarketSelectionSchema)
     ?? noTradeSelectionFromCompletedMarketCheck(marketCandidates, expressionFit);
-  const riskDecision = readPersistedStepOutput<RiskDecision>(steps, "risk", RiskDecisionSchema);
   const tradeTicket = readPersistedStepOutput<TradeTicket>(steps, "ticket", TradeTicketSchema);
 
   validatePersistedStageProgress({
@@ -66,18 +62,14 @@ export async function finalizeRunFromPersistedSteps(input: {
     quote,
     xSentiment,
     marketSelection,
-    riskDecision,
     tradeTicket,
   });
 
   const finalInput: PreparedFinalizeRunInput = {
     responseType: tradeTicket ? "trade_ticket" : "analysis",
-    publicSummary: riskDecision?.decision === "reject"
-      ? riskDecision.reason
-      : tradeExpression?.reason ?? "Cassie run completed.",
+    publicSummary: tradeExpression?.reason ?? "Cassie run completed.",
     tradeExpression,
     marketSelection,
-    riskDecision,
     tradeTicket: tradeTicket ? { ticketId: tradeTicket.ticketId } : undefined,
   };
   const preparedFinalInput = prepareFinalInput(finalInput);
@@ -109,7 +101,6 @@ function validatePersistedStageProgress(input: {
   quote?: unknown;
   xSentiment?: XSentimentAssessment;
   marketSelection?: MarketSelection;
-  riskDecision?: RiskDecision;
   tradeTicket?: TradeTicket;
 }) {
   if (!input.tradeExpression || input.tradeExpression.decision === "no_trade") {
@@ -152,16 +143,8 @@ function validatePersistedStageProgress(input: {
     return;
   }
 
-  if (!input.riskDecision) {
-    throw new SupervisorPrerequisiteError("Selected expression finalization requires a deterministic risk check.");
-  }
-
-  if (input.riskDecision.decision === "reject") {
-    return;
-  }
-
   if (!input.tradeTicket) {
-    throw new SupervisorPrerequisiteError("Approved expression finalization requires trade ticket creation.");
+    throw new SupervisorPrerequisiteError("Selected expression finalization requires trade ticket creation.");
   }
 }
 
@@ -204,13 +187,7 @@ function noTradeSelectionFromCompletedMarketCheck(
 
 export function assertUsableMarketSelection(selection?: MarketSelection): void {
   if (!selection || !selection.selectedMarket || selection.noTradeReason) {
-    throw new SupervisorPrerequisiteError("Risk check requires a usable market selection.");
-  }
-}
-
-export function assertApprovedRiskDecision(decision?: RiskDecision): void {
-  if (!decision || decision.decision !== "approve") {
-    throw new SupervisorPrerequisiteError("Trade ticket creation requires an approved risk decision.");
+    throw new SupervisorPrerequisiteError("Trade ticket creation requires a usable market selection.");
   }
 }
 
@@ -219,17 +196,12 @@ export function validateFinalizationPrerequisites(input: PreparedFinalizeRunInpu
     if (!input.tradeTicket) {
       throw new SupervisorPrerequisiteError("Trade-ticket finalization requires a trade ticket.");
     }
-    if (!input.riskDecision) {
-      throw new SupervisorPrerequisiteError("Trade-ticket finalization requires an approved risk decision.");
-    }
-    assertApprovedRiskDecision(input.riskDecision);
     return;
   }
 
   const hasMeaningfulAnalysisBasis = Boolean(
     input.tradeExpression ||
       input.marketSelection ||
-      input.riskDecision ||
       input.tradeTicket,
   );
   if (!hasMeaningfulAnalysisBasis) {
@@ -280,7 +252,6 @@ function latestPersistedStepOutput(steps: RunStep[], stepType: RunStepType): unk
 
 function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState {
   if (input.responseType === "trade_ticket") return "create_ticket";
-  if (input.riskDecision?.decision === "reject") return "block_trade";
 
   const selectedSide = input.marketSelection?.selectedMarket?.side;
   if (selectedSide === "long") return "long_perp";

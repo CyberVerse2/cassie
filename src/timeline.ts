@@ -141,7 +141,6 @@ function durationText(startedAt: string | null, completedAt: string | null): str
 
 function toolBadge(step: RunStep, theme: TerminalTheme): string {
   if (step.model) return theme.ai("[ai]");
-  if (step.stepType === "risk") return theme.risk("[risk]");
   if (step.stepType === "ticket") return theme.ticket("[ticket]");
   return "[tool]";
 }

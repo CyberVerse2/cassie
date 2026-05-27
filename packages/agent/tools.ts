@@ -2,10 +2,6 @@ import { tool } from "ai";
 import { z } from "zod";
 import type { CassieDependencies } from "./agent.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import {
-  HyperliquidAccountStateProvider,
-  type AccountStateProvider,
-} from "../adapters/hyperliquid/account-state.ts";
 import { config } from "../core/config.ts";
 import { withThinkingTraceCapture } from "../ai/client.ts";
 import {
@@ -15,19 +11,15 @@ import {
   PolymarketQuoteSchema,
   ExpressionFitAssessmentSchema,
   SourcePostSchema,
-  RiskDecisionSchema,
   TradeExpressionPlanSchema,
   XSentimentAssessmentSchema,
-  type AccountState,
   type ControlRun,
   type ExpressionFitAssessment,
   type MarketCandidate,
   type MarketSelection,
-  type RiskDecision,
   type UserSettings,
 } from "../core/schemas/index.ts";
 import { selectMarket } from "../adapters/selection.ts";
-import { evaluateRisk } from "../risk/index.ts";
 import { createTradeTicket } from "../tickets/index.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
@@ -37,7 +29,6 @@ import { assessExpressionFit, quoteExpression, searchVenues } from "./venues.ts"
 import { thesisForMarketSelection, thesisFromTradeExpression } from "./thesis.ts";
 import {
   FinalizeRunInputSchema,
-  assertApprovedRiskDecision,
   assertUsableMarketSelection,
   finalizeResult,
   validateFinalizationPrerequisites,
@@ -65,8 +56,6 @@ export function createCassieSupervisorTools(input: {
   deps: CassieDependencies;
   run: ControlRun;
   userSettings: UserSettings;
-  accountState?: AccountState;
-  accountStateProvider?: AccountStateProvider;
 }) {
   const cheapModel = config.ai.cheapModel;
   const importantModel = config.ai.importantModel;
@@ -412,62 +401,25 @@ export function createCassieSupervisorTools(input: {
         );
       },
     }),
-    risk_check: tool({
-      description: "Run deterministic risk checks against user policy and live account state.",
-      inputSchema: z.object({
-        marketSelection: z.unknown().nullable().default(null),
-      }),
-      execute: async ({ marketSelection }) => {
-        const persistedMarketSelection = await latestPersistedMarketSelection(input.store, input.run.runId)
-          ?? parseSuppliedMarketSelection(marketSelection);
-        return runStepOnce(
-          "risk",
-          { marketSelection: persistedMarketSelection },
-          async () => {
-            assertUsableMarketSelection(persistedMarketSelection);
-            return recordRunStep({
-              store: input.store,
-              runId: input.run.runId,
-              stepType: "risk",
-              stepInput: { marketSelection: persistedMarketSelection },
-              execute: async () => {
-                const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
-                  .getAccountState(input.userSettings);
-                return evaluateRisk({
-                  marketSelection: persistedMarketSelection,
-                  userSettings: input.userSettings,
-                  accountState,
-                });
-              },
-            });
-          },
-        );
-      },
-    }),
     create_trade_ticket: tool({
-      description: "Create a trade ticket from an approved risk decision. This never executes the order directly.",
+      description: "Create a trade ticket from the selected market using the user's configured default trade size. This never executes the order directly.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
         marketSelection: z.unknown().nullable().default(null),
-        riskDecision: z.unknown().nullable().default(null),
       }),
-      execute: async ({ tradeExpression, marketSelection, riskDecision }) => {
+      execute: async ({ tradeExpression, marketSelection }) => {
         const persistedTradeExpression = await latestPersistedTradeExpression(input.store, input.run.runId)
           ?? parseSuppliedTradeExpression(tradeExpression);
         const persistedMarketSelection = await latestPersistedMarketSelection(input.store, input.run.runId)
           ?? parseSuppliedMarketSelection(marketSelection);
-        const persistedRiskDecision = await latestPersistedRiskDecision(input.store, input.run.runId)
-          ?? parseSuppliedRiskDecision(riskDecision);
         return runStepOnce(
           "ticket",
           {
             tradeExpression: persistedTradeExpression,
             marketSelection: persistedMarketSelection,
-            riskDecision: persistedRiskDecision,
           },
           async () => {
             assertUsableMarketSelection(persistedMarketSelection);
-            assertApprovedRiskDecision(persistedRiskDecision);
             const thesis = thesisForMarketSelection(persistedTradeExpression, persistedMarketSelection);
             return recordRunStep({
               store: input.store,
@@ -476,7 +428,6 @@ export function createCassieSupervisorTools(input: {
               stepInput: {
                 tradeExpression: persistedTradeExpression,
                 marketSelection: persistedMarketSelection,
-                riskDecision: persistedRiskDecision,
               },
               execute: async () => {
                 const ticket = createTradeTicket({
@@ -484,7 +435,6 @@ export function createCassieSupervisorTools(input: {
                   userSettings: input.userSettings,
                   thesis,
                   marketSelection: persistedMarketSelection,
-                  riskDecision: persistedRiskDecision,
                 });
                 await input.store.addTradeTicket(ticket);
                 return ticket;
@@ -568,13 +518,6 @@ async function latestPersistedTradeExpression(store: CassieStore, runId: string)
     : null;
 }
 
-async function latestPersistedRiskDecision(store: CassieStore, runId: string): Promise<RiskDecision | null> {
-  const latestStep = await latestSucceededStep(store, runId, "risk");
-  return latestStep
-    ? RiskDecisionSchema.parse(latestStep.output)
-    : null;
-}
-
 async function latestPersistedQuotes(store: CassieStore, runId: string): Promise<unknown[]> {
   const steps = await store.getRunSteps(runId);
   return steps
@@ -605,13 +548,7 @@ function parseSuppliedRankQuotes(value: unknown): unknown[] {
 function parseSuppliedMarketSelection(value: unknown): MarketSelection {
   const parsed = MarketSelectionSchema.safeParse(value);
   if (parsed.success) return parsed.data;
-  throw new Error("Tool requires a persisted or supplied market selection from rank_expressions.");
-}
-
-function parseSuppliedRiskDecision(value: unknown): RiskDecision {
-  const parsed = RiskDecisionSchema.safeParse(value);
-  if (parsed.success) return parsed.data;
-  throw new Error("Trade ticket creation requires an approved risk decision.");
+  throw new Error("Trade ticket creation requires a usable market selection.");
 }
 
 function parseSuppliedTradeExpression(value: unknown) {
@@ -630,7 +567,7 @@ async function latestPersistedXSentiment(store: CassieStore, runId: string) {
 async function latestSucceededStep(
   store: CassieStore,
   runId: string,
-  stepType: "market_candidates" | "market_selection" | "risk" | "x_sentiment" | "trade_expression",
+  stepType: "market_candidates" | "market_selection" | "x_sentiment" | "trade_expression",
 ) {
   const steps = await store.getRunSteps(runId);
   return steps

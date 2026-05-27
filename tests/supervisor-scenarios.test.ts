@@ -5,7 +5,6 @@ import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   MarketSelection,
   OpportunityFrame,
-  RiskDecision,
   SourcePost,
   TradeExpressionPlan,
   UserSettings,
@@ -150,13 +149,6 @@ async function createScenario(command: string, settings: UserSettings = baseSett
     store,
     run,
     userSettings: settings,
-    accountState: {
-      userId: settings.userId,
-      availableBalanceUsd: 500,
-      openExposureUsd: 0,
-      dailyLossUsd: 0,
-      openOrdersUsd: 0,
-    },
     deps: {
       ai: new ScenarioAi(),
       marketData: {
@@ -178,49 +170,32 @@ async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<
 describe("supervisor scenario coverage", () => {
   it("creates a ticket from the single-loop step stream", async () => {
     const { store, tools } = await createScenario("@Cassie get me in");
-    const risk = await executeTool<RiskDecision>(tools.risk_check, {
-      marketSelection,
-    });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
-      riskDecision: risk,
     });
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
+    expect(state.tradeTickets[0]?.sizeUsd).toBe(baseSettings.defaultTradeSizeUsd);
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
-      expect.arrayContaining(["risk", "ticket"]),
+      expect.arrayContaining(["ticket"]),
     );
+    expect(state.runSteps.map((step) => step.stepType)).not.toContain("risk");
   });
 
-  it("finalizes insufficient-balance trade requests without creating a ticket", async () => {
-    const { store, run, tools } = await createScenario("@Cassie get me in", {
+  it("creates tickets with the configured default size", async () => {
+    const { store, tools } = await createScenario("@Cassie get me in", {
       ...baseSettings,
       defaultTradeSizeUsd: 1_000,
     });
-    const risk = await executeTool<RiskDecision>(tools.risk_check, {
-      marketSelection,
-    });
-
-    expect(risk.decision).toBe("reject");
-    await executeTool(tools.finalize_run, {
-      responseType: "analysis",
-      publicSummary: risk.decision === "reject" ? risk.reason : "Risk check passed.",
+    await executeTool(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
-      riskDecision: risk,
     });
 
     const state = await store.load();
-    expect(state.tradeTickets).toHaveLength(0);
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({ status: "succeeded" });
-    await expect(store.getRun(run.runId)).resolves.toMatchObject({
-      result: {
-        actionState: "block_trade",
-        publicSummary: expect.stringContaining("Insufficient available balance"),
-      },
-    });
+    expect(state.tradeTickets[0]?.sizeUsd).toBe(1_000);
   });
 
   it("finalizes no-trade market routing without preserving stale route language", async () => {

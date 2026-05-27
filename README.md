@@ -25,7 +25,7 @@ Runtime shape:
 - The supervisor drives the run: it calls bounded tools and writes visible `run_steps`.
 - Cassie treats the source post as raw verifiable signal, frames the opportunity, generates trade expressions, searches supported venues, ranks the cleanest real expression, and finalizes a ticket or no-trade.
 - DeepSeek handles cheap extraction, bookkeeping, analyst judgment, and trade decisions.
-- Ticket creation is downstream of market fit and deterministic risk.
+- Ticket creation is downstream of market fit and uses the user's configured default trade size.
 - Full supervisor and model-routing details live in `architecture.md`.
 
 ## Run
@@ -81,7 +81,6 @@ Implemented:
 - AI trade-expression generation and ranking
 - Polymarket market discovery using SDK public search and CLOB surfaces
 - Hyperliquid and Polymarket adapters over real connector candidates
-- Deterministic risk checks
 - Trade-ticket creation
 - Graphile Worker supervisor and execution jobs
 - Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events

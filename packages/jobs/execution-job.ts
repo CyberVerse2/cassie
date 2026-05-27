@@ -1,7 +1,7 @@
 import { config } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import type { ExecutionJob, MarketCandidate, TradeTicket } from "../core/schemas/index.ts";
+import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
@@ -11,7 +11,6 @@ import {
   WebhookExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
-import { evaluateRisk } from "../risk/index.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "./queue.ts";
 import {
   createQueuedExecutionJob,
@@ -129,75 +128,9 @@ async function preflightExecution(input: {
 
   const accountState = await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
     .getAccountState(userSettings);
-  const decision = evaluateRisk({
-    marketSelection: {
-      decision: "select_market",
-      selectedMarket: ticketToMarketCandidate(input.ticket),
-      selectedCandidateId: null,
-      rejectionReason: null,
-      rankedCandidates: [],
-      rejectedCandidates: [],
-      noTradeReason: null,
-    },
-    userSettings,
-    accountState,
-  });
-
-  if (decision.decision === "reject") {
-    throw new Error(decision.reason);
+  if (input.ticket.sizeUsd > accountState.availableBalanceUsd) {
+    throw new Error("Insufficient available balance.");
   }
-}
-
-function ticketToMarketCandidate(ticket: TradeTicket): MarketCandidate {
-  const side = parseMarketSide(ticket.side);
-  const symbol = ticket.venueData?.symbol ?? ticket.instrument;
-
-  if (!symbol) {
-    throw new Error("Execution preflight requires a market symbol.");
-  }
-
-  return {
-    venue: ticket.venue,
-    instrument: ticket.instrument,
-    side,
-    symbol,
-    conditionId: ticket.venueData?.conditionId ?? null,
-    outcomeTokenId: ticket.venueData?.outcomeTokenId ?? null,
-    yesOutcomeTokenId: null,
-    noOutcomeTokenId: null,
-    marketQuestion: null,
-    marketSlug: null,
-    outcome: null,
-    yesPrice: null,
-    noPrice: null,
-    heldSidePrice: null,
-    volumeUsd: null,
-    liquidityUsd: null,
-    endDate: null,
-    warnings: [],
-    markPrice: ticket.venueData?.markPrice ?? null,
-    liquidityScore: 1,
-    spreadBps: ticket.venueData?.spreadBps ?? 0,
-    estimatedSlippageBps: ticket.venueData?.estimatedSlippageBps ?? 0,
-    minOrderSizeUsd: ticket.venueData?.minOrderSizeUsd ?? 0,
-    thesisFit: 1,
-    reason: "Execution preflight candidate reconstructed from trade ticket.",
-  };
-}
-
-function parseMarketSide(side: string): MarketCandidate["side"] {
-  if (
-    side === "long" ||
-    side === "short" ||
-    side === "buy_yes" ||
-    side === "buy_no" ||
-    side === "buy" ||
-    side === "sell"
-  ) {
-    return side;
-  }
-
-  throw new Error(`Unsupported ticket side for execution preflight: ${side}`);
 }
 
 function defaultExecutionClient(): ExecutionClient {

@@ -31,7 +31,7 @@
       "candidateActionStates": [
         "needs_market_check",
         "route_to_market",
-        "block_trade"
+        "no_trade"
       ],
       "candidateVenuesToCheck": [
         "hyperliquid_spot",
@@ -41,7 +41,7 @@
       "candidateReasoningChecks": [
         "official catalyst verification",
         "timeline uncertainty",
-        "risk and invalidation"
+        "invalidation"
       ]
     },
     {
@@ -259,7 +259,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "block_trade",
+        "no_trade",
         "needs_market_check"
       ],
       "candidateVenuesToCheck": [
@@ -293,7 +293,7 @@
       "candidateActionStates": [
         "needs_market_check",
         "buy_no",
-        "block_trade"
+        "no_trade"
       ],
       "candidateVenuesToCheck": [
         "polymarket"
@@ -323,7 +323,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "block_trade",
+        "no_trade",
         "needs_market_check",
         "short_perp"
       ],
@@ -346,7 +346,7 @@
       "expectedBehavior": [
         "Separate exploit, bad security, rug pull, and recoverable incident.",
         "Look for primary incident reports, on-chain flows, and protocol response.",
-        "Block trade or mark insufficient evidence if exploit facts are unresolved."
+        "Do not trade or mark insufficient evidence if exploit facts are unresolved."
       ],
       "forbiddenBehavior": [
         "Call every exploit a rug without evidence.",
@@ -355,7 +355,7 @@
       ],
       "verificationStatus": "grok_candidate_unverified",
       "candidateActionStates": [
-        "block_trade",
+        "no_trade",
         "needs_market_check"
       ],
       "candidateVenuesToCheck": [
@@ -364,7 +364,7 @@
       "candidateReasoningChecks": [
         "exploit versus rug classification",
         "primary incident evidence",
-        "risk and invalidation"
+        "invalidation"
       ]
     },
     {
@@ -388,7 +388,7 @@
       "candidateActionStates": [
         "needs_market_check",
         "route_to_market",
-        "block_trade"
+        "no_trade"
       ],
       "candidateVenuesToCheck": [
         "hyperliquid_pre_stock",
@@ -397,7 +397,7 @@
       "candidateReasoningChecks": [
         "venue availability",
         "valuation or odds",
-        "risk and invalidation"
+        "invalidation"
       ]
     },
     {

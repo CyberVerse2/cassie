@@ -15,10 +15,6 @@ const ticket: TradeTicket = {
   venueData: {
     outcomeTokenId: "123",
   },
-  riskDecision: {
-    decision: "approve",
-    adjustedSizeUsd: 25,
-  },
 };
 const builderCode = `0x${"a".repeat(64)}`;
 

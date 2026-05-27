@@ -64,10 +64,6 @@ describe("InMemoryCassieStore", () => {
       side: "long",
       sizeUsd: 50,
       orderType: "marketable_limit",
-      riskDecision: {
-        decision: "approve",
-        adjustedSizeUsd: 50,
-      },
       venueData: {},
     };
     const job: ExecutionJob = {

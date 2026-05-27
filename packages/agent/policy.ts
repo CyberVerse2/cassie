@@ -44,17 +44,10 @@ export function selectActiveTools(
     return ["finalize_run"];
   }
 
-  const riskDecision = objectRecord(latestToolOutput(steps, "risk_check"));
-  if (riskDecision.decision) {
-    return riskDecision.decision === "reject"
-      ? ["finalize_run"]
-      : ["create_trade_ticket"];
-  }
-
   const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
   if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
     return marketSelection.selectedMarket && !marketSelection.noTradeReason
-      ? ["risk_check"]
+      ? ["create_trade_ticket"]
       : ["finalize_run"];
   }
 
@@ -303,7 +296,6 @@ function buildSupervisorState(
         "quote_expression",
         "check_x_sentiment",
         "rank_expressions",
-        "risk_check",
         "create_trade_ticket",
       ] satisfies CassieSupervisorToolName[])
         .map((toolName) => [toolName, latestToolOutput(steps, toolName)] as const)

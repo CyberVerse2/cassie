@@ -14,7 +14,6 @@ const ActionStateSchema = z.enum([
   "buy_yes",
   "buy_no",
   "create_ticket",
-  "block_trade",
 ]);
 
 const VenueCheckSchema = z.enum([
@@ -68,13 +67,13 @@ describe("X post eval fixture", () => {
       expect.arrayContaining([
         expect.objectContaining({
           id: "private-company-spacex-no-clean-venue",
-          candidateActionStates: expect.arrayContaining(["needs_market_check", "route_to_market", "block_trade"]),
+          candidateActionStates: expect.arrayContaining(["needs_market_check", "route_to_market", "no_trade"]),
           candidateVenuesToCheck: expect.arrayContaining(["hyperliquid_pre_stock", "polymarket"]),
-          candidateReasoningChecks: expect.arrayContaining(["venue availability", "valuation or odds", "risk and invalidation"]),
+          candidateReasoningChecks: expect.arrayContaining(["venue availability", "valuation or odds", "invalidation"]),
         }),
         expect.objectContaining({
           id: "coin-ticker-collision",
-          candidateActionStates: expect.arrayContaining(["block_trade"]),
+          candidateActionStates: expect.arrayContaining(["no_trade"]),
           candidateReasoningChecks: expect.arrayContaining(["ticker collision"]),
         }),
       ]),

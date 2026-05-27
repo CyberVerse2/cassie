@@ -31,7 +31,6 @@ describe("supervisor step policy", () => {
       selectedMarket: { venue: "hyperliquid", symbol: "SOL" },
       noTradeReason: null,
     });
-    const risk = step("risk_check", { decision: "approve", adjustedSizeUsd: 50 });
     const preflight = step("preflight_user_policy", { status: "ok", warnings: [] });
 
     expect(selectActiveTools([])).toEqual(["preflight_user_policy"]);
@@ -47,8 +46,7 @@ describe("supervisor step policy", () => {
     expect(selectActiveTools([opportunity, xSentiment, expression, candidates, fit])).toEqual(["quote_expression"]);
     const quote = step("quote_expression", { venue: "hyperliquid", symbol: "SOL", markPrice: 100 });
     expect(selectActiveTools([opportunity, xSentiment, expression, candidates, fit, quote])).toEqual(["rank_expressions"]);
-    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["risk_check"]);
-    expect(selectActiveTools([opportunity, expression, candidates, selection, risk])).toEqual(["create_trade_ticket"]);
+    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["create_trade_ticket"]);
   });
 
   it("finalizes when searches or ranking do not find a trade", () => {
@@ -93,21 +91,12 @@ describe("supervisor step policy", () => {
     ])).toEqual(["search_venues"]);
   });
 
-  it("exposes finalization around risk and ticket terminal states", () => {
+  it("exposes finalization after ticket creation", () => {
     expect(selectActiveTools([
       step("frame_opportunity", {}),
       step("generate_trade_expressions", { decision: "route_to_market_router" }),
       step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
       step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
-      step("risk_check", { decision: "reject", reason: "Too large." }),
-    ])).toEqual(["finalize_run"]);
-
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", { decision: "route_to_market_router" }),
-      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
-      step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
-      step("risk_check", { decision: "approve", adjustedSizeUsd: 50 }),
       step("create_trade_ticket", { ticketId: "ticket_1" }),
     ])).toEqual(["finalize_run"]);
   });
@@ -130,7 +119,7 @@ describe("supervisor step policy", () => {
   it("lets the model recover from prerequisite data errors", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        errorStep("create_trade_ticket", new SupervisorPrerequisiteError("Trade ticket creation requires an approved risk decision.")),
+        errorStep("create_trade_ticket", new SupervisorPrerequisiteError("Trade ticket creation requires a usable market selection.")),
       ],
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };

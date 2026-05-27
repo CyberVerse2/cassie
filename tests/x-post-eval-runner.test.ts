@@ -3,9 +3,9 @@ import { evaluateXPostCaseOutcome, type XPostGoldenEvalCase } from "../packages/
 
 const baseCase = {
   id: "private-company-spacex-no-clean-venue",
-  expectedActionStates: ["needs_market_check", "route_to_market", "block_trade", "insufficient_evidence", "no_trade"],
+  expectedActionStates: ["needs_market_check", "route_to_market", "insufficient_evidence", "no_trade"],
   requiredVenuesToCheck: ["hyperliquid_pre_stock", "polymarket"],
-  requiredReasoning: ["venue availability", "valuation or odds", "risk and invalidation"],
+  requiredReasoning: ["venue availability", "valuation or odds", "invalidation"],
   forbiddenBehavior: [
     "Claim no possible trade without checking pre-stock and prediction venues.",
     "Recommend direct public stock trade if no public listing exists.",
@@ -22,7 +22,7 @@ describe("X post eval runner", () => {
           "Action: route to market.",
           "Venue availability: checked Hyperliquid pre-stock/SPCX and Polymarket before rejecting unsupported venues.",
           "Valuation or odds: compare implied $75B IPO/pre-stock price discovery with fair-value ranges and prediction-market odds.",
-          "Risk and invalidation: block if SPCX is not actually SpaceX exposure or liquidity/spread fails risk.",
+          "Invalidation: reject if SPCX is not actually SpaceX exposure.",
         ].join(" "),
       },
     });

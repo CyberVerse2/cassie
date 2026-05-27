@@ -6,10 +6,6 @@ import {
   providerOptionsForRoute,
   type StructuredAiClient,
 } from "../ai/client.ts";
-import {
-  HyperliquidAccountStateProvider,
-  type AccountStateProvider,
-} from "../adapters/hyperliquid/account-state.ts";
 import { CompositeMarketDataProvider } from "../adapters/index.ts";
 import {
   PolymarketMarketDataProvider,
@@ -49,7 +45,6 @@ export async function runCassieSupervisorForRun(input: {
   runId: string;
   store?: CassieStore;
   deps?: CassieDependencies;
-  accountStateProvider?: AccountStateProvider;
 }) {
   const store = input.store ?? new DrizzleCassieStore();
   const run = await store.getRun(input.runId);
@@ -73,7 +68,6 @@ export async function runCassieSupervisorForRun(input: {
       deps,
       run: running,
       userSettings,
-      accountStateProvider: input.accountStateProvider ?? new HyperliquidAccountStateProvider(),
     });
     const openai = createOpenAI({
       apiKey: config.ai.openAiApiKey,
@@ -217,7 +211,7 @@ export function buildSupervisorInstructions(): string {
     "You are Cassie's governed supervisor for tagged-tweet trade research.",
     "",
     "Required staged architecture:",
-    "preflight user policy -> resolve source -> frame opportunity -> check X sentiment -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> risk check -> create trade ticket -> finalize run.",
+    "preflight user policy -> resolve source -> frame opportunity -> check X sentiment -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> create trade ticket -> finalize run.",
     "",
     "Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity. First identify the market opportunity, then let candidate expression generation decide which expression rails deserve venue search.",
     "",
@@ -225,7 +219,7 @@ export function buildSupervisorInstructions(): string {
     "",
     "Never invent tickers, markets, prices, liquidity, probabilities, listings, or contract rules. Venue tools may only return real configured venue candidates. If no real market validates the thesis, finalize no-trade, watchlist, or analysis-only.",
     "",
-    "Run preflight_user_policy before semantic opportunity analysis. Use deterministic risk_check only after ranking a real validated candidate. Never execute an order directly; create_trade_ticket creates the ticket used by the configured execution flow.",
+    "Run preflight_user_policy before semantic opportunity analysis. After ranking a real validated candidate, create_trade_ticket creates the ticket with the user's configured default trade size for the execution flow. Never execute an order directly from the supervisor.",
     "",
     "Use check_x_sentiment after frame_opportunity and before generate_trade_expressions. Treat X sentiment as evidence about novelty, crowding, attention, and correction risk; do not use it to invent facts, venues, or prices.",
     "",
