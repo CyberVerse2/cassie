@@ -55,7 +55,7 @@ XAI_API_KEY
 EXECUTION_WEBHOOK_URL
 ```
 
-CASSIE_API_TOKEN is optional; protected API routes require it when configured.
+CASSIE_API_TOKEN is optional for startup; set it before using protected API routes.
 
 Missing database, AI, market, or execution credentials fail clearly. Cassie does not downgrade semantic routing, persistence, or execution into local keyword behavior or fake fills.
 
