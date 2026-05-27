@@ -511,8 +511,8 @@ function Center() {
         <div className={s.tickerStrip}>
           {[...tickerStrip, ...tickerStrip].map((t, i) => (
             <span className={s.tickerPill} key={`${t.sym}-${i}`}>
-              <span className="tk-icon" style={{ overflow: "hidden", background: "none" }}>
-                <img src={tickerImages[t.sym]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
+              <span className="tk-icon">
+                <img className={s.assetIconImage} src={tickerImages[t.sym]} alt="" />
               </span>
               <span className="tk-sym">${t.sym}</span>
               <span className="tk-count">{t.label}</span>
@@ -575,11 +575,11 @@ function Center() {
               </div>
               <div className={s.moverBody}>
                 <div className={s.moverAssetInfo}>
-                  <span className={s.tokenCell} style={{ position: "relative", width: "24px", height: "24px", display: "inline-flex", verticalAlign: "middle", margin: 0 }}>
-                    <span className="tk" style={{ width: "24px", height: "24px", fontSize: "11px", fontWeight: "700", overflow: "hidden", background: "none" }}>
-                      <img src={tokenImages[largestPortfolioMover.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "2px" }} />
+                  <span className={`${s.tokenCell} ${s.moverTokenCell}`}>
+                    <span className="tk">
+                      <img className={`${s.assetIconImage} ${s.moverTokenImage}`} src={tokenImages[largestPortfolioMover.id]} alt="" />
                     </span>
-                    <span className={`tk-venue ${largestPortfolioMover.venue}`} style={{ width: "12px", height: "12px", bottom: "-2px", left: "14px", border: "1.5px solid var(--bg-deep)" }}>
+                    <span className={`tk-venue ${largestPortfolioMover.venue}`}>
                       <VenueIcon venue={largestPortfolioMover.venue} size={7} />
                     </span>
                   </span>
@@ -625,11 +625,11 @@ function Center() {
         <div className={s.summary}>
           <div className={s.summaryRow}>
             <div className={s.summaryVenue}>
-              <div style={{ display: "inline-flex", position: "relative", width: "32px", height: "22px", marginRight: "6px" }}>
-                <div style={{ position: "absolute", left: 0, top: "1px", zIndex: 2, background: "var(--panel)", border: "1.5px solid var(--panel)", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px" }}>
+              <div className={s.venueStack}>
+                <div className={`${s.venueStackIcon} ${s.venueStackFirst}`}>
                   <VenueIcon venue="hyper" size={12} />
                 </div>
-                <div style={{ position: "absolute", left: "12px", top: "1px", zIndex: 1, background: "var(--panel)", border: "1.5px solid var(--panel)", borderRadius: "4px", display: "flex", alignItems: "center", justifyContent: "center", width: "20px", height: "20px" }}>
+                <div className={`${s.venueStackIcon} ${s.venueStackSecond}`}>
                   <VenueIcon venue="poly" size={12} />
                 </div>
               </div>
@@ -685,8 +685,8 @@ function Center() {
           {trades.map((trade) => (
             <div className={s.tr} role="row" key={trade.title}>
               <span className={s.tokenCell}>
-                <span className="tk" style={{ overflow: "hidden", background: "none" }}>
-                  <img src={tokenImages[trade.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "4px" }} />
+                <span className="tk">
+                  <img className={s.tokenImage} src={tokenImages[trade.id]} alt="" />
                 </span>
                 <span className={`tk-venue ${trade.venue}`} title={trade.venueLabel}>
                   <VenueIcon venue={trade.venue} size={11} />
@@ -732,8 +732,8 @@ function Center() {
           {watching.map((w) => (
             <div className={s.tr} role="row" key={w.title}>
               <span className={s.tokenCell}>
-                <span className="tk" style={{ overflow: "hidden", background: "none" }}>
-                  <img src={tokenImages[w.id]} alt="" style={{ width: "100%", height: "100%", objectFit: "contain", padding: "4px" }} />
+                <span className="tk">
+                  <img className={s.tokenImage} src={tokenImages[w.id]} alt="" />
                 </span>
                 <span className={`tk-venue ${w.venue}`} title={w.venueLabel}>
                   <VenueIcon venue={w.venue} size={11} />
@@ -1076,7 +1076,7 @@ function LineChart({ data, onHover }: LineChartProps) {
   };
 
   return (
-    <div style={{ position: "relative", width: "100%", height: "100%" }}>
+    <div className={s.chartFrame}>
       <svg
         viewBox={`0 0 ${w} ${h}`}
         onMouseMove={handleMouseMove}
@@ -1135,7 +1135,6 @@ function LineChart({ data, onHover }: LineChartProps) {
               cy={yAt(values[hoveredIndex])}
               r="7"
               className={s.chartCursorDot}
-              style={{ filter: "drop-shadow(0 0 4px var(--series-a))" }}
             />
             {/* Cursor Dot inner core */}
             <circle
@@ -1179,7 +1178,6 @@ interface VenueIconProps {
   venue: string;
   size?: number;
   className?: string;
-  style?: React.CSSProperties;
 }
 
 type ActionIconName = "deposit" | "copy" | "check" | "send" | "swap" | "telegram" | "export";
@@ -1260,7 +1258,7 @@ function ActionIcon({ name }: { name: ActionIconName }) {
   );
 }
 
-function VenueIcon({ venue, size = 16, className, style }: VenueIconProps) {
+function VenueIcon({ venue, size = 16, className }: VenueIconProps) {
   if (venue === "hyper") {
     return (
       <svg
@@ -1270,7 +1268,6 @@ function VenueIcon({ venue, size = 16, className, style }: VenueIconProps) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className={className}
-        style={{ ...style }}
       >
         <path
           d="M144 71.6991C144 119.306 114.866 134.582 99.5156 120.98C86.8804 109.889 83.1211 86.4521 64.116 84.0456C39.9942 81.0113 37.9057 113.133 22.0334 113.133C3.5504 113.133 0 86.2428 0 72.4315C0 58.3063 3.96809 39.0542 19.736 39.0542C38.1146 39.0542 39.1588 66.5722 62.132 65.1073C85.0007 63.5379 85.4184 34.8689 100.247 22.6271C113.195 12.0593 144 23.4641 144 71.6991Z"
@@ -1289,7 +1286,6 @@ function VenueIcon({ venue, size = 16, className, style }: VenueIconProps) {
         fill="none"
         xmlns="http://www.w3.org/2000/svg"
         className={className}
-        style={{ ...style }}
       >
         <path
           fillRule="evenodd"

@@ -699,13 +699,20 @@
   width: 18px;
   height: 18px;
   border-radius: 50%;
-  background: color-mix(in oklab, var(--gilt) 18%, var(--bg));
+  background: none;
   font-family: var(--font-sans), var(--stack-sans);
   font-style: normal;
   font-size: 10px;
   font-weight: 700;
   color: var(--gilt);
   flex-shrink: 0;
+  overflow: hidden;
+}
+
+.assetIconImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .tickerPill :global(.tk-sym) {
@@ -716,13 +723,6 @@
 .tickerPill :global(.tk-count) {
   color: var(--up);
   font-weight: 600;
-}
-
-.tickerPill :global(.tk-state) {
-  color: var(--ink-mute);
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .tabs {
@@ -1186,6 +1186,12 @@
   aspect-ratio: 1080 / 280;
 }
 
+.chartFrame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
 .chartBody svg {
   width: 100%;
   height: 100%;
@@ -1257,7 +1263,7 @@
   fill: var(--series-a);
   stroke: var(--ink);
   stroke-width: 2px;
-  box-shadow: 0 0 10px var(--series-a);
+  filter: drop-shadow(0 0 4px var(--series-a));
 }
 
 /* --- Tooltip UI --- */
@@ -1530,26 +1536,35 @@
   color: var(--ink);
 }
 
-.summaryVenue :global(.vmark) {
-  display: grid;
-  place-items: center;
-  width: 22px;
+.venueStack {
+  display: inline-flex;
+  position: relative;
+  width: 32px;
   height: 22px;
-  border-radius: 6px;
-  font-family: var(--font-sans), var(--stack-sans);
-  font-style: normal;
-  font-size: 11px;
-  font-weight: 700;
+  margin-right: 6px;
 }
 
-.summaryVenue :global(.vmark.a) {
-  background: color-mix(in oklab, var(--gilt) 22%, var(--bg));
-  color: var(--gilt-glow);
+.venueStackIcon {
+  position: absolute;
+  top: 1px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--panel);
+  border-radius: 4px;
+  background: var(--panel);
 }
 
-.summaryVenue :global(.vmark.b) {
-  background: color-mix(in oklab, var(--moss) 28%, var(--bg));
-  color: oklch(0.78 0.08 245);
+.venueStackFirst {
+  left: 0;
+  z-index: 2;
+}
+
+.venueStackSecond {
+  left: 12px;
+  z-index: 1;
 }
 
 .summaryCell :global(.label) {
@@ -1853,8 +1868,6 @@
   text-transform: uppercase;
 }
 
-.tBody .tr:hover { background: var(--surface-hover); }
-
 .tokenCell {
   display: inline-flex;
   gap: 12px;
@@ -1879,6 +1892,14 @@
   font-size: 12px;
   font-weight: 700;
   color: var(--gilt-glow);
+  overflow: hidden;
+}
+
+.tokenImage {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 4px;
 }
 
 .tokenCell :global(.tk-venue) {
@@ -1893,6 +1914,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.moverTokenCell {
+  width: 24px;
+  height: 24px;
+  gap: 0;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.moverTokenCell :global(.tk) {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.moverTokenImage {
+  padding: 2px;
+}
+
+.moverTokenCell :global(.tk-venue) {
+  width: 12px;
+  height: 12px;
+  bottom: -2px;
+  left: 14px;
+  border: 1.5px solid var(--bg-deep);
 }
 
 .tokenCell :global(.entry-mark) {
@@ -1916,15 +1964,13 @@
   box-shadow: 0 0 10px color-mix(in oklab, var(--gilt) 55%, transparent);
 }
 
-.tradeCopy,
-.positionCell {
+.tradeCopy {
   display: grid;
   gap: 3px;
   min-width: 0;
 }
 
-.tradeCopy strong,
-.positionCell strong {
+.tradeCopy strong {
   display: inline-flex;
   gap: 8px;
   align-items: center;
@@ -1934,59 +1980,10 @@
   letter-spacing: -0.005em;
 }
 
-.tradeCopy span,
-.positionCell span {
+.tradeCopy span {
   color: var(--ink-mute);
   font-size: 12.5px;
   line-height: 1.35;
-}
-
-.positionCell :global(.side),
-.moverBody :global(.side) {
-  display: inline-grid;
-  place-items: center;
-  min-width: 36px;
-  height: 20px;
-  padding: 0 7px;
-  border-radius: 6px;
-  font-size: 9.5px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  line-height: 1;
-}
-
-.moverBody :global(.side) {
-  min-width: 34px;
-  height: 24px;
-  border-radius: 8px;
-}
-
-.positionCell :global(.side.long),
-.moverBody :global(.side.long) {
-  background: color-mix(in oklab, var(--gilt) 18%, var(--bg));
-  color: var(--gilt-glow);
-}
-
-.positionCell :global(.side.short),
-.moverBody :global(.side.short) {
-  background: color-mix(in oklab, var(--coral) 18%, var(--bg));
-  color: var(--coral-soft);
-}
-
-.positionCell :global(.side.yes),
-.moverBody :global(.side.yes) {
-  background: color-mix(in oklab, var(--series-b) 20%, var(--bg));
-  color: oklch(0.82 0.08 245);
-}
-
-.posUp {
-  color: var(--up);
-  font-weight: 600;
-}
-
-.posDown {
-  color: var(--coral);
-  font-weight: 600;
 }
 
 /* Amount + Value columns — paired figures, separate semantic loads */
@@ -2094,29 +2091,6 @@
   color: var(--ink-mute);
 }
 .sNoTrade :global(.dot) { background: var(--ink-mute); }
-
-.deltaCell {
-  text-align: right;
-  font-family: var(--font-sans), var(--stack-sans);
-  font-variant-numeric: tabular-nums;
-  font-size: 0.95rem;
-  font-style: normal;
-  font-weight: 600;
-  color: var(--ink);
-}
-
-.deltaCell :global(.delta) {
-  display: block;
-  font-family: var(--font-sans);
-  font-style: normal;
-  font-size: 11.5px;
-  font-weight: 600;
-  margin-top: 2px;
-}
-
-.deltaCell :global(.delta.up) { color: var(--up); }
-.deltaCell :global(.delta.down) { color: var(--coral); }
-.deltaCell :global(.delta.neutral) { color: var(--ink-mute); }
 
 .menuBtn {
   display: grid;
