@@ -4,6 +4,7 @@ import {
 } from "../packages/adapters/hyperliquid/index.ts";
 import {
   PolymarketMarketDataProvider,
+  type PolymarketSearchClient,
   PolymarketSdkSearchClient,
 } from "../packages/adapters/polymarket/index.ts";
 import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
@@ -57,7 +58,9 @@ const staticPolymarketSearchClient = {
   },
 };
 
-function polymarketSearchClientFor(markets: any[], book = {
+type PolymarketSearchMarket = Awaited<ReturnType<PolymarketSearchClient["searchMarkets"]>>[number];
+
+function polymarketSearchClientFor(markets: PolymarketSearchMarket[], book = {
   bids: [{ price: "0.53", size: "100" }],
   asks: [{ price: "0.55", size: "100" }],
 }) {
@@ -882,7 +885,7 @@ describe("market data connectors", () => {
         active: true,
         closed: false,
         liquidityNum: 600000,
-        clobTokenIds: ["123", 456],
+        clobTokenIds: ["123", 456] as unknown as string[],
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
         conditionId: "condition_1",
       },

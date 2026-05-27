@@ -149,11 +149,11 @@ export function requiredConnectorEnv(
 
 export function numberEnv(
   name: string,
-  fallback: number,
+  defaultValue: number,
   env: EnvSource = process.env,
   options: NumberEnvOptions = {},
 ): number {
-  return parseNumberEnv(name, env, fallback, options);
+  return parseNumberEnv(name, env, defaultValue, options);
 }
 
 export function readCassieConfig(
@@ -410,29 +410,29 @@ function aiProviderEnvDefaults(overrides: Partial<AiProviderEnvDefaults> = {}): 
   };
 }
 
-function numberSchema(name: string, fallback: number, options: NumberEnvOptions = {}): z.ZodType<number> {
+function numberSchema(name: string, defaultValue: number, options: NumberEnvOptions = {}): z.ZodType<number> {
   return z.preprocess((value) => {
-    return parseConfiguredNumber(name, value, fallback, options);
+    return parseConfiguredNumber(name, value, defaultValue, options);
   }, z.number());
 }
 
 function parseNumberEnv(
   name: string,
   env: EnvSource,
-  fallback: number,
+  defaultValue: number,
   options: NumberEnvOptions,
 ): number {
-  return numberSchema(name, fallback, options).parse(env[name]);
+  return numberSchema(name, defaultValue, options).parse(env[name]);
 }
 
 function parseConfiguredNumber(
   name: string,
   value: unknown,
-  fallback: number,
+  defaultValue: number,
   options: NumberEnvOptions,
 ): number {
   const configured = configuredStringSchema.parse(value);
-  if (configured == null) return fallback;
+  if (configured == null) return defaultValue;
 
   const parsed = Number(configured);
   if (!Number.isFinite(parsed)) {
