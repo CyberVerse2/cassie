@@ -556,8 +556,8 @@ function orderBookMetrics(
   bids: Array<{ px?: string; price?: string; sz?: string; size?: string }>,
   asks: Array<{ px?: string; price?: string; sz?: string; size?: string }>,
 ) {
-  const bid = bids.map((level) => Number(level.px ?? level.price)).filter(Number.isFinite).sort((a, b) => b - a)[0];
-  const ask = asks.map((level) => Number(level.px ?? level.price)).filter(Number.isFinite).sort((a, b) => a - b)[0];
+  const bid = topBid(bids);
+  const ask = topAsk(asks);
 
   if (!bid || !ask || bid <= 0 || ask <= 0) {
     return null;
@@ -570,11 +570,26 @@ function orderBookMetrics(
 }
 
 function topBid(bids: Array<{ px?: string; price?: string }>): number | null {
-  return bids.map((level) => Number(level.px ?? level.price)).filter(Number.isFinite).sort((a, b) => b - a)[0] ?? null;
+  return topPrice(bids, Math.max);
 }
 
 function topAsk(asks: Array<{ px?: string; price?: string }>): number | null {
-  return asks.map((level) => Number(level.px ?? level.price)).filter(Number.isFinite).sort((a, b) => a - b)[0] ?? null;
+  return topPrice(asks, Math.min);
+}
+
+function topPrice(
+  levels: Array<{ px?: string; price?: string }>,
+  select: (current: number, candidate: number) => number,
+): number | null {
+  let best: number | null = null;
+
+  for (const level of levels) {
+    const price = Number(level.px ?? level.price);
+    if (!Number.isFinite(price)) continue;
+    best = best == null ? price : select(best, price);
+  }
+
+  return best;
 }
 
 function estimateBuySlippageBps(

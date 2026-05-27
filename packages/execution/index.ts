@@ -87,9 +87,11 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     const transport = new HttpTransport();
     const info = new InfoClient({ transport });
     const exchange = new ExchangeClient({ transport, wallet });
-    const asset = await this.resolveAsset(info, ticket);
-    const mids = await info.allMids();
     const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
+    const [asset, mids] = await Promise.all([
+      this.resolveAsset(info, symbol),
+      info.allMids(),
+    ]);
     const mid = Number(mids[symbol]);
 
     if (!Number.isFinite(mid) || mid <= 0) {
@@ -122,8 +124,7 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     };
   }
 
-  private async resolveAsset(info: InfoClient, ticket: TradeTicket): Promise<{ id: number; sizeDecimals: number }> {
-    const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
+  private async resolveAsset(info: InfoClient, symbol: string): Promise<{ id: number; sizeDecimals: number }> {
     const [meta] = await info.metaAndAssetCtxs();
     const index = meta.universe.findIndex((asset) => asset.name === symbol);
 
