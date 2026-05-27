@@ -8,13 +8,6 @@ export class RateLimitError extends Error {
   }
 }
 
-export class RequestTooLargeError extends Error {
-  constructor(message = "Request body is too large") {
-    super(message);
-    this.name = "RequestTooLargeError";
-  }
-}
-
 export function applySecurityHeaders(response: ServerResponse): void {
   response.setHeader("X-Content-Type-Options", "nosniff");
   response.setHeader("X-Frame-Options", "DENY");

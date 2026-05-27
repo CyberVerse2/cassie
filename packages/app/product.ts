@@ -1,4 +1,3 @@
-import { z } from "zod";
 import {
   HyperliquidAccountStateProvider,
   type AccountStateProvider,
@@ -7,8 +6,6 @@ import {
   type ExecutionClient,
 } from "../execution/index.ts";
 import {
-  SourcePostSchema,
-  UserSettingsSchema,
   type ControlRun,
   type SourcePost,
   type TradeTicket,
@@ -23,14 +20,6 @@ import {
   queueExecutionJob,
   type CassieJobQueue,
 } from "../jobs/index.ts";
-
-export const MentionRequestSchema = z.object({
-  userId: z.string(),
-  userCommand: z.string().min(1),
-  sourcePost: SourcePostSchema,
-});
-
-export const SettingsRequestSchema = UserSettingsSchema;
 
 export class CassieProduct {
   constructor(
