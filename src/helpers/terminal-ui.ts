@@ -103,7 +103,7 @@ export function normalizeStatus(status: string): string {
   if (status === "succeeded") return "ok";
   if (status === "failed") return "fail";
   if (status === "running") return "run";
-  if (status === "queued" || status === "pending" || status === "awaiting_approval") return "wait";
+  if (status === "queued" || status === "pending") return "wait";
   return status;
 }
 

@@ -1,6 +1,6 @@
 import type { TaskList } from "graphile-worker";
 import { runCassieSupervisorForRun } from "../agent/agent.ts";
-import { enqueueAutoApprovedTicketsForRun, executeExecutionJob } from "./execution-job.ts";
+import { enqueueTradeTicketsForRun, executeExecutionJob } from "./execution-job.ts";
 import {
   EXECUTE_TRADE_TICKET_TASK,
   ExecuteTradeTicketPayloadSchema,
@@ -17,7 +17,7 @@ export function createExecutionTaskList(): TaskList {
     [RUN_CASSIE_SUPERVISOR_TASK]: async (payload) => {
       const parsed = RunCassieSupervisorPayloadSchema.parse(payload);
       await runCassieSupervisorForRun({ runId: parsed.runId });
-      await enqueueAutoApprovedTicketsForRun({ runId: parsed.runId });
+      await enqueueTradeTicketsForRun({ runId: parsed.runId });
     },
   };
 }

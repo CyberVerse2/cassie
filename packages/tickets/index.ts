@@ -21,17 +21,9 @@ export function createTradeTicket(input: {
     throw new Error("Cannot create a trade ticket without a selected market.");
   }
 
-  if (input.riskDecision.decision === "reject") {
-    throw new Error(`Cannot create rejected trade ticket: ${input.riskDecision.reason}`);
+  if (input.riskDecision.decision !== "approve") {
+    throw new Error(`Cannot create trade ticket without approved risk: ${input.riskDecision.reason}`);
   }
-
-  const sizeUsd =
-    input.riskDecision.decision === "approve"
-      ? input.riskDecision.adjustedSizeUsd
-      : Math.min(
-          input.sizeUsd ?? input.userSettings.defaultTradeSizeUsd,
-          input.userSettings.maxTradeSizeUsd,
-        );
 
   return {
     ticketId: randomUUID(),
@@ -41,7 +33,7 @@ export function createTradeTicket(input: {
     venue: market.venue,
     instrument: market.instrument,
     side: market.side,
-    sizeUsd,
+    sizeUsd: input.riskDecision.adjustedSizeUsd,
     orderType: "marketable_limit",
     venueData: {
       symbol: market.symbol,
@@ -53,7 +45,5 @@ export function createTradeTicket(input: {
       minOrderSizeUsd: market.minOrderSizeUsd,
     },
     riskDecision: input.riskDecision,
-    approvalState:
-      input.riskDecision.decision === "approve" ? "not_required" : "pending",
   };
 }

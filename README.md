@@ -1,6 +1,6 @@
 # Cassie
 
-Cassie is an X-native trade-expression and ticketing agent. A mention or CLI test run creates a durable run, a Graphile Worker supervisor drives bounded AI tools, and approved trade tickets are handed to the execution worker.
+Cassie is an X-native trade-expression and ticketing agent. A mention or CLI test run creates a durable run, a Graphile Worker supervisor drives bounded AI tools, and trade tickets are handed to the execution worker.
 
 Cassie can reason with AI, but she does not directly place orders.
 
@@ -72,12 +72,6 @@ Inspect an existing run:
 npm run cli -- control-run RUN_ID --json
 ```
 
-Approve pending tickets from the CLI:
-
-```bash
-npm run cli -- approve TICKET_ID
-```
-
 ## Current Test Surface
 
 Implemented:
@@ -89,10 +83,9 @@ Implemented:
 - Hyperliquid and Polymarket adapters over real connector candidates
 - Deterministic risk checks
 - Trade-ticket creation
-- Ticket approval action
 - Graphile Worker supervisor and execution jobs
 - Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events
-- CLI inspection for pending tickets, runs, and audit trail
+- CLI inspection for tickets, runs, and audit trail
 
 Not included:
 

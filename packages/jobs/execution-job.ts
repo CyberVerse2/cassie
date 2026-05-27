@@ -70,14 +70,14 @@ export async function executeExecutionJob(input: {
   }
 }
 
-export async function enqueueAutoApprovedTicketsForRun(input: {
+export async function enqueueTradeTicketsForRun(input: {
   runId: string;
   store?: CassieStore;
   jobQueue?: CassieJobQueue;
 }): Promise<{ enqueued: number; ticketIds: string[] }> {
   const store = input.store ?? new DrizzleCassieStore();
   const jobQueue = input.jobQueue ?? new GraphileExecutionJobQueue();
-  const tickets = await store.listAutoApprovedTicketsWithoutExecutionJob(input.runId);
+  const tickets = await store.listTradeTicketsWithoutExecutionJob(input.runId);
 
   const ticketIds: string[] = [];
   for (const ticket of tickets) {
@@ -85,7 +85,7 @@ export async function enqueueAutoApprovedTicketsForRun(input: {
       store,
       jobQueue,
       ticket,
-      message: "Auto-approved trade ticket queued for execution.",
+      message: "Trade ticket queued for execution.",
       data: { runId: input.runId },
     });
     ticketIds.push(ticket.ticketId);
@@ -122,10 +122,6 @@ async function preflightExecution(input: {
   ticket: TradeTicket;
   accountStateProvider?: AccountStateProvider;
 }): Promise<void> {
-  if (input.ticket.approvalState !== "approved" && input.ticket.approvalState !== "not_required") {
-    throw new Error("Trade ticket is not approved for execution.");
-  }
-
   const userSettings = await input.store.getUserSettings(input.ticket.userId);
   if (!userSettings) {
     throw new Error(`No Cassie settings found for user ${input.ticket.userId}.`);
@@ -186,7 +182,7 @@ function ticketToMarketCandidate(ticket: TradeTicket): MarketCandidate {
     estimatedSlippageBps: ticket.venueData?.estimatedSlippageBps ?? 0,
     minOrderSizeUsd: ticket.venueData?.minOrderSizeUsd ?? 0,
     thesisFit: 1,
-    reason: "Execution preflight candidate reconstructed from approved ticket.",
+    reason: "Execution preflight candidate reconstructed from trade ticket.",
   };
 }
 

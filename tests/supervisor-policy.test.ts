@@ -130,7 +130,7 @@ describe("supervisor step policy", () => {
   it("lets the model recover from prerequisite data errors", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        errorStep("create_trade_ticket", new SupervisorPrerequisiteError("Trade ticket creation requires a non-rejected risk decision.")),
+        errorStep("create_trade_ticket", new SupervisorPrerequisiteError("Trade ticket creation requires an approved risk decision.")),
       ],
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };

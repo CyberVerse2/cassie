@@ -336,7 +336,7 @@ describe("AI SDK supervisor agent", () => {
     });
 
     const state = await store.load();
-    expect(state.tradeTickets[0]?.approvalState).toBe("not_required");
+    expect(state.tradeTickets[0]).not.toHaveProperty("approvalState");
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["risk", "ticket", "final"]),
     );
@@ -405,7 +405,7 @@ describe("AI SDK supervisor agent", () => {
     await executeTool(tools.create_trade_ticket, {
       tradeExpression: expressionWithHigherPriorityEventMarket,
       marketSelection: selectedMarket,
-      riskDecision: { decision: "create_ticket_only", reason: "Needs approval." },
+      riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
       sizeUsd: null,
     });
 
@@ -423,7 +423,7 @@ describe("AI SDK supervisor agent", () => {
     });
     await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketSelection(store, run.runId, marketSelection);
-    await seedRiskDecision(store, run.runId, { decision: "create_ticket_only", reason: "Needs approval." });
+    await seedRiskDecision(store, run.runId, { decision: "approve", adjustedSizeUsd: 50 });
 
     const tools = createCassieSupervisorTools({
       store,
@@ -571,7 +571,7 @@ describe("AI SDK supervisor agent", () => {
     });
   });
 
-  it("rejects trade ticket creation without a supplied non-rejected risk decision", async () => {
+  it("rejects trade ticket creation without a supplied approved risk decision", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -597,7 +597,7 @@ describe("AI SDK supervisor agent", () => {
       tradeExpression,
       marketSelection,
       sizeUsd: null,
-    })).rejects.toThrow("Trade ticket creation requires a non-rejected risk decision.");
+    })).rejects.toThrow("Trade ticket creation requires an approved risk decision.");
   });
 
   it("allows early grounded analysis finalization without market or risk state", async () => {

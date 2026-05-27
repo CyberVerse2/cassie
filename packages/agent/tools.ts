@@ -37,7 +37,7 @@ import { assessExpressionFit, quoteExpression, searchVenues } from "./venues.ts"
 import { thesisForMarketSelection, thesisFromTradeExpression } from "./thesis.ts";
 import {
   FinalizeRunInputSchema,
-  assertNonRejectedRiskDecision,
+  assertApprovedRiskDecision,
   assertUsableMarketSelection,
   finalizeResult,
   validateFinalizationPrerequisites,
@@ -455,7 +455,7 @@ export function createCassieSupervisorTools(input: {
       },
     }),
     create_trade_ticket: tool({
-      description: "Create a trade ticket from a non-rejected risk decision. This never executes the order.",
+      description: "Create a trade ticket from an approved risk decision. This never executes the order directly.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
         marketSelection: z.unknown().nullable().default(null),
@@ -479,7 +479,7 @@ export function createCassieSupervisorTools(input: {
           },
           async () => {
             assertUsableMarketSelection(persistedMarketSelection);
-            assertNonRejectedRiskDecision(persistedRiskDecision);
+            assertApprovedRiskDecision(persistedRiskDecision);
             const thesis = thesisForMarketSelection(persistedTradeExpression, persistedMarketSelection);
             return recordRunStep({
               store: input.store,
@@ -523,7 +523,7 @@ export function createCassieSupervisorTools(input: {
             const result = finalizeResult(preparedFinalInput);
             const updated = {
               ...input.run,
-              status: preparedFinalInput.responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
+              status: "succeeded" as const,
               result,
               error: null,
               updatedAt: new Date().toISOString(),
@@ -625,7 +625,7 @@ function parseSuppliedMarketSelection(value: unknown): MarketSelection {
 function parseSuppliedRiskDecision(value: unknown): RiskDecision {
   const parsed = RiskDecisionSchema.safeParse(value);
   if (parsed.success) return parsed.data;
-  throw new Error("Trade ticket creation requires a non-rejected risk decision.");
+  throw new Error("Trade ticket creation requires an approved risk decision.");
 }
 
 function parseSuppliedTradeExpression(value: unknown) {
@@ -693,7 +693,7 @@ function predictionMarketSideForCandidate(candidate: MarketCandidate, side?: "ye
 function preflightUserPolicy(userSettings: UserSettings) {
   const warnings: string[] = [];
   if (!userSettings.walletAddress) {
-    warnings.push("No wallet address is configured; approved tickets may not be executable until wallet setup is complete.");
+    warnings.push("No wallet address is configured; trade tickets may not be executable until wallet setup is complete.");
   }
   if (userSettings.defaultTradeSizeUsd > userSettings.maxTradeSizeUsd) {
     warnings.push("Default trade size exceeds max trade size; deterministic risk check will cap or reject ticket sizing.");

@@ -22,8 +22,8 @@ export function evaluateRisk(input: {
 
   if (market.thesisFit < input.userSettings.minConfidence) {
     return {
-      decision: "create_ticket_only",
-      reason: "Thesis fit is below the auto-approval threshold.",
+      decision: "reject",
+      reason: "Thesis fit is below the execution threshold.",
     };
   }
 

@@ -60,7 +60,7 @@ describe("InMemoryCassieStore", () => {
     expect(snapshot.auditEvents.map((event) => event.eventType)).toContain("mention.received");
   });
 
-  it("finds execution jobs and auto-approved tickets without loading callers into full snapshots", async () => {
+  it("finds execution jobs and trade tickets without loading callers into full snapshots", async () => {
     const store = new InMemoryCassieStore();
     const ticket: TradeTicket = {
       ticketId: "ticket_1",
@@ -76,7 +76,6 @@ describe("InMemoryCassieStore", () => {
         decision: "approve",
         adjustedSizeUsd: 50,
       },
-      approvalState: "not_required",
       venueData: {},
     };
     const job: ExecutionJob = {
@@ -93,7 +92,7 @@ describe("InMemoryCassieStore", () => {
     await store.addExecutionJob(job);
 
     expect(await store.getExecutionJob("job_1")).toEqual(job);
-    expect((await store.listAutoApprovedTicketsWithoutExecutionJob("run_1")).map((entry) => entry.ticketId))
+    expect((await store.listTradeTicketsWithoutExecutionJob("run_1")).map((entry) => entry.ticketId))
       .toEqual(["ticket_1"]);
   });
 

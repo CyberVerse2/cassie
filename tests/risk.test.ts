@@ -85,4 +85,28 @@ describe("risk evaluation", () => {
       autoTradeEnabled: true,
     }).allowedVenues).toEqual(["hyperliquid", "polymarket"]);
   });
+
+  it("rejects low thesis fit instead of creating ticket-only trades", () => {
+    expect(evaluateRisk({
+      marketSelection: {
+        ...marketSelection,
+        selectedMarket: {
+          ...marketSelection.selectedMarket!,
+          thesisFit: 0.2,
+        },
+      },
+      userSettings: settings,
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
+      sizeUsd: null,
+    })).toEqual({
+      decision: "reject",
+      reason: "Thesis fit is below the execution threshold.",
+    });
+  });
 });

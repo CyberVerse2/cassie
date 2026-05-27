@@ -50,6 +50,13 @@
       "when": 1779584760000,
       "tag": "0006_run_step_thinking_trace",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1779920943000,
+      "tag": "0007_drop_trade_ticket_approval_state",
+      "breakpoints": true
     }
   ]
 }

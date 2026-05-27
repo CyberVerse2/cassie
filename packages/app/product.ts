@@ -8,7 +8,6 @@ import {
 import {
   type ControlRun,
   type SourcePost,
-  type TradeTicket,
   type UserSettings,
 } from "../core/schemas/index.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
@@ -20,7 +19,6 @@ import {
 } from "../jobs/queue.ts";
 import {
   executeExecutionJob,
-  queueExecutionJob,
 } from "../jobs/execution-job.ts";
 
 export class CassieProduct {
@@ -65,34 +63,6 @@ export class CassieProduct {
     return { runId: run.runId, status: run.status };
   }
 
-  async approveTicket(ticketId: string): Promise<{ ticketId: string; executionJobId: string }> {
-    const ticket = await this.store.getTradeTicket(ticketId);
-
-    if (!ticket) {
-      throw new Error(`Trade ticket ${ticketId} was not found.`);
-    }
-
-    if (ticket.approvalState === "rejected") {
-      throw new Error(`Trade ticket ${ticketId} was rejected.`);
-    }
-
-    const approvedTicket = {
-      ...ticket,
-      approvalState: "approved" as const,
-    };
-    await this.store.updateTradeTicket(approvedTicket);
-    await this.store.audit({
-      entityId: ticketId,
-      entityType: "trade_ticket",
-      eventType: "trade_ticket.approved",
-      message: "Trade ticket approved.",
-      data: { ticketId },
-    });
-
-    const job = await this.enqueueExecution(approvedTicket);
-    return { ticketId, executionJobId: job.jobId };
-  }
-
   async state() {
     return this.store.load();
   }
@@ -129,16 +99,6 @@ export class CassieProduct {
       product: this,
       store: this.store,
       userId,
-    });
-  }
-
-  private async enqueueExecution(ticket: TradeTicket) {
-    return queueExecutionJob({
-      store: this.store,
-      jobQueue: this.jobQueue,
-      ticket,
-      message: "Execution job queued.",
-      data: {},
     });
   }
 

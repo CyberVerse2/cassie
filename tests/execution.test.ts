@@ -19,7 +19,6 @@ const ticket: TradeTicket = {
     decision: "approve",
     adjustedSizeUsd: 25,
   },
-  approvalState: "approved",
 };
 const builderCode = `0x${"a".repeat(64)}`;
 

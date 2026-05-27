@@ -33,12 +33,11 @@ export const tradeTickets = pgTable("trade_tickets", {
   runId: text("run_id"),
   userId: text("user_id").notNull(),
   ticket: jsonb("ticket").$type<TradeTicket>().notNull(),
-  approvalState: text("approval_state").$type<TradeTicket["approvalState"]>().notNull(),
   createdAt: text("created_at").notNull(),
   updatedAt: text("updated_at").notNull(),
 }, (table) => [
-  index("trade_tickets_run_state_idx").on(table.runId, table.approvalState),
-  index("trade_tickets_user_state_idx").on(table.userId, table.approvalState),
+  index("trade_tickets_run_idx").on(table.runId),
+  index("trade_tickets_user_idx").on(table.userId),
 ]);
 
 export const executionJobs = pgTable("execution_jobs", {

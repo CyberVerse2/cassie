@@ -92,7 +92,7 @@ export async function finalizeRunFromPersistedSteps(input: {
       const result = finalizeResult(preparedFinalInput);
       await input.store.updateRun({
         ...input.run,
-        status: preparedFinalInput.responseType === "trade_ticket" ? "awaiting_approval" as const : "succeeded" as const,
+        status: "succeeded" as const,
         result,
         error: null,
         updatedAt: new Date().toISOString(),
@@ -208,9 +208,9 @@ export function assertUsableMarketSelection(selection?: MarketSelection): void {
   }
 }
 
-export function assertNonRejectedRiskDecision(decision?: RiskDecision): void {
-  if (!decision || decision.decision === "reject") {
-    throw new SupervisorPrerequisiteError("Trade ticket creation requires a non-rejected risk decision.");
+export function assertApprovedRiskDecision(decision?: RiskDecision): void {
+  if (!decision || decision.decision !== "approve") {
+    throw new SupervisorPrerequisiteError("Trade ticket creation requires an approved risk decision.");
   }
 }
 
@@ -220,9 +220,9 @@ export function validateFinalizationPrerequisites(input: PreparedFinalizeRunInpu
       throw new SupervisorPrerequisiteError("Trade-ticket finalization requires a trade ticket.");
     }
     if (!input.riskDecision) {
-      throw new SupervisorPrerequisiteError("Trade-ticket finalization requires a non-rejected risk decision.");
+      throw new SupervisorPrerequisiteError("Trade-ticket finalization requires an approved risk decision.");
     }
-    assertNonRejectedRiskDecision(input.riskDecision);
+    assertApprovedRiskDecision(input.riskDecision);
     return;
   }
 
@@ -257,7 +257,7 @@ export function finalizeResult(input: PreparedFinalizeRunInput) {
     responseType: input.responseType,
     actionState,
     publicSummary: input.publicSummary,
-    runStatus: "awaiting_approval",
+    runStatus: "succeeded",
     ticketId: input.tradeTicket.ticketId,
     warnings: [],
   });

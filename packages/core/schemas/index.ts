@@ -351,15 +351,7 @@ export const RiskDecisionSchema = z.discriminatedUnion("decision", [
     adjustedSizeUsd: z.number().positive(),
   }),
   z.object({
-    decision: z.literal("require_approval"),
-    reason: z.string(),
-  }),
-  z.object({
     decision: z.literal("reject"),
-    reason: z.string(),
-  }),
-  z.object({
-    decision: z.literal("create_ticket_only"),
     reason: z.string(),
   }),
 ]);
@@ -398,7 +390,6 @@ export const TradeTicketSchema = z.object({
   orderType: z.enum(["limit", "marketable_limit"]),
   venueData: TradeVenueDataSchema.optional(),
   riskDecision: RiskDecisionSchema,
-  approvalState: z.enum(["not_required", "pending", "approved", "rejected"]),
 });
 
 export const ExecutionJobSchema = z.object({
@@ -431,7 +422,6 @@ export const AuditEventSchema = z.object({
 export const ControlRunStatusSchema = z.enum([
   "queued",
   "running",
-  "awaiting_approval",
   "succeeded",
   "failed",
   "cancelled",

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
@@ -247,7 +247,6 @@ export class DrizzleCassieStore implements CassieStore {
       runId: ticket.runId ?? null,
       userId: ticket.userId,
       ticket,
-      approvalState: ticket.approvalState,
       createdAt: now,
       updatedAt: now,
     });
@@ -268,7 +267,6 @@ export class DrizzleCassieStore implements CassieStore {
       .set({
         runId: ticket.runId ?? null,
         ticket,
-        approvalState: ticket.approvalState,
         updatedAt: new Date().toISOString(),
       })
       .where(eq(tradeTickets.ticketId, ticket.ticketId));
@@ -329,14 +327,11 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.job;
   }
 
-  async listAutoApprovedTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
+  async listTradeTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
     const ticketRows = await this.db
       .select()
       .from(tradeTickets)
-      .where(and(
-        eq(tradeTickets.runId, runId),
-        eq(tradeTickets.approvalState, "not_required"),
-      ));
+      .where(eq(tradeTickets.runId, runId));
     const tickets = ticketRows.map((row) => row.ticket);
     const ticketIds = tickets.map((ticket) => ticket.ticketId);
 

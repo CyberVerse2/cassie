@@ -58,7 +58,6 @@ const commands = new Map<string, (args: ParsedArgs) => Promise<unknown>>([
   ["state", state],
   ["runs", runs],
   ["tickets", tickets],
-  ["approve", approve],
   ["execute-next", executeNext],
   ["smoke:ai", smokeAi],
   ["smoke:market", smokeMarket],
@@ -119,7 +118,6 @@ App flow:
   state                     Show the persisted app state summary.
   runs                      List durable runs.
   tickets                   List trade tickets.
-  approve <ticketId>        Approve a pending trade ticket and queue execution.
   execute-next --yes        Execute the next queued execution job.
 
 Smoke checks:
@@ -136,7 +134,6 @@ Useful examples:
   npm run cli -- run --post "Exa raised $250M" --audit
   npm run cli -- run-supervisor <runId>
   npm run cli -- tickets --json
-  npm run cli -- approve <ticketId>
   npm run cli -- execute-next --yes
 `);
 }
@@ -256,7 +253,6 @@ async function tickets(args: ParsedArgs) {
     .map((ticket) => ({
       ticketId: ticket.ticketId,
       userId: ticket.userId,
-      approvalState: ticket.approvalState,
       venue: ticket.venue,
       instrument: ticket.instrument,
       side: ticket.side,
@@ -264,10 +260,6 @@ async function tickets(args: ParsedArgs) {
       thesis: ticket.thesis,
       riskDecision: ticket.riskDecision.decision,
     }));
-}
-
-async function approve(args: ParsedArgs) {
-  return product().approveTicket(requiredPositional(args, 0, "ticketId"));
 }
 
 async function executeNext(args: ParsedArgs) {
@@ -335,7 +327,7 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
   return {
     mentions: snapshot.mentions.length,
     runs: countBy(snapshot.controlRuns, (run) => run.status),
-    tradeTickets: countBy(snapshot.tradeTickets, (ticket) => ticket.approvalState),
+    tradeTickets: snapshot.tradeTickets.length,
     executionJobs: countBy(snapshot.executionJobs, (job) => job.status),
     auditEvents: snapshot.auditEvents.length,
     userSettings: snapshot.userSettings.map((settings) => ({
