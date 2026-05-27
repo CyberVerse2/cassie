@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import tweetRun from "../../../../docs/test-run-tweets.json";
 import { StyledQR } from "../components/styled-qr";
@@ -29,14 +29,14 @@ const tokenImages: Record<string, string> = {
 };
 
 const tickerStrip = [
-  { sym: "SOL", label: "22 trades", letter: "S" },
-  { sym: "ETH", label: "14 trades", letter: "E" },
-  { sym: "AI16Z", label: "35 trades", letter: "A" },
-  { sym: "FED", label: "60 trades", letter: "F" },
-  { sym: "BTC", label: "85 trades", letter: "B" },
-  { sym: "HYPE", label: "73 trades", letter: "H" },
-  { sym: "AVNT", label: "98 trades", letter: "A" },
-  { sym: "GOLD", label: "41 trades", letter: "G" },
+  { sym: "SOL", label: "22 trades" },
+  { sym: "ETH", label: "14 trades" },
+  { sym: "AI16Z", label: "35 trades" },
+  { sym: "FED", label: "60 trades" },
+  { sym: "BTC", label: "85 trades" },
+  { sym: "HYPE", label: "73 trades" },
+  { sym: "AVNT", label: "98 trades" },
+  { sym: "GOLD", label: "41 trades" },
 ];
 
 const trades = [
@@ -46,11 +46,8 @@ const trades = [
     description: "Buy YES if approval odds pull back below 58c; cap exposure at $90 and exit above 68c.",
     venue: "poly",
     venueLabel: "Polymarket",
-    confidence: "82%",
-    instrument: "Prediction market",
     side: "YES",
     sideTone: "yes",
-    entry: "58c",
     current: "63c",
     pnlPct: "+8.6%",
     value: "$91.40",
@@ -63,11 +60,8 @@ const trades = [
     description: "Long ETH only while depth stays above 0.90 and funding remains below 0.02%.",
     venue: "hyper",
     venueLabel: "Hyperliquid",
-    confidence: "76%",
-    instrument: "Perp",
     side: "LONG",
     sideTone: "long",
-    entry: "$3,052",
     current: "$3,108",
     pnlPct: "+1.8%",
     value: "$124.70",
@@ -80,11 +74,8 @@ const trades = [
     description: "Hold YES exposure while CPI surprise remains negative and the market prices under 45%.",
     venue: "poly",
     venueLabel: "Polymarket",
-    confidence: "73%",
-    instrument: "Prediction market",
     side: "YES",
     sideTone: "yes",
-    entry: "43c",
     current: "41c",
     pnlPct: "-4.7%",
     value: "$57.80",
@@ -97,11 +88,8 @@ const trades = [
     description: "Watch only. Enter if price returns to prior range high with clean liquidity above $104k.",
     venue: "hyper",
     venueLabel: "Hyperliquid",
-    confidence: "48%",
-    instrument: "Perp",
     side: "SHORT",
     sideTone: "short",
-    entry: "$103,200",
     current: "$101,840",
     pnlPct: "+1.3%",
     value: "$74.20",
@@ -114,11 +102,8 @@ const trades = [
     description: "Long breakout while prior 14d resistance holds as support and volume stays above baseline.",
     venue: "hyper",
     venueLabel: "Hyperliquid",
-    confidence: "81%",
-    instrument: "Perp",
     side: "LONG",
     sideTone: "long",
-    entry: "$33.92",
     current: "$36.40",
     pnlPct: "+7.3%",
     value: "$103.74",
@@ -291,6 +276,8 @@ const activityFeed: ActivityGroup[] = [
     ],
   },
 ];
+
+const activityItemCount = activityFeed.reduce((n, g) => n + g.items.length, 0);
 
 export default function Dashboard() {
   return (
@@ -489,7 +476,7 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
   data[data.length - 1] = {
     date: range === "1D" ? "24:00" : new Date(2026, 4, 26).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
     value: endVal,
-    change: ((endVal - startVal) / startVal) * 100
+    change: ((endVal - startVal) / startVal) * 100,
   };
 
   return data;
@@ -501,7 +488,7 @@ function Center() {
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
 
-  const rangeData = generateDataForRange(selectedRange);
+  const rangeData = useMemo(() => generateDataForRange(selectedRange), [selectedRange]);
   const currentValPoint = rangeData[rangeData.length - 1];
   const displayedPoint = hoveredData || currentValPoint;
 
@@ -540,7 +527,7 @@ function Center() {
           onClick={() => setActiveTab("activity")}
         >
           Activity
-          <span className="tab-count">{activityFeed.reduce((n, g) => n + g.items.length, 0)}</span>
+          <span className="tab-count">{activityItemCount}</span>
         </button>
       </div>
 
@@ -1045,16 +1032,20 @@ function LineChart({ data, onHover }: LineChartProps) {
     return val.toFixed(0);
   };
 
-  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.clientX - rect.left;
-    const svgX = (mouseX / rect.width) * w;
+  const dataIndexAt = (clientX: number, rect: DOMRect) => {
+    const svgX = ((clientX - rect.left) / rect.width) * w;
+    return Math.max(0, Math.min(data.length - 1, Math.round((svgX / w) * (data.length - 1))));
+  };
 
-    const xPercent = svgX / w;
-    const dataIndex = Math.max(0, Math.min(data.length - 1, Math.round(xPercent * (data.length - 1))));
-
+  const setHoverIndex = (dataIndex: number) => {
+    if (dataIndex === hoveredIndex) return;
     setHoveredIndex(dataIndex);
     onHover(data[dataIndex]);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement, MouseEvent>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setHoverIndex(dataIndexAt(e.clientX, rect));
   };
 
   const handleMouseLeave = () => {
@@ -1065,14 +1056,7 @@ function LineChart({ data, onHover }: LineChartProps) {
   const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
     if (e.touches.length === 0) return;
     const rect = e.currentTarget.getBoundingClientRect();
-    const mouseX = e.touches[0].clientX - rect.left;
-    const svgX = (mouseX / rect.width) * w;
-
-    const xPercent = svgX / w;
-    const dataIndex = Math.max(0, Math.min(data.length - 1, Math.round(xPercent * (data.length - 1))));
-
-    setHoveredIndex(dataIndex);
-    onHover(data[dataIndex]);
+    setHoverIndex(dataIndexAt(e.touches[0].clientX, rect));
   };
 
   return (
@@ -1093,12 +1077,10 @@ function LineChart({ data, onHover }: LineChartProps) {
           </linearGradient>
         </defs>
 
-        {/* Horizontal Gridlines */}
         <line x1="0" y1={pad.t + innerH * 0.25} x2={w} y2={pad.t + innerH * 0.25} className={s.chartGrid} />
         <line x1="0" y1={pad.t + innerH * 0.5} x2={w} y2={pad.t + innerH * 0.5} className={s.chartGrid} />
         <line x1="0" y1={pad.t + innerH * 0.75} x2={w} y2={pad.t + innerH * 0.75} className={s.chartGrid} />
 
-        {/* Gridline Labels */}
         <text x="8" y={pad.t + innerH * 0.25 - 6} fill="var(--ink-faint)" fontSize="10" fontFamily="var(--stack-sans)" fontWeight="500">
           ${formatAxisValue(chartMax - (chartMax - chartMin) * 0.25)}
         </text>
@@ -1109,19 +1091,14 @@ function LineChart({ data, onHover }: LineChartProps) {
           ${formatAxisValue(chartMax - (chartMax - chartMin) * 0.75)}
         </text>
 
-        {/* Area Gradient Fill */}
         <path d={areaPath} className={s.chartFill} />
 
-        {/* Thick line glow underlay */}
         <path d={mainPath} className={s.chartGlow} pathLength={100} />
 
-        {/* Crisp balance line */}
         <path d={mainPath} className={s.chartLine} pathLength={100} />
 
-        {/* Cursor & Tracker elements */}
         {hoveredIndex !== null && (
           <>
-            {/* Vertical Cursor Guide */}
             <line
               x1={xAt(hoveredIndex)}
               y1={0}
@@ -1129,14 +1106,12 @@ function LineChart({ data, onHover }: LineChartProps) {
               y2={h}
               className={s.chartCursorLine}
             />
-            {/* Cursor Dot outer ring */}
             <circle
               cx={xAt(hoveredIndex)}
               cy={yAt(values[hoveredIndex])}
               r="7"
               className={s.chartCursorDot}
             />
-            {/* Cursor Dot inner core */}
             <circle
               cx={xAt(hoveredIndex)}
               cy={yAt(values[hoveredIndex])}
