@@ -3,12 +3,18 @@ import { describe, expect, it, vi } from "vitest";
 import { MemoryRateLimiter, RateLimitError } from "../src/security.ts";
 
 describe("server route security", () => {
-  it("does not gate API routes behind route auth", async () => {
+  it("does not gate local control routes behind token checks", async () => {
     const source = await readFile(new URL("../src/server.ts", import.meta.url), "utf8");
 
-    expect(source).not.toContain("require" + "ApiToken");
-    expect(routeBlock(source, "GET", "/api/state")).toContain("product.state()");
-    expect(routeBlock(source, "POST", "/api/settings")).toContain("product.upsertSettings");
+    const stateRoute = routeBlock(source, "GET", "/api/state");
+    const settingsRoute = routeBlock(source, "POST", "/api/settings");
+
+    expect(stateRoute).not.toContain("authorization");
+    expect(stateRoute).not.toContain("401");
+    expect(stateRoute).toContain("product.state()");
+    expect(settingsRoute).not.toContain("authorization");
+    expect(settingsRoute).not.toContain("401");
+    expect(settingsRoute).toContain("product.upsertSettings");
   });
 
   it("expires rate-limit buckets instead of retaining stale request keys", () => {
