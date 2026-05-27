@@ -288,7 +288,7 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).toContain("Use deterministic risk_check only after ranking a real validated candidate");
   });
 
-  it("records bounded tool steps and creates a pending trade ticket", async () => {
+  it("records bounded tool steps and creates an executable trade ticket", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
     const run = await store.createRun({
@@ -336,7 +336,7 @@ describe("AI SDK supervisor agent", () => {
     });
 
     const state = await store.load();
-    expect(state.tradeTickets[0]?.approvalState).toBe("pending");
+    expect(state.tradeTickets[0]?.approvalState).toBe("not_required");
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["risk", "ticket", "final"]),
     );
@@ -533,7 +533,7 @@ describe("AI SDK supervisor agent", () => {
     })).rejects.toThrow("account state unavailable");
   });
 
-  it("runs risk checks from the supplied market selection", async () => {
+  it("approves executable risk checks from the supplied market selection", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -566,8 +566,8 @@ describe("AI SDK supervisor agent", () => {
       marketSelection,
       sizeUsd: null,
     })).resolves.toMatchObject({
-      decision: "require_approval",
-      reason: "Auto-trade is disabled.",
+      decision: "approve",
+      adjustedSizeUsd: 50,
     });
   });
 

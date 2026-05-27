@@ -692,20 +692,11 @@ function predictionMarketSideForCandidate(candidate: MarketCandidate, side?: "ye
 
 function preflightUserPolicy(userSettings: UserSettings) {
   const warnings: string[] = [];
-  if (userSettings.allowedVenues.length === 0) {
-    warnings.push("No allowed venues are configured; venue search cannot produce executable candidates.");
-  }
   if (!userSettings.walletAddress) {
     warnings.push("No wallet address is configured; approved tickets may not be executable until wallet setup is complete.");
   }
   if (userSettings.defaultTradeSizeUsd > userSettings.maxTradeSizeUsd) {
     warnings.push("Default trade size exceeds max trade size; deterministic risk check will cap or reject ticket sizing.");
-  }
-  if (userSettings.defaultTradeSizeUsd > userSettings.maxPositionUsd) {
-    warnings.push("Default trade size exceeds max position size; deterministic risk check will cap or reject ticket sizing.");
-  }
-  if (!userSettings.autoTradeEnabled) {
-    warnings.push("Autotrade is disabled; Cassie will create approval tickets only.");
   }
 
   return PreflightUserPolicySchema.parse({

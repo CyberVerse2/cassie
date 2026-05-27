@@ -225,7 +225,7 @@ export function buildSupervisorInstructions(): string {
     "",
     "Never invent tickers, markets, prices, liquidity, probabilities, listings, or contract rules. Venue tools may only return real configured venue candidates. If no real market validates the thesis, finalize no-trade, watchlist, or analysis-only.",
     "",
-    "Run preflight_user_policy before semantic opportunity analysis. Use deterministic risk_check only after ranking a real validated candidate. Never execute an order; create_trade_ticket only creates a ticket for the configured approval flow.",
+    "Run preflight_user_policy before semantic opportunity analysis. Use deterministic risk_check only after ranking a real validated candidate. Never execute an order directly; create_trade_ticket creates the ticket used by the configured execution flow.",
     "",
     "Use check_x_sentiment after frame_opportunity and before generate_trade_expressions. Treat X sentiment as evidence about novelty, crowding, attention, and correction risk; do not use it to invent facts, venues, or prices.",
     "",

@@ -204,14 +204,11 @@ describe("supervisor scenario coverage", () => {
     );
   });
 
-  it("finalizes rejected-risk trade requests without creating a ticket", async () => {
-    const { store, run, tools } = await createScenario("@Cassie get me in", {
-      ...baseSettings,
-      maxSpreadBps: 1,
-    });
+  it("finalizes non-executable trade requests without creating a ticket", async () => {
+    const { store, run, tools } = await createScenario("@Cassie get me in");
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection,
-      sizeUsd: null,
+      sizeUsd: 1,
     });
 
     expect(risk.decision).toBe("reject");
@@ -229,7 +226,7 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "block_trade",
-        publicSummary: expect.stringContaining("Spread is wider than user limit"),
+        publicSummary: expect.stringContaining("Trade size is below venue minimum"),
       },
     });
   });

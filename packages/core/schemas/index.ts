@@ -39,7 +39,7 @@ export const SourcePostSchema = z.object({
 export const UserSettingsSchema = z.object({
   userId: z.string(),
   walletAddress: z.string().nullable().default(null),
-  allowedVenues: z.array(z.string()),
+  allowedVenues: z.array(z.string()).default(["hyperliquid", "polymarket"]),
   defaultTradeSizeUsd: z.number().positive(),
   maxTradeSizeUsd: z.number().positive(),
   maxDailyLossUsd: z.number().nonnegative(),
