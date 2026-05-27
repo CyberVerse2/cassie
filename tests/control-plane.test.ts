@@ -20,14 +20,7 @@ const sourcePost: SourcePost = {
 const settings: UserSettings = {
   userId: "user_1",
   walletAddress: "0x0000000000000000000000000000000000000000",
-  allowedVenues: ["hyperliquid"],
   defaultTradeSizeUsd: 50,
-  maxTradeSizeUsd: 100,
-  maxDailyLossUsd: 100,
-  maxSpreadBps: 50,
-  maxSlippageBps: 100,
-  maxPositionUsd: 1_000,
-  autoTradeEnabled: false,
 };
 
 class FakeCassieJobQueue implements CassieJobQueue {

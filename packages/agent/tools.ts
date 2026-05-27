@@ -55,14 +55,7 @@ const PreflightUserPolicySchema = z.object({
   status: z.literal("ok"),
   warnings: z.array(z.string()),
   policy: z.object({
-    allowedVenues: z.array(z.string()),
     defaultTradeSizeUsd: z.number(),
-    maxTradeSizeUsd: z.number(),
-    maxDailyLossUsd: z.number(),
-    maxSpreadBps: z.number(),
-    maxSlippageBps: z.number(),
-    maxPositionUsd: z.number(),
-    autoTradeEnabled: z.boolean(),
     hasWalletAddress: z.boolean(),
   }),
 });
@@ -688,22 +681,12 @@ function preflightUserPolicy(userSettings: UserSettings) {
   if (!userSettings.walletAddress) {
     warnings.push("No wallet address is configured; trade tickets may not be executable until wallet setup is complete.");
   }
-  if (userSettings.defaultTradeSizeUsd > userSettings.maxTradeSizeUsd) {
-    warnings.push("Default trade size exceeds max trade size; deterministic risk check will cap or reject ticket sizing.");
-  }
 
   return PreflightUserPolicySchema.parse({
     status: "ok",
     warnings,
     policy: {
-      allowedVenues: userSettings.allowedVenues,
       defaultTradeSizeUsd: userSettings.defaultTradeSizeUsd,
-      maxTradeSizeUsd: userSettings.maxTradeSizeUsd,
-      maxDailyLossUsd: userSettings.maxDailyLossUsd,
-      maxSpreadBps: userSettings.maxSpreadBps,
-      maxSlippageBps: userSettings.maxSlippageBps,
-      maxPositionUsd: userSettings.maxPositionUsd,
-      autoTradeEnabled: userSettings.autoTradeEnabled,
       hasWalletAddress: Boolean(userSettings.walletAddress),
     },
   });

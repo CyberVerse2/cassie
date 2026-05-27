@@ -5,14 +5,7 @@ import { UserSettingsSchema, type MarketSelection, type UserSettings } from "../
 const settings: UserSettings = {
   userId: "user_1",
   walletAddress: "0x0000000000000000000000000000000000000000",
-  allowedVenues: ["hyperliquid"],
   defaultTradeSizeUsd: 50,
-  maxTradeSizeUsd: 100,
-  maxDailyLossUsd: 1,
-  maxSpreadBps: 1,
-  maxSlippageBps: 1,
-  maxPositionUsd: 10,
-  autoTradeEnabled: false,
 };
 
 const marketSelection: MarketSelection = {
@@ -52,7 +45,7 @@ const marketSelection: MarketSelection = {
 };
 
 describe("risk evaluation", () => {
-  it("does not block trades on venue allowlists, spread, slippage, daily loss, position caps, or approval mode", () => {
+  it("does not block trades on stale policy settings", () => {
     expect(evaluateRisk({
       marketSelection,
       userSettings: settings,
@@ -69,18 +62,20 @@ describe("risk evaluation", () => {
     });
   });
 
-  it("defaults missing venue settings to all supported venues", () => {
-    expect(UserSettingsSchema.parse({
+  it("parses only the app settings needed for trading", () => {
+    const parsed = UserSettingsSchema.parse({
       userId: "user_1",
       walletAddress: null,
       defaultTradeSizeUsd: 50,
-      maxTradeSizeUsd: 100,
-      maxDailyLossUsd: 100,
-      maxSpreadBps: 50,
-      maxSlippageBps: 100,
-      maxPositionUsd: 1_000,
-      autoTradeEnabled: true,
-    }).allowedVenues).toEqual(["hyperliquid", "polymarket"]);
+    });
+
+    expect(parsed).toEqual({
+      userId: "user_1",
+      walletAddress: null,
+      defaultTradeSizeUsd: 50,
+    });
+    expect(parsed).not.toHaveProperty("allowedVenues");
+    expect(parsed).not.toHaveProperty("maxTradeSizeUsd");
   });
 
   it("does not block trades below venue minimum or low thesis fit", () => {
@@ -104,6 +99,26 @@ describe("risk evaluation", () => {
     })).toEqual({
       decision: "approve",
       adjustedSizeUsd: 50,
+    });
+  });
+
+  it("uses the configured default trade size exactly", () => {
+    expect(evaluateRisk({
+      marketSelection,
+      userSettings: {
+        ...settings,
+        defaultTradeSizeUsd: 150,
+      },
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
+    })).toEqual({
+      decision: "approve",
+      adjustedSizeUsd: 150,
     });
   });
 });

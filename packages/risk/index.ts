@@ -19,10 +19,7 @@ export function evaluateRisk(input: {
     };
   }
 
-  const adjustedSizeUsd = Math.min(
-    input.userSettings.defaultTradeSizeUsd,
-    input.userSettings.maxTradeSizeUsd,
-  );
+  const adjustedSizeUsd = input.userSettings.defaultTradeSizeUsd;
 
   if (adjustedSizeUsd > input.accountState.availableBalanceUsd) {
     return { decision: "reject", reason: "Insufficient available balance." };

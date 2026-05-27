@@ -333,9 +333,7 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
     userSettings: snapshot.userSettings.map((settings) => ({
       userId: settings.userId,
       walletAddress: settings.walletAddress,
-      allowedVenues: settings.allowedVenues,
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
-      autoTradeEnabled: settings.autoTradeEnabled,
     })),
   };
 }

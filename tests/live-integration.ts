@@ -70,14 +70,7 @@ liveDescribe("live integration", () => {
     const settings: UserSettings = {
       userId,
       walletAddress: null,
-      allowedVenues: ["hyperliquid", "polymarket"],
       defaultTradeSizeUsd: 25,
-      maxTradeSizeUsd: 50,
-      maxDailyLossUsd: 50,
-      maxSpreadBps: 100,
-      maxSlippageBps: 100,
-      maxPositionUsd: 500,
-      autoTradeEnabled: false,
     };
 
     const sourcePost: SourcePost = {

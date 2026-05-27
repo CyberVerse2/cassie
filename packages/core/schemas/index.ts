@@ -39,14 +39,7 @@ export const SourcePostSchema = z.object({
 export const UserSettingsSchema = z.object({
   userId: z.string(),
   walletAddress: z.string().nullable().default(null),
-  allowedVenues: z.array(z.string()).default(["hyperliquid", "polymarket"]),
   defaultTradeSizeUsd: z.number().positive(),
-  maxTradeSizeUsd: z.number().positive(),
-  maxDailyLossUsd: z.number().nonnegative(),
-  maxSpreadBps: z.number().nonnegative(),
-  maxSlippageBps: z.number().nonnegative().default(100),
-  maxPositionUsd: z.number().positive().default(1_000),
-  autoTradeEnabled: z.boolean(),
 });
 
 export const ThesisSchema = z.object({
