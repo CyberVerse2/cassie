@@ -20,11 +20,8 @@ X mention / CLI test command
 ```text
 src/
   cli.ts                  CLI frontend
-  server.ts               Local dashboard test harness
   worker.ts               Graphile worker entrypoint
   poller.ts               X polling entrypoint
-  dashboard.ts            Server-rendered dashboard
-  security.ts             Rate limit and headers
   visibility.ts           CLI trace formatting
   helpers/                CLI/runtime helper functions
 

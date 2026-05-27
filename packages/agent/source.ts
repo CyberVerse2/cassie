@@ -1,7 +1,7 @@
 import { createXai } from "@ai-sdk/xai";
 import { Output, generateText } from "ai";
 import { z } from "zod";
-import { MissingConnectorConfigError } from "../core/helpers/index.ts";
+import { MissingConnectorConfigError } from "../core/helpers/connector-errors.ts";
 import { config } from "../core/config.ts";
 import {
   ExpressionFitAssessmentSchema,
@@ -18,7 +18,7 @@ import {
   type XSentimentAssessment,
 } from "../core/schemas/index.ts";
 import type { TraceRecorder } from "../core/trace.ts";
-import { configureAiSdkWarningLogging } from "../ai/helpers/index.ts";
+import { configureAiSdkWarningLogging } from "../ai/helpers/sdk-warnings.ts";
 import { extractModelThinkingTrace } from "../ai/client.ts";
 
 configureAiSdkWarningLogging();

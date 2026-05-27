@@ -7,7 +7,6 @@
     "build": "tsc --noEmit",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
-    "dev": "tsx src/server.ts",
     "web:dev": "next dev apps/web",
     "web:build": "next build apps/web",
     "web:start": "next start apps/web",

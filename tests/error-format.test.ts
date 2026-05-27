@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatErrorForLog } from "../packages/core/helpers/index.ts";
+import { formatErrorForLog } from "../packages/core/helpers/error-format.ts";
 
 describe("AI error formatting", () => {
   it("includes AI SDK structured-output details and cause chain", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
+import { MissingConnectorConfigError } from "../packages/core/helpers/connector-errors.ts";
 import {
   GrokXSentimentProvider,
   type GrokXSentimentGenerationInput,

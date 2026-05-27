@@ -16,7 +16,7 @@ import {
   type MarketDataProvider,
   type PolymarketMarketFinder,
 } from "../adapters/selection.ts";
-import { formatErrorForLog } from "../core/helpers/index.ts";
+import { formatErrorForLog } from "../core/helpers/error-format.ts";
 import { expressionFitPromptSpec, structuredPromptInput } from "../prompts/index.ts";
 
 export type TradeExpressionIntent = {

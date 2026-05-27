@@ -1,13 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   HyperliquidMarketDataProvider,
-} from "../packages/adapters/hyperliquid/index.ts";
+} from "../packages/adapters/index.ts";
 import {
   PolymarketMarketDataProvider,
   type PolymarketSearchClient,
   PolymarketSdkSearchClient,
-} from "../packages/adapters/polymarket/index.ts";
-import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
+} from "../packages/adapters/index.ts";
+import { ConnectorRequestError, MissingConnectorConfigError } from "../packages/core/helpers/connector-errors.ts";
 import type { Thesis } from "../packages/core/schemas/index.ts";
 
 const thesis: Thesis = {

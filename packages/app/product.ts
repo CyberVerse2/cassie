@@ -16,10 +16,12 @@ import type { CassieStore } from "../core/db/store.ts";
 import { pollXMentions } from "./x-polling.ts";
 import {
   GraphileExecutionJobQueue,
+  type CassieJobQueue,
+} from "../jobs/queue.ts";
+import {
   executeExecutionJob,
   queueExecutionJob,
-  type CassieJobQueue,
-} from "../jobs/index.ts";
+} from "../jobs/execution-job.ts";
 
 export class CassieProduct {
   constructor(

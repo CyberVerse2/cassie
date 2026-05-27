@@ -33,16 +33,9 @@ Runtime shape:
 ```bash
 npm install
 npm run db:migrate
-npm run dev
+npm run cli -- settings:set --user local-user
+npm run cli -- run
 ```
-
-Dashboard:
-
-```text
-http://localhost:3000/dashboard
-```
-
-The dashboard is a local run viewer for testing and ticket approval.
 
 ## Configuration
 
@@ -79,7 +72,11 @@ Inspect an existing run:
 npm run cli -- control-run RUN_ID --json
 ```
 
-Approve pending tickets from the dashboard.
+Approve pending tickets from the CLI:
+
+```bash
+npm run cli -- approve TICKET_ID
+```
 
 ## Current Test Surface
 
@@ -95,7 +92,7 @@ Implemented:
 - Ticket approval action
 - Graphile Worker supervisor and execution jobs
 - Drizzle/Postgres persistence for mentions, control runs, run steps, tickets, execution jobs, and audit events
-- Local dashboard for pending tickets, runs, and audit trail
+- CLI inspection for pending tickets, runs, and audit trail
 
 Not included:
 

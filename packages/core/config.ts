@@ -1,6 +1,6 @@
 import type { ApiKeyCreds, SignatureType } from "@polymarket/client";
 import { z } from "zod";
-import { MissingConnectorConfigError } from "./helpers/index.ts";
+import { MissingConnectorConfigError } from "./helpers/connector-errors.ts";
 
 export type EnvSource = Record<string, string | undefined>;
 

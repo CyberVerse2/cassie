@@ -12,23 +12,25 @@ import {
 } from "../adapters/hyperliquid/account-state.ts";
 import { CompositeMarketDataProvider } from "../adapters/index.ts";
 import {
-  AiPolymarketDiscoveryQueryPlanner,
   PolymarketMarketDataProvider,
+} from "../adapters/index.ts";
+import {
+  AiPolymarketDiscoveryQueryPlanner,
   type MarketDataProvider,
   type PolymarketMarketFinder,
-} from "../adapters/polymarket/index.ts";
+} from "../adapters/selection.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import type { ControlRun } from "../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../core/schemas/index.ts";
-import { formatErrorForLog } from "../core/helpers/index.ts";
+import { formatErrorForLog } from "../core/helpers/error-format.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
 import { GrokXSentimentProvider, GrokXSourceResolver, type SourceResolver, type XSentimentProvider } from "./source.ts";
 import {
   createCassieStopConditions,
   prepareCassieSupervisorStep,
 } from "./policy.ts";
-import { configureAiSdkWarningLogging } from "../ai/helpers/index.ts";
+import { configureAiSdkWarningLogging } from "../ai/helpers/sdk-warnings.ts";
 import { config } from "../core/config.ts";
 
 configureAiSdkWarningLogging();

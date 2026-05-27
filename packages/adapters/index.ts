@@ -7,7 +7,7 @@ import type {
   TradeExpressionPlan,
 } from "../core/schemas/index.ts";
 import type { MarketDataProvider, PolymarketDiscoveryQueryPlanner, PolymarketMarketFinder } from "./selection.ts";
-import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/index.ts";
+import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/connector-errors.ts";
 
 type HyperliquidMetaAndCtxs = [
   {

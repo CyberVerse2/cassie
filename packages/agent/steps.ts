@@ -1,6 +1,6 @@
 import type { RunStepType } from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import { formatErrorForLog } from "../core/helpers/index.ts";
+import { formatErrorForLog } from "../core/helpers/error-format.ts";
 
 export type RunStepExecutionContext = {
   setThinkingTrace: (thinkingTrace: string | null) => void;

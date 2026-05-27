@@ -12,7 +12,7 @@ import {
   readPolymarketExecutionEnv,
   requiredConnectorEnv,
 } from "../packages/core/config.ts";
-import { MissingConnectorConfigError } from "../packages/core/helpers/index.ts";
+import { MissingConnectorConfigError } from "../packages/core/helpers/connector-errors.ts";
 
 describe("Polymarket env", () => {
   it("reads and normalizes CLOB execution config from env", () => {

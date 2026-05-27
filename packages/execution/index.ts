@@ -1,5 +1,5 @@
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
-import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/index.ts";
+import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/connector-errors.ts";
 import {
   assertHyperliquidExecutionEnv,
   assertPolymarketExecutionEnv,
@@ -15,9 +15,7 @@ import {
 import type { OrderResponse, OrderSide, OrderType, SecureClient } from "@polymarket/client";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
-import { formatDecimal } from "./helpers/index.ts";
-
-export * from "./helpers/index.ts";
+import { formatDecimal } from "./helpers/format.ts";
 
 export interface ExecutionClient {
   execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]>;

@@ -1,6 +1,6 @@
 import { InfoClient, HttpTransport } from "@nktkas/hyperliquid";
 import type { AccountState, UserSettings } from "../../core/schemas/index.ts";
-import { MissingConnectorConfigError } from "../../core/helpers/index.ts";
+import { MissingConnectorConfigError } from "../../core/helpers/connector-errors.ts";
 
 export interface AccountStateProvider {
   getAccountState(userSettings: UserSettings): Promise<AccountState>;

@@ -9,7 +9,7 @@ import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
 import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
-import type { CassieJobQueue } from "../packages/jobs/index.ts";
+import type { CassieJobQueue } from "../packages/jobs/queue.ts";
 import type { ControlRun, ExecutionJob } from "../packages/core/schemas/index.ts";
 import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
