@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactElement } from "react";
 import { useMemo, useState } from "react";
 import QRCode from "qrcode";
 
@@ -1345,7 +1346,7 @@ function StyledQR({ data, size = 132 }: { data: string; size?: number }) {
   const inLogo = (x: number, y: number) =>
     x >= logoStart && x < logoEnd && y >= logoStart && y < logoEnd;
 
-  const dots: JSX.Element[] = [];
+  const dots: ReactElement[] = [];
   for (let y = 0; y < count; y++) {
     for (let x = 0; x < count; x++) {
       if (inFinder(x, y) || inLogo(x, y)) continue;
