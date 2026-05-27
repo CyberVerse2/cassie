@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { parsePolymarketSmokeArgs, selectOutcomeToken } from "../scripts/test-polymarket-clob.ts";
+import {
+  parsePolymarketSmokeArgs,
+  parsePriceArray,
+  parseStringArray,
+  selectOutcomeToken,
+} from "../scripts/test-polymarket-clob.ts";
 
 describe("test-polymarket-clob script helpers", () => {
   it("defaults to a dry-run bullish YES smoke query", () => {
@@ -30,5 +35,16 @@ describe("test-polymarket-clob script helpers", () => {
 
     expect(selectOutcomeToken(market, "yes")).toBe("yes-token");
     expect(selectOutcomeToken(market, "no")).toBe("no-token");
+  });
+
+  it("rejects malformed market arrays instead of hiding them", () => {
+    expect(() => parseStringArray("not-json", "outcomes")).toThrow("must be a JSON array");
+    expect(() => parseStringArray("[\"Yes\", 1]", "outcomes")).toThrow("outcomes[1] must be a string");
+    expect(parseStringArray("[\"Yes\", null, \"No\"]", "outcomes")).toEqual(["Yes", "No"]);
+  });
+
+  it("parses numeric market prices without dropping invalid values", () => {
+    expect(parsePriceArray("[0.62, \"0.38\", null]", "outcomePrices")).toEqual([0.62, 0.38]);
+    expect(() => parsePriceArray("[\"bad\"]", "outcomePrices")).toThrow("outcomePrices[0] must be numeric");
   });
 });

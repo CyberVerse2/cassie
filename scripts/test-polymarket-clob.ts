@@ -260,9 +260,9 @@ function normalizeMarket(market: PolymarketGammaMarket): NormalizedMarket {
     question: market.question ?? slug,
     slug,
     conditionId: market.conditionId ?? null,
-    outcomes: parseStringArray(market.outcomes),
-    tokenIds: parseStringArray(market.clobTokenIds),
-    prices: parseStringArray(market.outcomePrices).map(Number).filter(Number.isFinite),
+    outcomes: parseStringArray(market.outcomes, "outcomes"),
+    tokenIds: parseStringArray(market.clobTokenIds, "clobTokenIds"),
+    prices: parsePriceArray(market.outcomePrices, "outcomePrices"),
     liquidityUsd: Number(market.liquidityNum ?? 0) || 0,
     volumeUsd: Number(market.volumeNum ?? 0) || 0,
     endDate: market.endDate ?? null,
@@ -303,15 +303,52 @@ async function authenticatedClient() {
     : await client.setupGaslessWallet();
 }
 
-function parseStringArray(value: string | string[] | undefined): string[] {
-  if (Array.isArray(value)) return value;
+export function parseStringArray(value: string | string[] | undefined, name: string): string[] {
+  if (Array.isArray(value)) return assertStringArray(value, name);
   if (!value) return [];
+
+  return assertStringArray(parseJsonArray(value, name).filter((item) => item != null), name);
+}
+
+function assertStringArray(value: unknown[], name: string): string[] {
+  return value.map((item, index) => {
+    if (typeof item !== "string") {
+      throw new Error(`Polymarket market ${name}[${index}] must be a string.`);
+    }
+    return item;
+  });
+}
+
+export function parsePriceArray(value: string | string[] | undefined, name: string): number[] {
+  const items = Array.isArray(value)
+    ? value
+    : value
+      ? parseJsonArray(value, name).filter((item) => item != null)
+      : [];
+
+  return items.map((item, index) => {
+    if (typeof item !== "string" && typeof item !== "number") {
+      throw new Error(`Polymarket market ${name}[${index}] must be a string or number.`);
+    }
+    const price = Number(item);
+    if (!Number.isFinite(price)) {
+      throw new Error(`Polymarket market ${name}[${index}] must be numeric.`);
+    }
+    return price;
+  });
+}
+
+function parseJsonArray(value: string, name: string): unknown[] {
+  let parsed: unknown;
   try {
-    const parsed = JSON.parse(value) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string") : [];
+    parsed = JSON.parse(value) as unknown;
   } catch {
-    return [];
+    throw new Error(`Polymarket market ${name} must be a JSON array.`);
   }
+  if (!Array.isArray(parsed)) {
+    throw new Error(`Polymarket market ${name} must be a JSON array.`);
+  }
+  return parsed;
 }
 
 function stringFlag(flags: Map<string, string | true>, name: string): string | null {
@@ -319,9 +356,9 @@ function stringFlag(flags: Map<string, string | true>, name: string): string | n
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-function numberFlag(flags: Map<string, string | true>, name: string, fallback: number): number {
+function numberFlag(flags: Map<string, string | true>, name: string, defaultValue: number): number {
   const raw = stringFlag(flags, name);
-  if (!raw) return fallback;
+  if (!raw) return defaultValue;
   return parseNonnegativeNumber(raw, name);
 }
 
