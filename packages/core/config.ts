@@ -109,6 +109,7 @@ export const RuntimeConfigSchema = z.object({
   DATABASE_URL: z.string().min(1),
   CASSIE_API_TOKEN: z.string().min(16),
   GEMINI_API_KEY: z.string().min(1),
+  DEEPSEEK_API_KEY: z.string().min(1),
   OPENAI_API_KEY: z.string().min(1),
   XAI_API_KEY: z.string().min(1),
 });

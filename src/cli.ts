@@ -145,6 +145,7 @@ async function env() {
   return {
     databaseUrl: maskSecret(config.database.url),
     geminiApiKey: maskSecret(config.ai.googleApiKey),
+    deepSeekApiKey: maskSecret(config.ai.deepSeekApiKey),
     xAiApiKey: maskSecret(config.ai.xAiApiKey),
     hyperliquidPrivateKey: maskSecret(config.execution.hyperliquid.privateKey),
     cassieModel: config.ai.importantModel,

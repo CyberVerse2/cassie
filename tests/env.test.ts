@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assertRuntimeConfig,
   assertPolymarketExecutionEnv,
   readAiProviderEnv,
   readCassieConfig,
@@ -112,6 +113,16 @@ describe("Polymarket env", () => {
     expect(requiredConnectorEnv("DeepSeek", "DEEPSEEK_API_KEY", {
       DEEPSEEK_API_KEY: "key",
     })).toBe("key");
+  });
+
+  it("fails startup validation when the cheap AI dependency is missing", () => {
+    expect(() => assertRuntimeConfig({
+      DATABASE_URL: "postgres://cassie",
+      CASSIE_API_TOKEN: "a".repeat(16),
+      GEMINI_API_KEY: "gemini",
+      OPENAI_API_KEY: "openai",
+      XAI_API_KEY: "xai",
+    })).toThrow("DEEPSEEK_API_KEY");
   });
 
   it("centralizes numeric env defaults", () => {
