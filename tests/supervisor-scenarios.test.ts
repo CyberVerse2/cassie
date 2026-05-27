@@ -301,7 +301,7 @@ describe("supervisor scenario coverage", () => {
     });
   });
 
-  it("does not fallback-finalize a market-check expression before venue search", async () => {
+  it("does not finalize a market-check expression from persisted steps before venue search", async () => {
     const { store, run } = await createScenario("@Cassie get me in");
     await store.addRunStep({
       runId: run.runId,
@@ -338,7 +338,7 @@ describe("supervisor scenario coverage", () => {
     });
   });
 
-  it("fallback-finalizes no-trade after venue search finds no candidates", async () => {
+  it("finalizes no-trade from persisted steps after venue search finds no candidates", async () => {
     const { store, run } = await createScenario("@Cassie get me in");
     await store.addRunStep({
       runId: run.runId,
@@ -384,7 +384,7 @@ describe("supervisor scenario coverage", () => {
     });
   });
 
-  it("does not fallback-finalize venue candidates before expression-fit assessment", async () => {
+  it("does not finalize venue candidates from persisted steps before expression-fit assessment", async () => {
     const { store, run } = await createScenario("@Cassie get me in");
     await store.addRunStep({
       runId: run.runId,
