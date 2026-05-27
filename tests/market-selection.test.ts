@@ -121,7 +121,7 @@ describe("market selection", () => {
       noTradeReason: null,
     });
     expect(calls[0]).toContain("Rank real venue candidates");
-    expect(calls[0]).toContain("Do not select a trade just because the tweet is interesting");
+    expect(calls[0]).toContain("Use selectedMarket only for a real validated candidate");
   });
 
   it("finds Polymarket markets through the configured finder dependency", async () => {

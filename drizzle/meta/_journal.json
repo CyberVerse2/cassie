@@ -57,6 +57,13 @@
       "when": 1779920943000,
       "tag": "0007_drop_trade_ticket_approval_state",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1779925957000,
+      "tag": "0008_cleanup_stale_trade_policy_data",
+      "breakpoints": true
     }
   ]
 }
