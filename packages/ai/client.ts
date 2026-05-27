@@ -5,9 +5,7 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { z } from "zod";
 import type { TraceRecorder } from "../core/trace.ts";
 import { formatErrorForLog } from "../core/helpers/index.ts";
-import {
-  config,
-} from "../core/config.ts";
+import { config } from "../core/config.ts";
 import { configureAiSdkWarningLogging } from "./helpers/index.ts";
 
 configureAiSdkWarningLogging();

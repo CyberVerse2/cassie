@@ -231,24 +231,24 @@ export function createCassieSupervisorTools(input: {
           "market_assessment",
           { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
           async () => {
-          return recordRunStep({
-            store: input.store,
-            runId: input.run.runId,
-            stepType: "market_assessment",
-            promptName: "cassie_expression_fit",
-            promptVersion,
-            model: importantModel,
-            stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
-            execute: ({ setThinkingTrace }) => assessExpressionFit({
-              ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
-              polymarket: input.deps.polymarketMarketFinder,
-              opportunityFrame,
-              tradeExpression,
-              candidate: persistedCandidate,
-              side: candidateSide,
-            }),
-          });
-        },
+            return recordRunStep({
+              store: input.store,
+              runId: input.run.runId,
+              stepType: "market_assessment",
+              promptName: "cassie_expression_fit",
+              promptVersion,
+              model: importantModel,
+              stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
+              execute: ({ setThinkingTrace }) => assessExpressionFit({
+                ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
+                polymarket: input.deps.polymarketMarketFinder,
+                opportunityFrame,
+                tradeExpression,
+                candidate: persistedCandidate,
+                side: candidateSide,
+              }),
+            });
+          },
         );
       },
     }),
@@ -275,21 +275,21 @@ export function createCassieSupervisorTools(input: {
           "market_quote",
           { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, ...(candidateSide ? { side: candidateSide } : {}) },
           async () => {
-          if (persistedFitAssessment.fitStatus !== "validated") {
-            throw new Error("quote_expression requires a validated fit assessment.");
-          }
-          return recordRunStep({
-            store: input.store,
-            runId: input.run.runId,
-            stepType: "market_quote",
-            stepInput: { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, ...(candidateSide ? { side: candidateSide } : {}) },
-            execute: () => quoteExpression({
-              polymarket: input.deps.polymarketMarketFinder,
-              candidate: persistedCandidate,
-              side: candidateSide,
-            }),
-          });
-        },
+            if (persistedFitAssessment.fitStatus !== "validated") {
+              throw new Error("quote_expression requires a validated fit assessment.");
+            }
+            return recordRunStep({
+              store: input.store,
+              runId: input.run.runId,
+              stepType: "market_quote",
+              stepInput: { candidate: persistedCandidate, fitAssessment: persistedFitAssessment, ...(candidateSide ? { side: candidateSide } : {}) },
+              execute: () => quoteExpression({
+                polymarket: input.deps.polymarketMarketFinder,
+                candidate: persistedCandidate,
+                side: candidateSide,
+              }),
+            });
+          },
         );
       },
     }),
@@ -391,33 +391,33 @@ export function createCassieSupervisorTools(input: {
             xSentiment: persistedXSentiment,
           },
           async () => {
-          const thesis = thesisFromTradeExpression(tradeExpression);
-          return recordRunStep({
-            store: input.store,
-            runId: input.run.runId,
-            stepType: "market_selection",
-            promptName: "cassie_market_selection",
-            promptVersion,
-            model: cheapModel,
-            stepInput: {
-              tradeExpression,
-              candidates: rankingCandidates,
-              fitAssessments: persistedFitAssessments,
-              quotes: groundedQuotes,
-              xSentiment: persistedXSentiment,
-            },
-            execute: ({ setThinkingTrace }) => selectMarket({
-              ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
-              marketData: input.deps.marketData,
-              thesis,
-              tradeExpression,
-              candidates: rankingCandidates,
-              fitAssessments: persistedFitAssessments,
-              quotes: groundedQuotes,
-              xSentiment: persistedXSentiment,
-            }),
-          });
-        },
+            const thesis = thesisFromTradeExpression(tradeExpression);
+            return recordRunStep({
+              store: input.store,
+              runId: input.run.runId,
+              stepType: "market_selection",
+              promptName: "cassie_market_selection",
+              promptVersion,
+              model: cheapModel,
+              stepInput: {
+                tradeExpression,
+                candidates: rankingCandidates,
+                fitAssessments: persistedFitAssessments,
+                quotes: groundedQuotes,
+                xSentiment: persistedXSentiment,
+              },
+              execute: ({ setThinkingTrace }) => selectMarket({
+                ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
+                marketData: input.deps.marketData,
+                thesis,
+                tradeExpression,
+                candidates: rankingCandidates,
+                fitAssessments: persistedFitAssessments,
+                quotes: groundedQuotes,
+                xSentiment: persistedXSentiment,
+              }),
+            });
+          },
         );
       },
     }),
@@ -434,24 +434,24 @@ export function createCassieSupervisorTools(input: {
           "risk",
           { marketSelection: persistedMarketSelection, sizeUsd },
           async () => {
-          assertUsableMarketSelection(persistedMarketSelection);
-          return recordRunStep({
-            store: input.store,
-            runId: input.run.runId,
-            stepType: "risk",
-            stepInput: { marketSelection: persistedMarketSelection, sizeUsd },
-            execute: async () => {
-              const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
-                .getAccountState(input.userSettings);
-              return evaluateRisk({
-                marketSelection: persistedMarketSelection,
-                userSettings: input.userSettings,
-                accountState,
-                sizeUsd,
-              });
-            },
-          });
-        },
+            assertUsableMarketSelection(persistedMarketSelection);
+            return recordRunStep({
+              store: input.store,
+              runId: input.run.runId,
+              stepType: "risk",
+              stepInput: { marketSelection: persistedMarketSelection, sizeUsd },
+              execute: async () => {
+                const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
+                  .getAccountState(input.userSettings);
+                return evaluateRisk({
+                  marketSelection: persistedMarketSelection,
+                  userSettings: input.userSettings,
+                  accountState,
+                  sizeUsd,
+                });
+              },
+            });
+          },
         );
       },
     }),
@@ -479,33 +479,33 @@ export function createCassieSupervisorTools(input: {
             sizeUsd,
           },
           async () => {
-          assertUsableMarketSelection(persistedMarketSelection);
-          assertNonRejectedRiskDecision(persistedRiskDecision);
-          const thesis = thesisForMarketSelection(persistedTradeExpression, persistedMarketSelection);
-          return recordRunStep({
-            store: input.store,
-            runId: input.run.runId,
-            stepType: "ticket",
-            stepInput: {
-              tradeExpression: persistedTradeExpression,
-              marketSelection: persistedMarketSelection,
-              riskDecision: persistedRiskDecision,
-              sizeUsd,
-            },
-            execute: async () => {
-              const ticket = createTradeTicket({
-                runId: input.run.runId,
-                userSettings: input.userSettings,
-                thesis,
+            assertUsableMarketSelection(persistedMarketSelection);
+            assertNonRejectedRiskDecision(persistedRiskDecision);
+            const thesis = thesisForMarketSelection(persistedTradeExpression, persistedMarketSelection);
+            return recordRunStep({
+              store: input.store,
+              runId: input.run.runId,
+              stepType: "ticket",
+              stepInput: {
+                tradeExpression: persistedTradeExpression,
                 marketSelection: persistedMarketSelection,
                 riskDecision: persistedRiskDecision,
                 sizeUsd,
-              });
-              await input.store.addTradeTicket(ticket);
-              return ticket;
-            },
-          });
-        },
+              },
+              execute: async () => {
+                const ticket = createTradeTicket({
+                  runId: input.run.runId,
+                  userSettings: input.userSettings,
+                  thesis,
+                  marketSelection: persistedMarketSelection,
+                  riskDecision: persistedRiskDecision,
+                  sizeUsd,
+                });
+                await input.store.addTradeTicket(ticket);
+                return ticket;
+              },
+            });
+          },
         );
       },
     }),
