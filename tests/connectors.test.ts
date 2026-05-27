@@ -895,6 +895,29 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("rejects blank Polymarket outcome prices instead of treating them as zero", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
+      return new Response("unexpected discovery fetch", { status: 500 });
+    });
+
+    await expect(new PolymarketMarketDataProvider(polymarketSearchClientFor([
+      {
+        id: "1",
+        slug: "solana-etf-approved",
+        question: "Will a Solana ETF be approved?",
+        active: true,
+        closed: false,
+        liquidityNum: 600000,
+        clobTokenIds: JSON.stringify(["123", "456"]),
+        outcomePrices: JSON.stringify(["", "0.38"]),
+        conditionId: "condition_1",
+      },
+    ]), staticPolymarketQueryPlanner).findCandidates({
+      thesis,
+    })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
+    fetchMock.mockRestore();
+  });
+
   it("rejects parsed Polymarket arrays containing non-string values", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       return new Response("unexpected discovery fetch", { status: 500 });

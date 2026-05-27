@@ -653,9 +653,12 @@ function parseNumberArray(value: string | string[] | undefined, context: { field
     : parseJsonArray(value, context);
 
   return items
-    .filter((item) => item !== null && item !== "")
+    .filter((item) => item !== null)
     .map((item) => {
       if (typeof item !== "string" && typeof item !== "number") {
+        throw malformedPolymarketNumberArrayError(context);
+      }
+      if (typeof item === "string" && item.trim() === "") {
         throw malformedPolymarketNumberArrayError(context);
       }
       const parsed = Number(item);
@@ -706,8 +709,8 @@ function polymarketMarketFromSdkMarket(market: PolymarketSdkMarket): PolymarketM
       market.outcomes?.no?.label ?? "No",
     ]),
     outcomePrices: JSON.stringify([
-      stringFromSdkValue(market.outcomes?.yes?.price),
-      stringFromSdkValue(market.outcomes?.no?.price),
+      market.outcomes?.yes?.price ?? null,
+      market.outcomes?.no?.price ?? null,
     ]),
     clobTokenIds: JSON.stringify([
       market.outcomes?.yes?.tokenId ?? "",
@@ -739,10 +742,6 @@ function nullableNumber(value: string | number | null | undefined): number | nul
 function numberFromSdkValue(value: string | number | null | undefined): number | undefined {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function stringFromSdkValue(value: string | number | null | undefined): string {
-  return value == null ? "" : String(value);
 }
 
 function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymarketMarket {

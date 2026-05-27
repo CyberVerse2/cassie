@@ -330,6 +330,9 @@ export function parsePriceArray(value: string | string[] | undefined, name: stri
     if (typeof item !== "string" && typeof item !== "number") {
       throw new Error(`Polymarket market ${name}[${index}] must be a string or number.`);
     }
+    if (typeof item === "string" && item.trim() === "") {
+      throw new Error(`Polymarket market ${name}[${index}] must be numeric.`);
+    }
     const price = Number(item);
     if (!Number.isFinite(price)) {
       throw new Error(`Polymarket market ${name}[${index}] must be numeric.`);

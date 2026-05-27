@@ -46,5 +46,6 @@ describe("test-polymarket-clob script helpers", () => {
   it("parses numeric market prices without dropping invalid values", () => {
     expect(parsePriceArray("[0.62, \"0.38\", null]", "outcomePrices")).toEqual([0.62, 0.38]);
     expect(() => parsePriceArray("[\"bad\"]", "outcomePrices")).toThrow("outcomePrices[0] must be numeric");
+    expect(() => parsePriceArray("[\"\"]", "outcomePrices")).toThrow("outcomePrices[0] must be numeric");
   });
 });
