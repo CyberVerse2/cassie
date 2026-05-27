@@ -79,11 +79,15 @@ export type CassieRuntimeConfig = {
   };
 };
 
-const configuredStringSchema = z.preprocess((value) => {
+function normalizedConfiguredString(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed === "" ? undefined : trimmed;
-}, z.string().optional());
+}
+
+const configuredStringSchema = z.preprocess(normalizedConfiguredString, z.string().optional());
+const requiredConfiguredStringSchema = (min = 1) =>
+  z.preprocess(normalizedConfiguredString, z.string().min(min));
 
 const privateKeySchema = z.custom<`0x${string}`>(
   (value) => typeof value === "string" && /^0x[0-9a-fA-F]{64}$/.test(value),
@@ -106,12 +110,12 @@ const aiProviderEnvSchema = z.object({
 });
 
 export const RuntimeConfigSchema = z.object({
-  DATABASE_URL: z.string().min(1),
-  CASSIE_API_TOKEN: z.string().min(16),
-  GEMINI_API_KEY: z.string().min(1),
-  DEEPSEEK_API_KEY: z.string().min(1),
-  OPENAI_API_KEY: z.string().min(1),
-  XAI_API_KEY: z.string().min(1),
+  DATABASE_URL: requiredConfiguredStringSchema(),
+  CASSIE_API_TOKEN: requiredConfiguredStringSchema(16),
+  GEMINI_API_KEY: requiredConfiguredStringSchema(),
+  DEEPSEEK_API_KEY: requiredConfiguredStringSchema(),
+  OPENAI_API_KEY: requiredConfiguredStringSchema(),
+  XAI_API_KEY: requiredConfiguredStringSchema(),
 });
 
 export function currentEnv(): EnvSource {

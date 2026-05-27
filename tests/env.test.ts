@@ -125,6 +125,17 @@ describe("Polymarket env", () => {
     })).toThrow("DEEPSEEK_API_KEY");
   });
 
+  it("treats blank runtime config values as missing", () => {
+    expect(() => assertRuntimeConfig({
+      DATABASE_URL: "postgres://cassie",
+      CASSIE_API_TOKEN: " ".repeat(16),
+      GEMINI_API_KEY: "gemini",
+      DEEPSEEK_API_KEY: "deepseek",
+      OPENAI_API_KEY: "openai",
+      XAI_API_KEY: "xai",
+    })).toThrow("CASSIE_API_TOKEN");
+  });
+
   it("centralizes numeric env defaults", () => {
     expect(numberEnv("COUNT", 3, { COUNT: "4.8" }, { integer: true, min: 1 })).toBe(4);
     expect(numberEnv("COUNT", 3, {})).toBe(3);
