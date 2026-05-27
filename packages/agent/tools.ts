@@ -556,7 +556,7 @@ async function resolveLatestMarketCandidate(input: {
 async function latestPersistedMarketCandidates(store: CassieStore, runId: string): Promise<MarketCandidate[]> {
   const latestStep = await latestSucceededStep(store, runId, "market_candidates");
   return latestStep
-    ? MarketCandidateSchema.array().safeParse(latestStep.output).data ?? []
+    ? MarketCandidateSchema.array().parse(latestStep.output)
     : [];
 }
 
@@ -565,28 +565,27 @@ async function latestPersistedFitAssessments(store: CassieStore, runId: string):
   return steps
     .filter((step) => step.stepType === "market_assessment" && step.status === "succeeded")
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
-    .map((step) => ExpressionFitAssessmentSchema.safeParse(step.output).data)
-    .filter((assessment): assessment is ExpressionFitAssessment => Boolean(assessment));
+    .map((step) => ExpressionFitAssessmentSchema.parse(step.output));
 }
 
 async function latestPersistedMarketSelection(store: CassieStore, runId: string): Promise<MarketSelection | null> {
   const latestStep = await latestSucceededStep(store, runId, "market_selection");
   return latestStep
-    ? MarketSelectionSchema.safeParse(latestStep.output).data ?? null
+    ? MarketSelectionSchema.parse(latestStep.output)
     : null;
 }
 
 async function latestPersistedTradeExpression(store: CassieStore, runId: string) {
   const latestStep = await latestSucceededStep(store, runId, "trade_expression");
   return latestStep
-    ? TradeExpressionPlanSchema.safeParse(latestStep.output).data ?? null
+    ? TradeExpressionPlanSchema.parse(latestStep.output)
     : null;
 }
 
 async function latestPersistedRiskDecision(store: CassieStore, runId: string): Promise<RiskDecision | null> {
   const latestStep = await latestSucceededStep(store, runId, "risk");
   return latestStep
-    ? RiskDecisionSchema.safeParse(latestStep.output).data ?? null
+    ? RiskDecisionSchema.parse(latestStep.output)
     : null;
 }
 
@@ -638,7 +637,7 @@ function parseSuppliedTradeExpression(value: unknown) {
 async function latestPersistedXSentiment(store: CassieStore, runId: string) {
   const latestStep = await latestSucceededStep(store, runId, "x_sentiment");
   return latestStep
-    ? XSentimentAssessmentSchema.safeParse(latestStep.output).data
+    ? XSentimentAssessmentSchema.parse(latestStep.output)
     : undefined;
 }
 

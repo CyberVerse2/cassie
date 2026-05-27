@@ -900,6 +900,50 @@ describe("AI SDK supervisor agent", () => {
     expect(ai.calls).toContain("cassie_market_selection");
   });
 
+  it("rejects corrupt persisted venue search output instead of using supplied ranking inputs", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie rank the validated candidate",
+      sourcePost,
+    });
+    const persistedCandidate = marketSelection.selectedMarket!;
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_candidates",
+      status: "succeeded",
+      input: {},
+      output: { candidates: [persistedCandidate] },
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      thinkingTrace: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {
+      tradeExpression,
+      candidates: [persistedCandidate],
+      fitAssessments: [expressionFitAssessment],
+      quotes: [persistedCandidate],
+    })).rejects.toThrow();
+  });
+
   it("ranks a validated direct candidate before every adjacent candidate has fit coverage", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
