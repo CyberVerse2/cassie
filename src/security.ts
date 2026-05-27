@@ -37,6 +37,8 @@ export class MemoryRateLimiter {
 
   check(key: string): void {
     const now = Date.now();
+    this.pruneExpired(now);
+
     const current = this.buckets.get(key);
 
     if (!current || current.resetAt <= now) {
@@ -47,6 +49,14 @@ export class MemoryRateLimiter {
     current.count += 1;
     if (current.count > this.maxRequests) {
       throw new RateLimitError();
+    }
+  }
+
+  private pruneExpired(now: number): void {
+    for (const [key, bucket] of this.buckets) {
+      if (bucket.resetAt <= now) {
+        this.buckets.delete(key);
+      }
     }
   }
 }

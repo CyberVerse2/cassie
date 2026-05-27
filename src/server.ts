@@ -5,6 +5,7 @@ import { assertRuntimeConfig, config } from "../packages/core/config.ts";
 import { renderDashboard, renderDashboardScript } from "./dashboard.ts";
 import {
   MemoryRateLimiter,
+  RateLimitError,
   RequestTooLargeError,
   applySecurityHeaders,
   requestKey,
@@ -22,10 +23,10 @@ const server = createServer(async (request, response) => {
     await route(request, response);
   } catch (error) {
     const status = error instanceof RequestTooLargeError
-        ? 413
-        : error instanceof Error && error.name === "RateLimitError"
-          ? 429
-          : 500;
+      ? 413
+      : error instanceof RateLimitError
+        ? 429
+        : 500;
     sendJson(response, status, {
       error: error instanceof Error ? error.message : String(error),
     });

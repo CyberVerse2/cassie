@@ -11,6 +11,7 @@ import {
   UserSettingsSchema,
   type ControlRun,
   type SourcePost,
+  type TradeTicket,
   type UserSettings,
 } from "../core/schemas/index.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
@@ -140,11 +141,7 @@ export class CassieProduct {
     });
   }
 
-  private async enqueueExecution(ticket: Awaited<ReturnType<CassieStore["getTradeTicket"]>>) {
-    if (!ticket) {
-      throw new Error("Cannot execute a missing ticket.");
-    }
-
+  private async enqueueExecution(ticket: TradeTicket) {
     return queueExecutionJob({
       store: this.store,
       jobQueue: this.jobQueue,
