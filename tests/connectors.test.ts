@@ -820,7 +820,7 @@ describe("market data connectors", () => {
   });
 
   it("rejects malformed Polymarket token ID arrays with provider-field context", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       return new Response("unexpected discovery fetch", { status: 500 });
     });
 
@@ -843,7 +843,7 @@ describe("market data connectors", () => {
   });
 
   it("rejects malformed Polymarket outcome price arrays with provider-field context", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       return new Response("unexpected discovery fetch", { status: 500 });
     });
 
@@ -866,7 +866,7 @@ describe("market data connectors", () => {
   });
 
   it("rejects parsed Polymarket arrays containing non-string values", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () => {
       return new Response("unexpected discovery fetch", { status: 500 });
     });
 

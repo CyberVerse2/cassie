@@ -2,6 +2,7 @@ node_modules/
 dist/
 coverage/
 .next/
+*.tsbuildinfo
 .env
 .DS_Store
 .cassie-data/

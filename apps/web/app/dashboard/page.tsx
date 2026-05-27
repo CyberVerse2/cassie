@@ -9,7 +9,6 @@ import s from "./dashboard.module.css";
 
 const baseDepositAddress = "0x193c2109089dd260811f1852c9b1521d6ccf1c6b";
 const baseDepositUri = `ethereum:${baseDepositAddress}@8453`;
-const basescanUrl = `https://basescan.org/address/${baseDepositAddress}`;
 
 const tickerImages: Record<string, string> = {
   SOL: "https://assets.dub.co/companies/polymarket.svg",
