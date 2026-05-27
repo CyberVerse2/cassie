@@ -9,7 +9,6 @@ export function evaluateRisk(input: {
   marketSelection: MarketSelection;
   userSettings: UserSettings;
   accountState: AccountState;
-  sizeUsd?: number | null;
 }): RiskDecision {
   const market = input.marketSelection.selectedMarket;
 
@@ -20,8 +19,10 @@ export function evaluateRisk(input: {
     };
   }
 
-  const requestedSize = input.sizeUsd ?? input.userSettings.defaultTradeSizeUsd;
-  const adjustedSizeUsd = Math.min(requestedSize, input.userSettings.maxTradeSizeUsd);
+  const adjustedSizeUsd = Math.min(
+    input.userSettings.defaultTradeSizeUsd,
+    input.userSettings.maxTradeSizeUsd,
+  );
 
   if (adjustedSizeUsd > input.accountState.availableBalanceUsd) {
     return { decision: "reject", reason: "Insufficient available balance." };

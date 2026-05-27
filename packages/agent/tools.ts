@@ -423,21 +423,20 @@ export function createCassieSupervisorTools(input: {
       description: "Run deterministic risk checks against user policy and live account state.",
       inputSchema: z.object({
         marketSelection: z.unknown().nullable().default(null),
-        sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ marketSelection, sizeUsd }) => {
+      execute: async ({ marketSelection }) => {
         const persistedMarketSelection = await latestPersistedMarketSelection(input.store, input.run.runId)
           ?? parseSuppliedMarketSelection(marketSelection);
         return runStepOnce(
           "risk",
-          { marketSelection: persistedMarketSelection, sizeUsd },
+          { marketSelection: persistedMarketSelection },
           async () => {
             assertUsableMarketSelection(persistedMarketSelection);
             return recordRunStep({
               store: input.store,
               runId: input.run.runId,
               stepType: "risk",
-              stepInput: { marketSelection: persistedMarketSelection, sizeUsd },
+              stepInput: { marketSelection: persistedMarketSelection },
               execute: async () => {
                 const accountState = input.accountState ?? await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
                   .getAccountState(input.userSettings);
@@ -445,7 +444,6 @@ export function createCassieSupervisorTools(input: {
                   marketSelection: persistedMarketSelection,
                   userSettings: input.userSettings,
                   accountState,
-                  sizeUsd,
                 });
               },
             });
@@ -459,9 +457,8 @@ export function createCassieSupervisorTools(input: {
         tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
         marketSelection: z.unknown().nullable().default(null),
         riskDecision: z.unknown().nullable().default(null),
-        sizeUsd: z.number().positive().nullable().optional(),
       }),
-      execute: async ({ tradeExpression, marketSelection, riskDecision, sizeUsd }) => {
+      execute: async ({ tradeExpression, marketSelection, riskDecision }) => {
         const persistedTradeExpression = await latestPersistedTradeExpression(input.store, input.run.runId)
           ?? parseSuppliedTradeExpression(tradeExpression);
         const persistedMarketSelection = await latestPersistedMarketSelection(input.store, input.run.runId)
@@ -474,7 +471,6 @@ export function createCassieSupervisorTools(input: {
             tradeExpression: persistedTradeExpression,
             marketSelection: persistedMarketSelection,
             riskDecision: persistedRiskDecision,
-            sizeUsd,
           },
           async () => {
             assertUsableMarketSelection(persistedMarketSelection);
@@ -488,7 +484,6 @@ export function createCassieSupervisorTools(input: {
                 tradeExpression: persistedTradeExpression,
                 marketSelection: persistedMarketSelection,
                 riskDecision: persistedRiskDecision,
-                sizeUsd,
               },
               execute: async () => {
                 const ticket = createTradeTicket({
@@ -497,7 +492,6 @@ export function createCassieSupervisorTools(input: {
                   thesis,
                   marketSelection: persistedMarketSelection,
                   riskDecision: persistedRiskDecision,
-                  sizeUsd,
                 });
                 await input.store.addTradeTicket(ticket);
                 return ticket;

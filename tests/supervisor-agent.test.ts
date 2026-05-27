@@ -319,13 +319,11 @@ describe("AI SDK supervisor agent", () => {
 
     const risk = await executeTool(tools.risk_check, {
       marketSelection,
-      sizeUsd: null,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
       riskDecision: risk,
-      sizeUsd: null,
     });
     await executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
@@ -405,7 +403,6 @@ describe("AI SDK supervisor agent", () => {
       tradeExpression: expressionWithHigherPriorityEventMarket,
       marketSelection: selectedMarket,
       riskDecision: { decision: "approve", adjustedSizeUsd: 50 },
-      sizeUsd: null,
     });
 
     const state = await store.load();
@@ -528,7 +525,6 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool(tools.risk_check, {
       marketSelection,
-      sizeUsd: null,
     })).rejects.toThrow("account state unavailable");
   });
 
@@ -563,7 +559,44 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool(tools.risk_check, {
       marketSelection,
-      sizeUsd: null,
+    })).resolves.toMatchObject({
+      decision: "approve",
+      adjustedSizeUsd: 50,
+    });
+  });
+
+  it("does not let model-supplied trade size affect risk sizing", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie trade this",
+      sourcePost,
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      accountState: {
+        userId: "user_1",
+        availableBalanceUsd: 500,
+        openExposureUsd: 0,
+        dailyLossUsd: 0,
+        openOrdersUsd: 0,
+      },
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [marketSelection.selectedMarket!];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.risk_check, {
+      marketSelection,
+      sizeUsd: 1_000,
     })).resolves.toMatchObject({
       decision: "approve",
       adjustedSizeUsd: 50,
@@ -595,7 +628,6 @@ describe("AI SDK supervisor agent", () => {
     await expect(executeTool(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
-      sizeUsd: null,
     })).rejects.toThrow("Trade ticket creation requires an approved risk decision.");
   });
 

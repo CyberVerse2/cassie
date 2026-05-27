@@ -187,13 +187,11 @@ describe("supervisor scenario coverage", () => {
     const { store, tools } = await createScenario("@Cassie get me in");
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection,
-      sizeUsd: null,
     });
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
       riskDecision: risk,
-      sizeUsd: null,
     });
 
     const state = await store.load();
@@ -206,11 +204,11 @@ describe("supervisor scenario coverage", () => {
   it("finalizes insufficient-balance trade requests without creating a ticket", async () => {
     const { store, run, tools } = await createScenario("@Cassie get me in", {
       ...baseSettings,
+      defaultTradeSizeUsd: 1_000,
       maxTradeSizeUsd: 1_000,
     });
     const risk = await executeTool<RiskDecision>(tools.risk_check, {
       marketSelection,
-      sizeUsd: 1_000,
     });
 
     expect(risk.decision).toBe("reject");

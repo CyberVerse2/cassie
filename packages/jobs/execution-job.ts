@@ -141,7 +141,6 @@ async function preflightExecution(input: {
     },
     userSettings,
     accountState,
-    sizeUsd: input.ticket.sizeUsd,
   });
 
   if (decision.decision === "reject") {

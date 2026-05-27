@@ -63,7 +63,6 @@ describe("risk evaluation", () => {
         dailyLossUsd: 100,
         openOrdersUsd: 0,
       },
-      sizeUsd: null,
     })).toEqual({
       decision: "approve",
       adjustedSizeUsd: 50,
@@ -102,7 +101,6 @@ describe("risk evaluation", () => {
         dailyLossUsd: 0,
         openOrdersUsd: 0,
       },
-      sizeUsd: null,
     })).toEqual({
       decision: "approve",
       adjustedSizeUsd: 50,

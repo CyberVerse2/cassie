@@ -13,7 +13,6 @@ export function createTradeTicket(input: {
   thesis: Thesis;
   marketSelection: MarketSelection;
   riskDecision: RiskDecision;
-  sizeUsd?: number | null;
 }): TradeTicket {
   const market = input.marketSelection.selectedMarket;
 
