@@ -111,7 +111,6 @@ const aiProviderEnvSchema = z.object({
 
 export const RuntimeConfigSchema = z.object({
   DATABASE_URL: requiredConfiguredStringSchema(),
-  CASSIE_API_TOKEN: requiredConfiguredStringSchema(16),
   GEMINI_API_KEY: requiredConfiguredStringSchema(),
   DEEPSEEK_API_KEY: requiredConfiguredStringSchema(),
   OPENAI_API_KEY: requiredConfiguredStringSchema(),

@@ -118,7 +118,6 @@ describe("Polymarket env", () => {
   it("fails startup validation when the cheap AI dependency is missing", () => {
     expect(() => assertRuntimeConfig({
       DATABASE_URL: "postgres://cassie",
-      CASSIE_API_TOKEN: "a".repeat(16),
       GEMINI_API_KEY: "gemini",
       OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
@@ -127,13 +126,12 @@ describe("Polymarket env", () => {
 
   it("treats blank runtime config values as missing", () => {
     expect(() => assertRuntimeConfig({
-      DATABASE_URL: "postgres://cassie",
-      CASSIE_API_TOKEN: " ".repeat(16),
+      DATABASE_URL: " ",
       GEMINI_API_KEY: "gemini",
       DEEPSEEK_API_KEY: "deepseek",
       OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
-    })).toThrow("CASSIE_API_TOKEN");
+    })).toThrow("DATABASE_URL");
   });
 
   it("centralizes numeric env defaults", () => {
