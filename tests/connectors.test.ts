@@ -196,6 +196,10 @@ describe("market data connectors", () => {
     });
 
     expect(candidates).toEqual([]);
+    expect(fetchMock.mock.calls.some(([, init]) => {
+      const body = JSON.parse(String(init?.body ?? "{}")) as { type?: string };
+      return body.type === "l2Book";
+    })).toBe(false);
     fetchMock.mockRestore();
   });
 

@@ -27,7 +27,6 @@ export async function executeExecutionJob(input: {
   accountStateProvider?: AccountStateProvider;
 }): Promise<ExecutionJob> {
   const store = input.store ?? new DrizzleCassieStore();
-  const executionClient = input.executionClient ?? defaultExecutionClient();
   const jobToRun = await store.getExecutionJob(input.jobId);
 
   if (!jobToRun) {
@@ -44,6 +43,7 @@ export async function executeExecutionJob(input: {
   }
 
   let job = await store.updateExecutionJob(markExecutionRunning(jobToRun));
+  const executionClient = input.executionClient ?? defaultExecutionClient();
 
   try {
     await preflightExecution({

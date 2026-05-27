@@ -210,6 +210,7 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     tradeExpression?: TradeExpressionPlan;
   }, exactSymbolAnchors: string[]): Promise<HyperliquidLiveAssetMatch[]> {
     const dexes = uniqueHyperliquidDexes(await this.getPerpDexs());
+    const normalizedAnchors = normalizedHyperliquidSymbolAnchors(exactSymbolAnchors);
     const liveMetas = await Promise.all(dexes.map(async (dex) => ({
       dex,
       data: await this.getMetaAndAssetCtxs(dex),
@@ -219,7 +220,7 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
 
     for (const { dex, data: [meta, ctxs] } of liveMetas) {
       for (const [index, asset] of meta.universe.entries()) {
-        if (!hyperliquidAssetMatchesExactAnchors(asset.name, exactSymbolAnchors)) continue;
+        if (!hyperliquidAssetMatchesExactAnchors(asset.name, normalizedAnchors)) continue;
 
         const key = `${dex ?? "main"}:${asset.name}`;
         if (seen.has(key)) continue;
@@ -242,12 +243,16 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     instrument: string;
     thesis: Thesis;
   }): Promise<MarketCandidate | null> {
+    const side = hyperliquidSideFromThesis(input.thesis);
+    if (!side) {
+      return null;
+    }
+
     const volume = Number(input.ctx?.dayNtlVlm ?? 0);
     const book = await this.getL2Book(input.asset.name);
     const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
-    const side = hyperliquidSideFromThesis(input.thesis);
 
-    if (!bookMetrics || !side) {
+    if (!bookMetrics) {
       return null;
     }
 
@@ -326,8 +331,11 @@ function uniqueHyperliquidDexes(perpDexs: HyperliquidPerpDexs): Array<string | n
   });
 }
 
-function hyperliquidAssetMatchesExactAnchors(assetName: string, exactSymbolAnchors: string[]): boolean {
-  const normalizedAnchors = new Set(exactSymbolAnchors.map(normalizeHyperliquidSymbolAnchor).filter(Boolean));
+function normalizedHyperliquidSymbolAnchors(exactSymbolAnchors: string[]): Set<string> {
+  return new Set(exactSymbolAnchors.map(normalizeHyperliquidSymbolAnchor).filter(Boolean));
+}
+
+function hyperliquidAssetMatchesExactAnchors(assetName: string, normalizedAnchors: Set<string>): boolean {
   const symbolCandidates = [
     assetName,
     hyperliquidBaseSymbol(assetName),
@@ -377,9 +385,9 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     }
 
     const queries = await this.queryPlanner.planPolymarketSearchQueries(input);
-    const marketResponses = await Promise.all(queries.map(async (query) => {
-      return this.searchClient.searchMarkets(query, input.limit ?? 10);
-    }));
+    const marketResponses = await Promise.all(
+      queries.map((query) => this.searchClient.searchMarkets(query, input.limit ?? 10)),
+    );
     const markets = uniquePolymarketMarkets(marketResponses.flat()).slice(0, input.limit ?? 10);
 
     const candidates = await Promise.all(markets
@@ -502,11 +510,6 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     if (!metrics) {
       throw new Error(`Polymarket order book is empty for token ${input.outcomeTokenId}.`);
     }
-    const bid = topBid(book.bids ?? []);
-    const ask = topAsk(book.asks ?? []);
-    if (!bid || !ask) {
-      throw new Error(`Polymarket order book is empty for token ${input.outcomeTokenId}.`);
-    }
     const heldSidePrice = buyPrice ?? metrics.mid;
 
     return {
@@ -516,8 +519,8 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
       yesPrice: input.side === "yes" ? heldSidePrice : input.yesPrice ?? null,
       noPrice: input.side === "no" ? heldSidePrice : input.noPrice ?? null,
       heldSidePrice,
-      bid,
-      ask,
+      bid: metrics.bid,
+      ask: metrics.ask,
       midPrice: metrics.mid,
       spreadBps: quotedSpread ? quotedSpread * 10_000 : metrics.spreadBps,
       timestamp: new Date().toISOString(),
@@ -566,7 +569,7 @@ function orderBookMetrics(
   const mid = (bid + ask) / 2;
   const spreadBps = Math.round(((ask - bid) / mid) * 10_000);
   const estimatedSlippageBps = estimateBuySlippageBps(asks, 50, ask);
-  return { mid, spreadBps, estimatedSlippageBps };
+  return { bid, ask, mid, spreadBps, estimatedSlippageBps };
 }
 
 function topBid(bids: Array<{ px?: string; price?: string }>): number | null {
