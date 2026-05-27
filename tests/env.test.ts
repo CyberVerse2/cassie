@@ -195,7 +195,6 @@ describe("Polymarket env", () => {
       DEEPSEEK_API_KEY: "deepseek",
       OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
-      CASSIE_API_TOKEN: "api-token",
       X_BEARER_TOKEN: "bearer",
       CASSIE_X_HANDLE: "cassie",
       X_POLL_USER_ID: "123",
@@ -220,9 +219,6 @@ describe("Polymarket env", () => {
       },
       database: {
         url: "postgres://cassie",
-      },
-      http: {
-        apiToken: "api-token",
       },
       structuredAi: {
         maxRetries: 4,

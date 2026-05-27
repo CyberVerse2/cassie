@@ -6,10 +6,8 @@ import { renderDashboard, renderDashboardScript } from "./dashboard.ts";
 import {
   MemoryRateLimiter,
   RequestTooLargeError,
-  UnauthorizedError,
   applySecurityHeaders,
   requestKey,
-  requireApiToken,
 } from "./security.ts";
 
 assertRuntimeConfig();
@@ -23,9 +21,7 @@ const server = createServer(async (request, response) => {
     rateLimiter.check(requestKey(request));
     await route(request, response);
   } catch (error) {
-    const status = error instanceof UnauthorizedError
-      ? 401
-      : error instanceof RequestTooLargeError
+    const status = error instanceof RequestTooLargeError
         ? 413
         : error instanceof Error && error.name === "RateLimitError"
           ? 429
@@ -93,27 +89,23 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (request.method === "GET" && url.pathname === "/api/state") {
-    requireApiToken(request);
     sendJson(response, 200, await product.state());
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/settings") {
-    requireApiToken(request);
     const body = SettingsRequestSchema.parse(await readJson(request));
     sendJson(response, 200, await product.upsertSettings(body));
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/mentions") {
-    requireApiToken(request);
     const body = MentionRequestSchema.parse(await readJson(request));
     sendJson(response, 202, await product.createMentionRun(body));
     return;
   }
 
   if (request.method === "POST" && url.pathname === "/api/x/poll") {
-    requireApiToken(request);
     const userId = url.searchParams.get("userId");
     if (!userId) {
       sendJson(response, 400, { error: "Missing userId" });
@@ -126,7 +118,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
 
   const approveMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/approve$/);
   if (request.method === "POST" && approveMatch) {
-    requireApiToken(request);
     const result = await product.approveTicket(approveMatch[1] as string);
 
     if (request.headers["content-type"]?.includes("application/json")) {
@@ -140,7 +131,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
   }
 
   if (request.method === "POST" && url.pathname === "/api/execution/process") {
-    requireApiToken(request);
     sendJson(response, 200, await product.processNextExecutionJob());
     return;
   }

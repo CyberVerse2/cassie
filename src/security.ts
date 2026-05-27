@@ -1,13 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { config } from "../packages/core/config.ts";
 
-export class UnauthorizedError extends Error {
-  constructor(message = "Unauthorized") {
-    super(message);
-    this.name = "UnauthorizedError";
-  }
-}
-
 export class RateLimitError extends Error {
   constructor(message = "Rate limit exceeded") {
     super(message);
@@ -27,20 +20,6 @@ export function applySecurityHeaders(response: ServerResponse): void {
   response.setHeader("X-Frame-Options", "DENY");
   response.setHeader("Referrer-Policy", "no-referrer");
   response.setHeader("Content-Security-Policy", "default-src 'self'; style-src 'unsafe-inline' 'self'; form-action 'self'; frame-ancestors 'none'");
-}
-
-export function requireApiToken(request: IncomingMessage): void {
-  const configured = config.http.apiToken;
-  if (!configured) {
-    throw new UnauthorizedError("CASSIE_API_TOKEN is not configured.");
-  }
-
-  const auth = request.headers.authorization ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice("Bearer ".length) : "";
-
-  if (token !== configured) {
-    throw new UnauthorizedError();
-  }
 }
 
 type RateBucket = {

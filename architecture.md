@@ -24,7 +24,7 @@ src/
   worker.ts               Graphile worker entrypoint
   poller.ts               X polling entrypoint
   dashboard.ts            Server-rendered dashboard
-  security.ts             API token, body limit, and headers
+  security.ts             Body limit, rate limit, and headers
   visibility.ts           CLI trace formatting
   helpers/                CLI/runtime helper functions
 

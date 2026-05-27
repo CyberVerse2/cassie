@@ -55,8 +55,6 @@ XAI_API_KEY
 EXECUTION_WEBHOOK_URL
 ```
 
-CASSIE_API_TOKEN is optional for startup; set it before using protected API routes.
-
 Missing database, AI, market, or execution credentials fail clearly. Cassie does not downgrade semantic routing, persistence, or execution into local keyword behavior or fake fills.
 
 Run the worker in a second terminal:
@@ -71,7 +69,6 @@ Create or update user settings:
 
 ```bash
 curl -X POST http://localhost:3000/api/settings \
-  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user_1",
@@ -92,7 +89,6 @@ Create a queued mention run:
 
 ```bash
 curl -X POST http://localhost:3000/api/mentions \
-  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "userId": "user_1",
@@ -125,15 +121,13 @@ Approve a ticket:
 
 ```bash
 curl -X POST http://localhost:3000/api/tickets/TICKET_ID/approve \
-  -H "Authorization: Bearer $CASSIE_API_TOKEN" \
   -H "Content-Type: application/json"
 ```
 
 Inspect state:
 
 ```bash
-curl http://localhost:3000/api/state \
-  -H "Authorization: Bearer $CASSIE_API_TOKEN"
+curl http://localhost:3000/api/state
 ```
 
 ## Product Surface

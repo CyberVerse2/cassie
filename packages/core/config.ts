@@ -35,7 +35,6 @@ export type GraphileWorkerEnv = {
 };
 
 export type HttpRuntimeEnv = {
-  apiToken?: string;
   maxBodyBytes: number;
   port: number;
   rateLimitMax: number;
@@ -229,13 +228,11 @@ export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWor
 
 export function readHttpRuntimeEnv(env: EnvSource = process.env): HttpRuntimeEnv {
   return z.object({
-    CASSIE_API_TOKEN: configuredStringSchema,
     CASSIE_MAX_BODY_BYTES: numberSchema("CASSIE_MAX_BODY_BYTES", 256_000, { integer: true, min: 1 }),
     PORT: numberSchema("PORT", 3000, { integer: true, min: 1 }),
     CASSIE_RATE_LIMIT_MAX: numberSchema("CASSIE_RATE_LIMIT_MAX", 60, { integer: true, min: 1 }),
     CASSIE_RATE_LIMIT_WINDOW_MS: numberSchema("CASSIE_RATE_LIMIT_WINDOW_MS", 60_000, { integer: true, min: 1 }),
   }).transform((values) => ({
-    apiToken: values.CASSIE_API_TOKEN,
     maxBodyBytes: values.CASSIE_MAX_BODY_BYTES,
     port: values.PORT,
     rateLimitMax: values.CASSIE_RATE_LIMIT_MAX,
