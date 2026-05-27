@@ -1187,7 +1187,7 @@ function renderPendingTickets(tickets: TradeTicket[]): string {
       <div class="muted">${escapeHtml(ticket.venue)} / ${formatUsd(ticket.sizeUsd)}</div>
       <div class="muted truncate">${escapeHtml(ticket.thesis)}</div>
     </div>
-    <form method="post" action="/api/tickets/${attributeValue(ticket.ticketId)}/approve">
+    <form method="post" action="/tickets/${attributeValue(ticket.ticketId)}/approve">
       <button type="submit">Approve</button>
     </form>
   </div>`).join("");

@@ -63,47 +63,7 @@ Run the worker in a second terminal:
 npm run worker
 ```
 
-## Local Control Surface
-
-Create or update user settings:
-
-```bash
-curl -X POST http://localhost:3000/api/settings \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user_1",
-    "walletAddress": "0x0000000000000000000000000000000000000000",
-    "allowedVenues": ["hyperliquid", "polymarket"],
-    "defaultTradeSizeUsd": 50,
-    "maxTradeSizeUsd": 100,
-    "maxDailyLossUsd": 100,
-    "minConfidence": 0.75,
-    "maxSpreadBps": 50,
-    "maxSlippageBps": 100,
-    "maxPositionUsd": 1000,
-    "autoTradeEnabled": false
-  }'
-```
-
-Create a queued mention run:
-
-```bash
-curl -X POST http://localhost:3000/api/mentions \
-  -H "Content-Type: application/json" \
-  -d '{
-    "userId": "user_1",
-    "userCommand": "@Cassie get me in",
-    "sourcePost": {
-      "platform": "x",
-      "postId": "post_1",
-      "url": "https://x.com/example/status/post_1",
-      "authorHandle": "example",
-      "authorName": "Example",
-      "text": "Solana ETF approval is basically inevitable now. Market is asleep.",
-      "createdAt": null
-    }
-  }'
-```
+## Operate Cassie
 
 Enqueue Cassie from the CLI and show the live timeline:
 
@@ -117,18 +77,7 @@ Inspect an existing run:
 npm run cli -- control-run RUN_ID --json
 ```
 
-Approve a ticket:
-
-```bash
-curl -X POST http://localhost:3000/api/tickets/TICKET_ID/approve \
-  -H "Content-Type: application/json"
-```
-
-Inspect state:
-
-```bash
-curl http://localhost:3000/api/state
-```
+Approve pending tickets from the dashboard.
 
 ## Product Surface
 

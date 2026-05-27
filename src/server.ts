@@ -1,12 +1,11 @@
 import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "../packages/app/product.ts";
+import { CassieProduct } from "../packages/app/product.ts";
 import { assertRuntimeConfig, config } from "../packages/core/config.ts";
 import { renderDashboard, renderDashboardScript } from "./dashboard.ts";
 import {
   MemoryRateLimiter,
   RateLimitError,
-  RequestTooLargeError,
   applySecurityHeaders,
   requestKey,
 } from "./security.ts";
@@ -22,9 +21,7 @@ const server = createServer(async (request, response) => {
     rateLimiter.check(requestKey(request));
     await route(request, response);
   } catch (error) {
-    const status = error instanceof RequestTooLargeError
-      ? 413
-      : error instanceof RateLimitError
+    const status = error instanceof RateLimitError
         ? 429
         : 500;
     sendJson(response, status, {
@@ -89,35 +86,7 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
-  if (request.method === "GET" && url.pathname === "/api/state") {
-    sendJson(response, 200, await product.state());
-    return;
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/settings") {
-    const body = SettingsRequestSchema.parse(await readJson(request));
-    sendJson(response, 200, await product.upsertSettings(body));
-    return;
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/mentions") {
-    const body = MentionRequestSchema.parse(await readJson(request));
-    sendJson(response, 202, await product.createMentionRun(body));
-    return;
-  }
-
-  if (request.method === "POST" && url.pathname === "/api/x/poll") {
-    const userId = url.searchParams.get("userId");
-    if (!userId) {
-      sendJson(response, 400, { error: "Missing userId" });
-      return;
-    }
-
-    sendJson(response, 200, await product.pollXMentions(userId));
-    return;
-  }
-
-  const approveMatch = url.pathname.match(/^\/api\/tickets\/([^/]+)\/approve$/);
+  const approveMatch = url.pathname.match(/^\/tickets\/([^/]+)\/approve$/);
   if (request.method === "POST" && approveMatch) {
     const result = await product.approveTicket(approveMatch[1] as string);
 
@@ -131,11 +100,6 @@ async function route(request: IncomingMessage, response: ServerResponse): Promis
     return;
   }
 
-  if (request.method === "POST" && url.pathname === "/api/execution/process") {
-    sendJson(response, 200, await product.processNextExecutionJob());
-    return;
-  }
-
   sendJson(response, 404, { error: "Not found" });
 }
 
@@ -143,22 +107,6 @@ function numberFromQuery(value: string | null): number | null {
   if (!value) return null;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
-}
-
-async function readJson(request: IncomingMessage): Promise<unknown> {
-  const chunks: Buffer[] = [];
-  let total = 0;
-  const maxBytes = config.http.maxBodyBytes;
-  for await (const chunk of request) {
-    const buffer = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-    total += buffer.byteLength;
-    if (total > maxBytes) {
-      throw new RequestTooLargeError();
-    }
-    chunks.push(buffer);
-  }
-
-  return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
 function sendJson(response: ServerResponse, status: number, payload: unknown): void {
