@@ -76,7 +76,6 @@ function SiteNav() {
   return (
     <header className="nav" aria-label="Primary">
       <div className="right">
-        <a className="nav-link" href="#">Docs</a>
         <a className="nav-action" href="/dashboard">Dashboard</a>
       </div>
     </header>
@@ -122,7 +121,6 @@ type TweetData = {
 };
 
 function Stream({ side, tweets }: { side: "left" | "right"; tweets: TweetData[] }) {
-  /* double the list so the keyframe loop is seamless */
   const loop = [...tweets, ...tweets];
   return (
     <div className={`stream stream-${side}`} aria-hidden>

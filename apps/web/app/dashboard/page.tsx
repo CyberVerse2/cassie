@@ -448,7 +448,7 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
     const change = ((value - startVal) / startVal) * 100;
 
     let dateStr = "";
-    const now = new Date(2026, 4, 26); // May 26, 2026
+    const now = new Date(2026, 4, 26);
     if (range === "1D") {
       const hour = 24 - (length - 1 - i);
       dateStr = `${hour.toString().padStart(2, "0")}:00`;

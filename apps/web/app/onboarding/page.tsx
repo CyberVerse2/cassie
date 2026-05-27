@@ -245,8 +245,8 @@ function StepFirstMention() {
       </div>
 
       <div className={s.ctaRow}>
-        <a className={`${s.btn} ${s.btnGhost}`} href="#">
-          Show me how it works
+        <a className={`${s.btn} ${s.btnGhost}`} href="/">
+          Back to home
         </a>
         <a className={`${s.btn} ${s.btnPrimary}`} href="/dashboard">
           Open my dashboard
