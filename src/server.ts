@@ -1,8 +1,8 @@
 import "dotenv/config";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { CassieProduct, MentionRequestSchema, SettingsRequestSchema } from "../packages/app/product.ts";
+import { assertRuntimeConfig, config } from "../packages/core/config.ts";
 import { renderDashboard, renderDashboardScript } from "./dashboard.ts";
-import { assertRuntimeConfig } from "./config.ts";
 import {
   MemoryRateLimiter,
   RequestTooLargeError,
@@ -11,7 +11,6 @@ import {
   requestKey,
   requireApiToken,
 } from "./security.ts";
-import { config } from "../packages/core/config.ts";
 
 assertRuntimeConfig();
 const product = new CassieProduct();

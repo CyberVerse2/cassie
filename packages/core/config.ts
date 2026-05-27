@@ -105,8 +105,27 @@ const aiProviderEnvSchema = z.object({
   GROK_X_SEARCH_MODEL: configuredStringSchema,
 });
 
+export const RuntimeConfigSchema = z.object({
+  DATABASE_URL: z.string().min(1),
+  CASSIE_API_TOKEN: z.string().min(16),
+  GEMINI_API_KEY: z.string().min(1),
+  OPENAI_API_KEY: z.string().min(1),
+  XAI_API_KEY: z.string().min(1),
+});
+
 export function currentEnv(): EnvSource {
   return process.env;
+}
+
+export function assertRuntimeConfig(env: EnvSource = currentEnv()): void {
+  const result = RuntimeConfigSchema.safeParse(env);
+  if (!result.success) {
+    const missing = result.error.issues
+      .map((issue) => issue.path.join("."))
+      .filter(Boolean)
+      .join(", ");
+    throw new Error(`Cassie runtime config is incomplete: ${missing}`);
+  }
 }
 
 export function optionalEnv(name: string, env: EnvSource = process.env): string | undefined {
