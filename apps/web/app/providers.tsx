@@ -13,6 +13,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     <PrivyProvider
       appId={appId}
       config={{
+        loginMethods: ["twitter"],
         embeddedWallets: {
           ethereum: {
             createOnLogin: "users-without-wallets",
