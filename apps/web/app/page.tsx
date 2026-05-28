@@ -36,9 +36,14 @@ type TestRunTweet = {
   date?: string;
   text?: string;
   cassiePrompt?: string;
+  unavailable?: boolean;
 };
 
-const streamTweets = (tweetRun.tweets as TestRunTweet[]).map((tweet, index) => {
+function hasDisplayText(tweet: TestRunTweet): tweet is TestRunTweet & { text: string } {
+  return !tweet.unavailable && typeof tweet.text === "string" && tweet.text.trim().length > 0;
+}
+
+const streamTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).map((tweet, index) => {
   const handle = xHandleFromUrl(tweet.url);
   const displayHandle = tweet.handle ?? `@${handle}`;
   return {
@@ -47,7 +52,7 @@ const streamTweets = (tweetRun.tweets as TestRunTweet[]).map((tweet, index) => {
     handle: displayHandle,
     avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
     date: tweet.date ?? (tweet.current ? "now" : `${index + 1}h`),
-    preview: tweet.text ?? "Open the source tweet to view the original post.",
+    preview: tweet.text,
     cassiePrompt: tweet.cassiePrompt ?? streamTweetPrompts[index % streamTweetPrompts.length],
   };
 });

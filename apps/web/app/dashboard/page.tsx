@@ -177,9 +177,14 @@ type TestRunTweet = {
   date?: string;
   text?: string;
   cassiePrompt?: string;
+  unavailable?: boolean;
 };
 
-const taggedTweets = (tweetRun.tweets as TestRunTweet[]).slice(0, 6).map((tweet, index) => {
+function hasDisplayText(tweet: TestRunTweet): tweet is TestRunTweet & { text: string } {
+  return !tweet.unavailable && typeof tweet.text === "string" && tweet.text.trim().length > 0;
+}
+
+const taggedTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).slice(0, 6).map((tweet, index) => {
   const handle = xHandleFromUrl(tweet.url);
   const displayHandle = tweet.handle ?? `@${handle}`;
   return {
@@ -189,7 +194,7 @@ const taggedTweets = (tweetRun.tweets as TestRunTweet[]).slice(0, 6).map((tweet,
     avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
     age: tweet.date ?? taggedTweetAges[index]!,
     cassiePrompt: tweet.cassiePrompt ?? taggedTweetPrompts[index]!,
-    preview: tweet.text ?? "Open the source tweet to view the original post.",
+    preview: tweet.text,
   };
 });
 
