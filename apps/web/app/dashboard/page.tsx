@@ -166,7 +166,7 @@ const watching = [
 ];
 
 const taggedTweetAges = ["2h", "5h", "11h", "1d", "2d", "3d"] as const;
-const taggedTweetPrompts = ["trade this", "fade this", "critic this", "watch this", "trade this", "fade this"] as const;
+const taggedTweetPrompts = ["trade this", "trade this", "critic this", "watch this", "trade this", "trade this"] as const;
 
 type TestRunTweet = {
   url: string;
@@ -184,6 +184,17 @@ function hasDisplayText(tweet: TestRunTweet): tweet is TestRunTweet & { text: st
   return !tweet.unavailable && typeof tweet.text === "string" && tweet.text.trim().length > 0;
 }
 
+function summarizeTweetText(text: string): string {
+  const cleaned = text
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/pic\.twitter\.com\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= 132) return cleaned;
+  const cutoff = cleaned.lastIndexOf(" ", 132);
+  return `${cleaned.slice(0, cutoff > 88 ? cutoff : 132).trim()}...`;
+}
+
 const taggedTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).slice(0, 6).map((tweet, index) => {
   const handle = xHandleFromUrl(tweet.url);
   const displayHandle = tweet.handle ?? `@${handle}`;
@@ -194,7 +205,7 @@ const taggedTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).
     avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
     age: tweet.date ?? taggedTweetAges[index]!,
     cassiePrompt: tweet.cassiePrompt ?? taggedTweetPrompts[index]!,
-    preview: tweet.text,
+    preview: summarizeTweetText(tweet.text),
   };
 });
 

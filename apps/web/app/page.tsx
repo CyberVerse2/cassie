@@ -25,7 +25,7 @@ const replyUsers = [
   },
 ];
 
-const streamTweetPrompts = ["trade this", "fade this", "critic this", "watch this"] as const;
+const streamTweetPrompts = ["trade this", "trade this", "critic this", "watch this"] as const;
 
 type TestRunTweet = {
   url: string;
@@ -36,11 +36,23 @@ type TestRunTweet = {
   date?: string;
   text?: string;
   cassiePrompt?: string;
+  mediaUrls?: string[];
   unavailable?: boolean;
 };
 
 function hasDisplayText(tweet: TestRunTweet): tweet is TestRunTweet & { text: string } {
   return !tweet.unavailable && typeof tweet.text === "string" && tweet.text.trim().length > 0;
+}
+
+function summarizeTweetText(text: string): string {
+  const cleaned = text
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/pic\.twitter\.com\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= 132) return cleaned;
+  const cutoff = cleaned.lastIndexOf(" ", 132);
+  return `${cleaned.slice(0, cutoff > 88 ? cutoff : 132).trim()}...`;
 }
 
 const streamTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).map((tweet, index) => {
@@ -52,7 +64,7 @@ const streamTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).
     handle: displayHandle,
     avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
     date: tweet.date ?? (tweet.current ? "now" : `${index + 1}h`),
-    preview: tweet.text,
+    preview: summarizeTweetText(tweet.text),
     cassiePrompt: tweet.cassiePrompt ?? streamTweetPrompts[index % streamTweetPrompts.length],
   };
 });
@@ -140,6 +152,7 @@ type TweetData = {
   url: string;
   current: boolean;
   cassiePrompt: string;
+  mediaUrls?: string[];
 };
 
 function Stream({ side, tweets }: { side: "left" | "right"; tweets: TweetData[] }) {
@@ -167,8 +180,11 @@ function TweetCard({
   url,
   current,
   cassiePrompt,
+  mediaUrls,
   replyUser,
 }: TweetData & { replyUser: ReplyUser }) {
+  const mediaUrl = mediaUrls?.[0];
+
   return (
     <article className={`tweet${current ? " tweet-current" : ""}`}>
       <header className="tweet-head">
@@ -181,6 +197,15 @@ function TweetCard({
         </div>
       </header>
       <p className="tweet-body">{preview}</p>
+      {mediaUrl ? (
+        <img
+          className="tweet-media"
+          src={mediaUrl}
+          alt=""
+          aria-hidden
+          decoding="async"
+        />
+      ) : null}
       <div className="tweet-reply">
         <img
           className="reply-avatar"
