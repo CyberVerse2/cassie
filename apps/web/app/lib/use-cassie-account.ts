@@ -56,8 +56,7 @@ export function useCassieAccount() {
   const syncAccount = useCallback(async (input: SyncInput = {}) => {
     if (!privy.ready || !walletsReady) return null;
     if (!privy.authenticated) {
-      privy.login();
-      return null;
+      throw new Error("Log in with Twitter before continuing onboarding.");
     }
     if (!embeddedWallet) return null;
 

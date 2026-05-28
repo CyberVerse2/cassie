@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { StyledQR } from "../components/styled-qr";
 import { useCassieAccount } from "../lib/use-cassie-account";
 import s from "./onboarding.module.css";
@@ -16,6 +17,7 @@ const steps = [
 type StepId = (typeof steps)[number]["id"];
 
 export default function OnboardingPage() {
+  const router = useRouter();
   const [stepId, setStepId] = useState<StepId>("welcome");
   const account = useCassieAccount();
   const currentIndex = steps.findIndex((s) => s.id === stepId);
@@ -23,6 +25,10 @@ export default function OnboardingPage() {
   const next = () => {
     if (currentIndex < steps.length - 1) goto(steps[currentIndex + 1].id);
   };
+
+  useEffect(() => {
+    if (account.ready && !account.authenticated) router.replace("/");
+  }, [account.authenticated, account.ready, router]);
 
   return (
     <main className={s.shell}>
@@ -51,8 +57,8 @@ export default function OnboardingPage() {
         {stepId === "welcome" && (
           <StepWelcome
             onNext={next}
-            login={account.login}
             authenticated={account.authenticated}
+            ready={account.ready}
           />
         )}
         {stepId === "permissions" && (
@@ -110,20 +116,14 @@ function Stepper({
 
 function StepWelcome({
   onNext,
-  login,
   authenticated,
+  ready,
 }: {
   onNext: () => void;
-  login: () => void;
   authenticated: boolean;
+  ready: boolean;
 }) {
-  async function begin() {
-    if (!authenticated) {
-      login();
-      return;
-    }
-    onNext();
-  }
+  const canBegin = ready && authenticated;
 
   return (
     <div className={s.step}>
@@ -139,9 +139,10 @@ function StepWelcome({
         <button
           type="button"
           className={`${s.btn} ${s.btnPrimary}`}
-          onClick={begin}
+          onClick={onNext}
+          disabled={!canBegin}
         >
-          Begin
+          {ready ? "Begin" : "Checking session"}
           <span className={s.arrow} aria-hidden>→</span>
         </button>
       </div>
