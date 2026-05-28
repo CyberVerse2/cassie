@@ -1,6 +1,5 @@
 import {
   PrivyClient,
-  verifyAccessToken,
   type AuthorizationContext,
   type VerifyAccessTokenResponse,
   type Wallet,
@@ -46,11 +45,7 @@ export class PrivyAdapter implements PrivyWalletGateway {
   }
 
   async verifyAccessToken(accessToken: string): Promise<PrivyAuthClaims> {
-    return verifyAccessToken({
-      access_token: accessToken,
-      app_id: this.env.appId,
-      verification_key: this.env.verificationKey,
-    });
+    return this.client.utils().auth().verifyAccessToken(accessToken);
   }
 
   async getWallet(walletId: string): Promise<Wallet> {

@@ -279,7 +279,6 @@ export type PrivyEnv = {
 export type RequiredPrivyEnv = PrivyEnv & {
   appId: string;
   appSecret: string;
-  verificationKey: string;
   treasuryAddress: string;
   authorizationPrivateKey: string;
 };
@@ -311,9 +310,6 @@ export function assertPrivyEnv(config: PrivyEnv): RequiredPrivyEnv {
   }
   if (!config.appSecret) {
     throw new MissingConnectorConfigError("Privy", "PRIVY_APP_SECRET");
-  }
-  if (!config.verificationKey) {
-    throw new MissingConnectorConfigError("Privy", "PRIVY_VERIFICATION_KEY");
   }
   if (!config.treasuryAddress) {
     throw new MissingConnectorConfigError("Privy sweep", "CASSIE_TREASURY_ADDRESS");
