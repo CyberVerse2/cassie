@@ -61,12 +61,13 @@ export function useCassieAccount() {
     }
     if (!embeddedWallet) return null;
 
+    setStatus("loading");
+    setError(null);
     if (input.requireDelegation && !embeddedWallet.delegated) {
       await delegateWallet({
         address: embeddedWallet.address,
         chainType: "ethereum",
       });
-      return null;
     }
 
     const accessToken = await privy.getAccessToken();
@@ -74,8 +75,6 @@ export function useCassieAccount() {
       throw new Error("Privy access token was not available.");
     }
 
-    setStatus("loading");
-    setError(null);
     const response = await fetch("/api/session/sync", {
       method: "POST",
       headers: {
@@ -138,7 +137,7 @@ export function useCassieAccount() {
     status,
     error,
     walletAddress: embeddedWallet?.address ?? account?.walletAddress ?? null,
-    walletReadyForSweeps: Boolean(embeddedWallet?.delegated && embeddedWallet.id),
+    walletReadyForSpending: Boolean(embeddedWallet?.delegated && embeddedWallet.id),
     login: privy.login,
     logout: privy.logout,
     prepareAccount,

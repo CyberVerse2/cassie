@@ -47,18 +47,25 @@ export default function OnboardingPage() {
       </header>
 
       <section className={s.frame} key={stepId}>
-        {stepId === "welcome" && <StepWelcome onNext={next} login={account.login} authenticated={account.authenticated} />}
-        {stepId === "fund" && (
-          <StepFund
-            onSkip={() => goto("defaults")}
+        {stepId === "welcome" && (
+          <StepWelcome
             onNext={next}
+            login={account.login}
+            authenticated={account.authenticated}
             prepareAccount={account.prepareAccount}
-            walletAddress={account.walletAddress}
             status={account.status}
             error={account.error}
           />
         )}
-        {stepId === "defaults" && <StepDefaults onNext={next} syncAccount={account.prepareAccount} />}
+        {stepId === "fund" && (
+          <StepFund
+            onSkip={() => goto("defaults")}
+            onNext={next}
+            walletAddress={account.walletAddress}
+            error={account.error}
+          />
+        )}
+        {stepId === "defaults" && <StepDefaults onNext={next} syncAccount={account.syncAccount} />}
         {stepId === "first" && <StepFirstMention />}
       </section>
     </main>
@@ -99,11 +106,26 @@ function StepWelcome({
   onNext,
   login,
   authenticated,
+  prepareAccount,
+  status,
+  error,
 }: {
   onNext: () => void;
   login: () => void;
   authenticated: boolean;
+  prepareAccount: () => Promise<unknown>;
+  status: "idle" | "loading" | "error";
+  error: string | null;
 }) {
+  async function begin() {
+    if (!authenticated) {
+      login();
+      return;
+    }
+    const prepared = await prepareAccount();
+    if (prepared) onNext();
+  }
+
   return (
     <div className={s.step}>
       <span className={s.eyebrow}>You're in</span>
@@ -118,18 +140,14 @@ function StepWelcome({
         <button
           type="button"
           className={`${s.btn} ${s.btnPrimary}`}
-          onClick={() => {
-            if (!authenticated) {
-              login();
-              return;
-            }
-            onNext();
-          }}
+          onClick={begin}
+          disabled={status === "loading"}
         >
-          Begin
+          {status === "loading" ? "Preparing wallet" : authenticated ? "Prepare wallet" : "Begin"}
           <span className={s.arrow} aria-hidden>→</span>
         </button>
       </div>
+      {error && <p className={s.fineprint}>{error}</p>}
     </div>
   );
 }
@@ -137,16 +155,12 @@ function StepWelcome({
 function StepFund({
   onSkip,
   onNext,
-  prepareAccount,
   walletAddress,
-  status,
   error,
 }: {
   onSkip: () => void;
   onNext: () => void;
-  prepareAccount: () => Promise<unknown>;
   walletAddress: string | null;
-  status: "idle" | "loading" | "error";
   error: string | null;
 }) {
   const [copied, setCopied] = useState(false);
@@ -158,11 +172,6 @@ function StepFund({
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
     await window.navigator.clipboard.writeText(walletAddress);
-  }
-
-  async function continueAfterSetup() {
-    const prepared = await prepareAccount();
-    if (prepared) onNext();
   }
 
   return (
@@ -196,8 +205,8 @@ function StepFund({
         <button type="button" className={`${s.btn} ${s.btnGhost}`} onClick={onSkip}>
           I'll do this later
         </button>
-        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={continueAfterSetup} disabled={status === "loading"}>
-          {status === "loading" ? "Preparing" : "Continue"}
+        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onNext}>
+          Continue
           <span className={s.arrow} aria-hidden>→</span>
         </button>
       </div>
