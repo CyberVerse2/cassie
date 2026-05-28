@@ -7,6 +7,7 @@ import s from "./onboarding.module.css";
 
 const steps = [
   { id: "welcome", label: "Welcome" },
+  { id: "permissions", label: "Permissions" },
   { id: "fund", label: "Fund" },
   { id: "defaults", label: "Defaults" },
   { id: "first", label: "First mention" },
@@ -52,6 +53,11 @@ export default function OnboardingPage() {
             onNext={next}
             login={account.login}
             authenticated={account.authenticated}
+          />
+        )}
+        {stepId === "permissions" && (
+          <StepPermissions
+            onNext={next}
             prepareAccount={account.prepareAccount}
             status={account.status}
             error={account.error}
@@ -106,24 +112,17 @@ function StepWelcome({
   onNext,
   login,
   authenticated,
-  prepareAccount,
-  status,
-  error,
 }: {
   onNext: () => void;
   login: () => void;
   authenticated: boolean;
-  prepareAccount: () => Promise<unknown>;
-  status: "idle" | "loading" | "error";
-  error: string | null;
 }) {
   async function begin() {
     if (!authenticated) {
       login();
       return;
     }
-    const prepared = await prepareAccount();
-    if (prepared) onNext();
+    onNext();
   }
 
   return (
@@ -141,9 +140,51 @@ function StepWelcome({
           type="button"
           className={`${s.btn} ${s.btnPrimary}`}
           onClick={begin}
+        >
+          Begin
+          <span className={s.arrow} aria-hidden>→</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function StepPermissions({
+  onNext,
+  prepareAccount,
+  status,
+  error,
+}: {
+  onNext: () => void;
+  prepareAccount: () => Promise<unknown>;
+  status: "idle" | "loading" | "error";
+  error: string | null;
+}) {
+  async function enablePermission() {
+    const prepared = await prepareAccount();
+    if (prepared) onNext();
+  }
+
+  return (
+    <div className={s.step}>
+      <span className={s.eyebrow}>Step two · Permissions</span>
+      <h1 className={s.display}>
+        Let Cassie <em>trade</em> when it matters.
+      </h1>
+      <p className={s.lede}>
+        Funds stay in your Privy wallet. This gives Cassie trading permission so a tweet, watch, or counter can execute without asking you to approve every single time.
+      </p>
+      <p className={s.fineprint}>
+        You still fund the wallet yourself, and Cassie can only trade what is available there.
+      </p>
+      <div className={s.ctaRow}>
+        <button
+          type="button"
+          className={`${s.btn} ${s.btnPrimary}`}
+          onClick={enablePermission}
           disabled={status === "loading"}
         >
-          {status === "loading" ? "Preparing wallet" : authenticated ? "Prepare wallet" : "Begin"}
+          {status === "loading" ? "Enabling permission" : "Enable trading permission"}
           <span className={s.arrow} aria-hidden>→</span>
         </button>
       </div>
@@ -176,7 +217,7 @@ function StepFund({
 
   return (
     <div className={s.step}>
-      <span className={s.eyebrow}>Step two · Fund</span>
+      <span className={s.eyebrow}>Step three · Fund</span>
       <h1 className={s.display}>
         Send some <em>USDC</em>.
       </h1>
@@ -232,7 +273,7 @@ function StepDefaults({
 
   return (
     <div className={s.step}>
-      <span className={s.eyebrow}>Step three · Defaults</span>
+      <span className={s.eyebrow}>Step four · Defaults</span>
       <h1 className={s.display}>
         How much per <em>trade</em>?
       </h1>
@@ -284,7 +325,7 @@ function StepDefaults({
 function StepFirstMention() {
   return (
     <div className={s.step}>
-      <span className={s.eyebrow}>Step four · Try it</span>
+      <span className={s.eyebrow}>Step five · Try it</span>
       <h1 className={s.display}>
         Now <em>mention me</em>.
       </h1>
