@@ -14,7 +14,3 @@ CREATE INDEX IF NOT EXISTS "user_settings_privy_user_idx"
 
 CREATE INDEX IF NOT EXISTS "user_settings_privy_wallet_idx"
   ON "user_settings" ("privy_wallet_id");
-
-CREATE UNIQUE INDEX IF NOT EXISTS "custody_ledger_sweep_external_ref_idx"
-  ON "custody_ledger_entries" ("source", "external_ref")
-  WHERE "type" = 'sweep_credit' AND "external_ref" IS NOT NULL;

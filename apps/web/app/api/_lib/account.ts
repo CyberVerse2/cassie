@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { authenticatePrivyRequest } from "../../../../../packages/adapters/privy";
+import { authenticatePrivyRequest, PrivyAdapter } from "../../../../../packages/adapters/privy";
 import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
 
 export const accountSyncSchema = z.object({
@@ -17,13 +17,22 @@ export async function authenticatedContext(request: Request) {
   };
 }
 
-export async function accountResponse(privyUserId: string, store = new DrizzleCassieStore()) {
+export async function accountResponse(
+  privyUserId: string,
+  store = new DrizzleCassieStore(),
+  walletGateway = new PrivyAdapter(),
+) {
   const settings = await store.getUserSettingsByPrivyUserId(privyUserId);
   if (!settings) {
     return NextResponse.json({ account: null }, { status: 404 });
   }
 
-  const balance = await store.getCustodyBalance(settings.userId);
+  const walletBalanceUsd = settings.privyWalletId
+    ? await walletGateway.getUsdcBalanceUsd(settings.privyWalletId)
+    : null;
+  const balance = walletBalanceUsd == null
+    ? null
+    : await store.getWalletFundingBalance(settings.userId, walletBalanceUsd);
   return NextResponse.json({
     account: {
       userId: settings.userId,

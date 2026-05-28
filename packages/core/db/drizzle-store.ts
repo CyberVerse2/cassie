@@ -1,21 +1,19 @@
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
   ControlRun,
-  CustodyBalance,
-  CustodyLedgerEntry,
   ExecutionJob,
   RunStep,
   SourcePost,
   TradeTicket,
   UserSettings,
+  WalletFundingBalance,
+  WalletSpendLedgerEntry,
 } from "../schemas/index.ts";
 import {
   auditEvents,
   controlRuns,
-  custodyBalances,
-  custodyLedgerEntries,
   executionJobs,
   mentions,
   runtimeState,
@@ -23,6 +21,7 @@ import {
   tradeTickets,
   modelCallUsage,
   userSettings,
+  walletSpendLedgerEntries,
 } from "./schema.ts";
 import { createCassieDb, type CassieDb } from "./client.ts";
 import type {
@@ -43,8 +42,7 @@ export class DrizzleCassieStore implements CassieStore {
       ticketRows,
       jobRows,
       auditRows,
-      custodyBalanceRows,
-      custodyLedgerRows,
+      walletSpendLedgerRows,
       controlRunRows,
       stepRows,
       modelCallUsageRows,
@@ -54,8 +52,7 @@ export class DrizzleCassieStore implements CassieStore {
       this.db.select().from(tradeTickets),
       this.db.select().from(executionJobs),
       this.db.select().from(auditEvents),
-      this.db.select().from(custodyBalances),
-      this.db.select().from(custodyLedgerEntries),
+      this.db.select().from(walletSpendLedgerEntries),
       this.db.select().from(controlRuns),
       this.db.select().from(runSteps),
       this.db.select().from(modelCallUsage),
@@ -66,13 +63,10 @@ export class DrizzleCassieStore implements CassieStore {
       mentions: mentionRows,
       tradeTickets: ticketRows.map((row) => row.ticket),
       executionJobs: jobRows.map((row) => row.job),
-      custodyBalances: custodyBalanceRows,
-      custodyLedgerEntries: custodyLedgerRows.map((row) => ({
+      walletSpendLedgerEntries: walletSpendLedgerRows.map((row) => ({
         ...row,
         ticketId: row.ticketId ?? null,
         executionJobId: row.executionJobId ?? null,
-        source: row.source ?? null,
-        externalRef: row.externalRef ?? null,
         metadata: row.metadata ?? null,
       })),
       auditEvents: auditRows.map((row) => ({
@@ -378,239 +372,136 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.job;
   }
 
-  async creditUserBalance(input: {
-    userId: string;
-    amountUsd: number;
-    source: string;
-    externalRef?: string | null;
-    metadata?: unknown;
-  }): Promise<CustodyBalance> {
-    assertPositiveAmount(input.amountUsd);
-    return await this.db.transaction(async (tx) => {
-      const now = new Date().toISOString();
-      if (input.externalRef) {
-        const existingCredit = await tx
-          .select()
-          .from(custodyLedgerEntries)
-          .where(and(
-            eq(custodyLedgerEntries.type, "sweep_credit"),
-            eq(custodyLedgerEntries.source, input.source),
-            eq(custodyLedgerEntries.externalRef, input.externalRef),
-          ))
-          .limit(1);
-        if (existingCredit[0]) {
-          const existingBalance = await tx
-            .select()
-            .from(custodyBalances)
-            .where(eq(custodyBalances.userId, input.userId))
-            .limit(1);
-          if (!existingBalance[0]) throw new Error(`No swept balance found for user ${input.userId}.`);
-          return existingBalance[0];
-        }
-      }
-
-      const balanceRows = await tx
-        .insert(custodyBalances)
-        .values({
-          userId: input.userId,
-          availableUsd: input.amountUsd,
-          reservedUsd: 0,
-          updatedAt: now,
-        })
-        .onConflictDoUpdate({
-          target: custodyBalances.userId,
-          set: {
-            availableUsd: sql`${custodyBalances.availableUsd} + ${input.amountUsd}`,
-            updatedAt: now,
-          },
-        })
-        .returning();
-
-      const balance = balanceRows[0];
-      if (!balance) {
-        throw new Error(`Unable to credit swept balance for user ${input.userId}.`);
-      }
-
-      await tx.insert(custodyLedgerEntries).values({
-        entryId: randomUUID(),
-        userId: input.userId,
-        type: "sweep_credit",
-        amountUsd: input.amountUsd,
-        ticketId: null,
-        executionJobId: null,
-        source: input.source,
-        externalRef: input.externalRef ?? null,
-        metadata: input.metadata ?? null,
-        createdAt: now,
-      });
-      return balance;
+  async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
+    assertNonnegativeAmount(walletBalanceUsd);
+    return walletFundingBalance({
+      userId,
+      walletBalanceUsd,
+      reservedUsd: await this.openReservedUsd(userId),
+      updatedAt: new Date().toISOString(),
     });
   }
 
-  async getCustodyBalance(userId: string): Promise<CustodyBalance | undefined> {
-    const rows = await this.db
-      .select()
-      .from(custodyBalances)
-      .where(eq(custodyBalances.userId, userId))
-      .limit(1);
-
-    return rows[0];
-  }
-
-  async reserveTradeFunds(ticket: TradeTicket, job: ExecutionJob): Promise<CustodyBalance> {
-    assertPositiveAmount(ticket.sizeUsd);
+  async reserveWalletSpend(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    walletBalanceUsd: number;
+  }): Promise<WalletFundingBalance> {
+    assertPositiveAmount(input.ticket.sizeUsd);
     return await this.db.transaction(async (tx) => {
       const existingReserve = await tx
         .select()
-        .from(custodyLedgerEntries)
+        .from(walletSpendLedgerEntries)
         .where(and(
-          eq(custodyLedgerEntries.type, "trade_reserve"),
-          eq(custodyLedgerEntries.executionJobId, job.jobId),
+          eq(walletSpendLedgerEntries.type, "trade_reserve"),
+          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
         ))
         .limit(1);
       if (existingReserve[0]) {
-        const existingBalance = await tx
-          .select()
-          .from(custodyBalances)
-          .where(eq(custodyBalances.userId, ticket.userId))
-          .limit(1);
-        if (!existingBalance[0]) throw new Error(`No swept balance found for user ${ticket.userId}.`);
-        return existingBalance[0];
+        return walletFundingBalance({
+          userId: input.ticket.userId,
+          walletBalanceUsd: input.walletBalanceUsd,
+          reservedUsd: await this.openReservedUsd(input.ticket.userId),
+          updatedAt: new Date().toISOString(),
+        });
       }
 
-      const now = new Date().toISOString();
-      const balanceRows = await tx
-        .update(custodyBalances)
-        .set({
-          availableUsd: sql`${custodyBalances.availableUsd} - ${ticket.sizeUsd}`,
-          reservedUsd: sql`${custodyBalances.reservedUsd} + ${ticket.sizeUsd}`,
-          updatedAt: now,
-        })
-        .where(and(
-          eq(custodyBalances.userId, ticket.userId),
-          gte(custodyBalances.availableUsd, ticket.sizeUsd),
-        ))
-        .returning();
-      const balance = balanceRows[0];
-      if (!balance) {
-        throw new Error("Insufficient swept balance.");
+      const reservedUsd = await this.openReservedUsd(input.ticket.userId);
+      const balance = walletFundingBalance({
+        userId: input.ticket.userId,
+        walletBalanceUsd: input.walletBalanceUsd,
+        reservedUsd,
+        updatedAt: new Date().toISOString(),
+      });
+      if (balance.spendableUsd < input.ticket.sizeUsd) {
+        throw new Error("Insufficient user wallet balance.");
       }
 
-      await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
-        userId: ticket.userId,
+      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
+        userId: input.ticket.userId,
         type: "trade_reserve",
-        amountUsd: ticket.sizeUsd,
-        ticketId: ticket.ticketId,
-        executionJobId: job.jobId,
-        metadata: { venue: ticket.venue, instrument: ticket.instrument, side: ticket.side },
-        createdAt: now,
+        amountUsd: input.ticket.sizeUsd,
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: { venue: input.ticket.venue, instrument: input.ticket.instrument, side: input.ticket.side },
+        createdAt: new Date().toISOString(),
       }));
-      return balance;
+      return walletFundingBalance({
+        userId: input.ticket.userId,
+        walletBalanceUsd: input.walletBalanceUsd,
+        reservedUsd: reservedUsd + input.ticket.sizeUsd,
+        updatedAt: new Date().toISOString(),
+      });
     });
   }
 
-  async releaseTradeReservation(input: {
+  async releaseWalletSpend(input: {
     ticket: TradeTicket;
     job: ExecutionJob;
     reason: string;
-  }): Promise<CustodyBalance> {
+    walletBalanceUsd: number;
+  }): Promise<WalletFundingBalance> {
     return await this.db.transaction(async (tx) => {
       const existingRelease = await tx
         .select()
-        .from(custodyLedgerEntries)
+        .from(walletSpendLedgerEntries)
         .where(and(
-          eq(custodyLedgerEntries.type, "trade_release"),
-          eq(custodyLedgerEntries.executionJobId, input.job.jobId),
+          eq(walletSpendLedgerEntries.type, "trade_release"),
+          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
         ))
         .limit(1);
       if (existingRelease[0]) {
-        const existingBalance = await tx
-          .select()
-          .from(custodyBalances)
-          .where(eq(custodyBalances.userId, input.ticket.userId))
-          .limit(1);
-        if (!existingBalance[0]) throw new Error(`No swept balance found for user ${input.ticket.userId}.`);
-        return existingBalance[0];
+        return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
       }
 
-      const now = new Date().toISOString();
-      const balanceRows = await tx
-        .update(custodyBalances)
-        .set({
-          availableUsd: sql`${custodyBalances.availableUsd} + ${input.ticket.sizeUsd}`,
-          reservedUsd: sql`${custodyBalances.reservedUsd} - ${input.ticket.sizeUsd}`,
-          updatedAt: now,
-        })
-        .where(and(
-          eq(custodyBalances.userId, input.ticket.userId),
-          gte(custodyBalances.reservedUsd, input.ticket.sizeUsd),
-        ))
-        .returning();
-      const balance = balanceRows[0];
-      if (!balance) {
+      const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      if (balance.reservedUsd < input.ticket.sizeUsd) {
         throw new Error("Cannot release a missing trade reservation.");
       }
 
-      await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
         userId: input.ticket.userId,
         type: "trade_release",
         amountUsd: input.ticket.sizeUsd,
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
         metadata: { reason: input.reason },
-        createdAt: now,
+        createdAt: new Date().toISOString(),
       }));
-      return balance;
+      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
     });
   }
 
-  async settleTradeReservation(input: {
+  async settleWalletSpend(input: {
     ticket: TradeTicket;
     job: ExecutionJob;
     executionResult: NonNullable<ExecutionJob["executionResult"]>;
-  }): Promise<CustodyBalance> {
+    walletBalanceUsd: number;
+  }): Promise<WalletFundingBalance> {
     return await this.db.transaction(async (tx) => {
       const existingSettlement = await tx
         .select()
-        .from(custodyLedgerEntries)
+        .from(walletSpendLedgerEntries)
         .where(and(
-          eq(custodyLedgerEntries.type, "trade_settlement"),
-          eq(custodyLedgerEntries.executionJobId, input.job.jobId),
+          eq(walletSpendLedgerEntries.type, "trade_spend"),
+          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
         ))
         .limit(1);
       if (existingSettlement[0]) {
-        const existingBalance = await tx
-          .select()
-          .from(custodyBalances)
-          .where(eq(custodyBalances.userId, input.ticket.userId))
-          .limit(1);
-        if (!existingBalance[0]) throw new Error(`No swept balance found for user ${input.ticket.userId}.`);
-        return existingBalance[0];
+        return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
       }
 
       const filledSizeUsd = normalizedFilledSize(input.ticket, input.executionResult);
       const releaseUsd = input.ticket.sizeUsd - filledSizeUsd;
       const now = new Date().toISOString();
-      const balanceRows = await tx
-        .update(custodyBalances)
-        .set({
-          availableUsd: sql`${custodyBalances.availableUsd} + ${releaseUsd}`,
-          reservedUsd: sql`${custodyBalances.reservedUsd} - ${input.ticket.sizeUsd}`,
-          updatedAt: now,
-        })
-        .where(and(
-          eq(custodyBalances.userId, input.ticket.userId),
-          gte(custodyBalances.reservedUsd, input.ticket.sizeUsd),
-        ))
-        .returning();
-      const balance = balanceRows[0];
-      if (!balance) {
+      const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      if (balance.reservedUsd < input.ticket.sizeUsd) {
         throw new Error("Cannot settle a missing trade reservation.");
       }
 
-      await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
         userId: input.ticket.userId,
-        type: "trade_settlement",
+        type: "trade_spend",
         amountUsd: filledSizeUsd,
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
@@ -619,7 +510,7 @@ export class DrizzleCassieStore implements CassieStore {
       }));
 
       if (releaseUsd > 0) {
-        await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+        await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
           userId: input.ticket.userId,
           type: "trade_release",
           amountUsd: releaseUsd,
@@ -629,7 +520,7 @@ export class DrizzleCassieStore implements CassieStore {
           createdAt: now,
         }));
       }
-      return balance;
+      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
     });
   }
 
@@ -701,11 +592,30 @@ export class DrizzleCassieStore implements CassieStore {
     await this.db.insert(auditEvents).values(event);
     return event;
   }
+
+  private async openReservedUsd(userId: string): Promise<number> {
+    const rows = await this.db
+      .select()
+      .from(walletSpendLedgerEntries)
+      .where(eq(walletSpendLedgerEntries.userId, userId));
+
+    return rows.reduce((total, entry) => {
+      if (entry.type === "trade_reserve") return total + entry.amountUsd;
+      if (entry.type === "trade_release" || entry.type === "trade_spend") return total - entry.amountUsd;
+      return total;
+    }, 0);
+  }
 }
 
 function assertPositiveAmount(amountUsd: number): void {
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-    throw new Error("Custody amount must be a positive USD value.");
+    throw new Error("Wallet spend amount must be a positive USD value.");
+  }
+}
+
+function assertNonnegativeAmount(amountUsd: number): void {
+  if (!Number.isFinite(amountUsd) || amountUsd < 0) {
+    throw new Error("Wallet balance must be a nonnegative USD value.");
   }
 }
 
@@ -723,11 +633,17 @@ function normalizedFilledSize(
   return filledSizeUsd;
 }
 
-function tradeLedgerEntry(input: Omit<CustodyLedgerEntry, "entryId" | "source" | "externalRef">): CustodyLedgerEntry {
+function walletFundingBalance(input: Omit<WalletFundingBalance, "spendableUsd">): WalletFundingBalance {
+  const spendableUsd = input.walletBalanceUsd - input.reservedUsd;
+  return {
+    ...input,
+    spendableUsd: spendableUsd > 0 ? spendableUsd : 0,
+  };
+}
+
+function walletSpendLedgerEntry(input: Omit<WalletSpendLedgerEntry, "entryId">): WalletSpendLedgerEntry {
   return {
     ...input,
     entryId: randomUUID(),
-    source: null,
-    externalRef: null,
   };
 }

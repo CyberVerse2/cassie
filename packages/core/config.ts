@@ -269,18 +269,14 @@ export type PrivyEnv = {
   appId?: string;
   appSecret?: string;
   verificationKey?: string;
-  treasuryAddress?: string;
   authorizationPrivateKey?: string;
-  sweepChain: "base";
-  sweepAsset: "usdc";
-  minSweepUsd: number;
+  spendChain: "base";
+  spendAsset: "usdc";
 };
 
 export type RequiredPrivyEnv = PrivyEnv & {
   appId: string;
   appSecret: string;
-  treasuryAddress: string;
-  authorizationPrivateKey: string;
 };
 
 export function readPrivyEnv(env: EnvSource = process.env): PrivyEnv {
@@ -290,17 +286,13 @@ export function readPrivyEnv(env: EnvSource = process.env): PrivyEnv {
     PRIVY_APP_SECRET: configuredStringSchema,
     PRIVY_VERIFICATION_KEY: configuredStringSchema,
     PRIVY_AUTHORIZATION_PRIVATE_KEY: configuredStringSchema,
-    CASSIE_TREASURY_ADDRESS: configuredStringSchema,
-    PRIVY_MIN_SWEEP_USD: numberSchema("PRIVY_MIN_SWEEP_USD", 1, { min: 0 }),
   }).transform((values) => ({
     appId: firstConfigured(values.PRIVY_APP_ID, values.NEXT_PUBLIC_PRIVY_APP_ID),
     appSecret: values.PRIVY_APP_SECRET,
     verificationKey: values.PRIVY_VERIFICATION_KEY,
     authorizationPrivateKey: values.PRIVY_AUTHORIZATION_PRIVATE_KEY,
-    treasuryAddress: values.CASSIE_TREASURY_ADDRESS,
-    sweepChain: "base" as const,
-    sweepAsset: "usdc" as const,
-    minSweepUsd: values.PRIVY_MIN_SWEEP_USD,
+    spendChain: "base" as const,
+    spendAsset: "usdc" as const,
   })).parse(env);
 }
 
@@ -310,12 +302,6 @@ export function assertPrivyEnv(config: PrivyEnv): RequiredPrivyEnv {
   }
   if (!config.appSecret) {
     throw new MissingConnectorConfigError("Privy", "PRIVY_APP_SECRET");
-  }
-  if (!config.treasuryAddress) {
-    throw new MissingConnectorConfigError("Privy sweep", "CASSIE_TREASURY_ADDRESS");
-  }
-  if (!config.authorizationPrivateKey) {
-    throw new MissingConnectorConfigError("Privy sweep", "PRIVY_AUTHORIZATION_PRIVATE_KEY");
   }
   return config as RequiredPrivyEnv;
 }

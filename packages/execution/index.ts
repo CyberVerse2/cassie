@@ -1,4 +1,4 @@
-import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
+import type { ExecutionFundingSource, ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/connector-errors.ts";
 import {
   assertHyperliquidExecutionEnv,
@@ -18,13 +18,23 @@ import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { formatDecimal } from "./helpers/format.ts";
 
 export interface ExecutionClient {
-  execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>>;
+  execute(
+    ticket: TradeTicket,
+    context?: ExecutionContext,
+  ): Promise<NonNullable<ExecutionJob["executionResult"]>>;
 }
+
+export type ExecutionContext = {
+  funding?: ExecutionFundingSource;
+};
 
 export class WebhookExecutionClient implements ExecutionClient {
   constructor(private readonly endpoint = config.execution.webhookUrl) {}
 
-  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+  async execute(
+    ticket: TradeTicket,
+    context: ExecutionContext = {},
+  ): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     if (!this.endpoint) {
       throw new MissingConnectorConfigError("Execution worker", "EXECUTION_WEBHOOK_URL");
     }
@@ -32,7 +42,7 @@ export class WebhookExecutionClient implements ExecutionClient {
     const response = await fetch(this.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ticket }),
+      body: JSON.stringify({ ticket, funding: context.funding ?? null }),
     });
 
     const payload = await readJsonResponse<{
@@ -57,7 +67,14 @@ export class VenueExecutionClient implements ExecutionClient {
     private readonly polymarket = new PolymarketExecutionClient(),
   ) {}
 
-  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+  async execute(
+    ticket: TradeTicket,
+    context: ExecutionContext = {},
+  ): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+    if (context.funding?.type === "privy_user_wallet") {
+      throw new MissingConnectorConfigError("Permissioned user-wallet execution", "EXECUTION_WEBHOOK_URL");
+    }
+
     if (ticket.venue === "hyperliquid") {
       return this.hyperliquid.execute(ticket);
     }
@@ -79,7 +96,14 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     this.config = readHyperliquidExecutionEnv(undefined, options);
   }
 
-  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+  async execute(
+    ticket: TradeTicket,
+    context: ExecutionContext = {},
+  ): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+    if (context.funding?.type === "privy_user_wallet") {
+      throw new MissingConnectorConfigError("Permissioned Hyperliquid execution", "EXECUTION_WEBHOOK_URL");
+    }
+
     const config = assertHyperliquidExecutionEnv(this.config);
     const wallet = new EthersWallet(config.privateKey);
     const transport = new HttpTransport();
@@ -164,7 +188,14 @@ export class PolymarketExecutionClient implements ExecutionClient {
     this.factory = options.factory ?? createPolymarketSdkTradingClient;
   }
 
-  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+  async execute(
+    ticket: TradeTicket,
+    context: ExecutionContext = {},
+  ): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+    if (context.funding?.type === "privy_user_wallet") {
+      throw new MissingConnectorConfigError("Permissioned Polymarket execution", "EXECUTION_WEBHOOK_URL");
+    }
+
     const config = assertPolymarketExecutionEnv(this.config);
     const tokenId = ticket.venueData?.outcomeTokenId;
     if (!tokenId || !/^\d+$/.test(tokenId)) {

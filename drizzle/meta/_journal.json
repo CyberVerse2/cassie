@@ -69,7 +69,7 @@
       "idx": 9,
       "version": "7",
       "when": 1779930000000,
-      "tag": "0009_custody_sweep_ledger",
+      "tag": "0009_wallet_spend_ledger",
       "breakpoints": true
     },
     {

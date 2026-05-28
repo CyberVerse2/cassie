@@ -5,7 +5,7 @@ import {
   type PolymarketSdkTradingClientLike,
 } from "../packages/execution/index.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
-import type { TradeTicket } from "../packages/core/schemas/index.ts";
+import type { TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
 import { executeExecutionJob } from "../packages/jobs/execution-job.ts";
 import { createQueuedExecutionJob } from "../packages/jobs/state.ts";
 
@@ -24,6 +24,13 @@ const ticket: TradeTicket = {
   },
 };
 const builderCode = `0x${"a".repeat(64)}`;
+const settings: UserSettings = {
+  userId: "user_1",
+  privyUserId: "did:privy:user_1",
+  privyWalletId: "wallet_1",
+  walletAddress: "0x1111111111111111111111111111111111111111",
+  defaultTradeSizeUsd: 25,
+};
 
 describe("PolymarketExecutionClient", () => {
   it("uses the beta SDK client with configured credentials for market orders", async () => {
@@ -105,28 +112,30 @@ describe("PolymarketExecutionClient", () => {
   });
 });
 
-describe("managed custody execution", () => {
-  it("does not submit venue orders without swept user balance", async () => {
+describe("permissioned user-wallet execution", () => {
+  it("does not submit venue orders without enough wallet balance", async () => {
     const store = new InMemoryCassieStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     const executionClient: ExecutionClient = {
       execute: vi.fn(),
     };
+    const walletGateway = { getUsdcBalanceUsd: vi.fn().mockResolvedValue(10) };
 
+    await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient }))
-      .rejects.toThrow("Insufficient swept balance.");
+    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway }))
+      .rejects.toThrow("Insufficient user wallet balance.");
 
     expect(executionClient.execute).not.toHaveBeenCalled();
     await expect(store.getExecutionJob(job.jobId)).resolves.toMatchObject({
       status: "failed",
-      failureReason: "Insufficient swept balance.",
+      failureReason: "Insufficient user wallet balance.",
     });
   });
 
-  it("reserves swept balance before execution and settles filled trades", async () => {
+  it("reserves delegated wallet balance before execution and records spent trades", async () => {
     const store = new InMemoryCassieStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     const executionClient: ExecutionClient = {
@@ -136,59 +145,48 @@ describe("managed custody execution", () => {
         averagePrice: 0.5,
       }),
     };
+    const walletGateway = { getUsdcBalanceUsd: vi.fn().mockResolvedValue(100) };
 
-    await store.creditUserBalance({
-      userId: ticket.userId,
-      amountUsd: 100,
-      source: "privy_sweep",
-      externalRef: "sweep_1",
-    });
+    await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient });
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
     const state = await store.load();
 
     expect(result.status).toBe("succeeded");
-    expect(executionClient.execute).toHaveBeenCalledWith(ticket);
-    expect(state.custodyBalances[0]).toMatchObject({
-      userId: ticket.userId,
-      availableUsd: 75,
-      reservedUsd: 0,
+    expect(executionClient.execute).toHaveBeenCalledWith(ticket, {
+      funding: {
+        type: "privy_user_wallet",
+        userId: "user_1",
+        privyWalletId: "wallet_1",
+        walletAddress: "0x1111111111111111111111111111111111111111",
+        amountUsd: 25,
+      },
     });
-    expect(state.custodyLedgerEntries.map((entry) => entry.type)).toEqual([
-      "sweep_credit",
+    expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
       "trade_reserve",
-      "trade_settlement",
+      "trade_spend",
     ]);
   });
 
-  it("releases reserved balance when venue execution fails", async () => {
+  it("releases reserved wallet spend when venue execution fails", async () => {
     const store = new InMemoryCassieStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     const executionClient: ExecutionClient = {
       execute: vi.fn().mockRejectedValue(new Error("venue unavailable")),
     };
+    const walletGateway = { getUsdcBalanceUsd: vi.fn().mockResolvedValue(100) };
 
-    await store.creditUserBalance({
-      userId: ticket.userId,
-      amountUsd: 100,
-      source: "privy_sweep",
-    });
+    await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient }))
+    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway }))
       .rejects.toThrow("venue unavailable");
     const state = await store.load();
 
-    expect(state.custodyBalances[0]).toMatchObject({
-      userId: ticket.userId,
-      availableUsd: 100,
-      reservedUsd: 0,
-    });
-    expect(state.custodyLedgerEntries.map((entry) => entry.type)).toEqual([
-      "sweep_credit",
+    expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
       "trade_reserve",
       "trade_release",
     ]);

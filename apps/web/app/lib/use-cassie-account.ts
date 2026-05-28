@@ -8,9 +8,10 @@ import {
   type Wallet,
 } from "@privy-io/react-auth";
 
-type CustodyBalance = {
-  availableUsd: number;
+type WalletFundingBalance = {
+  walletBalanceUsd: number;
   reservedUsd: number;
+  spendableUsd: number;
 };
 
 type CassieAccount = {
@@ -19,7 +20,7 @@ type CassieAccount = {
   privyWalletId: string | null;
   walletAddress: string | null;
   defaultTradeSizeUsd: number;
-  balance: CustodyBalance | null;
+  balance: WalletFundingBalance | null;
 };
 
 type SyncInput = {

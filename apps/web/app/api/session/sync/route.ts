@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import {
+  accountResponse,
   accountSyncSchema,
   apiError,
   authenticatedContext,
@@ -11,24 +11,13 @@ export async function POST(request: Request) {
   try {
     const { claims, store } = await authenticatedContext(request);
     const body = accountSyncSchema.parse(await request.json());
-    const settings = await store.syncPrivyUser({
+    await store.syncPrivyUser({
       privyUserId: claims.user_id,
       privyWalletId: body.privyWalletId,
       walletAddress: body.walletAddress,
       defaultTradeSizeUsd: body.defaultTradeSizeUsd,
     });
-    const balance = await store.getCustodyBalance(settings.userId);
-
-    return NextResponse.json({
-      account: {
-        userId: settings.userId,
-        privyUserId: settings.privyUserId,
-        privyWalletId: settings.privyWalletId,
-        walletAddress: settings.walletAddress,
-        defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
-        balance: balance ?? null,
-      },
-    });
+    return accountResponse(claims.user_id, store);
   } catch (error) {
     return apiError(error);
   }

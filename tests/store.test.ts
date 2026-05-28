@@ -154,28 +154,49 @@ describe("InMemoryCassieStore", () => {
     expect((await store.load()).userSettings).toHaveLength(1);
   });
 
-  it("deduplicates swept balance credits by source and external reference", async () => {
+  it("tracks open delegated wallet spend reservations against live wallet balance", async () => {
     const store = new InMemoryCassieStore();
+    const ticket: TradeTicket = {
+      ticketId: "ticket_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "SOL may rally.",
+      venue: "hyperliquid",
+      instrument: "SOL",
+      side: "long",
+      sizeUsd: 50,
+      orderType: "marketable_limit",
+      venueData: {},
+    };
+    const job: ExecutionJob = {
+      jobId: "job_1",
+      ticketId: "ticket_1",
+      status: "running",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      updatedAt: "2026-05-21T00:00:00.000Z",
+      failureReason: null,
+      executionResult: null,
+    };
 
-    await store.creditUserBalance({
+    await store.reserveWalletSpend({ ticket, job, walletBalanceUsd: 100 });
+    expect(await store.getWalletFundingBalance("user_1", 100)).toMatchObject({
       userId: "user_1",
-      amountUsd: 100,
-      source: "privy_sweep",
-      externalRef: "transfer_1",
-    });
-    await store.creditUserBalance({
-      userId: "user_1",
-      amountUsd: 100,
-      source: "privy_sweep",
-      externalRef: "transfer_1",
+      walletBalanceUsd: 100,
+      reservedUsd: 50,
+      spendableUsd: 50,
     });
 
-    const snapshot = await store.load();
-    expect(snapshot.custodyBalances[0]).toMatchObject({
-      userId: "user_1",
-      availableUsd: 100,
+    await expect(store.reserveWalletSpend({
+      ticket: { ...ticket, ticketId: "ticket_2", sizeUsd: 75 },
+      job: { ...job, jobId: "job_2", ticketId: "ticket_2" },
+      walletBalanceUsd: 100,
+    })).rejects.toThrow("Insufficient user wallet balance.");
+
+    await store.releaseWalletSpend({ ticket, job, reason: "venue unavailable", walletBalanceUsd: 100 });
+    expect(await store.getWalletFundingBalance("user_1", 100)).toMatchObject({
+      walletBalanceUsd: 100,
       reservedUsd: 0,
+      spendableUsd: 100,
     });
-    expect(snapshot.custodyLedgerEntries).toHaveLength(1);
   });
 });

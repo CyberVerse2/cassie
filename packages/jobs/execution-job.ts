@@ -1,9 +1,10 @@
 import { config } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
+import { MissingConnectorConfigError } from "../core/helpers/connector-errors.ts";
+import type { ExecutionFundingSource, ExecutionJob, TradeTicket, UserSettings } from "../core/schemas/index.ts";
+import { PrivyAdapter, type PrivyWalletGateway } from "../adapters/privy/index.ts";
 import {
-  VenueExecutionClient,
   WebhookExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
@@ -19,6 +20,7 @@ export async function executeExecutionJob(input: {
   jobId: string;
   store?: CassieStore;
   executionClient?: ExecutionClient;
+  walletGateway?: Pick<PrivyWalletGateway, "getUsdcBalanceUsd">;
 }): Promise<ExecutionJob> {
   const store = input.store ?? new DrizzleCassieStore();
   const jobToRun = await store.getExecutionJob(input.jobId);
@@ -38,14 +40,30 @@ export async function executeExecutionJob(input: {
 
   let job = await store.updateExecutionJob(markExecutionRunning(jobToRun));
   const executionClient = input.executionClient ?? defaultExecutionClient();
-  let releaseReservationOnFailure = false;
+  const walletGateway = input.walletGateway ?? new PrivyAdapter();
+  let funding: ExecutionFundingSource | null = null;
+  let reservedWalletBalanceUsd: number | null = null;
+  let reservationOpen = false;
 
   try {
-    await store.reserveTradeFunds(ticket, job);
-    releaseReservationOnFailure = true;
-    const executionResult = await executionClient.execute(ticket);
-    releaseReservationOnFailure = false;
-    await store.settleTradeReservation({ ticket, job, executionResult });
+    const settings = await requiredUserSettings(store, ticket.userId);
+    funding = await reservePermissionedWalletSpend({
+      store,
+      walletGateway,
+      settings,
+      ticket,
+      job,
+    });
+    reservationOpen = true;
+    reservedWalletBalanceUsd = await walletGateway.getUsdcBalanceUsd(funding.privyWalletId);
+    const executionResult = await executionClient.execute(ticket, { funding });
+    await store.settleWalletSpend({
+      ticket,
+      job,
+      executionResult,
+      walletBalanceUsd: reservedWalletBalanceUsd,
+    });
+    reservationOpen = false;
     job = await store.updateExecutionJob(markExecutionSucceeded(job, executionResult));
     await store.audit({
       entityId: job.jobId,
@@ -56,11 +74,12 @@ export async function executeExecutionJob(input: {
     });
     return job;
   } catch (error) {
-    if (releaseReservationOnFailure) {
-      await store.releaseTradeReservation({
+    if (reservationOpen && funding && reservedWalletBalanceUsd != null) {
+      await store.releaseWalletSpend({
         ticket,
         job,
         reason: error instanceof Error ? error.message : String(error),
+        walletBalanceUsd: reservedWalletBalanceUsd,
       });
     }
     job = await store.updateExecutionJob(
@@ -119,9 +138,43 @@ export async function queueExecutionJob(input: {
 }
 
 function defaultExecutionClient(): ExecutionClient {
-  return config.execution.webhookUrl
-    ? new WebhookExecutionClient()
-    : new VenueExecutionClient();
+  if (!config.execution.webhookUrl) {
+    throw new MissingConnectorConfigError("Permissioned user-wallet execution", "EXECUTION_WEBHOOK_URL");
+  }
+  return new WebhookExecutionClient();
+}
+
+async function requiredUserSettings(store: CassieStore, userId: string): Promise<UserSettings> {
+  const settings = await store.getUserSettings(userId);
+  if (!settings) {
+    throw new Error(`User settings were not found for ${userId}.`);
+  }
+  if (!settings.privyWalletId || !settings.walletAddress) {
+    throw new Error("Trade execution requires a delegated Privy user wallet.");
+  }
+  return settings;
+}
+
+async function reservePermissionedWalletSpend(input: {
+  store: CassieStore;
+  walletGateway: Pick<PrivyWalletGateway, "getUsdcBalanceUsd">;
+  settings: UserSettings;
+  ticket: TradeTicket;
+  job: ExecutionJob;
+}): Promise<ExecutionFundingSource> {
+  const walletBalanceUsd = await input.walletGateway.getUsdcBalanceUsd(input.settings.privyWalletId!);
+  await input.store.reserveWalletSpend({
+    ticket: input.ticket,
+    job: input.job,
+    walletBalanceUsd,
+  });
+  return {
+    type: "privy_user_wallet",
+    userId: input.ticket.userId,
+    privyWalletId: input.settings.privyWalletId!,
+    walletAddress: input.settings.walletAddress!,
+    amountUsd: input.ticket.sizeUsd,
+  };
 }
 
 async function auditExecutionFailure(store: CassieStore, job: ExecutionJob): Promise<void> {

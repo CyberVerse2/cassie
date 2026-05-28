@@ -302,7 +302,7 @@ export default function Dashboard() {
         login={account.login}
         authenticated={account.authenticated}
       />
-      <Center balanceUsd={account.account?.balance?.availableUsd ?? 0} />
+      <Center balanceUsd={account.account?.balance?.spendableUsd ?? 0} />
       <Voice />
     </main>
   );
