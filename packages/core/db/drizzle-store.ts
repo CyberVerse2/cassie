@@ -1,8 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
   ControlRun,
+  CustodyBalance,
+  CustodyLedgerEntry,
   ExecutionJob,
   RunStep,
   SourcePost,
@@ -12,6 +14,8 @@ import type {
 import {
   auditEvents,
   controlRuns,
+  custodyBalances,
+  custodyLedgerEntries,
   executionJobs,
   mentions,
   runtimeState,
@@ -39,6 +43,8 @@ export class DrizzleCassieStore implements CassieStore {
       ticketRows,
       jobRows,
       auditRows,
+      custodyBalanceRows,
+      custodyLedgerRows,
       controlRunRows,
       stepRows,
       modelCallUsageRows,
@@ -48,6 +54,8 @@ export class DrizzleCassieStore implements CassieStore {
       this.db.select().from(tradeTickets),
       this.db.select().from(executionJobs),
       this.db.select().from(auditEvents),
+      this.db.select().from(custodyBalances),
+      this.db.select().from(custodyLedgerEntries),
       this.db.select().from(controlRuns),
       this.db.select().from(runSteps),
       this.db.select().from(modelCallUsage),
@@ -58,6 +66,15 @@ export class DrizzleCassieStore implements CassieStore {
       mentions: mentionRows,
       tradeTickets: ticketRows.map((row) => row.ticket),
       executionJobs: jobRows.map((row) => row.job),
+      custodyBalances: custodyBalanceRows,
+      custodyLedgerEntries: custodyLedgerRows.map((row) => ({
+        ...row,
+        ticketId: row.ticketId ?? null,
+        executionJobId: row.executionJobId ?? null,
+        source: row.source ?? null,
+        externalRef: row.externalRef ?? null,
+        metadata: row.metadata ?? null,
+      })),
       auditEvents: auditRows.map((row) => ({
         ...row,
         data: row.data ?? undefined,
@@ -327,6 +344,240 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.job;
   }
 
+  async creditUserBalance(input: {
+    userId: string;
+    amountUsd: number;
+    source: string;
+    externalRef?: string | null;
+    metadata?: unknown;
+  }): Promise<CustodyBalance> {
+    assertPositiveAmount(input.amountUsd);
+    return await this.db.transaction(async (tx) => {
+      const now = new Date().toISOString();
+      const balanceRows = await tx
+        .insert(custodyBalances)
+        .values({
+          userId: input.userId,
+          availableUsd: input.amountUsd,
+          reservedUsd: 0,
+          updatedAt: now,
+        })
+        .onConflictDoUpdate({
+          target: custodyBalances.userId,
+          set: {
+            availableUsd: sql`${custodyBalances.availableUsd} + ${input.amountUsd}`,
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      const balance = balanceRows[0];
+      if (!balance) {
+        throw new Error(`Unable to credit swept balance for user ${input.userId}.`);
+      }
+
+      await tx.insert(custodyLedgerEntries).values({
+        entryId: randomUUID(),
+        userId: input.userId,
+        type: "sweep_credit",
+        amountUsd: input.amountUsd,
+        ticketId: null,
+        executionJobId: null,
+        source: input.source,
+        externalRef: input.externalRef ?? null,
+        metadata: input.metadata ?? null,
+        createdAt: now,
+      });
+      return balance;
+    });
+  }
+
+  async getCustodyBalance(userId: string): Promise<CustodyBalance | undefined> {
+    const rows = await this.db
+      .select()
+      .from(custodyBalances)
+      .where(eq(custodyBalances.userId, userId))
+      .limit(1);
+
+    return rows[0];
+  }
+
+  async reserveTradeFunds(ticket: TradeTicket, job: ExecutionJob): Promise<CustodyBalance> {
+    assertPositiveAmount(ticket.sizeUsd);
+    return await this.db.transaction(async (tx) => {
+      const existingReserve = await tx
+        .select()
+        .from(custodyLedgerEntries)
+        .where(and(
+          eq(custodyLedgerEntries.type, "trade_reserve"),
+          eq(custodyLedgerEntries.executionJobId, job.jobId),
+        ))
+        .limit(1);
+      if (existingReserve[0]) {
+        const existingBalance = await tx
+          .select()
+          .from(custodyBalances)
+          .where(eq(custodyBalances.userId, ticket.userId))
+          .limit(1);
+        if (!existingBalance[0]) throw new Error(`No swept balance found for user ${ticket.userId}.`);
+        return existingBalance[0];
+      }
+
+      const now = new Date().toISOString();
+      const balanceRows = await tx
+        .update(custodyBalances)
+        .set({
+          availableUsd: sql`${custodyBalances.availableUsd} - ${ticket.sizeUsd}`,
+          reservedUsd: sql`${custodyBalances.reservedUsd} + ${ticket.sizeUsd}`,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(custodyBalances.userId, ticket.userId),
+          gte(custodyBalances.availableUsd, ticket.sizeUsd),
+        ))
+        .returning();
+      const balance = balanceRows[0];
+      if (!balance) {
+        throw new Error("Insufficient swept balance.");
+      }
+
+      await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+        userId: ticket.userId,
+        type: "trade_reserve",
+        amountUsd: ticket.sizeUsd,
+        ticketId: ticket.ticketId,
+        executionJobId: job.jobId,
+        metadata: { venue: ticket.venue, instrument: ticket.instrument, side: ticket.side },
+        createdAt: now,
+      }));
+      return balance;
+    });
+  }
+
+  async releaseTradeReservation(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    reason: string;
+  }): Promise<CustodyBalance> {
+    return await this.db.transaction(async (tx) => {
+      const existingRelease = await tx
+        .select()
+        .from(custodyLedgerEntries)
+        .where(and(
+          eq(custodyLedgerEntries.type, "trade_release"),
+          eq(custodyLedgerEntries.executionJobId, input.job.jobId),
+        ))
+        .limit(1);
+      if (existingRelease[0]) {
+        const existingBalance = await tx
+          .select()
+          .from(custodyBalances)
+          .where(eq(custodyBalances.userId, input.ticket.userId))
+          .limit(1);
+        if (!existingBalance[0]) throw new Error(`No swept balance found for user ${input.ticket.userId}.`);
+        return existingBalance[0];
+      }
+
+      const now = new Date().toISOString();
+      const balanceRows = await tx
+        .update(custodyBalances)
+        .set({
+          availableUsd: sql`${custodyBalances.availableUsd} + ${input.ticket.sizeUsd}`,
+          reservedUsd: sql`${custodyBalances.reservedUsd} - ${input.ticket.sizeUsd}`,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(custodyBalances.userId, input.ticket.userId),
+          gte(custodyBalances.reservedUsd, input.ticket.sizeUsd),
+        ))
+        .returning();
+      const balance = balanceRows[0];
+      if (!balance) {
+        throw new Error("Cannot release a missing trade reservation.");
+      }
+
+      await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+        userId: input.ticket.userId,
+        type: "trade_release",
+        amountUsd: input.ticket.sizeUsd,
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: { reason: input.reason },
+        createdAt: now,
+      }));
+      return balance;
+    });
+  }
+
+  async settleTradeReservation(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    executionResult: NonNullable<ExecutionJob["executionResult"]>;
+  }): Promise<CustodyBalance> {
+    return await this.db.transaction(async (tx) => {
+      const existingSettlement = await tx
+        .select()
+        .from(custodyLedgerEntries)
+        .where(and(
+          eq(custodyLedgerEntries.type, "trade_settlement"),
+          eq(custodyLedgerEntries.executionJobId, input.job.jobId),
+        ))
+        .limit(1);
+      if (existingSettlement[0]) {
+        const existingBalance = await tx
+          .select()
+          .from(custodyBalances)
+          .where(eq(custodyBalances.userId, input.ticket.userId))
+          .limit(1);
+        if (!existingBalance[0]) throw new Error(`No swept balance found for user ${input.ticket.userId}.`);
+        return existingBalance[0];
+      }
+
+      const filledSizeUsd = normalizedFilledSize(input.ticket, input.executionResult);
+      const releaseUsd = input.ticket.sizeUsd - filledSizeUsd;
+      const now = new Date().toISOString();
+      const balanceRows = await tx
+        .update(custodyBalances)
+        .set({
+          availableUsd: sql`${custodyBalances.availableUsd} + ${releaseUsd}`,
+          reservedUsd: sql`${custodyBalances.reservedUsd} - ${input.ticket.sizeUsd}`,
+          updatedAt: now,
+        })
+        .where(and(
+          eq(custodyBalances.userId, input.ticket.userId),
+          gte(custodyBalances.reservedUsd, input.ticket.sizeUsd),
+        ))
+        .returning();
+      const balance = balanceRows[0];
+      if (!balance) {
+        throw new Error("Cannot settle a missing trade reservation.");
+      }
+
+      await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+        userId: input.ticket.userId,
+        type: "trade_settlement",
+        amountUsd: filledSizeUsd,
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: input.executionResult,
+        createdAt: now,
+      }));
+
+      if (releaseUsd > 0) {
+        await tx.insert(custodyLedgerEntries).values(tradeLedgerEntry({
+          userId: input.ticket.userId,
+          type: "trade_release",
+          amountUsd: releaseUsd,
+          ticketId: input.ticket.ticketId,
+          executionJobId: input.job.jobId,
+          metadata: { reason: "unfilled_order_amount" },
+          createdAt: now,
+        }));
+      }
+      return balance;
+    });
+  }
+
   async listTradeTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
     const ticketRows = await this.db
       .select()
@@ -395,4 +646,33 @@ export class DrizzleCassieStore implements CassieStore {
     await this.db.insert(auditEvents).values(event);
     return event;
   }
+}
+
+function assertPositiveAmount(amountUsd: number): void {
+  if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+    throw new Error("Custody amount must be a positive USD value.");
+  }
+}
+
+function normalizedFilledSize(
+  ticket: TradeTicket,
+  executionResult: NonNullable<ExecutionJob["executionResult"]>,
+): number {
+  const filledSizeUsd = executionResult.filledSizeUsd;
+  if (!Number.isFinite(filledSizeUsd) || filledSizeUsd < 0) {
+    throw new Error("Execution result filledSizeUsd must be nonnegative.");
+  }
+  if (filledSizeUsd > ticket.sizeUsd) {
+    throw new Error("Execution result filled more than the reserved ticket size.");
+  }
+  return filledSizeUsd;
+}
+
+function tradeLedgerEntry(input: Omit<CustodyLedgerEntry, "entryId" | "source" | "externalRef">): CustodyLedgerEntry {
+  return {
+    ...input,
+    entryId: randomUUID(),
+    source: null,
+    externalRef: null,
+  };
 }

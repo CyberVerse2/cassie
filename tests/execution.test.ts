@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
-import { PolymarketExecutionClient, type PolymarketSdkTradingClientLike } from "../packages/execution/index.ts";
+import {
+  PolymarketExecutionClient,
+  type ExecutionClient,
+  type PolymarketSdkTradingClientLike,
+} from "../packages/execution/index.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { TradeTicket } from "../packages/core/schemas/index.ts";
+import { executeExecutionJob } from "../packages/jobs/execution-job.ts";
+import { createQueuedExecutionJob } from "../packages/jobs/state.ts";
 
 const ticket: TradeTicket = {
   ticketId: "ticket_1",
@@ -95,5 +102,95 @@ describe("PolymarketExecutionClient", () => {
 
     await expect(client.execute(ticket))
       .rejects.toThrow("POLYMARKET_RELAYER_API_KEY, POLYMARKET_RELAYER_API_KEY_ADDRESS");
+  });
+});
+
+describe("managed custody execution", () => {
+  it("does not submit venue orders without swept user balance", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn(),
+    };
+
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient }))
+      .rejects.toThrow("Insufficient swept balance.");
+
+    expect(executionClient.execute).not.toHaveBeenCalled();
+    await expect(store.getExecutionJob(job.jobId)).resolves.toMatchObject({
+      status: "failed",
+      failureReason: "Insufficient swept balance.",
+    });
+  });
+
+  it("reserves swept balance before execution and settles filled trades", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn().mockResolvedValue({
+        venueOrderId: "venue_order_1",
+        filledSizeUsd: 25,
+        averagePrice: 0.5,
+      }),
+    };
+
+    await store.creditUserBalance({
+      userId: ticket.userId,
+      amountUsd: 100,
+      source: "privy_sweep",
+      externalRef: "sweep_1",
+    });
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient });
+    const state = await store.load();
+
+    expect(result.status).toBe("succeeded");
+    expect(executionClient.execute).toHaveBeenCalledWith(ticket);
+    expect(state.custodyBalances[0]).toMatchObject({
+      userId: ticket.userId,
+      availableUsd: 75,
+      reservedUsd: 0,
+    });
+    expect(state.custodyLedgerEntries.map((entry) => entry.type)).toEqual([
+      "sweep_credit",
+      "trade_reserve",
+      "trade_settlement",
+    ]);
+  });
+
+  it("releases reserved balance when venue execution fails", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn().mockRejectedValue(new Error("venue unavailable")),
+    };
+
+    await store.creditUserBalance({
+      userId: ticket.userId,
+      amountUsd: 100,
+      source: "privy_sweep",
+    });
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient }))
+      .rejects.toThrow("venue unavailable");
+    const state = await store.load();
+
+    expect(state.custodyBalances[0]).toMatchObject({
+      userId: ticket.userId,
+      availableUsd: 100,
+      reservedUsd: 0,
+    });
+    expect(state.custodyLedgerEntries.map((entry) => entry.type)).toEqual([
+      "sweep_credit",
+      "trade_reserve",
+      "trade_release",
+    ]);
   });
 });

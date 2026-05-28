@@ -1,8 +1,4 @@
 import {
-  HyperliquidAccountStateProvider,
-  type AccountStateProvider,
-} from "../adapters/hyperliquid/account-state.ts";
-import {
   type ExecutionClient,
 } from "../execution/index.ts";
 import {
@@ -25,9 +21,11 @@ export class CassieProduct {
   constructor(
     private readonly store: CassieStore = new DrizzleCassieStore(),
     private readonly executionClient: ExecutionClient | null = null,
-    private readonly accountStateProvider: AccountStateProvider | undefined = new HyperliquidAccountStateProvider(),
+    _legacyAccountStateProvider: unknown = undefined,
     private readonly jobQueue: CassieJobQueue = new GraphileExecutionJobQueue(),
-  ) {}
+  ) {
+    void _legacyAccountStateProvider;
+  }
 
   async upsertSettings(settings: UserSettings): Promise<UserSettings> {
     await this.store.upsertUserSettings(settings);
@@ -89,7 +87,6 @@ export class CassieProduct {
       jobId: queuedJob.jobId,
       store: this.store,
       executionClient: this.executionClient ?? undefined,
-      accountStateProvider: this.accountProvider(),
     });
     return { processed: true, job };
   }
@@ -102,7 +99,4 @@ export class CassieProduct {
     });
   }
 
-  private accountProvider(): AccountStateProvider {
-    return this.accountStateProvider ?? new HyperliquidAccountStateProvider();
-  }
 }

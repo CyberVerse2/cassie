@@ -358,6 +358,33 @@ export const AccountStateSchema = z.object({
   openOrdersUsd: z.number().nonnegative(),
 });
 
+export const CustodyBalanceSchema = z.object({
+  userId: z.string(),
+  availableUsd: z.number().nonnegative(),
+  reservedUsd: z.number().nonnegative(),
+  updatedAt: z.string(),
+});
+
+export const CustodyLedgerEntryTypeSchema = z.enum([
+  "sweep_credit",
+  "trade_reserve",
+  "trade_release",
+  "trade_settlement",
+]);
+
+export const CustodyLedgerEntrySchema = z.object({
+  entryId: z.string(),
+  userId: z.string(),
+  type: CustodyLedgerEntryTypeSchema,
+  amountUsd: z.number().nonnegative(),
+  ticketId: z.string().nullable(),
+  executionJobId: z.string().nullable(),
+  source: z.string().nullable(),
+  externalRef: z.string().nullable(),
+  metadata: z.unknown().nullable(),
+  createdAt: z.string(),
+});
+
 export const TradeTicketSchema = z.object({
   ticketId: z.string(),
   runId: z.string().nullable().optional(),
@@ -481,6 +508,8 @@ export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSc
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type CassieActionState = z.infer<typeof CassieActionStateSchema>;
 export type AccountState = z.infer<typeof AccountStateSchema>;
+export type CustodyBalance = z.infer<typeof CustodyBalanceSchema>;
+export type CustodyLedgerEntry = z.infer<typeof CustodyLedgerEntrySchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;
 export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;

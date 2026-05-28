@@ -18,13 +18,13 @@ import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { formatDecimal } from "./helpers/format.ts";
 
 export interface ExecutionClient {
-  execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]>;
+  execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>>;
 }
 
 export class WebhookExecutionClient implements ExecutionClient {
   constructor(private readonly endpoint = config.execution.webhookUrl) {}
 
-  async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
+  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     if (!this.endpoint) {
       throw new MissingConnectorConfigError("Execution worker", "EXECUTION_WEBHOOK_URL");
     }
@@ -57,7 +57,7 @@ export class VenueExecutionClient implements ExecutionClient {
     private readonly polymarket = new PolymarketExecutionClient(),
   ) {}
 
-  async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
+  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     if (ticket.venue === "hyperliquid") {
       return this.hyperliquid.execute(ticket);
     }
@@ -79,7 +79,7 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     this.config = readHyperliquidExecutionEnv(undefined, options);
   }
 
-  async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
+  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     const config = assertHyperliquidExecutionEnv(this.config);
     const wallet = new EthersWallet(config.privateKey);
     const transport = new HttpTransport();
@@ -164,7 +164,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
     this.factory = options.factory ?? createPolymarketSdkTradingClient;
   }
 
-  async execute(ticket: TradeTicket): Promise<ExecutionJob["executionResult"]> {
+  async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     const config = assertPolymarketExecutionEnv(this.config);
     const tokenId = ticket.venueData?.outcomeTokenId;
     if (!tokenId || !/^\d+$/.test(tokenId)) {

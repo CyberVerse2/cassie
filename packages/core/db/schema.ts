@@ -2,6 +2,7 @@ import { index, integer, jsonb, pgTable, real, text } from "drizzle-orm/pg-core"
 import type {
   AuditEvent,
   ControlRun,
+  CustodyLedgerEntry,
   ExecutionJob,
   RunStep,
   SourcePost,
@@ -50,6 +51,30 @@ export const executionJobs = pgTable("execution_jobs", {
 }, (table) => [
   index("execution_jobs_status_updated_idx").on(table.status, table.updatedAt),
   index("execution_jobs_ticket_idx").on(table.ticketId),
+]);
+
+export const custodyBalances = pgTable("custody_balances", {
+  userId: text("user_id").primaryKey(),
+  availableUsd: real("available_usd").notNull(),
+  reservedUsd: real("reserved_usd").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});
+
+export const custodyLedgerEntries = pgTable("custody_ledger_entries", {
+  entryId: text("entry_id").primaryKey(),
+  userId: text("user_id").notNull(),
+  type: text("type").$type<CustodyLedgerEntry["type"]>().notNull(),
+  amountUsd: real("amount_usd").notNull(),
+  ticketId: text("ticket_id"),
+  executionJobId: text("execution_job_id"),
+  source: text("source"),
+  externalRef: text("external_ref"),
+  metadata: jsonb("metadata"),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  index("custody_ledger_user_created_idx").on(table.userId, table.createdAt),
+  index("custody_ledger_ticket_idx").on(table.ticketId),
+  index("custody_ledger_execution_job_idx").on(table.executionJobId),
 ]);
 
 export const auditEvents = pgTable("audit_events", {

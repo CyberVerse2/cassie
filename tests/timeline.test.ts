@@ -6,6 +6,8 @@ const snapshot: CassieStoreSnapshot = {
   mentions: [],
   tradeTickets: [],
   executionJobs: [],
+  custodyBalances: [],
+  custodyLedgerEntries: [],
   auditEvents: [],
   userSettings: [],
   controlRuns: [

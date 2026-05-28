@@ -3,10 +3,6 @@ import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import type { ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
 import {
-  HyperliquidAccountStateProvider,
-  type AccountStateProvider,
-} from "../adapters/hyperliquid/account-state.ts";
-import {
   VenueExecutionClient,
   WebhookExecutionClient,
   type ExecutionClient,
@@ -23,7 +19,6 @@ export async function executeExecutionJob(input: {
   jobId: string;
   store?: CassieStore;
   executionClient?: ExecutionClient;
-  accountStateProvider?: AccountStateProvider;
 }): Promise<ExecutionJob> {
   const store = input.store ?? new DrizzleCassieStore();
   const jobToRun = await store.getExecutionJob(input.jobId);
@@ -43,14 +38,14 @@ export async function executeExecutionJob(input: {
 
   let job = await store.updateExecutionJob(markExecutionRunning(jobToRun));
   const executionClient = input.executionClient ?? defaultExecutionClient();
+  let releaseReservationOnFailure = false;
 
   try {
-    await preflightExecution({
-      store,
-      ticket,
-      accountStateProvider: input.accountStateProvider,
-    });
+    await store.reserveTradeFunds(ticket, job);
+    releaseReservationOnFailure = true;
     const executionResult = await executionClient.execute(ticket);
+    releaseReservationOnFailure = false;
+    await store.settleTradeReservation({ ticket, job, executionResult });
     job = await store.updateExecutionJob(markExecutionSucceeded(job, executionResult));
     await store.audit({
       entityId: job.jobId,
@@ -61,6 +56,13 @@ export async function executeExecutionJob(input: {
     });
     return job;
   } catch (error) {
+    if (releaseReservationOnFailure) {
+      await store.releaseTradeReservation({
+        ticket,
+        job,
+        reason: error instanceof Error ? error.message : String(error),
+      });
+    }
     job = await store.updateExecutionJob(
       markExecutionFailed(job, error instanceof Error ? error.message : String(error)),
     );
@@ -114,23 +116,6 @@ export async function queueExecutionJob(input: {
     },
   });
   return job;
-}
-
-async function preflightExecution(input: {
-  store: CassieStore;
-  ticket: TradeTicket;
-  accountStateProvider?: AccountStateProvider;
-}): Promise<void> {
-  const userSettings = await input.store.getUserSettings(input.ticket.userId);
-  if (!userSettings) {
-    throw new Error(`No Cassie settings found for user ${input.ticket.userId}.`);
-  }
-
-  const accountState = await (input.accountStateProvider ?? new HyperliquidAccountStateProvider())
-    .getAccountState(userSettings);
-  if (input.ticket.sizeUsd > accountState.availableBalanceUsd) {
-    throw new Error("Insufficient available balance.");
-  }
 }
 
 function defaultExecutionClient(): ExecutionClient {

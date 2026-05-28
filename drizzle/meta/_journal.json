@@ -64,6 +64,13 @@
       "when": 1779925957000,
       "tag": "0008_cleanup_stale_trade_policy_data",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1779930000000,
+      "tag": "0009_custody_sweep_ledger",
+      "breakpoints": true
     }
   ]
 }
