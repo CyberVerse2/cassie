@@ -83,6 +83,18 @@
       ]
     },
     {
+      "url": "https://x.com/TrustlessState/status/2057523312821969182",
+      "current": false,
+      "authorName": "TrustlessState",
+      "handle": "@TrustlessState",
+      "avatarUrl": "https://unavatar.io/x/TrustlessState",
+      "date": null,
+      "text": null,
+      "cassiePrompt": "critic this",
+      "mediaUrls": [],
+      "unavailable": true
+    },
+    {
       "url": "https://x.com/aixbt_agent/status/2057597490518753671",
       "current": false,
       "authorName": "aixbt",
@@ -108,7 +120,7 @@
     },
     {
       "url": "https://x.com/SuiNetwork/status/2057560872390885473",
-      "current": true,
+      "current": false,
       "authorName": "Sui",
       "handle": "@SuiNetwork",
       "avatarUrl": "https://unavatar.io/x/SuiNetwork",
@@ -141,7 +153,7 @@
     },
     {
       "url": "https://x.com/lookonchain/status/2057648353681485873",
-      "current": false,
+      "current": true,
       "authorName": "Lookonchain",
       "handle": "@lookonchain",
       "avatarUrl": "https://unavatar.io/x/lookonchain",
@@ -241,52 +253,6 @@
       "avatarUrl": "https://unavatar.io/x/Kalshi_Crypto",
       "date": "May 21, 2026",
       "text": "BREAKING: Michael Saylor says 'Strategy' will likely sell Bitcoin this year",
-      "cassiePrompt": "watch this",
-      "mediaUrls": []
-    },
-    {
-      "url": "https://x.com/EmanAbio/status/2057930279629602924",
-      "current": false,
-      "authorName": "Adeniyi.sui",
-      "handle": "@EmanAbio",
-      "avatarUrl": "https://unavatar.io/x/EmanAbio",
-      "date": "May 22, 2026",
-      "text": "BREAKING💥\n\nPRIVATE TRANSACTIONS ARE COMING TO SUI MAINNET VERY, VERY SOON pic.twitter.com/2LxDIx3xXC",
-      "cassiePrompt": "trade this",
-      "mediaUrls": []
-    },
-    {
-      "url": "https://x.com/MTSlive/status/2058251131239952819",
-      "current": false,
-      "authorName": "MTS",
-      "handle": "@MTSlive",
-      "avatarUrl": "https://unavatar.io/x/MTSlive",
-      "date": "May 23, 2026",
-      "text": "AI adoption by industry, over time https://t.co/AzCI46ITFV pic.twitter.com/g5hDnzs56I",
-      "cassiePrompt": "fade this",
-      "mediaUrls": [
-        "https://pbs.twimg.com/media/HJBgfxfbgAAAgs7.jpg"
-      ]
-    },
-    {
-      "url": "https://x.com/icobeast/status/2058336375905108182",
-      "current": false,
-      "authorName": "IcoBeast.eth🦇🔊",
-      "handle": "@icobeast",
-      "avatarUrl": "https://unavatar.io/x/icobeast",
-      "date": "May 23, 2026",
-      "text": "Mental model for the next week or so:\n\nETH-based privacy coins keep going parabolic (RAIL already caught a bid, VEIL seems to be forgotten so far)\n\nAI-based winners keep running (NEAR/VVV-even if i dont like it/TAO/probably a bunch of ai-related shitters)\n\nKnicks win. Lose game…",
-      "cassiePrompt": "critic this",
-      "mediaUrls": []
-    },
-    {
-      "url": "https://x.com/sjdedic/status/2058137246436327728",
-      "current": false,
-      "authorName": "Simon Dedic",
-      "handle": "@sjdedic",
-      "avatarUrl": "https://unavatar.io/x/sjdedic",
-      "date": "May 23, 2026",
-      "text": "I've been an Ethereum supporter since the early days and I still believe it's one of the most important pieces of infrastructure in crypto. The tech is great, my conviction hasn't changed in that respect.\n\nBut watching 9 senior researchers and key operators leave the Ethereum…",
       "cassiePrompt": "watch this",
       "mediaUrls": []
     }

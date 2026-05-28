@@ -168,16 +168,28 @@ const watching = [
 const taggedTweetAges = ["2h", "5h", "11h", "1d", "2d", "3d"] as const;
 const taggedTweetPrompts = ["trade this", "fade this", "critic this", "watch this", "trade this", "fade this"] as const;
 
-const taggedTweets = tweetRun.tweets.slice(0, 6).map((tweet, index) => {
+type TestRunTweet = {
+  url: string;
+  current: boolean;
+  authorName?: string;
+  handle?: string;
+  avatarUrl?: string;
+  date?: string;
+  text?: string;
+  cassiePrompt?: string;
+};
+
+const taggedTweets = (tweetRun.tweets as TestRunTweet[]).slice(0, 6).map((tweet, index) => {
   const handle = xHandleFromUrl(tweet.url);
+  const displayHandle = tweet.handle ?? `@${handle}`;
   return {
     ...tweet,
-    authorName: handle,
-    handle: `@${handle}`,
-    avatarUrl: `https://unavatar.io/x/${handle}`,
-    age: taggedTweetAges[index]!,
-    cassiePrompt: taggedTweetPrompts[index]!,
-    preview: tweet.current ? "Latest tagged tweet ready for Cassie." : "Tagged tweet ready for Cassie.",
+    authorName: tweet.authorName ?? handle,
+    handle: displayHandle,
+    avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
+    age: tweet.date ?? taggedTweetAges[index]!,
+    cassiePrompt: tweet.cassiePrompt ?? taggedTweetPrompts[index]!,
+    preview: tweet.text ?? "Open the source tweet to view the original post.",
   };
 });
 

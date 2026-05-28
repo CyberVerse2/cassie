@@ -27,16 +27,28 @@ const replyUsers = [
 
 const streamTweetPrompts = ["trade this", "fade this", "critic this", "watch this"] as const;
 
-const streamTweets = tweetRun.tweets.map((tweet, index) => {
+type TestRunTweet = {
+  url: string;
+  current: boolean;
+  authorName?: string;
+  handle?: string;
+  avatarUrl?: string;
+  date?: string;
+  text?: string;
+  cassiePrompt?: string;
+};
+
+const streamTweets = (tweetRun.tweets as TestRunTweet[]).map((tweet, index) => {
   const handle = xHandleFromUrl(tweet.url);
+  const displayHandle = tweet.handle ?? `@${handle}`;
   return {
     ...tweet,
-    authorName: handle,
-    handle: `@${handle}`,
-    avatarUrl: `https://unavatar.io/x/${handle}`,
-    date: tweet.current ? "now" : `${index + 1}h`,
-    preview: tweet.current ? "Latest tagged tweet ready for Cassie." : "Tagged tweet ready for Cassie.",
-    cassiePrompt: streamTweetPrompts[index % streamTweetPrompts.length],
+    authorName: tweet.authorName ?? handle,
+    handle: displayHandle,
+    avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
+    date: tweet.date ?? (tweet.current ? "now" : `${index + 1}h`),
+    preview: tweet.text ?? "Open the source tweet to view the original post.",
+    cassiePrompt: tweet.cassiePrompt ?? streamTweetPrompts[index % streamTweetPrompts.length],
   };
 });
 
