@@ -15,9 +15,15 @@ import type {
 
 export const userSettings = pgTable("user_settings", {
   userId: text("user_id").primaryKey(),
+  privyUserId: text("privy_user_id"),
+  privyWalletId: text("privy_wallet_id"),
+  walletAddress: text("wallet_address"),
   settings: jsonb("settings").$type<UserSettings>().notNull(),
   updatedAt: text("updated_at").notNull(),
-});
+}, (table) => [
+  index("user_settings_privy_user_idx").on(table.privyUserId),
+  index("user_settings_privy_wallet_idx").on(table.privyWalletId),
+]);
 
 export const mentions = pgTable("mentions", {
   mentionId: text("mention_id").primaryKey(),

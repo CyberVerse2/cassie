@@ -64,6 +64,13 @@ export interface CassieStore {
   load(): Promise<CassieStoreSnapshot>;
   upsertUserSettings(settings: UserSettings): Promise<void>;
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
+  getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined>;
+  syncPrivyUser(input: {
+    privyUserId: string;
+    privyWalletId: string | null;
+    walletAddress: string | null;
+    defaultTradeSizeUsd?: number;
+  }): Promise<UserSettings>;
   createRun(input: {
     userId: string;
     userCommand: string;
@@ -138,6 +145,28 @@ export class InMemoryCassieStore implements CassieStore {
 
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
     return this.snapshot.userSettings.find((settings) => settings.userId === userId);
+  }
+
+  async getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined> {
+    return this.snapshot.userSettings.find((settings) => settings.privyUserId === privyUserId);
+  }
+
+  async syncPrivyUser(input: {
+    privyUserId: string;
+    privyWalletId: string | null;
+    walletAddress: string | null;
+    defaultTradeSizeUsd?: number;
+  }): Promise<UserSettings> {
+    const existing = await this.getUserSettingsByPrivyUserId(input.privyUserId);
+    const settings: UserSettings = {
+      userId: existing?.userId ?? input.privyUserId,
+      privyUserId: input.privyUserId,
+      privyWalletId: input.privyWalletId,
+      walletAddress: input.walletAddress,
+      defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+    };
+    await this.upsertUserSettings(settings);
+    return settings;
   }
 
   async createRun(input: {
@@ -275,6 +304,12 @@ export class InMemoryCassieStore implements CassieStore {
     metadata?: unknown;
   }): Promise<CustodyBalance> {
     assertPositiveAmount(input.amountUsd);
+    if (input.externalRef && this.hasCustodyCredit(input.source, input.externalRef)) {
+      const existing = await this.getCustodyBalance(input.userId);
+      if (!existing) throw new Error(`No swept balance found for user ${input.userId}.`);
+      return existing;
+    }
+
     const now = new Date().toISOString();
     const balance = this.snapshot.custodyBalances.find((candidate) => candidate.userId === input.userId);
     const updated: CustodyBalance = {
@@ -461,6 +496,12 @@ export class InMemoryCassieStore implements CassieStore {
   private hasCustodyEntry(type: CustodyLedgerEntry["type"], executionJobId: string): boolean {
     return this.snapshot.custodyLedgerEntries.some((entry) =>
       entry.type === type && entry.executionJobId === executionJobId
+    );
+  }
+
+  private hasCustodyCredit(source: string, externalRef: string): boolean {
+    return this.snapshot.custodyLedgerEntries.some((entry) =>
+      entry.type === "sweep_credit" && entry.source === source && entry.externalRef === externalRef
     );
   }
 }

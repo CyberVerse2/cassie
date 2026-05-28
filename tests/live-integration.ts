@@ -69,6 +69,8 @@ liveDescribe("live integration", () => {
 
     const settings: UserSettings = {
       userId,
+      privyUserId: null,
+      privyWalletId: null,
       walletAddress: null,
       defaultTradeSizeUsd: 25,
     };

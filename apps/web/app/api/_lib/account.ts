@@ -1,0 +1,42 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import { authenticatePrivyRequest } from "../../../../../packages/adapters/privy";
+import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
+
+export const accountSyncSchema = z.object({
+  walletAddress: z.string().min(1).nullable(),
+  privyWalletId: z.string().min(1).nullable(),
+  defaultTradeSizeUsd: z.number().positive().optional(),
+});
+
+export async function authenticatedContext(request: Request) {
+  const claims = await authenticatePrivyRequest(request);
+  return {
+    claims,
+    store: new DrizzleCassieStore(),
+  };
+}
+
+export async function accountResponse(privyUserId: string, store = new DrizzleCassieStore()) {
+  const settings = await store.getUserSettingsByPrivyUserId(privyUserId);
+  if (!settings) {
+    return NextResponse.json({ account: null }, { status: 404 });
+  }
+
+  const balance = await store.getCustodyBalance(settings.userId);
+  return NextResponse.json({
+    account: {
+      userId: settings.userId,
+      privyUserId: settings.privyUserId,
+      privyWalletId: settings.privyWalletId,
+      walletAddress: settings.walletAddress,
+      defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
+      balance: balance ?? null,
+    },
+  });
+}
+
+export function apiError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return NextResponse.json({ error: message }, { status: 400 });
+}

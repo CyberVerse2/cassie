@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { EB_Garamond, Manrope } from "next/font/google";
+import { AppProviders } from "./providers";
 import "./globals.css";
 
 const garamond = EB_Garamond({
@@ -28,7 +29,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${garamond.variable} ${manrope.variable}`}>
-      <body>{children}</body>
+      <body>
+        <AppProviders>{children}</AppProviders>
+      </body>
     </html>
   );
 }

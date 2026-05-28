@@ -2,10 +2,8 @@
 
 import { useState } from "react";
 import { StyledQR } from "../components/styled-qr";
+import { useCassieAccount } from "../lib/use-cassie-account";
 import s from "./onboarding.module.css";
-
-const baseDepositAddress = "0x193c2109089dd260811f1852c9b1521d6ccf1c6b";
-const baseDepositUri = `ethereum:${baseDepositAddress}@8453`;
 
 const steps = [
   { id: "welcome", label: "Welcome" },
@@ -18,6 +16,7 @@ type StepId = (typeof steps)[number]["id"];
 
 export default function OnboardingPage() {
   const [stepId, setStepId] = useState<StepId>("welcome");
+  const account = useCassieAccount();
   const currentIndex = steps.findIndex((s) => s.id === stepId);
   const goto = (id: StepId) => setStepId(id);
   const next = () => {
@@ -48,11 +47,18 @@ export default function OnboardingPage() {
       </header>
 
       <section className={s.frame} key={stepId}>
-        {stepId === "welcome" && <StepWelcome onNext={next} />}
+        {stepId === "welcome" && <StepWelcome onNext={next} login={account.login} authenticated={account.authenticated} />}
         {stepId === "fund" && (
-          <StepFund onSkip={() => goto("defaults")} onNext={next} />
+          <StepFund
+            onSkip={() => goto("defaults")}
+            onNext={next}
+            prepareAccount={account.prepareAccount}
+            walletAddress={account.walletAddress}
+            status={account.status}
+            error={account.error}
+          />
         )}
-        {stepId === "defaults" && <StepDefaults onNext={next} />}
+        {stepId === "defaults" && <StepDefaults onNext={next} syncAccount={account.prepareAccount} />}
         {stepId === "first" && <StepFirstMention />}
       </section>
     </main>
@@ -89,7 +95,15 @@ function Stepper({
   );
 }
 
-function StepWelcome({ onNext }: { onNext: () => void }) {
+function StepWelcome({
+  onNext,
+  login,
+  authenticated,
+}: {
+  onNext: () => void;
+  login: () => void;
+  authenticated: boolean;
+}) {
   return (
     <div className={s.step}>
       <span className={s.eyebrow}>You're in</span>
@@ -101,7 +115,17 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
         <em>Hyperliquid</em>, <em>Polymarket</em>, and more.
       </p>
       <div className={s.ctaRow}>
-        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onNext}>
+        <button
+          type="button"
+          className={`${s.btn} ${s.btnPrimary}`}
+          onClick={() => {
+            if (!authenticated) {
+              login();
+              return;
+            }
+            onNext();
+          }}
+        >
           Begin
           <span className={s.arrow} aria-hidden>→</span>
         </button>
@@ -110,14 +134,35 @@ function StepWelcome({ onNext }: { onNext: () => void }) {
   );
 }
 
-function StepFund({ onSkip, onNext }: { onSkip: () => void; onNext: () => void }) {
+function StepFund({
+  onSkip,
+  onNext,
+  prepareAccount,
+  walletAddress,
+  status,
+  error,
+}: {
+  onSkip: () => void;
+  onNext: () => void;
+  prepareAccount: () => Promise<unknown>;
+  walletAddress: string | null;
+  status: "idle" | "loading" | "error";
+  error: string | null;
+}) {
   const [copied, setCopied] = useState(false);
-  const short = `${baseDepositAddress.slice(0, 6)}…${baseDepositAddress.slice(-4)}`;
+  const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
+  const short = walletAddress ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}` : "Creating wallet";
 
   async function copy() {
+    if (!walletAddress) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
-    await window.navigator.clipboard.writeText(baseDepositAddress);
+    await window.navigator.clipboard.writeText(walletAddress);
+  }
+
+  async function continueAfterSetup() {
+    const prepared = await prepareAccount();
+    if (prepared) onNext();
   }
 
   return (
@@ -132,17 +177,17 @@ function StepFund({ onSkip, onNext }: { onSkip: () => void; onNext: () => void }
 
       <div className={s.fundCard}>
         <div className={s.qrWrap}>
-          <StyledQR data={baseDepositUri} size={196} />
+          {depositUri ? <StyledQR data={depositUri} size={196} /> : <span className={s.fundLabel}>Wallet pending</span>}
         </div>
         <div className={s.fundMeta}>
           <span className={s.fundLabel}>Your Base wallet</span>
           <span className={s.fundAddress}>{short}</span>
-          <button type="button" className={s.fundCopy} onClick={copy}>
+          <button type="button" className={s.fundCopy} onClick={copy} disabled={!walletAddress}>
             {copied ? "Copied" : "Copy address"}
           </button>
           <span className={s.fundStatus}>
             <span className={s.fundPulse} aria-hidden />
-            Watching for USDC on Base
+            {error ?? "Watching for USDC on Base"}
           </span>
         </div>
       </div>
@@ -151,8 +196,8 @@ function StepFund({ onSkip, onNext }: { onSkip: () => void; onNext: () => void }
         <button type="button" className={`${s.btn} ${s.btnGhost}`} onClick={onSkip}>
           I'll do this later
         </button>
-        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onNext}>
-          Continue
+        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={continueAfterSetup} disabled={status === "loading"}>
+          {status === "loading" ? "Preparing" : "Continue"}
           <span className={s.arrow} aria-hidden>→</span>
         </button>
       </div>
@@ -162,8 +207,19 @@ function StepFund({ onSkip, onNext }: { onSkip: () => void; onNext: () => void }
 
 const presets = [25, 50, 100, 250];
 
-function StepDefaults({ onNext }: { onNext: () => void }) {
+function StepDefaults({
+  onNext,
+  syncAccount,
+}: {
+  onNext: () => void;
+  syncAccount: (input?: { defaultTradeSizeUsd?: number }) => Promise<unknown>;
+}) {
   const [value, setValue] = useState("50");
+
+  async function save() {
+    await syncAccount({ defaultTradeSizeUsd: Number(value) });
+    onNext();
+  }
 
   return (
     <div className={s.step}>
@@ -207,7 +263,7 @@ function StepDefaults({ onNext }: { onNext: () => void }) {
       </p>
 
       <div className={s.ctaRow}>
-        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onNext}>
+        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={save}>
           Save & continue
           <span className={s.arrow} aria-hidden>→</span>
         </button>

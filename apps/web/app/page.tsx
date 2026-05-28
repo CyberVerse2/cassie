@@ -1,4 +1,5 @@
 import tweetRun from "../../../docs/test-run-tweets.json";
+import { xHandleFromUrl } from "./lib/x-post";
 
 const replyUsers = [
   {
@@ -23,10 +24,20 @@ const replyUsers = [
   },
 ];
 
-const streamTweets = tweetRun.tweets.map((tweet) => ({
-  ...tweet,
-  preview: shortenTweet(tweet.text, tweet.mediaUrls.length > 0),
-}));
+const streamTweetPrompts = ["trade this", "fade this", "critic this", "watch this"] as const;
+
+const streamTweets = tweetRun.tweets.map((tweet, index) => {
+  const handle = xHandleFromUrl(tweet.url);
+  return {
+    ...tweet,
+    authorName: handle,
+    handle: `@${handle}`,
+    avatarUrl: `https://unavatar.io/x/${handle}`,
+    date: tweet.current ? "now" : `${index + 1}h`,
+    preview: tweet.current ? "Latest tagged tweet ready for Cassie." : "Tagged tweet ready for Cassie.",
+    cassiePrompt: streamTweetPrompts[index % streamTweetPrompts.length],
+  };
+});
 
 const midpoint = Math.ceil(streamTweets.length / 2);
 const tweetsLeft = streamTweets.slice(0, midpoint);
@@ -117,7 +128,6 @@ type TweetData = {
   url: string;
   current: boolean;
   cassiePrompt: string;
-  mediaUrls: string[];
 };
 
 function Stream({ side, tweets }: { side: "left" | "right"; tweets: TweetData[] }) {
@@ -145,11 +155,8 @@ function TweetCard({
   url,
   current,
   cassiePrompt,
-  mediaUrls,
   replyUser,
 }: TweetData & { replyUser: ReplyUser }) {
-  const [mediaUrl] = mediaUrls;
-
   return (
     <article className={`tweet${current ? " tweet-current" : ""}`}>
       <header className="tweet-head">
@@ -162,15 +169,6 @@ function TweetCard({
         </div>
       </header>
       <p className="tweet-body">{preview}</p>
-      {mediaUrl && (
-        <img
-          className="tweet-media"
-          src={mediaUrl}
-          alt=""
-          aria-hidden
-          loading="lazy"
-        />
-      )}
       <div className="tweet-reply">
         <img
           className="reply-avatar"
@@ -190,18 +188,4 @@ function TweetCard({
       <a className="tweet-link" href={url} aria-label={`Open tweet by ${authorName}`} />
     </article>
   );
-}
-
-function shortenTweet(text: string, hasMedia: boolean) {
-  const clean = text
-    .replace(/https:\/\/t\.co\/\S+/g, "")
-    .replace(/pic\.twitter\.com\/\S+/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  const maxLength = hasMedia ? 118 : 170;
-
-  return clean.length > maxLength
-    ? `${clean.slice(0, maxLength - 3).trim()}...`
-    : clean;
 }

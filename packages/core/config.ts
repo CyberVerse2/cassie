@@ -71,6 +71,7 @@ export type CassieRuntimeConfig = {
     hyperliquid: HyperliquidExecutionEnv;
     polymarket: PolymarketExecutionEnv;
   };
+  privy: PrivyEnv;
   terminal: {
     debug: boolean;
     noColor: boolean;
@@ -184,6 +185,7 @@ export function readCassieConfig(
       hyperliquid: readHyperliquidExecutionEnv(env),
       polymarket: readPolymarketExecutionEnv(env),
     },
+    privy: readPrivyEnv(env),
     terminal: {
       debug: optionalEnv("DEBUG", env) != null,
       noColor: optionalEnv("NO_COLOR", env) != null,
@@ -262,6 +264,65 @@ export type PolymarketExecutionEnvOptions = {
   relayerApiKey?: string;
   relayerApiKeyAddress?: string;
 };
+
+export type PrivyEnv = {
+  appId?: string;
+  appSecret?: string;
+  verificationKey?: string;
+  treasuryAddress?: string;
+  authorizationPrivateKey?: string;
+  sweepChain: "base";
+  sweepAsset: "usdc";
+  minSweepUsd: number;
+};
+
+export type RequiredPrivyEnv = PrivyEnv & {
+  appId: string;
+  appSecret: string;
+  verificationKey: string;
+  treasuryAddress: string;
+  authorizationPrivateKey: string;
+};
+
+export function readPrivyEnv(env: EnvSource = process.env): PrivyEnv {
+  return z.object({
+    PRIVY_APP_ID: configuredStringSchema,
+    NEXT_PUBLIC_PRIVY_APP_ID: configuredStringSchema,
+    PRIVY_APP_SECRET: configuredStringSchema,
+    PRIVY_VERIFICATION_KEY: configuredStringSchema,
+    PRIVY_AUTHORIZATION_PRIVATE_KEY: configuredStringSchema,
+    CASSIE_TREASURY_ADDRESS: configuredStringSchema,
+    PRIVY_MIN_SWEEP_USD: numberSchema("PRIVY_MIN_SWEEP_USD", 1, { min: 0 }),
+  }).transform((values) => ({
+    appId: firstConfigured(values.PRIVY_APP_ID, values.NEXT_PUBLIC_PRIVY_APP_ID),
+    appSecret: values.PRIVY_APP_SECRET,
+    verificationKey: values.PRIVY_VERIFICATION_KEY,
+    authorizationPrivateKey: values.PRIVY_AUTHORIZATION_PRIVATE_KEY,
+    treasuryAddress: values.CASSIE_TREASURY_ADDRESS,
+    sweepChain: "base" as const,
+    sweepAsset: "usdc" as const,
+    minSweepUsd: values.PRIVY_MIN_SWEEP_USD,
+  })).parse(env);
+}
+
+export function assertPrivyEnv(config: PrivyEnv): RequiredPrivyEnv {
+  if (!config.appId) {
+    throw new MissingConnectorConfigError("Privy", "PRIVY_APP_ID or NEXT_PUBLIC_PRIVY_APP_ID");
+  }
+  if (!config.appSecret) {
+    throw new MissingConnectorConfigError("Privy", "PRIVY_APP_SECRET");
+  }
+  if (!config.verificationKey) {
+    throw new MissingConnectorConfigError("Privy", "PRIVY_VERIFICATION_KEY");
+  }
+  if (!config.treasuryAddress) {
+    throw new MissingConnectorConfigError("Privy sweep", "CASSIE_TREASURY_ADDRESS");
+  }
+  if (!config.authorizationPrivateKey) {
+    throw new MissingConnectorConfigError("Privy sweep", "PRIVY_AUTHORIZATION_PRIVATE_KEY");
+  }
+  return config as RequiredPrivyEnv;
+}
 
 export type HyperliquidExecutionEnvOptions = {
   privateKey?: string;

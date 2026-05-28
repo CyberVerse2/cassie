@@ -112,12 +112,18 @@ export class DrizzleCassieStore implements CassieStore {
       .insert(userSettings)
       .values({
         userId: settings.userId,
+        privyUserId: settings.privyUserId ?? null,
+        privyWalletId: settings.privyWalletId ?? null,
+        walletAddress: settings.walletAddress,
         settings,
         updatedAt: new Date().toISOString(),
       })
       .onConflictDoUpdate({
         target: userSettings.userId,
         set: {
+          privyUserId: settings.privyUserId ?? null,
+          privyWalletId: settings.privyWalletId ?? null,
+          walletAddress: settings.walletAddress,
           settings,
           updatedAt: new Date().toISOString(),
         },
@@ -132,6 +138,34 @@ export class DrizzleCassieStore implements CassieStore {
       .limit(1);
 
     return rows[0]?.settings;
+  }
+
+  async getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined> {
+    const rows = await this.db
+      .select()
+      .from(userSettings)
+      .where(eq(userSettings.privyUserId, privyUserId))
+      .limit(1);
+
+    return rows[0]?.settings;
+  }
+
+  async syncPrivyUser(input: {
+    privyUserId: string;
+    privyWalletId: string | null;
+    walletAddress: string | null;
+    defaultTradeSizeUsd?: number;
+  }): Promise<UserSettings> {
+    const existing = await this.getUserSettingsByPrivyUserId(input.privyUserId);
+    const settings: UserSettings = {
+      userId: existing?.userId ?? input.privyUserId,
+      privyUserId: input.privyUserId,
+      privyWalletId: input.privyWalletId,
+      walletAddress: input.walletAddress,
+      defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+    };
+    await this.upsertUserSettings(settings);
+    return settings;
   }
 
   async createRun(input: {
@@ -354,6 +388,27 @@ export class DrizzleCassieStore implements CassieStore {
     assertPositiveAmount(input.amountUsd);
     return await this.db.transaction(async (tx) => {
       const now = new Date().toISOString();
+      if (input.externalRef) {
+        const existingCredit = await tx
+          .select()
+          .from(custodyLedgerEntries)
+          .where(and(
+            eq(custodyLedgerEntries.type, "sweep_credit"),
+            eq(custodyLedgerEntries.source, input.source),
+            eq(custodyLedgerEntries.externalRef, input.externalRef),
+          ))
+          .limit(1);
+        if (existingCredit[0]) {
+          const existingBalance = await tx
+            .select()
+            .from(custodyBalances)
+            .where(eq(custodyBalances.userId, input.userId))
+            .limit(1);
+          if (!existingBalance[0]) throw new Error(`No swept balance found for user ${input.userId}.`);
+          return existingBalance[0];
+        }
+      }
+
       const balanceRows = await tx
         .insert(custodyBalances)
         .values({

@@ -38,6 +38,8 @@ export const SourcePostSchema = z.object({
 
 export const UserSettingsSchema = z.object({
   userId: z.string(),
+  privyUserId: z.string().nullable().default(null),
+  privyWalletId: z.string().nullable().default(null),
   walletAddress: z.string().nullable().default(null),
   defaultTradeSizeUsd: z.number().positive(),
 });
@@ -365,6 +367,15 @@ export const CustodyBalanceSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const UserAccountSchema = z.object({
+  userId: z.string(),
+  privyUserId: z.string().nullable(),
+  privyWalletId: z.string().nullable(),
+  walletAddress: z.string().nullable(),
+  defaultTradeSizeUsd: z.number().positive(),
+  balance: CustodyBalanceSchema.nullable(),
+});
+
 export const CustodyLedgerEntryTypeSchema = z.enum([
   "sweep_credit",
   "trade_reserve",
@@ -495,6 +506,7 @@ export const RunStepSchema = z.object({
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
+export type UserAccount = z.infer<typeof UserAccountSchema>;
 export type Thesis = z.infer<typeof ThesisSchema>;
 export type MarketCandidate = z.infer<typeof MarketCandidateSchema>;
 export type OpportunityFrame = z.infer<typeof OpportunityFrameSchema>;

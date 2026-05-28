@@ -1,13 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import tweetRun from "../../../../docs/test-run-tweets.json";
 import { StyledQR } from "../components/styled-qr";
+import { useCassieAccount } from "../lib/use-cassie-account";
+import { xHandleFromUrl } from "../lib/x-post";
 import s from "./dashboard.module.css";
-
-const baseDepositAddress = "0x193c2109089dd260811f1852c9b1521d6ccf1c6b";
-const baseDepositUri = `ethereum:${baseDepositAddress}@8453`;
 
 const tickerImages: Record<string, string> = {
   SOL: "https://assets.dub.co/companies/polymarket.svg",
@@ -166,11 +165,21 @@ const watching = [
   },
 ];
 
-const taggedTweets = tweetRun.tweets.slice(0, 6).map((tweet, index) => ({
-  ...tweet,
-  age: ["2h", "5h", "11h", "1d", "2d", "3d"][index] ?? tweet.date,
-  preview: shortenTweet(tweet.text, 142),
-}));
+const taggedTweetAges = ["2h", "5h", "11h", "1d", "2d", "3d"] as const;
+const taggedTweetPrompts = ["trade this", "fade this", "critic this", "watch this", "trade this", "fade this"] as const;
+
+const taggedTweets = tweetRun.tweets.slice(0, 6).map((tweet, index) => {
+  const handle = xHandleFromUrl(tweet.url);
+  return {
+    ...tweet,
+    authorName: handle,
+    handle: `@${handle}`,
+    avatarUrl: `https://unavatar.io/x/${handle}`,
+    age: taggedTweetAges[index]!,
+    cassiePrompt: taggedTweetPrompts[index]!,
+    preview: tweet.current ? "Latest tagged tweet ready for Cassie." : "Tagged tweet ready for Cassie.",
+  };
+});
 
 const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
 
@@ -280,22 +289,42 @@ const activityFeed: ActivityGroup[] = [
 const activityItemCount = activityFeed.reduce((n, g) => n + g.items.length, 0);
 
 export default function Dashboard() {
+  const account = useCassieAccount();
+
+  useEffect(() => {
+    void account.refreshAccount();
+  }, [account.refreshAccount]);
+
   return (
     <main className={s.shell}>
-      <Aside />
-      <Center />
+      <Aside
+        walletAddress={account.walletAddress}
+        login={account.login}
+        authenticated={account.authenticated}
+      />
+      <Center balanceUsd={account.account?.balance?.availableUsd ?? 0} />
       <Voice />
     </main>
   );
 }
 
-function Aside() {
+function Aside({
+  walletAddress,
+  login,
+  authenticated,
+}: {
+  walletAddress: string | null;
+  login: () => void;
+  authenticated: boolean;
+}) {
   const [copied, setCopied] = useState(false);
+  const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
 
   async function copyAddress() {
+    if (!walletAddress) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
-    await window.navigator.clipboard.writeText(baseDepositAddress);
+    await window.navigator.clipboard.writeText(walletAddress);
   }
 
   return (
@@ -308,7 +337,13 @@ function Aside() {
       <div className={s.depositCard} id="deposit">
         <div className={s.qrFrame}>
           <div className={s.qrSurface}>
-            <StyledQR data={baseDepositUri} />
+            {depositUri ? (
+              <StyledQR data={depositUri} />
+            ) : (
+              <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={login}>
+                Sign in
+              </button>
+            )}
             <span className={`${s.qrCorner} ${s.qrCornerTopLeft}`} aria-hidden />
             <span className={`${s.qrCorner} ${s.qrCornerTopRight}`} aria-hidden />
             <span className={`${s.qrCorner} ${s.qrCornerBottomLeft}`} aria-hidden />
@@ -316,7 +351,7 @@ function Aside() {
           </div>
           <div className={s.qrMetaLine}>
             <span>Base USDC</span>
-            <code>{shortAddress(baseDepositAddress)}</code>
+            <code>{walletAddress ? shortAddress(walletAddress) : "Sign in"}</code>
           </div>
         </div>
       </div>
@@ -330,6 +365,7 @@ function Aside() {
           className={`${s.btn} ${s.copyDepositBtn}`}
           type="button"
           onClick={copyAddress}
+          disabled={!authenticated || !walletAddress}
           aria-label="Copy Base deposit address"
           title={copied ? "Copied" : "Copy address"}
         >
@@ -482,7 +518,7 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
   return data;
 }
 
-function Center() {
+function Center({ balanceUsd }: { balanceUsd: number }) {
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
@@ -491,6 +527,8 @@ function Center() {
   const rangeData = useMemo(() => generateDataForRange(selectedRange), [selectedRange]);
   const currentValPoint = rangeData[rangeData.length - 1];
   const displayedPoint = hoveredData || currentValPoint;
+  const balanceLabel = `$${balanceUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const displayedBalance = hoveredData ? displayedPoint.value : balanceUsd;
 
   return (
     <section className={s.main}>
@@ -517,7 +555,7 @@ function Center() {
           onClick={() => setActiveTab("wallet")}
         >
           Wallet
-          <span className="tab-count">$1,284</span>
+          <span className="tab-count">{balanceLabel}</span>
         </button>
         <button
           type="button"
@@ -543,7 +581,7 @@ function Center() {
         <div className={s.chartCard}>
           <div className={s.chartTop}>
             <span className={s.chartPrice}>
-              ${displayedPoint.value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              ${displayedBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
             </span>
             <span className={`${s.deltaPill} ${displayedPoint.change >= 0 ? s.deltaUp : s.deltaDown}`}>
               {displayedPoint.change >= 0 ? "↑" : "↓"} {Math.abs(displayedPoint.change).toFixed(2)}%
@@ -1273,18 +1311,6 @@ function VenueIcon({ venue, size = 16, className }: VenueIconProps) {
   }
 
   return null;
-}
-
-function shortenTweet(text: string, maxLength: number) {
-  const clean = text
-    .replace(/https:\/\/t\.co\/\S+/g, "")
-    .replace(/pic\.twitter\.com\/\S+/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-
-  return clean.length > maxLength
-    ? `${clean.slice(0, maxLength - 3).trim()}...`
-    : clean;
 }
 
 function shortAddress(address: string) {

@@ -41,6 +41,8 @@ const resolvedSourcePost: SourcePost = {
 
 const settings: UserSettings = {
   userId: "user_1",
+  privyUserId: null,
+  privyWalletId: null,
   walletAddress: "0x0000000000000000000000000000000000000000",
   defaultTradeSizeUsd: 50,
 };

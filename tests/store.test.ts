@@ -8,6 +8,8 @@ import type {
 
 const settings: UserSettings = {
   userId: "user_1",
+  privyUserId: null,
+  privyWalletId: null,
   walletAddress: "0x0000000000000000000000000000000000000000",
   defaultTradeSizeUsd: 50,
 };
@@ -124,5 +126,56 @@ describe("InMemoryCassieStore", () => {
 
     const snapshot = await store.load();
     expect(snapshot.modelCallUsage).toMatchObject([{ purpose: "supervisor_step", totalTokens: 30 }]);
+  });
+
+  it("syncs Privy identity into user settings", async () => {
+    const store = new InMemoryCassieStore();
+
+    const first = await store.syncPrivyUser({
+      privyUserId: "did:privy:user_1",
+      privyWalletId: "wallet_1",
+      walletAddress: "0x1111111111111111111111111111111111111111",
+    });
+    const updated = await store.syncPrivyUser({
+      privyUserId: "did:privy:user_1",
+      privyWalletId: "wallet_2",
+      walletAddress: "0x2222222222222222222222222222222222222222",
+      defaultTradeSizeUsd: 25,
+    });
+
+    expect(first.userId).toBe("did:privy:user_1");
+    expect(updated).toMatchObject({
+      userId: "did:privy:user_1",
+      privyUserId: "did:privy:user_1",
+      privyWalletId: "wallet_2",
+      walletAddress: "0x2222222222222222222222222222222222222222",
+      defaultTradeSizeUsd: 25,
+    });
+    expect((await store.load()).userSettings).toHaveLength(1);
+  });
+
+  it("deduplicates swept balance credits by source and external reference", async () => {
+    const store = new InMemoryCassieStore();
+
+    await store.creditUserBalance({
+      userId: "user_1",
+      amountUsd: 100,
+      source: "privy_sweep",
+      externalRef: "transfer_1",
+    });
+    await store.creditUserBalance({
+      userId: "user_1",
+      amountUsd: 100,
+      source: "privy_sweep",
+      externalRef: "transfer_1",
+    });
+
+    const snapshot = await store.load();
+    expect(snapshot.custodyBalances[0]).toMatchObject({
+      userId: "user_1",
+      availableUsd: 100,
+      reservedUsd: 0,
+    });
+    expect(snapshot.custodyLedgerEntries).toHaveLength(1);
   });
 });

@@ -21,6 +21,8 @@ export function buildCliUserSettings(flags: CliSettingsFlags): {
   }
   const settings: UserSettings = {
     userId: flag(flags, "user", "local-user"),
+    privyUserId: null,
+    privyWalletId: null,
     walletAddress,
     defaultTradeSizeUsd: numberFlag(flags, "size", 50),
   };
