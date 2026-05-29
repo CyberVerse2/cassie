@@ -5,7 +5,7 @@ import CoreGraphics
 import Foundation
 import IOKit
 
-let targetDeviceName = "LG MONITOR WEBCAM MIC"
+let targetDeviceName = "UGREEN Camera 4K"
 
 enum MicError: Error, CustomStringConvertible {
   case coreAudio(OSStatus, String)

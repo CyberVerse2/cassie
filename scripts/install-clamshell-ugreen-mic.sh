@@ -8,6 +8,8 @@ binary="$install_dir/cassie-clamshell-ugreen-mic"
 agent_dir="$HOME/Library/LaunchAgents"
 agent_plist="$agent_dir/com.thecyberverse.clamshell-ugreen-mic.plist"
 cache_dir="/private/tmp/cassie-swift-module-cache"
+stdout_log="/tmp/com.thecyberverse.clamshell-ugreen-mic.log"
+stderr_log="/tmp/com.thecyberverse.clamshell-ugreen-mic.err"
 
 mkdir -p "$install_dir" "$agent_dir" "$cache_dir"
 
@@ -30,9 +32,9 @@ cat > "$agent_plist" <<PLIST
   <key>StartInterval</key>
   <integer>10</integer>
   <key>StandardOutPath</key>
-  <string>/tmp/com.thecyberverse.clamshell-ugreen-mic.log</string>
+  <string>$stdout_log</string>
   <key>StandardErrorPath</key>
-  <string>/tmp/com.thecyberverse.clamshell-ugreen-mic.err</string>
+  <string>$stderr_log</string>
 </dict>
 </plist>
 PLIST
@@ -41,6 +43,8 @@ plutil -lint "$agent_plist"
 
 uid="$(id -u)"
 launchctl bootout "gui/$uid" "$agent_plist" >/dev/null 2>&1 || true
+: > "$stdout_log"
+: > "$stderr_log"
 launchctl bootstrap "gui/$uid" "$agent_plist"
 launchctl kickstart -k "gui/$uid/com.thecyberverse.clamshell-ugreen-mic"
 
