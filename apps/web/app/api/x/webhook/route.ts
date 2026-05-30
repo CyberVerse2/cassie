@@ -1,0 +1,53 @@
+import { NextResponse } from "next/server";
+import { CassieProduct } from "../../../../../../packages/app/product";
+import {
+  processXWebhookPayload,
+  verifyXWebhookSignature,
+  xWebhookResponseToken,
+} from "../../../../../../packages/app/x-webhook";
+import { config } from "../../../../../../packages/core/config";
+import { DrizzleCassieStore } from "../../../../../../packages/core/db/drizzle-store";
+import { apiError } from "../../_lib/account";
+
+export const runtime = "nodejs";
+
+export async function GET(request: Request) {
+  try {
+    const crcToken = new URL(request.url).searchParams.get("crc_token");
+    if (!crcToken) {
+      throw new Error("X webhook CRC request is missing crc_token.");
+    }
+
+    return NextResponse.json({
+      response_token: xWebhookResponseToken({
+        crcToken,
+        consumerSecret: config.x.consumerSecret,
+      }),
+    });
+  } catch (error) {
+    return apiError(error);
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const rawBody = Buffer.from(await request.arrayBuffer());
+    verifyXWebhookSignature({
+      rawBody,
+      signature: request.headers.get("x-twitter-webhooks-signature"),
+      consumerSecret: config.x.consumerSecret,
+    });
+
+    const store = new DrizzleCassieStore();
+    const product = new CassieProduct(store);
+    const result = await processXWebhookPayload({
+      product,
+      store,
+      payload: JSON.parse(rawBody.toString("utf8")),
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    return apiError(error);
+  }
+}

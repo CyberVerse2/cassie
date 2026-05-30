@@ -219,8 +219,9 @@ describe("Polymarket env", () => {
       OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
       X_BEARER_TOKEN: "bearer",
+      X_CONSUMER_SECRET: "secret",
       CASSIE_X_HANDLE: "cassiedottrade",
-      X_POLL_USER_ID: "123",
+      X_WEBHOOK_USER_ID: "123",
       EXECUTION_WEBHOOK_URL: "https://execution.example.com",
       HYPERLIQUID_PRIVATE_KEY: privateKey,
       POLYMARKET_PRIVATE_KEY: privateKey,
@@ -247,11 +248,10 @@ describe("Polymarket env", () => {
         maxRetries: 4,
       },
       x: {
-        pollUserId: "123",
-      },
-      xPolling: {
         bearerToken: "bearer",
         cassieHandle: "cassiedottrade",
+        consumerSecret: "secret",
+        webhookUserId: "123",
       },
       supervisor: {
         timeoutMs: 240000,

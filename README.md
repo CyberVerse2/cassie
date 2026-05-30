@@ -1,6 +1,6 @@
 # Cassie
 
-Cassie is an X-native trade-expression and ticketing agent. A mention or CLI test run creates a durable run, a Graphile Worker supervisor drives bounded AI tools, and trade tickets are handed to the execution worker.
+Cassie is an X-native trade-expression and ticketing agent. An X webhook mention or CLI test run creates a durable run, a Graphile Worker supervisor drives bounded AI tools, and trade tickets are handed to the execution worker.
 
 Cassie can reason with AI, but she does not directly place orders.
 
@@ -8,7 +8,7 @@ Cassie can reason with AI, but she does not directly place orders.
 
 ```mermaid
 flowchart TD
-  User["X mention / CLI test run"] --> Intake["Durable run"]
+  User["X webhook mention / CLI test run"] --> Intake["Durable run"]
   Intake --> Supervisor["Graphile Worker supervisor"]
   Supervisor --> Tools["Bounded AI tools + run steps"]
   Tools --> Router["Trade-expression router"]
@@ -57,6 +57,8 @@ Run the worker in a second terminal:
 ```bash
 npm run worker
 ```
+
+Register `https://yourdomain.com/api/x/webhook` with X Account Activity webhooks and subscribe the Cassie X account. The webhook endpoint handles CRC checks and verifies `x-twitter-webhooks-signature` with `X_CONSUMER_SECRET`.
 
 Run the Telegram poller in another terminal to receive onboarding `/start` messages without a webhook:
 

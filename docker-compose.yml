@@ -61,10 +61,6 @@ services:
     <<: *cassie-runtime
     command: ["npm", "run", "worker"]
 
-  x-poller:
-    <<: *cassie-runtime
-    command: ["npm", "run", "poll:x"]
-
   telegram-poller:
     <<: *cassie-runtime
     command: ["npm", "run", "poll:telegram"]

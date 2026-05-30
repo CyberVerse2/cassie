@@ -40,10 +40,11 @@ export type HttpRuntimeEnv = {
   rateLimitWindowMs: number;
 };
 
-export type XPollingEnv = {
+export type XWebhookEnv = {
   bearerToken?: string;
   cassieHandle?: string;
-  maxResults: number;
+  consumerSecret?: string;
+  webhookUserId?: string;
 };
 
 export type CassieRuntimeConfig = {
@@ -56,12 +57,7 @@ export type CassieRuntimeConfig = {
   };
   graphileWorker: GraphileWorkerEnv;
   http: HttpRuntimeEnv;
-  xPolling: XPollingEnv;
-  x: {
-    pollUserId?: string;
-    pollIntervalMs: number;
-    consumerSecret?: string;
-  };
+  x: XWebhookEnv;
   supervisor: {
     timeoutMs: number;
     stepTimeoutMs: number;
@@ -171,12 +167,7 @@ export function readCassieConfig(
     },
     graphileWorker: readGraphileWorkerEnv(env),
     http: readHttpRuntimeEnv(env),
-    xPolling: xPollingEnv(env),
-    x: {
-      pollUserId: optionalEnv("X_POLL_USER_ID", env),
-      pollIntervalMs: numberEnv("X_POLL_INTERVAL_MS", 120_000, env, { integer: true, min: 1 }),
-      consumerSecret: optionalEnv("X_CONSUMER_SECRET", env),
-    },
+    x: xWebhookEnv(env),
     supervisor: {
       timeoutMs: numberEnv("CASSIE_SUPERVISOR_TIMEOUT_MS", 1_800_000, env, { integer: true, min: 1 }),
       stepTimeoutMs: numberEnv("CASSIE_SUPERVISOR_STEP_TIMEOUT_MS", 900_000, env, { integer: true, min: 1 }),
@@ -241,15 +232,17 @@ export function readHttpRuntimeEnv(env: EnvSource = process.env): HttpRuntimeEnv
   })).parse(env);
 }
 
-export function xPollingEnv(env: EnvSource = process.env): XPollingEnv {
+export function xWebhookEnv(env: EnvSource = process.env): XWebhookEnv {
   return z.object({
     X_BEARER_TOKEN: configuredStringSchema,
     CASSIE_X_HANDLE: configuredStringSchema,
-    X_POLL_MAX_RESULTS: numberSchema("X_POLL_MAX_RESULTS", 25, { integer: true, min: 10 }),
+    X_CONSUMER_SECRET: configuredStringSchema,
+    X_WEBHOOK_USER_ID: configuredStringSchema,
   }).transform((values) => ({
     bearerToken: values.X_BEARER_TOKEN,
     cassieHandle: values.CASSIE_X_HANDLE,
-    maxResults: values.X_POLL_MAX_RESULTS,
+    consumerSecret: values.X_CONSUMER_SECRET,
+    webhookUserId: values.X_WEBHOOK_USER_ID,
   })).parse(env);
 }
 
