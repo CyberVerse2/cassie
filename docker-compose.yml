@@ -1,6 +1,10 @@
 x-cassie-service: &cassie-service
   build:
     context: .
+    args:
+      NEXT_PUBLIC_PRIVY_APP_ID: ${NEXT_PUBLIC_PRIVY_APP_ID}
+      NEXT_PUBLIC_PRIVY_SIGNER_ID: ${NEXT_PUBLIC_PRIVY_SIGNER_ID}
+      NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS: ${NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS}
   env_file:
     - .env
   init: true
@@ -67,4 +71,3 @@ services:
 
 volumes:
   cassie-postgres-data:
-
