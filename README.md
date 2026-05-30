@@ -60,6 +60,12 @@ npm run worker
 
 Register `https://yourdomain.com/api/x/webhook` with X Account Activity webhooks and subscribe the Cassie X account. The webhook endpoint handles CRC checks and verifies `x-twitter-webhooks-signature` with `X_CONSUMER_SECRET`.
 
+Set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` before building hosted images so rebuilt containers share a stable Next Server Actions key. Generate it with:
+
+```bash
+openssl rand -base64 32
+```
+
 Run the Telegram poller in another terminal to receive onboarding `/start` messages without a webhook:
 
 ```bash
