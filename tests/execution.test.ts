@@ -112,40 +112,45 @@ describe("PolymarketExecutionClient", () => {
   });
 });
 
-describe("permissioned user-wallet execution", () => {
+describe("treasury-prefunded execution", () => {
   it("does not submit venue orders without enough wallet balance", async () => {
     const store = new InMemoryCassieStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     const executionClient: ExecutionClient = {
       execute: vi.fn(),
     };
-    const walletGateway = { getUsdcBalanceUsd: vi.fn().mockResolvedValue(10) };
+    const walletGateway = mockWalletGateway({ balanceUsd: 10 });
 
     await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway }))
-      .rejects.toThrow("Insufficient user wallet balance.");
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
 
+    expect(result).toMatchObject({
+      status: "failed",
+      failureReason: "Insufficient user wallet balance.",
+    });
     expect(executionClient.execute).not.toHaveBeenCalled();
+    expect(walletGateway.transferUserUsdcToTreasury).not.toHaveBeenCalled();
     await expect(store.getExecutionJob(job.jobId)).resolves.toMatchObject({
       status: "failed",
       failureReason: "Insufficient user wallet balance.",
     });
   });
 
-  it("reserves delegated wallet balance before execution and records spent trades", async () => {
+  it("prefunds treasury from the signer-provisioned user wallet before execution", async () => {
     const store = new InMemoryCassieStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
+    const execute = vi.fn().mockResolvedValue({
+      venueOrderId: "venue_order_1",
+      filledSizeUsd: 25,
+      averagePrice: 0.5,
+    });
     const executionClient: ExecutionClient = {
-      execute: vi.fn().mockResolvedValue({
-        venueOrderId: "venue_order_1",
-        filledSizeUsd: 25,
-        averagePrice: 0.5,
-      }),
+      execute,
     };
-    const walletGateway = { getUsdcBalanceUsd: vi.fn().mockResolvedValue(100) };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
 
     await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
@@ -155,17 +160,26 @@ describe("permissioned user-wallet execution", () => {
     const state = await store.load();
 
     expect(result.status).toBe("succeeded");
+    expect(walletGateway.transferUserUsdcToTreasury).toHaveBeenCalledWith({
+      userWalletId: "wallet_1",
+      amountUsd: 25,
+      referenceId: `trade_prefund:${job.jobId}`,
+    });
     expect(executionClient.execute).toHaveBeenCalledWith(ticket, {
       funding: {
-        type: "privy_user_wallet",
+        type: "cassie_treasury",
         userId: "user_1",
-        privyWalletId: "wallet_1",
-        walletAddress: "0x1111111111111111111111111111111111111111",
+        treasuryWalletAddress: "0x2222222222222222222222222222222222222222",
+        prefundTransferId: "transfer_prefund",
+        prefundTransferStatus: "succeeded",
         amountUsd: 25,
       },
     });
+    expect(walletGateway.transferUserUsdcToTreasury.mock.invocationCallOrder[0]!)
+      .toBeLessThan(execute.mock.invocationCallOrder[0]!);
     expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
       "trade_reserve",
+      "trade_prefund",
       "trade_spend",
     ]);
   });
@@ -176,19 +190,136 @@ describe("permissioned user-wallet execution", () => {
     const executionClient: ExecutionClient = {
       execute: vi.fn().mockRejectedValue(new Error("venue unavailable")),
     };
-    const walletGateway = { getUsdcBalanceUsd: vi.fn().mockResolvedValue(100) };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
 
     await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    await expect(executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway }))
-      .rejects.toThrow("venue unavailable");
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
     const state = await store.load();
 
+    expect(result).toMatchObject({
+      status: "failed",
+      failureReason: "venue unavailable",
+    });
+    expect(walletGateway.refundUserUsdcFromTreasury).toHaveBeenCalledWith({
+      userWalletAddress: "0x1111111111111111111111111111111111111111",
+      amountUsd: 25,
+      referenceId: `trade_refund:${job.jobId}`,
+    });
     expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
       "trade_reserve",
+      "trade_prefund",
       "trade_release",
     ]);
   });
+
+  it("does not submit venue orders while the treasury prefund is pending", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn(),
+    };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
+    walletGateway.transferUserUsdcToTreasury.mockResolvedValueOnce({
+      transferId: "transfer_pending",
+      referenceId: `trade_prefund:${job.jobId}`,
+      status: "pending",
+      sourceWalletId: "wallet_1",
+      destinationAddress: "0x2222222222222222222222222222222222222222",
+      amountUsd: 25,
+      asset: "usdc",
+      chain: "base",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      raw: {},
+    });
+
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
+    const state = await store.load();
+    const balance = await store.getWalletFundingBalance("user_1", 100);
+
+    expect(result).toMatchObject({
+      status: "failed",
+      failureReason: "Privy USDC prefund transfer_pending did not confirm before execution: pending.",
+    });
+    expect(executionClient.execute).not.toHaveBeenCalled();
+    expect(walletGateway.refundUserUsdcFromTreasury).not.toHaveBeenCalled();
+    expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
+      "trade_reserve",
+      "trade_prefund",
+    ]);
+    expect(balance.reservedUsd).toBe(25);
+  });
+
+  it("refunds unfilled prefunded spend after a partial fill", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn().mockResolvedValue({
+        venueOrderId: "venue_order_1",
+        filledSizeUsd: 10,
+        averagePrice: 0.5,
+      }),
+    };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
+
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
+    const state = await store.load();
+
+    expect(result.status).toBe("succeeded");
+    expect(walletGateway.refundUserUsdcFromTreasury).toHaveBeenCalledWith({
+      userWalletAddress: "0x1111111111111111111111111111111111111111",
+      amountUsd: 15,
+      referenceId: `trade_release:${job.jobId}`,
+    });
+    expect(state.walletSpendLedgerEntries.map((entry) => ({
+      type: entry.type,
+      amountUsd: entry.amountUsd,
+    }))).toEqual([
+      { type: "trade_reserve", amountUsd: 25 },
+      { type: "trade_prefund", amountUsd: 25 },
+      { type: "trade_spend", amountUsd: 10 },
+      { type: "trade_release", amountUsd: 15 },
+    ]);
+  });
 });
+
+function mockWalletGateway(input: { balanceUsd: number }) {
+  return {
+    getUsdcBalanceUsd: vi.fn().mockResolvedValue(input.balanceUsd),
+    getTreasuryWalletAddress: vi.fn().mockReturnValue("0x2222222222222222222222222222222222222222"),
+    transferUserUsdcToTreasury: vi.fn().mockResolvedValue({
+      transferId: "transfer_prefund",
+      referenceId: "trade_prefund:job_1",
+      status: "succeeded",
+      sourceWalletId: "wallet_1",
+      destinationAddress: "0x2222222222222222222222222222222222222222",
+      amountUsd: 25,
+      asset: "usdc",
+      chain: "base",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      raw: {},
+    }),
+    refundUserUsdcFromTreasury: vi.fn().mockResolvedValue({
+      transferId: "transfer_refund",
+      referenceId: "trade_refund:job_1",
+      status: "succeeded",
+      sourceWalletId: "treasury_wallet",
+      destinationAddress: "0x1111111111111111111111111111111111111111",
+      amountUsd: 25,
+      asset: "usdc",
+      chain: "base",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      raw: {},
+    }),
+  };
+}

@@ -10,7 +10,6 @@ import {
   type PolymarketQuote,
   type Thesis,
   type TradeExpressionPlan,
-  type XSentimentAssessment,
 } from "../core/schemas/index.ts";
 import {
   marketSelectionPromptSpec,
@@ -87,7 +86,6 @@ export async function selectMarket(input: {
   candidates?: MarketCandidate[];
   fitAssessments?: ExpressionFitAssessment[];
   quotes?: unknown[];
-  xSentiment?: XSentimentAssessment;
 }): Promise<MarketSelection> {
   const providerCandidates = input.candidates === undefined
     ? await input.marketData.findCandidates({
@@ -119,7 +117,6 @@ export async function selectMarket(input: {
       candidates,
       fitAssessments: input.fitAssessments ?? [],
       quotes: input.quotes ?? [],
-      xSentiment: input.xSentiment ?? null,
     })),
   });
 }

@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
@@ -64,10 +64,14 @@ export class DrizzleCassieStore implements CassieStore {
       tradeTickets: ticketRows.map((row) => row.ticket),
       executionJobs: jobRows.map((row) => row.job),
       walletSpendLedgerEntries: walletSpendLedgerRows.map((row) => ({
-        ...row,
+        entryId: row.entryId,
+        userId: row.userId,
+        type: row.type,
+        amountUsd: centsToUsd(row.amountUsdCents),
         ticketId: row.ticketId ?? null,
         executionJobId: row.executionJobId ?? null,
         metadata: row.metadata ?? null,
+        createdAt: row.createdAt,
       })),
       auditEvents: auditRows.map((row) => ({
         ...row,
@@ -157,6 +161,7 @@ export class DrizzleCassieStore implements CassieStore {
       privyWalletId: input.privyWalletId,
       walletAddress: input.walletAddress,
       defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+      telegram: existing?.telegram ?? null,
     };
     await this.upsertUserSettings(settings);
     return settings;
@@ -373,11 +378,10 @@ export class DrizzleCassieStore implements CassieStore {
   }
 
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
-    assertNonnegativeAmount(walletBalanceUsd);
     return walletFundingBalance({
       userId,
-      walletBalanceUsd,
-      reservedUsd: await this.openReservedUsd(userId),
+      walletBalanceUsdCents: nonnegativeUsdToCents(walletBalanceUsd),
+      reservedUsdCents: await this.openReservedUsdCents(userId),
       updatedAt: new Date().toISOString(),
     });
   }
@@ -387,8 +391,9 @@ export class DrizzleCassieStore implements CassieStore {
     job: ExecutionJob;
     walletBalanceUsd: number;
   }): Promise<WalletFundingBalance> {
-    assertPositiveAmount(input.ticket.sizeUsd);
+    const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     return await this.db.transaction(async (tx) => {
+      await lockWalletSpendUser(tx, input.ticket.userId);
       const existingReserve = await tx
         .select()
         .from(walletSpendLedgerEntries)
@@ -400,27 +405,22 @@ export class DrizzleCassieStore implements CassieStore {
       if (existingReserve[0]) {
         return walletFundingBalance({
           userId: input.ticket.userId,
-          walletBalanceUsd: input.walletBalanceUsd,
-          reservedUsd: await this.openReservedUsd(input.ticket.userId),
+          walletBalanceUsdCents: nonnegativeUsdToCents(input.walletBalanceUsd),
+          reservedUsdCents: await this.openReservedUsdCents(input.ticket.userId, tx),
           updatedAt: new Date().toISOString(),
         });
       }
 
-      const reservedUsd = await this.openReservedUsd(input.ticket.userId);
-      const balance = walletFundingBalance({
-        userId: input.ticket.userId,
-        walletBalanceUsd: input.walletBalanceUsd,
-        reservedUsd,
-        updatedAt: new Date().toISOString(),
-      });
-      if (balance.spendableUsd < input.ticket.sizeUsd) {
+      const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
+      const reservedUsdCents = await this.openReservedUsdCents(input.ticket.userId, tx);
+      if (walletBalanceUsdCents - reservedUsdCents < ticketSizeCents) {
         throw new Error("Insufficient user wallet balance.");
       }
 
       await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
         userId: input.ticket.userId,
         type: "trade_reserve",
-        amountUsd: input.ticket.sizeUsd,
+        amountUsdCents: ticketSizeCents,
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
         metadata: { venue: input.ticket.venue, instrument: input.ticket.instrument, side: input.ticket.side },
@@ -428,8 +428,8 @@ export class DrizzleCassieStore implements CassieStore {
       }));
       return walletFundingBalance({
         userId: input.ticket.userId,
-        walletBalanceUsd: input.walletBalanceUsd,
-        reservedUsd: reservedUsd + input.ticket.sizeUsd,
+        walletBalanceUsdCents,
+        reservedUsdCents: reservedUsdCents + ticketSizeCents,
         updatedAt: new Date().toISOString(),
       });
     });
@@ -440,8 +440,11 @@ export class DrizzleCassieStore implements CassieStore {
     job: ExecutionJob;
     reason: string;
     walletBalanceUsd: number;
+    metadata?: unknown;
   }): Promise<WalletFundingBalance> {
+    const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     return await this.db.transaction(async (tx) => {
+      await lockWalletSpendUser(tx, input.ticket.userId);
       const existingRelease = await tx
         .select()
         .from(walletSpendLedgerEntries)
@@ -454,21 +457,72 @@ export class DrizzleCassieStore implements CassieStore {
         return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
       }
 
-      const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
-      if (balance.reservedUsd < input.ticket.sizeUsd) {
+      const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
+      const reservedUsdCents = await this.openReservedUsdCents(input.ticket.userId, tx);
+      if (reservedUsdCents < ticketSizeCents) {
         throw new Error("Cannot release a missing trade reservation.");
       }
 
       await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
         userId: input.ticket.userId,
         type: "trade_release",
-        amountUsd: input.ticket.sizeUsd,
+        amountUsdCents: ticketSizeCents,
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
-        metadata: { reason: input.reason },
+        metadata: input.metadata ?? { reason: input.reason },
         createdAt: new Date().toISOString(),
       }));
-      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      return walletFundingBalance({
+        userId: input.ticket.userId,
+        walletBalanceUsdCents,
+        reservedUsdCents: reservedUsdCents - ticketSizeCents,
+        updatedAt: new Date().toISOString(),
+      });
+    });
+  }
+
+  async recordWalletPrefund(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    amountUsd: number;
+    metadata: unknown;
+    walletBalanceUsd: number;
+  }): Promise<WalletFundingBalance> {
+    const prefundCents = positiveUsdToCents(input.amountUsd);
+    return await this.db.transaction(async (tx) => {
+      await lockWalletSpendUser(tx, input.ticket.userId);
+      const existingPrefund = await tx
+        .select()
+        .from(walletSpendLedgerEntries)
+        .where(and(
+          eq(walletSpendLedgerEntries.type, "trade_prefund"),
+          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
+        ))
+        .limit(1);
+      if (existingPrefund[0]) {
+        return walletFundingBalance({
+          userId: input.ticket.userId,
+          walletBalanceUsdCents: nonnegativeUsdToCents(input.walletBalanceUsd),
+          reservedUsdCents: await this.openReservedUsdCents(input.ticket.userId, tx),
+          updatedAt: new Date().toISOString(),
+        });
+      }
+
+      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
+        userId: input.ticket.userId,
+        type: "trade_prefund",
+        amountUsdCents: prefundCents,
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: input.metadata,
+        createdAt: new Date().toISOString(),
+      }));
+      return walletFundingBalance({
+        userId: input.ticket.userId,
+        walletBalanceUsdCents: nonnegativeUsdToCents(input.walletBalanceUsd),
+        reservedUsdCents: await this.openReservedUsdCents(input.ticket.userId, tx),
+        updatedAt: new Date().toISOString(),
+      });
     });
   }
 
@@ -477,8 +531,11 @@ export class DrizzleCassieStore implements CassieStore {
     job: ExecutionJob;
     executionResult: NonNullable<ExecutionJob["executionResult"]>;
     walletBalanceUsd: number;
+    releaseMetadata?: unknown;
   }): Promise<WalletFundingBalance> {
+    const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     return await this.db.transaction(async (tx) => {
+      await lockWalletSpendUser(tx, input.ticket.userId);
       const existingSettlement = await tx
         .select()
         .from(walletSpendLedgerEntries)
@@ -491,36 +548,42 @@ export class DrizzleCassieStore implements CassieStore {
         return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
       }
 
-      const filledSizeUsd = normalizedFilledSize(input.ticket, input.executionResult);
-      const releaseUsd = input.ticket.sizeUsd - filledSizeUsd;
+      const filledSizeCents = normalizedFilledSizeCents(input.ticket, input.executionResult);
+      const releaseCents = ticketSizeCents - filledSizeCents;
       const now = new Date().toISOString();
-      const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
-      if (balance.reservedUsd < input.ticket.sizeUsd) {
+      const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
+      const reservedUsdCents = await this.openReservedUsdCents(input.ticket.userId, tx);
+      if (reservedUsdCents < ticketSizeCents) {
         throw new Error("Cannot settle a missing trade reservation.");
       }
 
       await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
         userId: input.ticket.userId,
         type: "trade_spend",
-        amountUsd: filledSizeUsd,
+        amountUsdCents: filledSizeCents,
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
         metadata: input.executionResult,
         createdAt: now,
       }));
 
-      if (releaseUsd > 0) {
+      if (releaseCents > 0) {
         await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
           userId: input.ticket.userId,
           type: "trade_release",
-          amountUsd: releaseUsd,
+          amountUsdCents: releaseCents,
           ticketId: input.ticket.ticketId,
           executionJobId: input.job.jobId,
-          metadata: { reason: "unfilled_order_amount" },
+          metadata: input.releaseMetadata ?? { reason: "unfilled_order_amount" },
           createdAt: now,
         }));
       }
-      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      return walletFundingBalance({
+        userId: input.ticket.userId,
+        walletBalanceUsdCents,
+        reservedUsdCents: reservedUsdCents - ticketSizeCents,
+        updatedAt: new Date().toISOString(),
+      });
     });
   }
 
@@ -593,55 +656,96 @@ export class DrizzleCassieStore implements CassieStore {
     return event;
   }
 
-  private async openReservedUsd(userId: string): Promise<number> {
-    const rows = await this.db
+  private async openReservedUsdCents(
+    userId: string,
+    db: Pick<CassieDb, "select"> = this.db,
+  ): Promise<number> {
+    const rows = await db
       .select()
       .from(walletSpendLedgerEntries)
       .where(eq(walletSpendLedgerEntries.userId, userId));
 
     return rows.reduce((total, entry) => {
-      if (entry.type === "trade_reserve") return total + entry.amountUsd;
-      if (entry.type === "trade_release" || entry.type === "trade_spend") return total - entry.amountUsd;
+      if (entry.type === "trade_reserve") return total + entry.amountUsdCents;
+      if (entry.type === "trade_release" || entry.type === "trade_spend") return total - entry.amountUsdCents;
       return total;
     }, 0);
   }
 }
 
-function assertPositiveAmount(amountUsd: number): void {
-  if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+async function lockWalletSpendUser(db: { execute(query: ReturnType<typeof sql>): Promise<unknown> }, userId: string) {
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`);
+}
+
+function positiveUsdToCents(amountUsd: number): number {
+  if (!Number.isFinite(amountUsd)) {
     throw new Error("Wallet spend amount must be a positive USD value.");
   }
+  const cents = usdToCents(amountUsd);
+  if (cents <= 0) {
+    throw new Error("Wallet spend amount must be a positive USD value.");
+  }
+  return cents;
 }
 
-function assertNonnegativeAmount(amountUsd: number): void {
-  if (!Number.isFinite(amountUsd) || amountUsd < 0) {
+function nonnegativeUsdToCents(amountUsd: number): number {
+  if (!Number.isFinite(amountUsd)) {
     throw new Error("Wallet balance must be a nonnegative USD value.");
   }
+  const cents = usdToCents(amountUsd);
+  if (cents < 0) {
+    throw new Error("Wallet balance must be a nonnegative USD value.");
+  }
+  return cents;
 }
 
-function normalizedFilledSize(
+function usdToCents(amountUsd: number): number {
+  return Math.round(amountUsd * 100);
+}
+
+function centsToUsd(amountUsdCents: number): number {
+  return amountUsdCents / 100;
+}
+
+function normalizedFilledSizeCents(
   ticket: TradeTicket,
   executionResult: NonNullable<ExecutionJob["executionResult"]>,
 ): number {
-  const filledSizeUsd = executionResult.filledSizeUsd;
-  if (!Number.isFinite(filledSizeUsd) || filledSizeUsd < 0) {
+  if (!Number.isFinite(executionResult.filledSizeUsd) || executionResult.filledSizeUsd < 0) {
     throw new Error("Execution result filledSizeUsd must be nonnegative.");
   }
-  if (filledSizeUsd > ticket.sizeUsd) {
+  const filledSizeCents = usdToCents(executionResult.filledSizeUsd);
+  if (filledSizeCents > positiveUsdToCents(ticket.sizeUsd)) {
     throw new Error("Execution result filled more than the reserved ticket size.");
   }
-  return filledSizeUsd;
+  return filledSizeCents;
 }
 
-function walletFundingBalance(input: Omit<WalletFundingBalance, "spendableUsd">): WalletFundingBalance {
-  const spendableUsd = input.walletBalanceUsd - input.reservedUsd;
+function walletFundingBalance(input: {
+  userId: string;
+  walletBalanceUsdCents: number;
+  reservedUsdCents: number;
+  updatedAt: string;
+}): WalletFundingBalance {
+  const spendableUsdCents = input.walletBalanceUsdCents - input.reservedUsdCents;
   return {
-    ...input,
-    spendableUsd: spendableUsd > 0 ? spendableUsd : 0,
+    userId: input.userId,
+    walletBalanceUsd: centsToUsd(input.walletBalanceUsdCents),
+    reservedUsd: centsToUsd(input.reservedUsdCents),
+    spendableUsd: centsToUsd(spendableUsdCents > 0 ? spendableUsdCents : 0),
+    updatedAt: input.updatedAt,
   };
 }
 
-function walletSpendLedgerEntry(input: Omit<WalletSpendLedgerEntry, "entryId">): WalletSpendLedgerEntry {
+function walletSpendLedgerEntry(input: {
+  userId: string;
+  type: WalletSpendLedgerEntry["type"];
+  amountUsdCents: number;
+  ticketId: string | null;
+  executionJobId: string | null;
+  metadata: unknown | null;
+  createdAt: string;
+}) {
   return {
     ...input,
     entryId: randomUUID(),

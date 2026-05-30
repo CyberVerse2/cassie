@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertRuntimeConfig,
   assertPolymarketExecutionEnv,
+  assertPrivySettlementEnv,
   readAiProviderEnv,
   readCassieConfig,
   readGraphileWorkerEnv,
@@ -10,6 +11,7 @@ import {
   numberEnv,
   readHyperliquidExecutionEnv,
   readPolymarketExecutionEnv,
+  readTelegramEnv,
   requiredConnectorEnv,
 } from "../packages/core/config.ts";
 import { MissingConnectorConfigError } from "../packages/core/helpers/connector-errors.ts";
@@ -115,6 +117,27 @@ describe("Polymarket env", () => {
     })).toBe("key");
   });
 
+  it("validates Privy treasury settlement config", () => {
+    expect(() => assertPrivySettlementEnv(readCassieConfig({
+      NEXT_PUBLIC_PRIVY_APP_ID: "app",
+      PRIVY_APP_SECRET: "secret",
+    }).privy)).toThrow("PRIVY_AUTHORIZATION_PRIVATE_KEY, CASSIE_TREASURY_WALLET_ID, CASSIE_TREASURY_WALLET_ADDRESS");
+
+    expect(assertPrivySettlementEnv(readCassieConfig({
+      NEXT_PUBLIC_PRIVY_APP_ID: "app",
+      PRIVY_APP_SECRET: "secret",
+      PRIVY_AUTHORIZATION_PRIVATE_KEY: "private-key",
+      CASSIE_TREASURY_WALLET_ID: "treasury-wallet",
+      CASSIE_TREASURY_WALLET_ADDRESS: "0x2222222222222222222222222222222222222222",
+    }).privy)).toMatchObject({
+      appId: "app",
+      appSecret: "secret",
+      authorizationPrivateKey: "private-key",
+      treasuryWalletId: "treasury-wallet",
+      treasuryWalletAddress: "0x2222222222222222222222222222222222222222",
+    });
+  });
+
   it("fails startup validation when the cheap AI dependency is missing", () => {
     expect(() => assertRuntimeConfig({
       DATABASE_URL: "postgres://cassie",
@@ -196,7 +219,7 @@ describe("Polymarket env", () => {
       OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
       X_BEARER_TOKEN: "bearer",
-      CASSIE_X_HANDLE: "cassie",
+      CASSIE_X_HANDLE: "cassiedottrade",
       X_POLL_USER_ID: "123",
       EXECUTION_WEBHOOK_URL: "https://execution.example.com",
       HYPERLIQUID_PRIVATE_KEY: privateKey,
@@ -228,7 +251,7 @@ describe("Polymarket env", () => {
       },
       xPolling: {
         bearerToken: "bearer",
-        cassieHandle: "cassie",
+        cassieHandle: "cassiedottrade",
       },
       supervisor: {
         timeoutMs: 240000,
@@ -248,6 +271,27 @@ describe("Polymarket env", () => {
           },
         },
       },
+      telegram: {
+        connectTtlMs: 600000,
+        pollIntervalMs: 2000,
+        longPollTimeoutSeconds: 30,
+      },
+    });
+  });
+
+  it("reads Telegram bot config and normalizes the public username", () => {
+    expect(readTelegramEnv({
+      TELEGRAM_BOT_TOKEN: "token",
+      TELEGRAM_BOT_USERNAME: "@cassie_bot",
+      TELEGRAM_CONNECT_TTL_MS: "120000",
+      TELEGRAM_POLL_INTERVAL_MS: "2500",
+      TELEGRAM_LONG_POLL_TIMEOUT_SECONDS: "45",
+    })).toEqual({
+      botToken: "token",
+      botUsername: "cassie_bot",
+      connectTtlMs: 120000,
+      pollIntervalMs: 2500,
+      longPollTimeoutSeconds: 45,
     });
   });
 });

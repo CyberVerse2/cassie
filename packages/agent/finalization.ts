@@ -7,7 +7,6 @@ import {
   SupervisorFinalResultSchema,
   TradeExpressionPlanSchema,
   TradeTicketSchema,
-  XSentimentAssessmentSchema,
   type CassieActionState,
   type ControlRun,
   type ExpressionFitAssessment,
@@ -17,7 +16,6 @@ import {
   type RunStepType,
   type TradeExpressionPlan,
   type TradeTicket,
-  type XSentimentAssessment,
 } from "../core/schemas/index.ts";
 import { prepareFinalInput } from "./public-summary.ts";
 import { recordRunStep } from "./steps.ts";
@@ -50,7 +48,6 @@ export async function finalizeRunFromPersistedSteps(input: {
   const marketCandidates = readPersistedStepOutput<MarketCandidate[]>(steps, "market_candidates", MarketCandidateSchema.array());
   const expressionFit = readPersistedStepOutput<ExpressionFitAssessment>(steps, "market_assessment", ExpressionFitAssessmentSchema);
   const quote = latestPersistedStepOutput(steps, "market_quote");
-  const xSentiment = readPersistedStepOutput<XSentimentAssessment>(steps, "x_sentiment", XSentimentAssessmentSchema);
   const marketSelection = readPersistedStepOutput<MarketSelection>(steps, "market_selection", MarketSelectionSchema)
     ?? noTradeSelectionFromCompletedMarketCheck(marketCandidates, expressionFit);
   const tradeTicket = readPersistedStepOutput<TradeTicket>(steps, "ticket", TradeTicketSchema);
@@ -60,7 +57,6 @@ export async function finalizeRunFromPersistedSteps(input: {
     marketCandidates,
     expressionFit,
     quote,
-    xSentiment,
     marketSelection,
     tradeTicket,
   });
@@ -99,7 +95,6 @@ function validatePersistedStageProgress(input: {
   marketCandidates?: MarketCandidate[];
   expressionFit?: ExpressionFitAssessment;
   quote?: unknown;
-  xSentiment?: XSentimentAssessment;
   marketSelection?: MarketSelection;
   tradeTicket?: TradeTicket;
 }) {
@@ -129,10 +124,6 @@ function validatePersistedStageProgress(input: {
 
   if (!input.quote) {
     throw new SupervisorPrerequisiteError("Validated expression finalization requires a quote.");
-  }
-
-  if (!input.xSentiment) {
-    throw new SupervisorPrerequisiteError("Quoted expression finalization requires X sentiment check.");
   }
 
   if (!input.marketSelection) {

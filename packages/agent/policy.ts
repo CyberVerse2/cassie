@@ -92,12 +92,8 @@ export function selectActiveTools(
       : ["search_venues"];
   }
 
-  if (latestToolOutput(steps, "check_x_sentiment")) {
-    return ["generate_trade_expressions"];
-  }
-
   if (latestToolOutput(steps, "frame_opportunity")) {
-    return ["check_x_sentiment"];
+    return ["generate_trade_expressions"];
   }
 
   if (latestToolOutput(steps, "resolve_source")) {
@@ -223,11 +219,6 @@ function summarizeToolPart(part: unknown, originalChars: number) {
         originalChars,
         result: summarizeToolOutput(rawOutput),
         status: output?.status,
-        sentimentDirection: output?.sentimentDirection,
-        attentionLevel: output?.attentionLevel,
-        novelty: output?.novelty,
-        crowdingRisk: output?.crowdingRisk,
-        correctionRisk: output?.correctionRisk,
         intent: output?.intent,
         signalType: output?.signalType,
         stance: output?.stance,
@@ -294,7 +285,6 @@ function buildSupervisorState(
         "search_venues",
         "assess_expression_fit",
         "quote_expression",
-        "check_x_sentiment",
         "rank_expressions",
         "create_trade_ticket",
       ] satisfies CassieSupervisorToolName[])

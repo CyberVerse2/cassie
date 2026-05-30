@@ -2,9 +2,10 @@
 
 import { useCallback, useMemo, useState } from "react";
 import {
-  useDelegatedActions,
   usePrivy,
+  useSigners,
   useWallets,
+  type User,
   type Wallet,
 } from "@privy-io/react-auth";
 
@@ -14,27 +15,47 @@ type WalletFundingBalance = {
   spendableUsd: number;
 };
 
+type TelegramConnection = {
+  chatId: string;
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  connectedAt: string;
+  lastMessageAt: string;
+};
+
 type CassieAccount = {
   userId: string;
   privyUserId: string | null;
   privyWalletId: string | null;
   walletAddress: string | null;
   defaultTradeSizeUsd: number;
+  telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
+};
+
+type TelegramConnectSession = {
+  connectUrl: string;
+  expiresAt: string;
 };
 
 type SyncInput = {
   defaultTradeSizeUsd?: number;
-  requireDelegation?: boolean;
+  requireSigner?: boolean;
 };
 
 export function useCassieAccount() {
   const privy = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
-  const { delegateWallet } = useDelegatedActions();
+  const { addSigners } = useSigners();
   const [account, setAccount] = useState<CassieAccount | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
+  const signerId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID;
+  const signerPolicyIds = useMemo(
+    () => parsePolicyIds(process.env.NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS),
+    [],
+  );
 
   const embeddedWallet = useMemo(() => {
     const primary = privy.user?.wallet;
@@ -62,11 +83,22 @@ export function useCassieAccount() {
 
     setStatus("loading");
     setError(null);
-    if (input.requireDelegation && !embeddedWallet.delegated) {
-      await delegateWallet({
+    let walletForSync = embeddedWallet;
+    if (input.requireSigner && !embeddedWallet.delegated) {
+      if (!signerId) {
+        throw new Error("Privy signer ID is not configured.");
+      }
+      const { user } = await addSigners({
         address: embeddedWallet.address,
-        chainType: "ethereum",
+        signers: [{
+          signerId,
+          policyIds: signerPolicyIds,
+        }],
       });
+      const updatedWallet = getUserEmbeddedWallet(user);
+      if (updatedWallet) {
+        walletForSync = updatedWallet;
+      }
     }
 
     const accessToken = await privy.getAccessToken();
@@ -81,8 +113,8 @@ export function useCassieAccount() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        walletAddress: embeddedWallet.address,
-        privyWalletId: embeddedWallet.id ?? null,
+        walletAddress: walletForSync.address,
+        privyWalletId: walletForSync.id ?? null,
         defaultTradeSizeUsd: input.defaultTradeSizeUsd,
       }),
     });
@@ -93,11 +125,11 @@ export function useCassieAccount() {
     setAccount(payload.account);
     setStatus("idle");
     return payload.account;
-  }, [delegateWallet, embeddedWallet, privy, walletsReady]);
+  }, [addSigners, embeddedWallet, privy, signerId, signerPolicyIds, walletsReady]);
 
   const prepareAccount = useCallback(async (input: SyncInput = {}) => {
     try {
-      return await syncAccount({ ...input, requireDelegation: true });
+      return await syncAccount({ ...input, requireSigner: true });
     } catch (caught) {
       const message = caught instanceof Error ? caught.message : String(caught);
       setError(message);
@@ -129,6 +161,25 @@ export function useCassieAccount() {
     }
   }, [privy]);
 
+  const beginTelegramConnect = useCallback(async () => {
+    if (!privy.authenticated) {
+      throw new Error("Log in before connecting Telegram.");
+    }
+    const accessToken = await privy.getAccessToken();
+    if (!accessToken) {
+      throw new Error("Privy access token was not available.");
+    }
+    const response = await fetch("/api/telegram/connect", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = await response.json() as { telegram?: TelegramConnectSession; error?: string };
+    if (!response.ok || !payload.telegram) {
+      throw new Error(payload.error ?? "Telegram connection could not be started.");
+    }
+    return payload.telegram;
+  }, [privy]);
+
   return {
     account,
     authenticated: privy.authenticated,
@@ -136,10 +187,11 @@ export function useCassieAccount() {
     status,
     error,
     walletAddress: embeddedWallet?.address ?? account?.walletAddress ?? null,
-    walletReadyForSpending: Boolean(embeddedWallet?.delegated && embeddedWallet.id),
+    walletReadyForSpending: Boolean(embeddedWallet?.id && embeddedWallet.delegated),
     login: privy.login,
     logout: privy.logout,
     prepareAccount,
+    beginTelegramConnect,
     refreshAccount,
     syncAccount,
   };
@@ -161,4 +213,18 @@ function isPrivyEthereumWallet(wallet: Wallet | undefined): wallet is Wallet & {
 
 function isPrivyWalletClient(walletClientType: string | undefined): boolean {
   return walletClientType === "privy" || walletClientType === "privy-v2";
+}
+
+function parsePolicyIds(value: string | undefined): string[] {
+  if (!value) return [];
+  return value.split(",").map((policyId) => policyId.trim()).filter(Boolean);
+}
+
+function getUserEmbeddedWallet(user: User): (Wallet & {
+  address: string;
+  chainType: "ethereum";
+  walletClientType: string;
+  delegated: boolean;
+}) | null {
+  return isPrivyEthereumWallet(user.wallet) ? user.wallet : null;
 }

@@ -42,6 +42,14 @@ export const UserSettingsSchema = z.object({
   privyWalletId: z.string().nullable().default(null),
   walletAddress: z.string().nullable().default(null),
   defaultTradeSizeUsd: z.number().positive(),
+  telegram: z.object({
+    chatId: z.string().min(1),
+    username: z.string().nullable(),
+    firstName: z.string().nullable(),
+    lastName: z.string().nullable(),
+    connectedAt: z.string(),
+    lastMessageAt: z.string(),
+  }).nullable().optional(),
 });
 
 export const ThesisSchema = z.object({
@@ -229,27 +237,6 @@ export const ExpressionFitAssessmentSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
-export const XSentimentEvidenceSchema = z.object({
-  url: z.string().nullable(),
-  authorName: z.string().nullable(),
-  text: z.string().min(1),
-  observedAt: z.string().nullable(),
-  relevance: z.string(),
-});
-
-export const XSentimentAssessmentSchema = z.object({
-  status: z.enum(["available", "insufficient_evidence"]),
-  sourcesChecked: z.array(z.literal("x")),
-  sentimentDirection: z.enum(["bullish", "bearish", "mixed", "neutral"]),
-  attentionLevel: z.enum(["low", "medium", "high", "unclear"]),
-  novelty: z.enum(["new", "already_widespread", "unclear"]),
-  crowdingRisk: z.enum(["low", "medium", "high", "unclear"]),
-  correctionRisk: z.enum(["low", "medium", "high", "unclear"]),
-  summary: z.string(),
-  evidence: z.array(XSentimentEvidenceSchema).max(10),
-  limitations: z.array(z.string()),
-});
-
 export const TradeExpressionCandidateSchema = z.object({
   instrument: z.string(),
   venue: z.enum(["hyperliquid", "polymarket"]).nullable(),
@@ -374,11 +361,13 @@ export const UserAccountSchema = z.object({
   privyWalletId: z.string().nullable(),
   walletAddress: z.string().nullable(),
   defaultTradeSizeUsd: z.number().positive(),
+  telegram: UserSettingsSchema.shape.telegram,
   balance: WalletFundingBalanceSchema.nullable(),
 });
 
 export const WalletSpendLedgerEntryTypeSchema = z.enum([
   "trade_reserve",
+  "trade_prefund",
   "trade_release",
   "trade_spend",
 ]);
@@ -395,10 +384,11 @@ export const WalletSpendLedgerEntrySchema = z.object({
 });
 
 export const ExecutionFundingSourceSchema = z.object({
-  type: z.literal("privy_user_wallet"),
+  type: z.literal("cassie_treasury"),
   userId: z.string(),
-  privyWalletId: z.string(),
-  walletAddress: z.string(),
+  treasuryWalletAddress: z.string(),
+  prefundTransferId: z.string(),
+  prefundTransferStatus: z.enum(["pending", "succeeded", "rejected", "failed"]),
   amountUsd: z.number().positive(),
 });
 
@@ -475,7 +465,6 @@ export const RunStepTypeSchema = z.enum([
   "market_candidates",
   "market_assessment",
   "market_quote",
-  "x_sentiment",
   "market_selection",
   "ticket",
   "final",
@@ -511,6 +500,7 @@ export const RunStepSchema = z.object({
 
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
+export type TelegramConnection = NonNullable<z.infer<typeof UserSettingsSchema>["telegram"]>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type UserAccount = z.infer<typeof UserAccountSchema>;
 export type Thesis = z.infer<typeof ThesisSchema>;
@@ -521,7 +511,6 @@ export type PolymarketQuote = z.infer<typeof PolymarketQuoteSchema>;
 export type MarketSelection = z.infer<typeof MarketSelectionSchema>;
 export type CandidateTradeExpression = z.infer<typeof CandidateTradeExpressionSchema>;
 export type ExpressionFitAssessment = z.infer<typeof ExpressionFitAssessmentSchema>;
-export type XSentimentAssessment = z.infer<typeof XSentimentAssessmentSchema>;
 export type TradeExpressionCandidate = z.infer<typeof TradeExpressionCandidateSchema>;
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type CassieActionState = z.infer<typeof CassieActionStateSchema>;

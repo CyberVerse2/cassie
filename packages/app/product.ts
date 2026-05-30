@@ -9,6 +9,7 @@ import {
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { pollXMentions } from "./x-polling.ts";
+import { pollTelegramUpdates } from "../notifications/telegram.ts";
 import {
   GraphileExecutionJobQueue,
   type CassieJobQueue,
@@ -96,6 +97,12 @@ export class CassieProduct {
       product: this,
       store: this.store,
       userId,
+    });
+  }
+
+  async pollTelegramUpdates() {
+    return pollTelegramUpdates({
+      store: this.store,
     });
   }
 

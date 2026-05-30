@@ -40,6 +40,7 @@ export async function accountResponse(
       privyWalletId: settings.privyWalletId,
       walletAddress: settings.walletAddress,
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
+      telegram: settings.telegram ?? null,
       balance: balance ?? null,
     },
   });

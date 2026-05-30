@@ -111,10 +111,10 @@ const marketCandidate: MarketCandidate = {
 describe("prompts", () => {
   it("keeps semantic rules but removes AI SDK structured-output prose", () => {
     const prompts = [
-      opportunityFramePrompt({ sourcePost, userCommand: "@cassie trade this" }),
+      opportunityFramePrompt({ sourcePost, userCommand: "@cassiedottrade trade this" }),
       singleStepTradeExpressionPrompt({
         sourcePost,
-        userCommand: "@cassie trade this",
+        userCommand: "@cassiedottrade trade this",
         opportunityFrame,
       }),
       expressionFitPrompt({
@@ -156,10 +156,10 @@ describe("prompts", () => {
 
   it("exposes stage prompts as AI SDK-ready specs", () => {
     const specs = [
-      opportunityFramePromptSpec({ sourcePost, userCommand: "@cassie trade this" }),
+      opportunityFramePromptSpec({ sourcePost, userCommand: "@cassiedottrade trade this" }),
       singleStepTradeExpressionPromptSpec({
         sourcePost,
-        userCommand: "@cassie trade this",
+        userCommand: "@cassiedottrade trade this",
         opportunityFrame,
       }),
       expressionFitPromptSpec({
@@ -203,7 +203,7 @@ describe("prompts", () => {
     for (const spec of specs.slice(1)) {
       expect(spec.system).not.toContain("Web search is available in this stage.");
     }
-    expect(opportunityFramePromptSpec({ sourcePost, userCommand: "@cassie trade this" }).tools).toEqual({
+    expect(opportunityFramePromptSpec({ sourcePost, userCommand: "@cassiedottrade trade this" }).tools).toEqual({
       webSearch: {
         externalWebAccess: true,
         searchContextSize: "low",
@@ -211,7 +211,7 @@ describe("prompts", () => {
     });
     expect(JSON.parse(String(opportunityFramePromptSpec({
       sourcePost,
-      userCommand: "@cassie trade this",
+      userCommand: "@cassiedottrade trade this",
     }).messages[0]?.content)).source).toMatchObject({
       author: "Example",
     });
@@ -227,13 +227,13 @@ describe("prompts", () => {
   it("keeps legacy string prompts rendered from the prompt spec content", () => {
     const spec = singleStepTradeExpressionPromptSpec({
       sourcePost,
-      userCommand: "@cassie trade this",
+      userCommand: "@cassiedottrade trade this",
       opportunityFrame,
     });
     const rendered = renderPromptSpec(spec);
     const legacy = singleStepTradeExpressionPrompt({
       sourcePost,
-      userCommand: "@cassie trade this",
+      userCommand: "@cassiedottrade trade this",
       opportunityFrame,
     });
 

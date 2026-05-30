@@ -8,3 +8,6 @@ coverage/
 .cassie-data/
 .worktrees/
 fire.json
+.claude/
+.superpowers/
+tmp/

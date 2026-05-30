@@ -11,6 +11,7 @@ const steps = [
   { id: "permissions", label: "Permissions" },
   { id: "fund", label: "Fund" },
   { id: "defaults", label: "Defaults" },
+  { id: "notify", label: "Notify" },
   { id: "first", label: "First mention" },
 ] as const;
 
@@ -78,6 +79,15 @@ export default function OnboardingPage() {
           />
         )}
         {stepId === "defaults" && <StepDefaults onNext={next} syncAccount={account.syncAccount} />}
+        {stepId === "notify" && (
+          <StepNotify
+            onSkip={() => goto("first")}
+            onNext={next}
+            telegram={account.account?.telegram ?? null}
+            beginTelegramConnect={account.beginTelegramConnect}
+            refreshAccount={account.refreshAccount}
+          />
+        )}
         {stepId === "first" && <StepFirstMention />}
       </section>
     </main>
@@ -279,7 +289,7 @@ function StepDefaults({
         How much per <em>trade</em>?
       </h1>
       <p className={s.lede}>
-        When you tag <span className={s.mention}>@cassie</span> trade this, I'll deploy this amount from your wallet.
+        When you tag <span className={s.mention}>@cassiedottrade</span> trade this, I'll deploy this amount from your wallet.
       </p>
 
       <label className={s.amountField}>
@@ -323,15 +333,148 @@ function StepDefaults({
   );
 }
 
+type TelegramConnection = {
+  username: string | null;
+  firstName: string | null;
+  lastName: string | null;
+};
+
+function StepNotify({
+  onSkip,
+  onNext,
+  telegram,
+  beginTelegramConnect,
+  refreshAccount,
+}: {
+  onSkip: () => void;
+  onNext: () => void;
+  telegram: TelegramConnection | null;
+  beginTelegramConnect: () => Promise<{ connectUrl: string; expiresAt: string }>;
+  refreshAccount: () => Promise<{ telegram: TelegramConnection | null } | null>;
+}) {
+  const [connectUrl, setConnectUrl] = useState<string | null>(null);
+  const [status, setStatus] = useState<"idle" | "loading" | "waiting" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+  const connectedLabel = telegram?.username
+    ? `@${telegram.username}`
+    : [telegram?.firstName, telegram?.lastName].filter(Boolean).join(" ") || "Telegram";
+
+  useEffect(() => {
+    if (telegram || !connectUrl) return;
+    const interval = window.setInterval(() => {
+      void refreshAccount();
+    }, 2000);
+    return () => window.clearInterval(interval);
+  }, [connectUrl, refreshAccount, telegram]);
+
+  async function connectTelegram() {
+    if (telegram || status === "loading") return;
+    if (connectUrl) {
+      const opened = window.open(connectUrl, "_blank", "noopener,noreferrer");
+      if (!opened) {
+        setError("Telegram window could not be opened. Allow pop-ups and try again.");
+        setStatus("error");
+        return;
+      }
+      setStatus("waiting");
+      return;
+    }
+
+    setStatus("loading");
+    setError(null);
+    const telegramWindow = window.open("about:blank", "_blank");
+
+    try {
+      const session = await beginTelegramConnect();
+      setConnectUrl(session.connectUrl);
+      if (!telegramWindow) {
+        throw new Error("Telegram window could not be opened. Allow pop-ups and try again.");
+      }
+      telegramWindow.opener = null;
+      telegramWindow.location.href = session.connectUrl;
+      setStatus("waiting");
+    } catch (caught) {
+      telegramWindow?.close();
+      setError(caught instanceof Error ? caught.message : String(caught));
+      setStatus("error");
+    }
+  }
+
+  return (
+    <div className={s.step}>
+      <span className={s.eyebrow}>Step five · Notify</span>
+      <h1 className={s.display}>
+        Stay in the <em>loop</em>.
+      </h1>
+      <p className={s.lede}>
+        Connect Telegram and I'll ping you the moment a trade fills, a{" "}
+        <em>watch</em> moves, or a <em>counter</em> triggers.
+      </p>
+
+      <div className={s.tgCard}>
+        <span className={s.tgIcon} aria-hidden>
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+            <path d="M21.94 4.36 18.6 20.1c-.25 1.1-.9 1.38-1.83.86l-5.05-3.72-2.44 2.35c-.27.27-.5.5-1 .5l.36-5.12L17.96 6.4c.4-.36-.09-.56-.62-.2L4.9 14.1l-5.05-1.58c-1.1-.34-1.12-1.1.23-1.63L20.5 2.78c.92-.34 1.72.22 1.44 1.58Z" transform="translate(1)" />
+          </svg>
+        </span>
+        <div className={s.tgInfo}>
+          <span className={s.tgLabel}>Telegram</span>
+          {telegram ? (
+            <span className={s.tgConnected}>
+              <span className={s.tgCheck} aria-hidden />
+              Connected as <strong>{connectedLabel}</strong>
+            </span>
+          ) : (
+            <span className={s.tgHelp}>
+              {status === "waiting"
+                ? "Waiting for your /start message in Telegram."
+                : "Real-time fills, watches, and counters — straight to your DMs."}
+            </span>
+          )}
+        </div>
+      </div>
+      {error && <p className={s.fineprint}>{error}</p>}
+
+      <div className={s.ctaRow}>
+        {telegram ? (
+          <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={onNext}>
+            Continue
+            <span className={s.arrow} aria-hidden>→</span>
+          </button>
+        ) : (
+          <>
+            <button type="button" className={`${s.btn} ${s.btnGhost}`} onClick={onSkip}>
+              I'll do this later
+            </button>
+            <button
+              type="button"
+              className={`${s.btn} ${s.btnPrimary}`}
+              onClick={connectTelegram}
+              disabled={status === "loading"}
+            >
+              {status === "loading"
+                ? "Preparing Telegram"
+                : status === "waiting"
+                  ? "Open Telegram"
+                  : "Connect Telegram"}
+              <span className={s.arrow} aria-hidden>→</span>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function StepFirstMention() {
   return (
     <div className={s.step}>
-      <span className={s.eyebrow}>Step five · Try it</span>
+      <span className={s.eyebrow}>Step six · Try it</span>
       <h1 className={s.display}>
         Now <em>mention me</em>.
       </h1>
       <p className={s.lede}>
-        Under any market-flavoured tweet, reply with <span className={s.mention}>@cassie trade this</span>. I'll do the rest.
+        Under any market-flavoured tweet, reply with <span className={s.mention}>@cassiedottrade trade this</span>. I'll do the rest.
       </p>
 
       <div className={s.mockTweet}>
@@ -346,7 +489,7 @@ function StepFirstMention() {
           SOL ETF approval odds quietly grinding back above 60c on Polymarket. Volume's there, this is the one.
         </p>
         <div className={s.mockReply}>
-          <span className={s.mockReplyMention}>@cassie</span> trade this
+          <span className={s.mockReplyMention}>@cassiedottrade</span> trade this
           <span className={s.caret} aria-hidden />
         </div>
       </div>

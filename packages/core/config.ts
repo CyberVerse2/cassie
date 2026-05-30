@@ -72,6 +72,7 @@ export type CassieRuntimeConfig = {
     polymarket: PolymarketExecutionEnv;
   };
   privy: PrivyEnv;
+  telegram: TelegramEnv;
   terminal: {
     debug: boolean;
     noColor: boolean;
@@ -186,6 +187,7 @@ export function readCassieConfig(
       polymarket: readPolymarketExecutionEnv(env),
     },
     privy: readPrivyEnv(env),
+    telegram: readTelegramEnv(env),
     terminal: {
       debug: optionalEnv("DEBUG", env) != null,
       noColor: optionalEnv("NO_COLOR", env) != null,
@@ -270,6 +272,10 @@ export type PrivyEnv = {
   appSecret?: string;
   verificationKey?: string;
   authorizationPrivateKey?: string;
+  treasuryWalletId?: string;
+  treasuryWalletAddress?: string;
+  walletActionPollIntervalMs: number;
+  walletActionPollTimeoutMs: number;
   spendChain: "base";
   spendAsset: "usdc";
 };
@@ -279,6 +285,12 @@ export type RequiredPrivyEnv = PrivyEnv & {
   appSecret: string;
 };
 
+export type RequiredPrivySettlementEnv = RequiredPrivyEnv & {
+  authorizationPrivateKey: string;
+  treasuryWalletId: string;
+  treasuryWalletAddress: string;
+};
+
 export function readPrivyEnv(env: EnvSource = process.env): PrivyEnv {
   return z.object({
     PRIVY_APP_ID: configuredStringSchema,
@@ -286,11 +298,25 @@ export function readPrivyEnv(env: EnvSource = process.env): PrivyEnv {
     PRIVY_APP_SECRET: configuredStringSchema,
     PRIVY_VERIFICATION_KEY: configuredStringSchema,
     PRIVY_AUTHORIZATION_PRIVATE_KEY: configuredStringSchema,
+    CASSIE_TREASURY_WALLET_ID: configuredStringSchema,
+    CASSIE_TREASURY_WALLET_ADDRESS: configuredStringSchema,
+    PRIVY_WALLET_ACTION_POLL_INTERVAL_MS: numberSchema("PRIVY_WALLET_ACTION_POLL_INTERVAL_MS", 1_500, {
+      integer: true,
+      min: 100,
+    }),
+    PRIVY_WALLET_ACTION_POLL_TIMEOUT_MS: numberSchema("PRIVY_WALLET_ACTION_POLL_TIMEOUT_MS", 120_000, {
+      integer: true,
+      min: 1_000,
+    }),
   }).transform((values) => ({
     appId: firstConfigured(values.PRIVY_APP_ID, values.NEXT_PUBLIC_PRIVY_APP_ID),
     appSecret: values.PRIVY_APP_SECRET,
     verificationKey: values.PRIVY_VERIFICATION_KEY,
     authorizationPrivateKey: values.PRIVY_AUTHORIZATION_PRIVATE_KEY,
+    treasuryWalletId: values.CASSIE_TREASURY_WALLET_ID,
+    treasuryWalletAddress: values.CASSIE_TREASURY_WALLET_ADDRESS,
+    walletActionPollIntervalMs: values.PRIVY_WALLET_ACTION_POLL_INTERVAL_MS,
+    walletActionPollTimeoutMs: values.PRIVY_WALLET_ACTION_POLL_TIMEOUT_MS,
     spendChain: "base" as const,
     spendAsset: "usdc" as const,
   })).parse(env);
@@ -304,6 +330,75 @@ export function assertPrivyEnv(config: PrivyEnv): RequiredPrivyEnv {
     throw new MissingConnectorConfigError("Privy", "PRIVY_APP_SECRET");
   }
   return config as RequiredPrivyEnv;
+}
+
+export function assertPrivySettlementEnv(config: PrivyEnv): RequiredPrivySettlementEnv {
+  const required = assertPrivyEnv(config);
+  const missing = [
+    required.authorizationPrivateKey ? null : "PRIVY_AUTHORIZATION_PRIVATE_KEY",
+    required.treasuryWalletId ? null : "CASSIE_TREASURY_WALLET_ID",
+    required.treasuryWalletAddress ? null : "CASSIE_TREASURY_WALLET_ADDRESS",
+  ].filter((name): name is string => Boolean(name));
+  if (missing.length > 0) {
+    throw new MissingConnectorConfigError("Privy treasury settlement", missing.join(", "));
+  }
+  return required as RequiredPrivySettlementEnv;
+}
+
+export type TelegramEnv = {
+  botToken?: string;
+  botUsername?: string;
+  connectTtlMs: number;
+  pollIntervalMs: number;
+  longPollTimeoutSeconds: number;
+};
+
+export type RequiredTelegramBotEnv = TelegramEnv & {
+  botToken: string;
+};
+
+export type RequiredTelegramConnectEnv = RequiredTelegramBotEnv & {
+  botUsername: string;
+};
+
+export function readTelegramEnv(env: EnvSource = process.env): TelegramEnv {
+  return z.object({
+    TELEGRAM_BOT_TOKEN: configuredStringSchema,
+    TELEGRAM_BOT_USERNAME: configuredStringSchema,
+    TELEGRAM_CONNECT_TTL_MS: numberSchema("TELEGRAM_CONNECT_TTL_MS", 10 * 60 * 1000, {
+      integer: true,
+      min: 1,
+    }),
+    TELEGRAM_POLL_INTERVAL_MS: numberSchema("TELEGRAM_POLL_INTERVAL_MS", 2_000, {
+      integer: true,
+      min: 1,
+    }),
+    TELEGRAM_LONG_POLL_TIMEOUT_SECONDS: numberSchema("TELEGRAM_LONG_POLL_TIMEOUT_SECONDS", 30, {
+      integer: true,
+      min: 1,
+    }),
+  }).transform((values) => ({
+    botToken: values.TELEGRAM_BOT_TOKEN,
+    botUsername: values.TELEGRAM_BOT_USERNAME?.replace(/^@/, ""),
+    connectTtlMs: values.TELEGRAM_CONNECT_TTL_MS,
+    pollIntervalMs: values.TELEGRAM_POLL_INTERVAL_MS,
+    longPollTimeoutSeconds: values.TELEGRAM_LONG_POLL_TIMEOUT_SECONDS,
+  })).parse(env);
+}
+
+export function assertTelegramBotEnv(config: TelegramEnv): RequiredTelegramBotEnv {
+  if (!config.botToken) {
+    throw new MissingConnectorConfigError("Telegram", "TELEGRAM_BOT_TOKEN");
+  }
+  return config as RequiredTelegramBotEnv;
+}
+
+export function assertTelegramConnectEnv(config: TelegramEnv): RequiredTelegramConnectEnv {
+  assertTelegramBotEnv(config);
+  if (!config.botUsername) {
+    throw new MissingConnectorConfigError("Telegram", "TELEGRAM_BOT_USERNAME");
+  }
+  return config as RequiredTelegramConnectEnv;
 }
 
 export type HyperliquidExecutionEnvOptions = {

@@ -153,7 +153,7 @@
     },
     {
       "url": "https://x.com/lookonchain/status/2057648353681485873",
-      "current": true,
+      "current": false,
       "authorName": "Lookonchain",
       "handle": "@lookonchain",
       "avatarUrl": "https://unavatar.io/x/lookonchain",
@@ -188,7 +188,7 @@
     },
     {
       "url": "https://x.com/cryptogoos/status/2057405540477665634",
-      "current": false,
+      "current": true,
       "authorName": "CryptoGoos",
       "handle": "@cryptogoos",
       "avatarUrl": "https://unavatar.io/x/cryptogoos",

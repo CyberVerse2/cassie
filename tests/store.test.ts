@@ -154,7 +154,7 @@ describe("InMemoryCassieStore", () => {
     expect((await store.load()).userSettings).toHaveLength(1);
   });
 
-  it("tracks open delegated wallet spend reservations against live wallet balance", async () => {
+  it("tracks open signer-provisioned wallet spend reservations against live wallet balance", async () => {
     const store = new InMemoryCassieStore();
     const ticket: TradeTicket = {
       ticketId: "ticket_1",
@@ -179,6 +179,8 @@ describe("InMemoryCassieStore", () => {
     };
 
     await store.reserveWalletSpend({ ticket, job, walletBalanceUsd: 100 });
+    await store.reserveWalletSpend({ ticket, job, walletBalanceUsd: 100 });
+    expect((await store.load()).walletSpendLedgerEntries).toHaveLength(1);
     expect(await store.getWalletFundingBalance("user_1", 100)).toMatchObject({
       userId: "user_1",
       walletBalanceUsd: 100,
@@ -193,6 +195,57 @@ describe("InMemoryCassieStore", () => {
     })).rejects.toThrow("Insufficient user wallet balance.");
 
     await store.releaseWalletSpend({ ticket, job, reason: "venue unavailable", walletBalanceUsd: 100 });
+    expect(await store.getWalletFundingBalance("user_1", 100)).toMatchObject({
+      walletBalanceUsd: 100,
+      reservedUsd: 0,
+      spendableUsd: 100,
+    });
+  });
+
+  it("settles partial fills in cents and releases the unfilled reservation", async () => {
+    const store = new InMemoryCassieStore();
+    const ticket: TradeTicket = {
+      ticketId: "ticket_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "SOL may rally.",
+      venue: "hyperliquid",
+      instrument: "SOL",
+      side: "long",
+      sizeUsd: 50,
+      orderType: "marketable_limit",
+      venueData: {},
+    };
+    const job: ExecutionJob = {
+      jobId: "job_1",
+      ticketId: "ticket_1",
+      status: "running",
+      createdAt: "2026-05-21T00:00:00.000Z",
+      updatedAt: "2026-05-21T00:00:00.000Z",
+      failureReason: null,
+      executionResult: null,
+    };
+
+    await store.reserveWalletSpend({ ticket, job, walletBalanceUsd: 100 });
+    await store.settleWalletSpend({
+      ticket,
+      job,
+      walletBalanceUsd: 100,
+      executionResult: {
+        venueOrderId: "order_1",
+        filledSizeUsd: 33.33,
+        averagePrice: 0.5,
+      },
+    });
+
+    expect((await store.load()).walletSpendLedgerEntries.map((entry) => ({
+      type: entry.type,
+      amountUsd: entry.amountUsd,
+    }))).toEqual([
+      { type: "trade_reserve", amountUsd: 50 },
+      { type: "trade_spend", amountUsd: 33.33 },
+      { type: "trade_release", amountUsd: 16.67 },
+    ]);
     expect(await store.getWalletFundingBalance("user_1", 100)).toMatchObject({
       walletBalanceUsd: 100,
       reservedUsd: 0,

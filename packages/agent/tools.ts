@@ -12,7 +12,6 @@ import {
   ExpressionFitAssessmentSchema,
   SourcePostSchema,
   TradeExpressionPlanSchema,
-  XSentimentAssessmentSchema,
   type ControlRun,
   type ExpressionFitAssessment,
   type MarketCandidate,
@@ -273,58 +272,6 @@ export function createCassieSupervisorTools(input: {
         );
       },
     }),
-    check_x_sentiment: tool({
-      description: "Check X-only sentiment, novelty, crowding, and correction risk for the framed opportunity.",
-      inputSchema: z.object({
-        sourcePost: SourcePostSchema.nullable().default(null),
-        opportunityFrame: OpportunityFrameSchema,
-        tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
-        fitAssessment: ExpressionFitAssessmentSchema.nullable().default(null),
-        candidate: MarketCandidateSchema.nullable().default(null),
-      }),
-      execute: async ({ sourcePost, opportunityFrame, tradeExpression, fitAssessment, candidate }) => runStepOnce(
-        "x_sentiment",
-        {
-          sourcePost,
-          opportunityFrame,
-          tradeExpression: tradeExpression ?? null,
-          fitAssessment: fitAssessment ?? null,
-          candidate: candidate ?? null,
-        },
-        async () => {
-          if (!input.deps.xSentimentProvider) {
-            throw new Error("check_x_sentiment requires a configured X sentiment provider dependency.");
-          }
-          const source = sourcePost ?? input.run.sourcePost;
-          const expressionContext = tradeExpression ?? null;
-          const fitContext = fitAssessment ?? null;
-          const candidateContext = candidate ?? null;
-          return recordRunStep({
-            store: input.store,
-            runId: input.run.runId,
-            stepType: "x_sentiment",
-            promptName: "cassie_x_sentiment",
-            promptVersion,
-            model: config.ai.grokXSearchModel,
-            stepInput: {
-              sourcePost: source,
-              opportunityFrame,
-              tradeExpression: expressionContext,
-              fitAssessment: fitContext,
-              candidate: candidateContext,
-            },
-            execute: ({ setThinkingTrace }) => input.deps.xSentimentProvider!.checkXSentiment({
-              sourcePost: source,
-              opportunityFrame,
-              tradeExpression: expressionContext,
-              fitAssessment: fitContext,
-              candidate: candidateContext,
-              onThinkingTrace: setThinkingTrace,
-            }),
-          });
-        },
-      ),
-    }),
     rank_expressions: tool({
       description: "Rank real venue candidates and choose the best grounded trade expression; do not invent markets.",
       inputSchema: z.object({
@@ -332,9 +279,8 @@ export function createCassieSupervisorTools(input: {
         candidates: z.array(z.unknown()).default([]),
         fitAssessments: z.array(z.unknown()).default([]),
         quotes: z.array(z.unknown()).default([]),
-        xSentiment: XSentimentAssessmentSchema.nullable().default(null),
       }),
-      execute: async ({ tradeExpression, candidates, fitAssessments, quotes, xSentiment }) => {
+      execute: async ({ tradeExpression, candidates, fitAssessments, quotes }) => {
         const storedCandidates = await latestPersistedMarketCandidates(input.store, input.run.runId);
         const persistedCandidates = storedCandidates.length > 0
           ? storedCandidates
@@ -344,8 +290,6 @@ export function createCassieSupervisorTools(input: {
           ? storedFitAssessments
           : parseSuppliedFitAssessments(fitAssessments);
         const persistedQuotes = await latestPersistedQuotes(input.store, input.run.runId);
-        const persistedXSentiment = xSentiment
-          ?? await latestPersistedXSentiment(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : parseSuppliedRankQuotes(quotes);
         const validatedFitAssessments = persistedFitAssessments.filter((assessment) => assessment.fitStatus === "validated");
         const rankingCandidates = persistedCandidates
@@ -368,7 +312,6 @@ export function createCassieSupervisorTools(input: {
             candidates: rankingCandidates,
             fitAssessments: persistedFitAssessments,
             quotes: groundedQuotes,
-            xSentiment: persistedXSentiment,
           },
           async () => {
             const thesis = thesisFromTradeExpression(tradeExpression);
@@ -384,7 +327,6 @@ export function createCassieSupervisorTools(input: {
                 candidates: rankingCandidates,
                 fitAssessments: persistedFitAssessments,
                 quotes: groundedQuotes,
-                xSentiment: persistedXSentiment,
               },
               execute: ({ setThinkingTrace }) => selectMarket({
                 ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
@@ -394,7 +336,6 @@ export function createCassieSupervisorTools(input: {
                 candidates: rankingCandidates,
                 fitAssessments: persistedFitAssessments,
                 quotes: groundedQuotes,
-                xSentiment: persistedXSentiment,
               }),
             });
           },
@@ -557,17 +498,10 @@ function parseSuppliedTradeExpression(value: unknown) {
   throw new Error("Trade ticket creation requires a persisted or supplied trade expression.");
 }
 
-async function latestPersistedXSentiment(store: CassieStore, runId: string) {
-  const latestStep = await latestSucceededStep(store, runId, "x_sentiment");
-  return latestStep
-    ? XSentimentAssessmentSchema.parse(latestStep.output)
-    : undefined;
-}
-
 async function latestSucceededStep(
   store: CassieStore,
   runId: string,
-  stepType: "market_candidates" | "market_selection" | "x_sentiment" | "trade_expression",
+  stepType: "market_candidates" | "market_selection" | "trade_expression",
 ) {
   const steps = await store.getRunSteps(runId);
   return steps

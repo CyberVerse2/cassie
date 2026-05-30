@@ -1016,7 +1016,7 @@ function Voice() {
               />
             </svg>
           </span>
-          <span className="handle">@cassie</span>
+          <span className="handle">@cassiedottrade</span>
         </span>
         <span className={s.voiceTag}>
           <span className="k">Orders placed</span>{" "}
@@ -1039,7 +1039,7 @@ function Voice() {
             </header>
             <p className={s.postBody}>
               <span className="lnk">{tweet.handle}</span> tagged{" "}
-              <span className="tk">@cassie</span>: {tweet.cassiePrompt}
+              <span className="tk">@cassiedottrade</span>: {tweet.cassiePrompt}
             </p>
             <p className={s.postQuote}>{tweet.preview}</p>
           </a>

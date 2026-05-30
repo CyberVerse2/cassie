@@ -1,4 +1,5 @@
-import { index, integer, jsonb, pgTable, real, text } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, foreignKey, index, integer, jsonb, pgTable, real, text, uniqueIndex } from "drizzle-orm/pg-core";
 import type {
   AuditEvent,
   ControlRun,
@@ -63,7 +64,7 @@ export const walletSpendLedgerEntries = pgTable("wallet_spend_ledger_entries", {
   entryId: text("entry_id").primaryKey(),
   userId: text("user_id").notNull(),
   type: text("type").$type<WalletSpendLedgerEntry["type"]>().notNull(),
-  amountUsd: real("amount_usd").notNull(),
+  amountUsdCents: integer("amount_usd_cents").notNull(),
   ticketId: text("ticket_id"),
   executionJobId: text("execution_job_id"),
   metadata: jsonb("metadata"),
@@ -72,6 +73,25 @@ export const walletSpendLedgerEntries = pgTable("wallet_spend_ledger_entries", {
   index("wallet_spend_ledger_user_created_idx").on(table.userId, table.createdAt),
   index("wallet_spend_ledger_ticket_idx").on(table.ticketId),
   index("wallet_spend_ledger_execution_job_idx").on(table.executionJobId),
+  uniqueIndex("wallet_spend_ledger_execution_type_unique_idx")
+    .on(table.executionJobId, table.type)
+    .where(sql`${table.executionJobId} is not null`),
+  check("wallet_spend_ledger_amount_cents_nonnegative", sql`${table.amountUsdCents} >= 0`),
+  foreignKey({
+    name: "wallet_spend_ledger_user_fk",
+    columns: [table.userId],
+    foreignColumns: [userSettings.userId],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "wallet_spend_ledger_ticket_fk",
+    columns: [table.ticketId],
+    foreignColumns: [tradeTickets.ticketId],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "wallet_spend_ledger_execution_job_fk",
+    columns: [table.executionJobId],
+    foreignColumns: [executionJobs.jobId],
+  }).onDelete("cascade"),
 ]);
 
 export const auditEvents = pgTable("audit_events", {

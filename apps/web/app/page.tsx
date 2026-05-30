@@ -1,5 +1,6 @@
 import tweetRun from "../../../docs/test-run-tweets.json";
 import { HomeAuthCta } from "./components/home-auth-cta";
+import { TweetDeck } from "./components/tweet-deck";
 import { xHandleFromUrl } from "./lib/x-post";
 
 const replyUsers = [
@@ -73,6 +74,16 @@ const midpoint = Math.ceil(streamTweets.length / 2);
 const tweetsLeft = streamTweets.slice(0, midpoint);
 const tweetsRight = streamTweets.slice(midpoint);
 
+const deckCards = streamTweets.map((t, i) => {
+  const replyUser = replyUsers[i % replyUsers.length];
+  return {
+    ...t,
+    replyName: replyUser.name,
+    replyHandle: replyUser.handle,
+    replyAvatarUrl: replyUser.avatarUrl,
+  };
+});
+
 export default function Home() {
   return (
     <main className="page">
@@ -92,9 +103,11 @@ export default function Home() {
               into a <em>trade</em>.
             </h1>
             <p className="lede">
-              Cassie turns tweets into executable trade ideas. Mention
-              her under any post - she makes a trade for you.
+              Cassie turns tweets into executable trade ideas.
+              <br />
+              Mention her under any post - she makes a trade for you.
             </p>
+            <TweetDeck cards={deckCards} />
             <div className="cta-row">
               <HomeAuthCta />
             </div>
@@ -218,7 +231,7 @@ function TweetCard({
             {replyUser.name} <span className="reply-handle">{replyUser.handle}</span>
           </span>
           <p className="reply-body">
-            <span className="reply-mention">@cassie</span> {cassiePrompt}
+            <span className="reply-mention">@cassiedottrade</span> {cassiePrompt}
           </p>
         </div>
       </div>

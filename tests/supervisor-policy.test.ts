@@ -37,15 +37,13 @@ describe("supervisor step policy", () => {
     expect(selectActiveTools([preflight])).toEqual(["resolve_source", "frame_opportunity"]);
     const source = step("resolve_source", { text: "OpenAI revenue growth is accelerating." });
     expect(selectActiveTools([preflight, source])).toEqual(["frame_opportunity"]);
-    expect(selectActiveTools([preflight, source, opportunity])).toEqual(["check_x_sentiment"]);
-    const xSentiment = step("check_x_sentiment", { status: "available", sentimentDirection: "mixed" });
-    expect(selectActiveTools([preflight, source, opportunity, xSentiment])).toEqual(["generate_trade_expressions"]);
-    expect(selectActiveTools([opportunity, xSentiment, expression])).toEqual(["search_venues"]);
-    expect(selectActiveTools([opportunity, xSentiment, expression, candidates])).toEqual(["assess_expression_fit"]);
+    expect(selectActiveTools([preflight, source, opportunity])).toEqual(["generate_trade_expressions"]);
+    expect(selectActiveTools([opportunity, expression])).toEqual(["search_venues"]);
+    expect(selectActiveTools([opportunity, expression, candidates])).toEqual(["assess_expression_fit"]);
     const fit = step("assess_expression_fit", { fitStatus: "validated", candidateId: "hyperliquid:SOL:long" });
-    expect(selectActiveTools([opportunity, xSentiment, expression, candidates, fit])).toEqual(["quote_expression"]);
+    expect(selectActiveTools([opportunity, expression, candidates, fit])).toEqual(["quote_expression"]);
     const quote = step("quote_expression", { venue: "hyperliquid", symbol: "SOL", markPrice: 100 });
-    expect(selectActiveTools([opportunity, xSentiment, expression, candidates, fit, quote])).toEqual(["rank_expressions"]);
+    expect(selectActiveTools([opportunity, expression, candidates, fit, quote])).toEqual(["rank_expressions"]);
     expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["create_trade_ticket"]);
   });
 

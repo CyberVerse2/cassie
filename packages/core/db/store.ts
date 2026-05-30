@@ -99,12 +99,21 @@ export interface CassieStore {
     job: ExecutionJob;
     reason: string;
     walletBalanceUsd: number;
+    metadata?: unknown;
+  }): Promise<WalletFundingBalance>;
+  recordWalletPrefund(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    amountUsd: number;
+    metadata: unknown;
+    walletBalanceUsd: number;
   }): Promise<WalletFundingBalance>;
   settleWalletSpend(input: {
     ticket: TradeTicket;
     job: ExecutionJob;
     executionResult: NonNullable<ExecutionJob["executionResult"]>;
     walletBalanceUsd: number;
+    releaseMetadata?: unknown;
   }): Promise<WalletFundingBalance>;
   listTradeTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]>;
   getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined>;
@@ -161,6 +170,7 @@ export class InMemoryCassieStore implements CassieStore {
       privyWalletId: input.privyWalletId,
       walletAddress: input.walletAddress,
       defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+      telegram: existing?.telegram ?? null,
     };
     await this.upsertUserSettings(settings);
     return settings;
@@ -294,11 +304,10 @@ export class InMemoryCassieStore implements CassieStore {
   }
 
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
-    assertNonnegativeAmount(walletBalanceUsd);
     return walletFundingBalance({
       userId,
-      walletBalanceUsd,
-      reservedUsd: this.openReservedUsd(userId),
+      walletBalanceUsdCents: nonnegativeUsdToCents(walletBalanceUsd),
+      reservedUsdCents: this.openReservedUsdCents(userId),
       updatedAt: new Date().toISOString(),
     });
   }
@@ -308,26 +317,32 @@ export class InMemoryCassieStore implements CassieStore {
     job: ExecutionJob;
     walletBalanceUsd: number;
   }): Promise<WalletFundingBalance> {
-    assertPositiveAmount(input.ticket.sizeUsd);
+    const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     if (this.hasWalletSpendEntry("trade_reserve", input.job.jobId)) {
       return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
     }
 
-    const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
-    if (balance.spendableUsd < input.ticket.sizeUsd) {
+    const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
+    const reservedUsdCents = this.openReservedUsdCents(input.ticket.userId);
+    if (walletBalanceUsdCents - reservedUsdCents < ticketSizeCents) {
       throw new Error("Insufficient user wallet balance.");
     }
 
     this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
       userId: input.ticket.userId,
       type: "trade_reserve",
-      amountUsd: input.ticket.sizeUsd,
+      amountUsd: centsToUsd(ticketSizeCents),
       ticketId: input.ticket.ticketId,
       executionJobId: input.job.jobId,
       metadata: { venue: input.ticket.venue, instrument: input.ticket.instrument, side: input.ticket.side },
       createdAt: new Date().toISOString(),
     }));
-    return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+    return walletFundingBalance({
+      userId: input.ticket.userId,
+      walletBalanceUsdCents,
+      reservedUsdCents: reservedUsdCents + ticketSizeCents,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async releaseWalletSpend(input: {
@@ -335,23 +350,55 @@ export class InMemoryCassieStore implements CassieStore {
     job: ExecutionJob;
     reason: string;
     walletBalanceUsd: number;
+    metadata?: unknown;
   }): Promise<WalletFundingBalance> {
+    const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     if (this.hasWalletSpendEntry("trade_release", input.job.jobId)) {
       return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
     }
 
-    const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
-    if (balance.reservedUsd < input.ticket.sizeUsd) {
+    const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
+    const reservedUsdCents = this.openReservedUsdCents(input.ticket.userId);
+    if (reservedUsdCents < ticketSizeCents) {
       throw new Error("Cannot release a missing trade reservation.");
     }
 
     this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
       userId: input.ticket.userId,
       type: "trade_release",
-      amountUsd: input.ticket.sizeUsd,
+      amountUsd: centsToUsd(ticketSizeCents),
       ticketId: input.ticket.ticketId,
       executionJobId: input.job.jobId,
-      metadata: { reason: input.reason },
+      metadata: input.metadata ?? { reason: input.reason },
+      createdAt: new Date().toISOString(),
+    }));
+    return walletFundingBalance({
+      userId: input.ticket.userId,
+      walletBalanceUsdCents,
+      reservedUsdCents: reservedUsdCents - ticketSizeCents,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async recordWalletPrefund(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    amountUsd: number;
+    metadata: unknown;
+    walletBalanceUsd: number;
+  }): Promise<WalletFundingBalance> {
+    const prefundCents = positiveUsdToCents(input.amountUsd);
+    if (this.hasWalletSpendEntry("trade_prefund", input.job.jobId)) {
+      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+    }
+
+    this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
+      userId: input.ticket.userId,
+      type: "trade_prefund",
+      amountUsd: centsToUsd(prefundCents),
+      ticketId: input.ticket.ticketId,
+      executionJobId: input.job.jobId,
+      metadata: input.metadata,
       createdAt: new Date().toISOString(),
     }));
     return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
@@ -362,15 +409,18 @@ export class InMemoryCassieStore implements CassieStore {
     job: ExecutionJob;
     executionResult: NonNullable<ExecutionJob["executionResult"]>;
     walletBalanceUsd: number;
+    releaseMetadata?: unknown;
   }): Promise<WalletFundingBalance> {
+    const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     if (this.hasWalletSpendEntry("trade_spend", input.job.jobId)) {
       return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
     }
 
-    const filledSizeUsd = normalizedFilledSize(input.ticket, input.executionResult);
-    const releaseUsd = input.ticket.sizeUsd - filledSizeUsd;
-    const balance = await this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
-    if (balance.reservedUsd < input.ticket.sizeUsd) {
+    const filledSizeCents = normalizedFilledSizeCents(input.ticket, input.executionResult);
+    const releaseCents = ticketSizeCents - filledSizeCents;
+    const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
+    const reservedUsdCents = this.openReservedUsdCents(input.ticket.userId);
+    if (reservedUsdCents < ticketSizeCents) {
       throw new Error("Cannot settle a missing trade reservation.");
     }
 
@@ -378,24 +428,29 @@ export class InMemoryCassieStore implements CassieStore {
     this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
       userId: input.ticket.userId,
       type: "trade_spend",
-      amountUsd: filledSizeUsd,
+      amountUsd: centsToUsd(filledSizeCents),
       ticketId: input.ticket.ticketId,
       executionJobId: input.job.jobId,
       metadata: input.executionResult,
       createdAt: now,
     }));
-    if (releaseUsd > 0) {
+    if (releaseCents > 0) {
       this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
         userId: input.ticket.userId,
         type: "trade_release",
-        amountUsd: releaseUsd,
+        amountUsd: centsToUsd(releaseCents),
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
-        metadata: { reason: "unfilled_order_amount" },
+        metadata: input.releaseMetadata ?? { reason: "unfilled_order_amount" },
         createdAt: now,
       }));
     }
-    return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+    return walletFundingBalance({
+      userId: input.ticket.userId,
+      walletBalanceUsdCents,
+      reservedUsdCents: reservedUsdCents - ticketSizeCents,
+      updatedAt: new Date().toISOString(),
+    });
   }
 
   async listTradeTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
@@ -434,47 +489,75 @@ export class InMemoryCassieStore implements CassieStore {
     );
   }
 
-  private openReservedUsd(userId: string): number {
+  private openReservedUsdCents(userId: string): number {
     return this.snapshot.walletSpendLedgerEntries.reduce((total, entry) => {
       if (entry.userId !== userId) return total;
-      if (entry.type === "trade_reserve") return total + entry.amountUsd;
-      if (entry.type === "trade_release" || entry.type === "trade_spend") return total - entry.amountUsd;
+      if (entry.type === "trade_reserve") return total + nonnegativeUsdToCents(entry.amountUsd);
+      if (entry.type === "trade_release" || entry.type === "trade_spend") {
+        return total - nonnegativeUsdToCents(entry.amountUsd);
+      }
       return total;
     }, 0);
   }
 }
 
-function assertPositiveAmount(amountUsd: number): void {
-  if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+function positiveUsdToCents(amountUsd: number): number {
+  if (!Number.isFinite(amountUsd)) {
     throw new Error("Wallet spend amount must be a positive USD value.");
   }
+  const cents = usdToCents(amountUsd);
+  if (cents <= 0) {
+    throw new Error("Wallet spend amount must be a positive USD value.");
+  }
+  return cents;
 }
 
-function assertNonnegativeAmount(amountUsd: number): void {
-  if (!Number.isFinite(amountUsd) || amountUsd < 0) {
+function nonnegativeUsdToCents(amountUsd: number): number {
+  if (!Number.isFinite(amountUsd)) {
     throw new Error("Wallet balance must be a nonnegative USD value.");
   }
+  const cents = usdToCents(amountUsd);
+  if (cents < 0) {
+    throw new Error("Wallet balance must be a nonnegative USD value.");
+  }
+  return cents;
 }
 
-function normalizedFilledSize(
+function usdToCents(amountUsd: number): number {
+  return Math.round(amountUsd * 100);
+}
+
+function centsToUsd(amountUsdCents: number): number {
+  return amountUsdCents / 100;
+}
+
+function normalizedFilledSizeCents(
   ticket: TradeTicket,
   executionResult: NonNullable<ExecutionJob["executionResult"]>,
 ): number {
-  const filledSizeUsd = executionResult.filledSizeUsd;
-  if (!Number.isFinite(filledSizeUsd) || filledSizeUsd < 0) {
+  if (!Number.isFinite(executionResult.filledSizeUsd) || executionResult.filledSizeUsd < 0) {
     throw new Error("Execution result filledSizeUsd must be nonnegative.");
   }
-  if (filledSizeUsd > ticket.sizeUsd) {
+  const filledSizeCents = usdToCents(executionResult.filledSizeUsd);
+  if (filledSizeCents > positiveUsdToCents(ticket.sizeUsd)) {
     throw new Error("Execution result filled more than the reserved ticket size.");
   }
-  return filledSizeUsd;
+  return filledSizeCents;
 }
 
-function walletFundingBalance(input: Omit<WalletFundingBalance, "spendableUsd">): WalletFundingBalance {
-  const spendableUsd = input.walletBalanceUsd - input.reservedUsd;
+function walletFundingBalance(input: {
+  userId: string;
+  walletBalanceUsdCents: number;
+  reservedUsdCents: number;
+  updatedAt: string;
+}): WalletFundingBalance {
+  const spendableUsdCents = input.walletBalanceUsdCents - input.reservedUsdCents;
   return {
-    ...input,
-    spendableUsd: spendableUsd > 0 ? spendableUsd : 0,
+    userId: input.userId,
+    walletBalanceUsd: centsToUsd(input.walletBalanceUsdCents),
+    reservedUsd: centsToUsd(input.reservedUsdCents),
+    spendableUsd: centsToUsd(spendableUsdCents > 0 ? spendableUsdCents : 0),
+    updatedAt: input.updatedAt,
   };
 }
 

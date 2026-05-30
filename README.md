@@ -58,6 +58,12 @@ Run the worker in a second terminal:
 npm run worker
 ```
 
+Run the Telegram poller in another terminal to receive onboarding `/start` messages without a webhook:
+
+```bash
+npm run poll:telegram
+```
+
 ## Operate Cassie
 
 Enqueue Cassie from the CLI and show the live timeline:
