@@ -25,6 +25,56 @@ describe("tweet round robin", () => {
     await expect(selectNextTweetUrl(filePath)).resolves.toBe("https://x.com/c/status/3");
     await expect(currentFlags(filePath)).resolves.toEqual([true, false, false]);
   });
+
+  it("preserves tweet display metadata when advancing the cursor", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "cassie-tweets-"));
+    const filePath = join(dir, "tweets.json");
+    await writeFile(filePath, JSON.stringify({
+      tweets: [
+        {
+          url: "https://x.com/a/status/1",
+          current: true,
+          authorName: "A",
+          text: "Display copy",
+          mediaUrls: ["https://example.com/a.png"],
+        },
+        {
+          url: "https://x.com/b/status/2",
+          current: false,
+          authorName: "B",
+          text: "More display copy",
+          mediaUrls: [],
+        },
+      ],
+    }, null, 2));
+
+    await selectNextTweetUrl(filePath);
+
+    const parsed = JSON.parse(await readFile(filePath, "utf8")) as {
+      tweets: Array<{
+        current: boolean;
+        authorName?: string;
+        text?: string;
+        mediaUrls?: string[];
+      }>;
+    };
+    expect(parsed.tweets).toEqual([
+      {
+        url: "https://x.com/a/status/1",
+        current: false,
+        authorName: "A",
+        text: "Display copy",
+        mediaUrls: ["https://example.com/a.png"],
+      },
+      {
+        url: "https://x.com/b/status/2",
+        current: true,
+        authorName: "B",
+        text: "More display copy",
+        mediaUrls: [],
+      },
+    ]);
+  });
 });
 
 async function currentFlags(filePath: string): Promise<boolean[]> {

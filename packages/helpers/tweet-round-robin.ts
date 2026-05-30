@@ -8,6 +8,7 @@ export const DEFAULT_TEST_RUN_TWEETS_PATH = fileURLToPath(
 type TweetEntry = {
   url: string;
   current: boolean;
+  [key: string]: unknown;
 };
 
 type TweetFile = {
@@ -54,6 +55,7 @@ function parseTweetFile(raw: string, filePath: string): TweetFile {
       throw new Error(`Tweet round-robin file ${filePath} has an invalid tweet at index ${index}.`);
     }
     return {
+      ...tweet,
       url: tweet.url,
       current: tweet.current,
     };
