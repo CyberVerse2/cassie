@@ -1,0 +1,70 @@
+x-cassie-service: &cassie-service
+  build:
+    context: .
+  env_file:
+    - .env
+  init: true
+  restart: unless-stopped
+  environment:
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/cassie
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+x-cassie-runtime: &cassie-runtime
+  <<: *cassie-service
+  depends_on:
+    migrate:
+      condition: service_completed_successfully
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: cassie
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - cassie-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d cassie"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate:
+    <<: *cassie-service
+    restart: "no"
+    command: ["npm", "run", "db:migrate"]
+
+  web:
+    <<: *cassie-runtime
+    command: ["npm", "run", "web:start"]
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/cassie
+      PORT: 3000
+    expose:
+      - "3000"
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  worker:
+    <<: *cassie-runtime
+    command: ["npm", "run", "worker"]
+
+  x-poller:
+    <<: *cassie-runtime
+    command: ["npm", "run", "poll:x"]
+
+  telegram-poller:
+    <<: *cassie-runtime
+    command: ["npm", "run", "poll:telegram"]
+
+volumes:
+  cassie-postgres-data:
+

@@ -1,0 +1,12 @@
+.claude
+.env
+.git
+.next
+.superpowers
+.worktrees
+coverage
+dist
+node_modules
+tmp
+*.tsbuildinfo
+

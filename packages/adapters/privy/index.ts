@@ -219,12 +219,13 @@ function formatUsdAmount(amountUsd: number): string {
   if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
     throw new Error("USDC transfer amount must be a positive USD value.");
   }
+  const microUsdcPerUsd = BigInt(1_000_000);
   const microUsdc = BigInt(Math.round(amountUsd * 1_000_000));
-  if (microUsdc <= 0n) {
+  if (microUsdc <= BigInt(0)) {
     throw new Error("USDC transfer amount must be a positive USD value.");
   }
-  const whole = microUsdc / 1_000_000n;
-  const fractional = microUsdc % 1_000_000n;
+  const whole = microUsdc / microUsdcPerUsd;
+  const fractional = microUsdc % microUsdcPerUsd;
   const fractionalText = fractional.toString().padStart(6, "0").replace(/0+$/, "");
   return fractionalText ? `${whole}.${fractionalText}` : whole.toString();
 }
