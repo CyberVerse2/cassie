@@ -4,6 +4,7 @@ import type { SourcePost } from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { config as runtimeConfig } from "../core/config.ts";
 import type { CassieProduct } from "./product.ts";
+import type { XReplyGateway } from "../notifications/x.ts";
 
 const XUrlEntitySchema = z.object({
   expanded_url: z.string().optional(),
@@ -60,8 +61,11 @@ type XWebhookTweet = z.infer<typeof XWebhookTweetSchema>;
 export type ProcessXWebhookPayloadResult = {
   received: number;
   queued: number;
+  replied: number;
   skipped: number;
+  failed: number;
   runIds: string[];
+  errors: Array<{ postId?: string; error: string }>;
 };
 
 export function xWebhookResponseToken(input: {
@@ -108,6 +112,7 @@ export async function processXWebhookPayload(input: {
   product: CassieProduct;
   store: CassieStore;
   payload: unknown;
+  replyGateway?: XReplyGateway;
   userId?: string;
   cassieHandle?: string;
 }): Promise<ProcessXWebhookPayloadResult> {
@@ -124,49 +129,111 @@ export async function processXWebhookPayload(input: {
   const payload = XAccountActivityPayloadSchema.parse(input.payload);
   const tweets = payload.tweet_create_events ?? [];
   if (isTruthyXFlag(payload.user_has_blocked) || isTruthyXFlag(payload.is_blocked_by)) {
-    return { received: tweets.length, queued: 0, skipped: tweets.length, runIds: [] };
+    return {
+      received: tweets.length,
+      queued: 0,
+      replied: 0,
+      skipped: tweets.length,
+      failed: 0,
+      runIds: [],
+      errors: [],
+    };
   }
 
   const runIds: string[] = [];
+  const errors: Array<{ postId?: string; error: string }> = [];
+  let replied = 0;
   let skipped = 0;
+  let failed = 0;
 
   for (const tweet of tweets) {
-    if (tweet.retweeted_status != null) {
-      skipped += 1;
-      continue;
-    }
+    let postId: string | undefined;
+    try {
+      if (tweet.retweeted_status != null) {
+        skipped += 1;
+        continue;
+      }
 
-    const sourcePost = sourcePostFromXWebhookTweet(tweet);
-    if (!mentionsCassie(sourcePost.text, cassieHandle)) {
-      skipped += 1;
-      continue;
-    }
+      const sourcePost = sourcePostFromXWebhookTweet(tweet);
+      postId = requireSourcePostId(sourcePost);
+      if (!mentionsCassie(sourcePost.text, cassieHandle)) {
+        skipped += 1;
+        continue;
+      }
 
-    const stateKey = `x_webhook:${userId}:${sourcePost.postId}`;
-    const existing = await input.store.getRuntimeState(stateKey);
-    if (existing != null) {
-      skipped += 1;
-      continue;
-    }
+      const stateKey = `x_webhook:${userId}:${postId}`;
+      const existing = await input.store.getRuntimeState(stateKey);
+      if (existing != null) {
+        skipped += 1;
+        continue;
+      }
 
-    const result = await input.product.createMentionRun({
-      userId,
-      userCommand: sourcePost.text,
-      sourcePost,
-    });
-    await input.store.setRuntimeState(stateKey, {
-      runId: result.runId,
-      receivedAt: new Date().toISOString(),
-    });
-    runIds.push(result.runId);
+      const reply = await replyToMentionOnce({
+        store: input.store,
+        replyGateway: input.replyGateway,
+        sourcePost,
+      });
+      if (reply.replied) {
+        replied += 1;
+      }
+
+      const result = await input.product.createMentionRun({
+        userId,
+        userCommand: sourcePost.text,
+        sourcePost,
+      });
+      await input.store.setRuntimeState(stateKey, {
+        runId: result.runId,
+        replyId: reply.replyId ?? null,
+        receivedAt: new Date().toISOString(),
+      });
+      runIds.push(result.runId);
+    } catch (error) {
+      failed += 1;
+      errors.push({
+        postId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   return {
     received: tweets.length,
     queued: runIds.length,
+    replied,
     skipped,
+    failed,
     runIds,
+    errors,
   };
+}
+
+async function replyToMentionOnce(input: {
+  store: CassieStore;
+  replyGateway?: XReplyGateway;
+  sourcePost: SourcePost;
+}): Promise<{ replied: boolean; replyId?: string }> {
+  if (!input.replyGateway) {
+    return { replied: false };
+  }
+
+  const postId = requireSourcePostId(input.sourcePost);
+  const stateKey = `x_reply:hi:${postId}`;
+  const existing = await input.store.getRuntimeState<{ replyId?: string }>(stateKey);
+  if (existing) {
+    return { replied: false, replyId: existing.replyId };
+  }
+
+  const reply = await input.replyGateway.replyToPost({
+    postId,
+    text: "hi",
+  });
+  await input.store.setRuntimeState(stateKey, {
+    replyId: reply.id,
+    text: reply.text,
+    repliedAt: new Date().toISOString(),
+  });
+  return { replied: true, replyId: reply.id };
 }
 
 function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {
@@ -218,6 +285,13 @@ function escapeRegExp(value: string): string {
 
 function uniqueStrings(values: string[]): string[] {
   return [...new Set(values)];
+}
+
+function requireSourcePostId(sourcePost: SourcePost): string {
+  if (!sourcePost.postId) {
+    throw new Error("X webhook source post is missing postId.");
+  }
+  return sourcePost.postId;
 }
 
 function isTruthyXFlag(value: string | boolean | undefined): boolean {

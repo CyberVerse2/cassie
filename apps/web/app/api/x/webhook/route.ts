@@ -7,6 +7,7 @@ import {
 } from "../../../../../../packages/app/x-webhook";
 import { config } from "../../../../../../packages/core/config";
 import { DrizzleCassieStore } from "../../../../../../packages/core/db/drizzle-store";
+import { XApi } from "../../../../../../packages/notifications/x";
 import { apiError } from "../../_lib/account";
 
 export const runtime = "nodejs";
@@ -32,6 +33,11 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const rawBody = Buffer.from(await request.arrayBuffer());
+    console.log(JSON.stringify({
+      event: "x.webhook.received",
+      bytes: rawBody.byteLength,
+      signaturePresent: Boolean(request.headers.get("x-twitter-webhooks-signature")),
+    }));
     verifyXWebhookSignature({
       rawBody,
       signature: request.headers.get("x-twitter-webhooks-signature"),
@@ -43,11 +49,26 @@ export async function POST(request: Request) {
     const result = await processXWebhookPayload({
       product,
       store,
+      replyGateway: new XApi({ env: config.x, store }),
       payload: JSON.parse(rawBody.toString("utf8")),
     });
+    console.log(JSON.stringify({
+      event: "x.webhook.processed",
+      received: result.received,
+      queued: result.queued,
+      replied: result.replied,
+      skipped: result.skipped,
+      failed: result.failed,
+      runIds: result.runIds,
+      errors: result.errors,
+    }));
 
     return NextResponse.json(result);
   } catch (error) {
+    console.error(JSON.stringify({
+      event: "x.webhook.failed",
+      error: error instanceof Error ? error.message : String(error),
+    }));
     return apiError(error);
   }
 }
