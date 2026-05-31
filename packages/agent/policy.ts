@@ -6,6 +6,7 @@ import {
   hasToolCall,
   stepCountIs,
 } from "ai";
+import { isConfiguredVenueSearchableExpressionRail } from "../core/expression-rails.ts";
 import type { createCassieSupervisorTools } from "./tools.ts";
 
 export type CassieSupervisorTools = ReturnType<typeof createCassieSupervisorTools>;
@@ -44,6 +45,11 @@ export function selectActiveTools(
     return ["finalize_run"];
   }
 
+  const sourceModeClassification = objectRecord(latestToolOutput(steps, "classify_source_mode"));
+  if (sourceModeClassification.sourceMode === "breaking_news") {
+    return selectBreakingNewsActiveTools(steps, sourceModeClassification);
+  }
+
   const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
   if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
     return marketSelection.selectedMarket && !marketSelection.noTradeReason
@@ -60,14 +66,7 @@ export function selectActiveTools(
     const fitAssessments = toolOutputsAfterLatest(steps, "assess_expression_fit", "search_venues")
       .map(objectRecord)
       .filter((assessment) => typeof assessment.fitStatus === "string");
-    const validatedDirectFitAssessments = fitAssessments.filter(isValidatedDirectFitAssessment);
     const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
-    if (validatedDirectFitAssessments.length > 0) {
-      if (quotes.length < validatedDirectFitAssessments.length) {
-        return ["quote_expression"];
-      }
-      return ["rank_expressions"];
-    }
 
     if (fitAssessments.length < marketCandidates.length) {
       return ["assess_expression_fit"];
@@ -104,7 +103,76 @@ export function selectActiveTools(
     return ["preflight_user_policy"];
   }
 
+  if (!latestToolOutput(steps, "classify_source_mode")) {
+    return ["classify_source_mode"];
+  }
+
   return ["resolve_source", "frame_opportunity"];
+}
+
+function selectBreakingNewsActiveTools(
+  steps: Array<Pick<StepResult<ToolSet>, "toolCalls" | "toolResults">>,
+  sourceModeClassification: Record<string, unknown>,
+): CassieSupervisorToolName[] {
+  if (hasSucceeded(steps, "finalize_run")) {
+    return [];
+  }
+
+  if (latestToolOutput(steps, "create_trade_ticket")) {
+    return ["finalize_run"];
+  }
+
+  if (!latestToolOutput(steps, "preflight_user_policy")) {
+    return ["preflight_user_policy"];
+  }
+
+  const marketSelection = objectRecord(latestToolOutput(steps, "rank_expressions"));
+  if (hasOwn(marketSelection, "selectedMarket") || marketSelection.decision === "no_selection" || marketSelection.noTradeReason) {
+    if (marketSelection.selectedMarket && !marketSelection.noTradeReason && sourceModeClassification.userIntent === "trade") {
+      return ["create_trade_ticket"];
+    }
+    return ["finalize_run"];
+  }
+
+  const marketCandidates = latestToolOutput(steps, "search_venues");
+  if (marketCandidates) {
+    if (!Array.isArray(marketCandidates) || marketCandidates.length === 0) {
+      return ["finalize_run"];
+    }
+
+    const fitAssessments = toolOutputsAfterLatest(steps, "assess_expression_fit", "search_venues")
+      .map(objectRecord)
+      .filter((assessment) => typeof assessment.fitStatus === "string");
+    const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+    const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
+
+    if (fitAssessments.length < marketCandidates.length) {
+      return ["assess_expression_fit"];
+    }
+
+    if (validatedFitAssessments.length === 0) {
+      return ["finalize_run"];
+    }
+
+    if (quotes.length < validatedFitAssessments.length) {
+      return ["quote_expression"];
+    }
+
+    return ["rank_expressions"];
+  }
+
+  const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
+  if (tradeExpression.decision) {
+    return tradeExpression.decision === "no_trade" && !hasSearchableCandidateExpression(tradeExpression)
+      ? ["finalize_run"]
+      : ["search_venues"];
+  }
+
+  if (!latestToolOutput(steps, "frame_opportunity")) {
+    return ["frame_opportunity", "generate_trade_expressions"];
+  }
+
+  return ["generate_trade_expressions"];
 }
 
 function hasSucceeded(
@@ -280,6 +348,7 @@ function buildSupervisorState(
       ([
         "resolve_source",
         "preflight_user_policy",
+        "classify_source_mode",
         "frame_opportunity",
         "generate_trade_expressions",
         "search_venues",
@@ -305,12 +374,8 @@ function buildVenueDiscoveryProgress(
     .map(objectRecord)
     .filter((assessment) => typeof assessment.fitStatus === "string");
   const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
-  const validatedDirectFitAssessments = fitAssessments.filter(isValidatedDirectFitAssessment);
-  const activeValidatedFitAssessments = validatedDirectFitAssessments.length > 0
-    ? validatedDirectFitAssessments
-    : validatedFitAssessments;
   const validatedCandidateIndexes = fitAssessments
-    .map((assessment, index) => activeValidatedFitAssessments.includes(assessment) ? index : null)
+    .map((assessment, index) => validatedFitAssessments.includes(assessment) ? index : null)
     .filter((index): index is number => index !== null);
   const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
   const nextUnquotedCandidateIndex = validatedCandidateIndexes[quotes.length] ?? null;
@@ -321,21 +386,15 @@ function buildVenueDiscoveryProgress(
     validatedFitCount: validatedFitAssessments.length,
     quoteCount: quotes.length,
     nextUnassessedCandidate: fitAssessments.length < candidates.length
-      && validatedDirectFitAssessments.length === 0
       ? summarizeToolOutput(candidates[fitAssessments.length])
       : null,
-    nextUnquotedCandidate: quotes.length < activeValidatedFitAssessments.length
+    nextUnquotedCandidate: quotes.length < validatedFitAssessments.length
       ? summarizeToolOutput(candidates[nextUnquotedCandidateIndex ?? quotes.length])
       : null,
-    readyToRank: activeValidatedFitAssessments.length > 0
-      && quotes.length >= activeValidatedFitAssessments.length
-      && (fitAssessments.length >= candidates.length || validatedDirectFitAssessments.length > 0),
+    readyToRank: validatedFitAssessments.length > 0
+      && quotes.length >= validatedFitAssessments.length
+      && fitAssessments.length >= candidates.length,
   };
-}
-
-function isValidatedDirectFitAssessment(assessment: Record<string, unknown>): boolean {
-  return assessment.fitStatus === "validated"
-    && (assessment.directness === "direct" || assessment.directness === "strong_proxy");
 }
 
 function summarizeToolOutput(output: unknown): unknown {
@@ -393,7 +452,8 @@ function hasSearchableCandidateExpression(tradeExpression: Record<string, unknow
     const expression = objectRecord(candidate);
     const searchTerms = Array.isArray(expression.searchTerms) ? expression.searchTerms : [];
     const marketFeatures = Array.isArray(expression.requiredMarketFeatures) ? expression.requiredMarketFeatures : [];
-    return expression.expressionRail !== "no_trade"
+    return typeof expression.expressionRail === "string"
+      && isConfiguredVenueSearchableExpressionRail(expression.expressionRail)
       && expression.intendedSide !== "avoid"
       && searchTerms.length > 0
       && marketFeatures.length > 0;

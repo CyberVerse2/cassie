@@ -17,6 +17,9 @@ import {
   type ExpressionFitAssessment,
   type MarketCandidate,
   type MarketSelection,
+  type OpportunityFrame,
+  type SourcePost,
+  type TradeExpressionPlan,
   type UserSettings,
 } from "../core/schemas/index.ts";
 import { selectMarket } from "../adapters/selection.ts";
@@ -24,7 +27,7 @@ import { createTradeTicket } from "../tickets/index.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
 import { createRunStepCache } from "./tool-cache.ts";
-import { frameOpportunity, generateTradeExpressions } from "./reasoning.ts";
+import { classifySourceMode, frameOpportunity, generateTradeExpressions } from "./reasoning.ts";
 import { assessExpressionFit, quoteExpression, searchVenues } from "./venues.ts";
 import { thesisForMarketSelection, thesisFromTradeExpression } from "./thesis.ts";
 import {
@@ -40,7 +43,7 @@ export {
   finalizeRunFromPersistedSteps,
 } from "./finalization.ts";
 
-const promptVersion = "2026-05-24";
+const promptVersion = "2026-05-31";
 
 const PreflightUserPolicySchema = z.object({
   status: z.literal("ok"),
@@ -69,6 +72,17 @@ export function createCassieSupervisorTools(input: {
   }
   const { runStepOnce } = createRunStepCache();
 
+  async function sourceForAnalysis(): Promise<SourcePost> {
+    const steps = await input.store.getRunSteps(input.run.runId);
+    for (let index = steps.length - 1; index >= 0; index -= 1) {
+      const step = steps[index];
+      if (step?.stepType !== "intake" || step.status !== "succeeded") continue;
+      const resolved = SourcePostSchema.safeParse(step.output);
+      if (resolved.success) return resolved.data;
+    }
+    return input.run.sourcePost;
+  }
+
   return {
     preflight_user_policy: tool({
       description: "Run deterministic user-policy preflight before semantic opportunity analysis.",
@@ -83,13 +97,35 @@ export function createCassieSupervisorTools(input: {
         execute: async () => preflightUserPolicy(input.userSettings),
       })),
     }),
+    classify_source_mode: tool({
+      description: "Classify whether the source content is normal or breaking news while preserving user intent.",
+      inputSchema: z.object({}),
+      execute: async () => runStepOnce("intake", { kind: "source_mode" }, async () => {
+        const source = await sourceForAnalysis();
+        return recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "intake",
+          promptName: "cassie_source_mode_classification",
+          promptVersion,
+          model: cheapModel,
+          stepInput: {
+            userCommand: input.run.userCommand,
+            sourcePost: source,
+          },
+          execute: ({ setThinkingTrace }) => classifySourceMode({
+            ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
+            sourcePost: source,
+            userCommand: input.run.userCommand,
+          }),
+        });
+      }),
+    }),
     frame_opportunity: tool({
       description: "Frame the market opportunity implied by the source post without choosing the final trade.",
-      inputSchema: z.object({
-        sourcePost: SourcePostSchema.optional(),
-      }),
-      execute: async ({ sourcePost }) => runStepOnce("opportunity", { sourcePost }, async () => {
-        const source = sourcePost ?? input.run.sourcePost;
+      inputSchema: z.object({}),
+      execute: async () => runStepOnce("opportunity", {}, async () => {
+        const source = await sourceForAnalysis();
         return recordRunStep({
           store: input.store,
           runId: input.run.runId,
@@ -167,20 +203,21 @@ export function createCassieSupervisorTools(input: {
     search_venues: tool({
       description: "Search configured execution and market venues for real candidates matching the trade expression.",
       inputSchema: z.object({
-        tradeExpression: TradeExpressionPlanSchema,
         venues: z.array(z.enum(["hyperliquid", "polymarket"])).optional(),
         limit: z.number().int().positive().max(25).optional(),
       }),
-      execute: async ({ tradeExpression, venues, limit }) => runStepOnce(
+      execute: async ({ venues, limit }) => {
+        const tradeExpression = await requireLatestTradeExpression(input.store, input.run.runId);
+        return runStepOnce(
         "market_candidates",
-        { tradeExpression, venues, limit },
+        { venues, limit },
         async () => {
           const thesis = thesisFromTradeExpression(tradeExpression);
           return recordRunStep({
             store: input.store,
             runId: input.run.runId,
             stepType: "market_candidates",
-            stepInput: { tradeExpression, venues, limit },
+            stepInput: { venues, limit },
             execute: () => searchVenues({
               marketData: input.deps.marketData,
               polymarket: input.deps.polymarketMarketFinder,
@@ -191,17 +228,18 @@ export function createCassieSupervisorTools(input: {
             }),
           });
         },
-      ),
+        );
+      },
     }),
     assess_expression_fit: tool({
       description: "Use AI semantic judgment to assess whether a real venue candidate fits the framed opportunity and intended expression.",
       inputSchema: z.object({
-        opportunityFrame: OpportunityFrameSchema,
-        tradeExpression: TradeExpressionPlanSchema,
         candidate: MarketCandidateSchema,
         side: z.enum(["yes", "no"]).optional(),
       }),
-      execute: async ({ opportunityFrame, tradeExpression, candidate, side }) => {
+      execute: async ({ candidate, side }) => {
+        const opportunityFrame = await requireLatestOpportunityFrame(input.store, input.run.runId);
+        const tradeExpression = await requireLatestTradeExpression(input.store, input.run.runId);
         const persistedCandidate = await resolveLatestMarketCandidate({
           store: input.store,
           runId: input.run.runId,
@@ -210,7 +248,7 @@ export function createCassieSupervisorTools(input: {
         const candidateSide = predictionMarketSideForCandidate(persistedCandidate, side);
         return runStepOnce(
           "market_assessment",
-          { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
+          { candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
           async () => {
             return recordRunStep({
               store: input.store,
@@ -219,7 +257,7 @@ export function createCassieSupervisorTools(input: {
               promptName: "cassie_expression_fit",
               promptVersion,
               model: importantModel,
-              stepInput: { opportunityFrame, tradeExpression, candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
+              stepInput: { candidate: persistedCandidate, ...(candidateSide ? { side: candidateSide } : {}) },
               execute: ({ setThinkingTrace }) => assessExpressionFit({
                 ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
                 opportunityFrame,
@@ -276,12 +314,12 @@ export function createCassieSupervisorTools(input: {
     rank_expressions: tool({
       description: "Rank real venue candidates and choose the best grounded trade expression; do not invent markets.",
       inputSchema: z.object({
-        tradeExpression: TradeExpressionPlanSchema,
         candidates: z.array(z.unknown()).default([]),
         fitAssessments: z.array(z.unknown()).default([]),
         quotes: z.array(z.unknown()).default([]),
       }),
-      execute: async ({ tradeExpression, candidates, fitAssessments, quotes }) => {
+      execute: async ({ candidates, fitAssessments, quotes }) => {
+        const tradeExpression = await requireLatestTradeExpression(input.store, input.run.runId);
         const storedCandidates = await latestPersistedMarketCandidates(input.store, input.run.runId);
         const persistedCandidates = storedCandidates.length > 0
           ? storedCandidates
@@ -293,9 +331,10 @@ export function createCassieSupervisorTools(input: {
         const persistedQuotes = await latestPersistedQuotes(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : parseSuppliedRankQuotes(quotes);
         const validatedFitAssessments = persistedFitAssessments.filter((assessment) => assessment.fitStatus === "validated");
-        const rankingCandidates = preferHyperliquidPerpsOverSpot(persistedCandidates
-          .slice(0, persistedFitAssessments.length)
-          .filter((_, index) => persistedFitAssessments[index]?.fitStatus === "validated"));
+        const rankingCandidates = preferHyperliquidPerpsOverSpot(candidatesForFitAssessments(
+          persistedCandidates,
+          validatedFitAssessments,
+        ));
         if (groundedQuotes.length === 0) {
           throw new Error("rank_expressions requires a persisted or supplied market quote.");
         }
@@ -455,11 +494,34 @@ async function latestPersistedMarketSelection(store: CassieStore, runId: string)
     : null;
 }
 
+async function latestPersistedOpportunityFrame(store: CassieStore, runId: string): Promise<OpportunityFrame | null> {
+  const latestStep = await latestSucceededStep(store, runId, "opportunity");
+  return latestStep
+    ? OpportunityFrameSchema.parse(latestStep.output)
+    : null;
+}
+
+async function requireLatestOpportunityFrame(store: CassieStore, runId: string): Promise<OpportunityFrame> {
+  const opportunityFrame = await latestPersistedOpportunityFrame(store, runId);
+  if (!opportunityFrame) {
+    throw new Error("assess_expression_fit requires a persisted opportunity frame from frame_opportunity.");
+  }
+  return opportunityFrame;
+}
+
 async function latestPersistedTradeExpression(store: CassieStore, runId: string) {
   const latestStep = await latestSucceededStep(store, runId, "trade_expression");
   return latestStep
     ? TradeExpressionPlanSchema.parse(latestStep.output)
     : null;
+}
+
+async function requireLatestTradeExpression(store: CassieStore, runId: string): Promise<TradeExpressionPlan> {
+  const tradeExpression = await latestPersistedTradeExpression(store, runId);
+  if (!tradeExpression) {
+    throw new Error("This tool requires a persisted trade expression from generate_trade_expressions.");
+  }
+  return tradeExpression;
 }
 
 async function latestPersistedQuotes(store: CassieStore, runId: string): Promise<unknown[]> {
@@ -507,6 +569,45 @@ function preferHyperliquidPerpsOverSpot(candidates: MarketCandidate[]): MarketCa
   );
 }
 
+function candidatesForFitAssessments(
+  candidates: MarketCandidate[],
+  fitAssessments: ExpressionFitAssessment[],
+): MarketCandidate[] {
+  return fitAssessments.map((assessment) => {
+    const match = candidates.find((candidate) =>
+      marketCandidateAssessmentKeys(candidate).some((key) =>
+        normalizedCandidateId(key) === normalizedCandidateId(assessment.candidateId)
+      )
+    );
+    if (!match) {
+      throw new Error(`Validated candidate ${assessment.candidateId} was not found in persisted venue-search results.`);
+    }
+    return match;
+  });
+}
+
+function marketCandidateAssessmentKeys(candidate: MarketCandidate): string[] {
+  return Array.from(new Set([
+    `${candidate.venue}:${candidate.symbol}:${candidate.side}`,
+    `${candidate.venue}:${candidate.symbol}:${candidate.instrument}:${candidate.side}`,
+    `${candidate.venue}:${candidate.instrument}:${candidate.symbol}:${candidate.side}`,
+    `${candidate.venue}:${candidate.marketSlug ?? candidate.symbol}:${candidate.side}`,
+    `${candidate.venue}:${candidate.marketSlug ?? candidate.symbol}:${candidate.instrument}:${candidate.side}`,
+    `${candidate.venue}:${candidate.instrument}:${candidate.marketSlug ?? candidate.symbol}:${candidate.side}`,
+    `${candidate.venue}:${candidate.conditionId ?? candidate.symbol}:${candidate.side}`,
+    `${candidate.venue}:${candidate.conditionId ?? candidate.symbol}:${candidate.instrument}:${candidate.side}`,
+    `${candidate.venue}:${candidate.instrument}:${candidate.conditionId ?? candidate.symbol}:${candidate.side}`,
+    marketCandidateLookupKey(candidate),
+  ]));
+}
+
+function normalizedCandidateId(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[_|]+/gu, ":");
+}
+
 function parseSuppliedTradeExpression(value: unknown) {
   const parsed = TradeExpressionPlanSchema.safeParse(value);
   if (parsed.success) return parsed.data;
@@ -516,7 +617,7 @@ function parseSuppliedTradeExpression(value: unknown) {
 async function latestSucceededStep(
   store: CassieStore,
   runId: string,
-  stepType: "market_candidates" | "market_selection" | "trade_expression",
+  stepType: "market_candidates" | "market_selection" | "opportunity" | "trade_expression",
 ) {
   const steps = await store.getRunSteps(runId);
   return steps
@@ -531,7 +632,7 @@ async function resolveLatestFitAssessment(input: {
 }): Promise<ExpressionFitAssessment> {
   const assessments = await latestPersistedFitAssessments(input.store, input.runId);
   const match = assessments.find((assessment) =>
-    assessment.candidateId === input.fitAssessment.candidateId
+    normalizedCandidateId(assessment.candidateId) === normalizedCandidateId(input.fitAssessment.candidateId)
     && assessment.expressionId === input.fitAssessment.expressionId
     && assessment.venue === input.fitAssessment.venue
     && assessment.fitStatus === input.fitAssessment.fitStatus,

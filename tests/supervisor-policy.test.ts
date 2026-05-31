@@ -32,12 +32,14 @@ describe("supervisor step policy", () => {
       noTradeReason: null,
     });
     const preflight = step("preflight_user_policy", { status: "ok", warnings: [] });
+    const sourceMode = step("classify_source_mode", { sourceMode: "normal", userIntent: "trade" });
 
     expect(selectActiveTools([])).toEqual(["preflight_user_policy"]);
-    expect(selectActiveTools([preflight])).toEqual(["resolve_source", "frame_opportunity"]);
+    expect(selectActiveTools([preflight])).toEqual(["classify_source_mode"]);
+    expect(selectActiveTools([preflight, sourceMode])).toEqual(["resolve_source", "frame_opportunity"]);
     const source = step("resolve_source", { text: "OpenAI revenue growth is accelerating." });
-    expect(selectActiveTools([preflight, source])).toEqual(["frame_opportunity"]);
-    expect(selectActiveTools([preflight, source, opportunity])).toEqual(["generate_trade_expressions"]);
+    expect(selectActiveTools([preflight, sourceMode, source])).toEqual(["frame_opportunity"]);
+    expect(selectActiveTools([preflight, sourceMode, source, opportunity])).toEqual(["generate_trade_expressions"]);
     expect(selectActiveTools([opportunity, expression])).toEqual(["search_venues"]);
     expect(selectActiveTools([opportunity, expression, candidates])).toEqual(["assess_expression_fit"]);
     const fit = step("assess_expression_fit", { fitStatus: "validated", candidateId: "hyperliquid:SOL:long" });
@@ -87,6 +89,21 @@ describe("supervisor step policy", () => {
         }],
       }),
     ])).toEqual(["search_venues"]);
+  });
+
+  it("finalizes no-trade when the remaining expression rail has no configured execution venue", () => {
+    expect(selectActiveTools([
+      step("frame_opportunity", {}),
+      step("generate_trade_expressions", {
+        decision: "no_trade",
+        candidateExpressions: [{
+          expressionRail: "options_volatility",
+          intendedSide: "long",
+          searchTerms: ["VIX call"],
+          requiredMarketFeatures: ["listed option"],
+        }],
+      }),
+    ])).toEqual(["finalize_run"]);
   });
 
   it("exposes finalization after ticket creation", () => {
@@ -141,7 +158,65 @@ describe("supervisor step policy", () => {
     expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "search_venues" });
   });
 
-  it("quotes a direct validated candidate before assessing weak adjacent candidates", () => {
+  it("branches breaking news into parallel frame and expression generation", () => {
+    const preflight = step("preflight_user_policy", { status: "ok", warnings: [] });
+    const sourceMode = step("classify_source_mode", {
+      sourceMode: "breaking_news",
+      userIntent: "trade",
+      headlineThesis: "US approves spot SOL ETF.",
+      affectedEntities: ["SOL"],
+      urgency: "minutes",
+      verificationNeed: "medium",
+      reason: "Fresh approval headline with direct SOL impact.",
+    });
+
+    expect(selectActiveTools([preflight, sourceMode])).toEqual([
+      "frame_opportunity",
+      "generate_trade_expressions",
+    ]);
+  });
+
+  it("does not create tickets for breaking-news watch, countertrade, or critic intents", () => {
+    for (const userIntent of ["watch", "countertrade", "critic"]) {
+      expect(selectActiveTools([
+        step("preflight_user_policy", { status: "ok", warnings: [] }),
+        step("classify_source_mode", {
+          sourceMode: "breaking_news",
+          userIntent,
+          headlineThesis: "Exchange hacked.",
+          affectedEntities: ["BTC"],
+          urgency: "minutes",
+          verificationNeed: "high",
+          reason: "Fresh security headline.",
+        }),
+        step("rank_expressions", {
+          selectedMarket: { venue: "hyperliquid", symbol: "BTC" },
+          noTradeReason: null,
+        }),
+      ])).toEqual(["finalize_run"]);
+    }
+  });
+
+  it("creates tickets for breaking-news trade intent after market selection", () => {
+    expect(selectActiveTools([
+      step("preflight_user_policy", { status: "ok", warnings: [] }),
+      step("classify_source_mode", {
+        sourceMode: "breaking_news",
+        userIntent: "trade",
+        headlineThesis: "Exchange hacked.",
+        affectedEntities: ["BTC"],
+        urgency: "minutes",
+        verificationNeed: "high",
+        reason: "Fresh security headline.",
+      }),
+      step("rank_expressions", {
+        selectedMarket: { venue: "hyperliquid", symbol: "BTC" },
+        noTradeReason: null,
+      }),
+    ])).toEqual(["create_trade_ticket"]);
+  });
+
+  it("keeps assessing candidates before quoting a validated direct candidate", () => {
     const opportunity = step("frame_opportunity", {});
     const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
     const candidates = step("search_venues", [
@@ -155,7 +230,7 @@ describe("supervisor step policy", () => {
       directness: "direct",
     });
 
-    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["quote_expression"]);
+    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["assess_expression_fit"]);
   });
 
   it("keeps assessing venue candidates when no direct candidate has validated", () => {
@@ -195,10 +270,10 @@ describe("supervisor step policy", () => {
     } as never) as { activeTools: string[]; messages: unknown[] };
 
     const serialized = JSON.stringify(prepared.messages);
-    expect(prepared.activeTools).toEqual(["quote_expression"]);
+    expect(prepared.activeTools).toEqual(["assess_expression_fit"]);
     expect(serialized).toContain("venueDiscoveryProgress");
-    expect(serialized).toContain("nextUnquotedCandidate");
-    expect(serialized).toContain("BTC");
+    expect(serialized).toContain("nextUnassessedCandidate");
+    expect(serialized).toContain("btc-price-market");
   });
 
   it("quotes every validated venue candidate before ranking", () => {

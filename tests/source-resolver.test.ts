@@ -30,6 +30,12 @@ describe("Grok X source resolver", () => {
 
     expect(prompt).toContain("https://x.com/example/status/2057246023974875269");
     expect(prompt).toContain("2057246023974875269");
+    expect(prompt).toContain("Role:");
+    expect(prompt).toContain("When uncertain:");
+    expect(prompt).not.toContain("Stage role:");
+    expect(prompt).not.toContain("Output contract:");
+    expect(prompt).toContain("same topic from the same author but a different status ID");
+    expect(prompt).toContain("Before returning, verify internally");
     expect(prompt).toContain("Do not infer, summarize, embellish, or invent");
   });
 

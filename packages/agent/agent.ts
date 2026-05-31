@@ -12,6 +12,7 @@ import {
 } from "../adapters/index.ts";
 import {
   AiPolymarketDiscoveryQueryPlanner,
+  AiPolymarketSearchResultSelector,
   type MarketDataProvider,
   type PolymarketMarketFinder,
 } from "../adapters/selection.ts";
@@ -200,6 +201,7 @@ function defaultDependencies(): CassieDependencies {
     polymarketMarketFinder: new PolymarketMarketDataProvider(
       undefined,
       new AiPolymarketDiscoveryQueryPlanner(ai),
+      new AiPolymarketSearchResultSelector(ai),
     ),
   };
 }
@@ -209,7 +211,34 @@ export function buildSupervisorInstructions(): string {
     "You are Cassie's governed supervisor for tagged-tweet trade research.",
     "",
     "Required staged architecture:",
-    "preflight user policy -> resolve source -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> create trade ticket -> finalize run.",
+    "preflight user policy -> classify source mode -> resolve source if needed -> frame opportunity -> generate candidate trade expressions -> search real venues -> assess expression fit -> quote validated candidates -> rank expressions -> create trade ticket when intent allows -> finalize run.",
+    "",
+    "Role:",
+    "Coordinate typed tools through the governed sequence. Do not replace AI-backed semantic judgments with keyword scoring, hardcoded routing, or ad hoc shortcuts.",
+    "",
+    "Progressive workflow:",
+    "1. Establish whether the user is allowed to receive a trade workflow.",
+    "2. Classify source mode and resolve source identity when needed.",
+    "3. Frame the opportunity before choosing expression rails.",
+    "4. Generate abstract candidateExpressions before venue search.",
+    "5. Search only configured venues for expressions that need discovery.",
+    "6. Assess fit before quote, quote before rank, rank before ticket.",
+    "7. Finalize with the evidence-supported outcome.",
+    "",
+    "Stage gates:",
+    "- Run preflight_user_policy and classify_source_mode before semantic opportunity analysis.",
+    "- Resolve the source before frame_opportunity when the run only has an X/Twitter status URL.",
+    "- Do not search venues until generate_trade_expressions has produced candidateExpressions that need configured venue discovery.",
+    "- Do not quote or rank a venue candidate until assess_expression_fit validates it or identifies exactly what information is still required.",
+    "- If a required stage cannot produce evidence, finalize with the explicit missing evidence or venue failure; do not silently substitute a different rail.",
+    "",
+    "When uncertain:",
+    "- Surface missing source evidence, venue failures, rule gaps, quote gaps, or fit uncertainty in the final result.",
+    "- Do not silently reroute to a different rail because a required market, quote, or rule is unavailable.",
+    "",
+    "Classify breaking_news from source content only. Do not use urgency words in the user command to set source mode. Use the user command only to preserve userIntent: trade, watch, countertrade, or critic.",
+    "",
+    "Breaking news is a routing mode, not an execution decision. In breaking-news mode, reduce serial deliberation: identify the headline thesis, generate direct and downstream expressions, search configured venues quickly, and route only validated expressions. For watch, countertrade, and critic intents, do not create a trade ticket; finalize with the appropriate analysis unless the preserved userIntent is trade.",
     "",
     "Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity. First identify the market opportunity, then let candidate expression generation decide which expression rails deserve venue search.",
     "",
@@ -217,7 +246,9 @@ export function buildSupervisorInstructions(): string {
     "",
     "Never invent tickers, markets, prices, liquidity, probabilities, listings, or contract rules. Venue tools may only return real configured venue candidates. If no real market validates the thesis, finalize no-trade, watchlist, or analysis-only.",
     "",
-    "Run preflight_user_policy before semantic opportunity analysis. After ranking a real validated candidate, create_trade_ticket creates the ticket with the user's configured default trade size and an explicit exitPlan chosen by the agent. The exitPlan must include takeProfitPct, stopLossPct, maxHoldDays, daily review cadence, thesis, and concrete invalidationSignals. The execution worker handles order submission after ticket creation.",
+    "After ranking a real validated candidate for trade intent, create_trade_ticket creates the ticket with the user's configured default trade size and an explicit exitPlan chosen by the agent. The exitPlan must include takeProfitPct, stopLossPct, maxHoldDays, daily review cadence, thesis, and concrete invalidationSignals. The execution worker handles order submission after ticket creation.",
+    "",
+    "Before finalizing, verify internally that the run has the staged evidence required for its outcome: preflight decision, source mode, source resolution when needed, opportunity frame, expression plan, venue search or no-search reason, fit assessment, quote when selecting a market, ranking when selecting a market, and ticket only when preserved userIntent allows trading.",
     "",
     "Finalize every run with finalize_run after enough staged evidence exists for trade_ticket, no_trade, watchlist-style analysis, or analysis-only.",
   ].join("\n");
@@ -230,7 +261,10 @@ function buildSupervisorPrompt(run: ControlRun): string {
     `Run ID: ${run.runId}`,
     `User command: ${run.userCommand}`,
     "Source post:",
-    JSON.stringify(run.sourcePost, null, 2),
+    JSON.stringify({
+      text: run.sourcePost.text,
+      author: run.sourcePost.authorHandle,
+    }, null, 2),
   ].join("\n");
 }
 

@@ -61,7 +61,7 @@ describe("trade expression planning", () => {
             userIntent: "trade",
             affectedEntities: ["Zcash"],
             affectedAssets: ["ZEC"],
-            expressionFamilies: ["long ZEC perp", "no trade if edge is already priced"],
+            expressionFamilies: ["long ZEC perp", "no trade if no matching configured venue market is found"],
             signalVerificationRisk: "medium",
             shouldVerifyTruthBeforeTrading: true,
             reason: "The tweet is a thesis, not a venue-confirmed trade.",
@@ -246,6 +246,65 @@ describe("trade expression planning", () => {
     })).resolves.toMatchObject({
       decision: "needs_market_check",
       marketRouterInstructions: expect.stringContaining("Search configured venues"),
+    });
+  });
+
+  it("does not turn unsupported execution rails into venue-search work", async () => {
+    const ai = {
+      async generateObject<T>(): Promise<T> {
+        return {
+          signal: "Volatility should expand after a macro catalyst.",
+          coreInterpretation: "The clean expression is a listed volatility option, which Cassie cannot execute yet.",
+          directAsset: "VIX",
+          directAssetTradable: false,
+          evidenceConfidence: 0.66,
+          marketDiscoveryConfidence: 0.1,
+          tradeExpressionConfidence: 0.28,
+          highestPurityExpression: "Long volatility option, unsupported by configured venues.",
+          publicMarketReadThrough: "strong",
+          candidates: [],
+          rankedCandidates: [],
+          candidateExpressions: [{
+            expressionId: "vix_volatility_option",
+            expressionRail: "options_volatility",
+            expressionType: "directional",
+            abstractMarket: "VIX call option",
+            intendedSide: "long",
+            primaryEntityOrEvent: "VIX",
+            relatedEntities: [],
+            thesis: "Long volatility expresses the thesis directly.",
+            whyThisExpressesTheOpportunity: "Option convexity maps to volatility expansion.",
+            directness: "direct",
+            whatMustBeTrue: ["A configured venue supports options."],
+            searchTerms: ["VIX call"],
+            requiredMarketFeatures: ["listed option"],
+            requiredRuleOrContractFeatures: ["option contract"],
+            keyRisks: ["Unsupported execution rail."],
+            expectedTimeHorizon: "days",
+            priority: "high",
+            confidence: 0.28,
+          }],
+          discardedExpressions: [],
+          noTradeCase: {
+            shouldConsiderNoTrade: true,
+            reason: "No configured options venue exists.",
+            whatWouldChangeThis: ["Configured options execution support."],
+          },
+          decision: "no_trade",
+          reason: "The clean rail is unsupported.",
+          insufficiency: null,
+          marketRouterInstructions: null,
+        } as T;
+      },
+    };
+
+    await expect(generateTradeExpressions({
+      ai,
+      sourcePost,
+      userCommand: "@Cassie trade this",
+    })).resolves.toMatchObject({
+      decision: "no_trade",
+      marketRouterInstructions: null,
     });
   });
 });

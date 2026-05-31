@@ -27,6 +27,12 @@ const staticPolymarketQueryPlanner = {
   },
 };
 
+const staticPolymarketSearchResultSelector = {
+  async selectPolymarketSearchResults(input: { markets: Array<{ slug: string }>; limit?: number }) {
+    return input.markets.map((market) => market.slug).slice(0, input.limit ?? 10);
+  },
+};
+
 const staticPolymarketSearchClient = {
   async searchMarkets(query: string) {
     if (query !== "Solana ETF") return [];
@@ -41,6 +47,7 @@ const staticPolymarketSearchClient = {
         clobTokenIds: JSON.stringify(["123", "456"]),
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
         conditionId: "condition_1",
+        description: "This market resolves Yes if a Solana ETF is approved by the deadline.",
       },
     ];
   },
@@ -218,6 +225,105 @@ describe("market data connectors", () => {
       const body = JSON.parse(String(init?.body ?? "{}")) as { type?: string };
       return body.type === "l2Book";
     })).toBe(false);
+    fetchMock.mockRestore();
+  });
+
+  it("uses matching direct expression side when top expression is a prediction market", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "BTC" }],
+          ctxs: [{ dayNtlVlm: "1000000000", markPx: "76728" }],
+        },
+      },
+      books: {
+        BTC: {
+          levels: [
+            [{ px: "76727", sz: "1" }],
+            [{ px: "76729", sz: "1" }],
+          ],
+        },
+      },
+    });
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        ...thesis,
+        claim: "Strategy may sell Bitcoin this year.",
+        direction: "unclear",
+        mentionedAssets: ["BTC", "Strategy"],
+        topics: ["Strategy Bitcoin sale"],
+      },
+      tradeExpression: {
+        signal: "bearish",
+        coreInterpretation: "The exact event is Strategy selling BTC, with BTC short as the direct venue proxy.",
+        directAsset: "BTC",
+        directAssetTradable: true,
+        evidenceConfidence: 0.79,
+        marketDiscoveryConfidence: 0.58,
+        tradeExpressionConfidence: 0.72,
+        highestPurityExpression: "Buy Yes on an exact Strategy BTC-sale event market.",
+        publicMarketReadThrough: "moderate",
+        candidates: [],
+        rankedCandidates: [],
+        candidateExpressions: [
+          {
+            expressionId: "strategy_sale_event",
+            expressionRail: "prediction_market",
+            expressionType: "event_probability",
+            abstractMarket: "Strategy BTC sale before year-end 2026",
+            intendedSide: "yes",
+            primaryEntityOrEvent: "Strategy sells Bitcoin before 2026-12-31",
+            relatedEntities: ["Strategy", "Bitcoin"],
+            thesis: "Strategy sells BTC before year-end.",
+            whyThisExpressesTheOpportunity: "It directly isolates the binary catalyst.",
+            directness: "direct",
+            whatMustBeTrue: ["A matching event market exists."],
+            searchTerms: ["Strategy sells Bitcoin before 2026-12-31"],
+            requiredMarketFeatures: ["binary yes/no"],
+            requiredRuleOrContractFeatures: ["defines BTC sale"],
+            keyRisks: [],
+            expectedTimeHorizon: "months",
+            priority: "high",
+            confidence: 0.89,
+          },
+          {
+            expressionId: "btc_short",
+            expressionRail: "crypto",
+            expressionType: "directional",
+            abstractMarket: "BTC perp or spot",
+            intendedSide: "short",
+            primaryEntityOrEvent: "Bitcoin",
+            relatedEntities: ["Strategy"],
+            thesis: "A perceived Strategy BTC sale can pressure Bitcoin.",
+            whyThisExpressesTheOpportunity: "BTC is the liquid direct read-through.",
+            directness: "strong_proxy",
+            whatMustBeTrue: ["BTC is listed and liquid."],
+            searchTerms: ["BTC perp Hyperliquid", "BTC spot Hyperliquid"],
+            requiredMarketFeatures: ["live BTC market"],
+            requiredRuleOrContractFeatures: ["standard spot/perp specs"],
+            keyRisks: [],
+            expectedTimeHorizon: "days",
+            priority: "medium",
+            confidence: 0.74,
+          },
+        ],
+        discardedExpressions: [],
+        noTradeCase: null,
+        decision: "needs_market_check",
+        reason: "Needs venue discovery.",
+        insufficiency: null,
+        marketRouterInstructions: "Search exact event first, then BTC short.",
+      },
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      venue: "hyperliquid",
+      instrument: "perp",
+      side: "short",
+      symbol: "BTC",
+    });
     fetchMock.mockRestore();
   });
 
@@ -483,6 +589,86 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("uses broad configured-venue rails as Hyperliquid symbol anchors", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "NVDA" }],
+          ctxs: [{ dayNtlVlm: "18000000", markPx: "156.4" }],
+        },
+      },
+      books: {
+        NVDA: {
+          levels: [
+            [{ px: "156.3", sz: "100" }],
+            [{ px: "156.5", sz: "100" }],
+          ],
+        },
+      },
+    });
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        claim: "Nvidia earnings could re-rate AI capex exposure.",
+        direction: "bullish",
+        mentionedAssets: ["AI"],
+        topics: ["AI capex", "Nvidia"],
+        timeHorizon: "days",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.7,
+      },
+      tradeExpression: {
+        signal: "Nvidia AI capex acceleration",
+        coreInterpretation: "Search configured venues for direct Nvidia exposure before rejecting public-equity tradability.",
+        directAsset: "Nvidia",
+        directAssetTradable: false,
+        evidenceConfidence: 0.7,
+        marketDiscoveryConfidence: 0.2,
+        tradeExpressionConfidence: 0.54,
+        highestPurityExpression: "Long NVDA if a configured venue lists it.",
+        publicMarketReadThrough: "strong",
+        candidates: [],
+        rankedCandidates: [],
+        candidateExpressions: [{
+          expressionId: "nvda_public_equity",
+          expressionRail: "public_equity",
+          expressionType: "directional",
+          abstractMarket: "NVDA listed equity or synthetic",
+          intendedSide: "long",
+          primaryEntityOrEvent: "NVDA",
+          relatedEntities: ["Nvidia"],
+          thesis: "Long Nvidia if a configured venue provides direct exposure.",
+          whyThisExpressesTheOpportunity: "NVDA is the direct public-market read-through.",
+          directness: "direct",
+          whatMustBeTrue: ["A configured venue lists NVDA exposure."],
+          searchTerms: ["NVDA"],
+          requiredMarketFeatures: ["direct NVDA exposure"],
+          requiredRuleOrContractFeatures: ["tracks NVDA"],
+          keyRisks: ["No configured listing exists."],
+          expectedTimeHorizon: "days",
+          priority: "high",
+          confidence: 0.54,
+        }],
+        discardedExpressions: [],
+        noTradeCase: null,
+        decision: "needs_market_check",
+        reason: "Venue discovery determines actionability.",
+        insufficiency: null,
+        marketRouterInstructions: "Search Hyperliquid for direct NVDA exposure.",
+      },
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      venue: "hyperliquid",
+      instrument: "perp",
+      side: "long",
+      symbol: "NVDA",
+    });
+    fetchMock.mockRestore();
+  });
+
   it("searches Hyperliquid spot metadata with trade-expression aliases", async () => {
     const spotCtxs = Array.from({ length: 183 }, (_, index) =>
       index === 182
@@ -542,7 +728,7 @@ describe("market data connectors", () => {
         candidateExpressions: [
           {
             expressionId: "expr_gold_spot",
-            expressionRail: "crypto",
+            expressionRail: "commodity",
             expressionType: "directional",
             abstractMarket: "Tokenized gold spot",
             intendedSide: "long",
@@ -710,7 +896,7 @@ describe("market data connectors", () => {
       return new Response("unexpected discovery fetch", { status: 500 });
     });
 
-    const candidates = await new PolymarketMarketDataProvider(staticPolymarketSearchClient, staticPolymarketQueryPlanner).findCandidates({
+    const candidates = await new PolymarketMarketDataProvider(staticPolymarketSearchClient, staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     });
 
@@ -720,11 +906,124 @@ describe("market data connectors", () => {
     expect(candidates[0]?.instrument).toBe("solana-etf-approved");
     expect(candidates[0]?.outcomeTokenId).toBe("123");
     expect(candidates[0]?.conditionId).toBe("condition_1");
+    expect(candidates[0]?.resolutionRules).toBe("This market resolves Yes if a Solana ETF is approved by the deadline.");
     fetchMock.mockRestore();
+  });
+
+  it("selects semantically matching Polymarket results before quoting", async () => {
+    const quotedTokens: string[] = [];
+    const noisyMarkets = Array.from({ length: 12 }, (_, index) => ({
+      id: `noise-${index}`,
+      slug: `will-hyperliquid-reach-${index}-by-december-31-2026`,
+      question: `Will Hyperliquid reach $${index} by December 31, 2026?`,
+      active: true,
+      closed: false,
+      liquidityNum: 1000,
+      clobTokenIds: JSON.stringify([`noise_yes_${index}`, `noise_no_${index}`]),
+      outcomePrices: JSON.stringify(["0.5", "0.5"]),
+      conditionId: `noise_condition_${index}`,
+    }));
+    const exactMarket = {
+      id: "exact",
+      slug: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      question: "MicroStrategy sells any Bitcoin by December 31, 2026?",
+      active: true,
+      closed: false,
+      liquidityNum: 12000,
+      clobTokenIds: JSON.stringify(["exact_yes", "exact_no"]),
+      outcomePrices: JSON.stringify(["0.875", "0.125"]),
+      conditionId: "exact_condition",
+    };
+    const searchClient = {
+      async searchMarkets(query: string) {
+        return query === "broad" ? noisyMarkets : [exactMarket];
+      },
+      async fetchOrderBook(tokenId: string) {
+        quotedTokens.push(tokenId);
+        return {
+          bids: [{ price: "0.86", size: "100" }],
+          asks: [{ price: "0.89", size: "100" }],
+        };
+      },
+      async fetchBuyPrice() {
+        return 0.89;
+      },
+      async fetchSpread() {
+        return 0.03;
+      },
+    };
+    const selector = {
+      async selectPolymarketSearchResults(input: { markets: Array<{ slug: string }> }) {
+        expect(input.markets.map((market) => market.slug)).toContain(exactMarket.slug);
+        return [exactMarket.slug];
+      },
+    };
+
+    const candidates = await new PolymarketMarketDataProvider(
+      searchClient,
+      { async planPolymarketSearchQueries() { return ["broad", "exact"]; } },
+      selector,
+    ).findCandidates({
+      thesis: {
+        ...thesis,
+        claim: "MicroStrategy may sell Bitcoin by year end.",
+        direction: "bearish",
+        mentionedAssets: ["MicroStrategy", "Bitcoin"],
+      },
+      tradeExpression: {
+        signal: "strategy_bitcoin_sale",
+        coreInterpretation: "The event market is YES even though the BTC price read-through is bearish.",
+        directAsset: "BTC",
+        directAssetTradable: true,
+        evidenceConfidence: 0.8,
+        marketDiscoveryConfidence: 0.6,
+        tradeExpressionConfidence: 0.8,
+        highestPurityExpression: "Buy yes on MicroStrategy selling any Bitcoin by Dec 31, 2026.",
+        publicMarketReadThrough: "strong",
+        candidates: [],
+        rankedCandidates: [],
+        candidateExpressions: [{
+          expressionId: "strategy_sells_btc_yes",
+          expressionRail: "prediction_market",
+          expressionType: "event_probability",
+          abstractMarket: "MicroStrategy sells any Bitcoin by Dec 31, 2026",
+          intendedSide: "yes",
+          primaryEntityOrEvent: "MicroStrategy sells Bitcoin",
+          relatedEntities: ["Bitcoin"],
+          thesis: "Buy yes on the exact event.",
+          whyThisExpressesTheOpportunity: "It directly resolves the source claim.",
+          directness: "direct",
+          whatMustBeTrue: ["The market wording matches the event."],
+          searchTerms: ["MicroStrategy sells Bitcoin before 2026-12-31"],
+          requiredMarketFeatures: ["yes/no market"],
+          requiredRuleOrContractFeatures: ["sale definition"],
+          keyRisks: ["Resolution ambiguity"],
+          expectedTimeHorizon: "months",
+          priority: "high",
+          confidence: 0.9,
+        }],
+        discardedExpressions: [],
+        noTradeCase: null,
+        decision: "needs_market_check",
+        reason: "Search exact event.",
+        insufficiency: null,
+        marketRouterInstructions: "Prefer exact event.",
+      },
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.marketSlug).toBe(exactMarket.slug);
+    expect(quotedTokens).toEqual(["exact_yes"]);
   });
 
   it("requires an AI query planner for Polymarket semantic discovery", async () => {
     await expect(new PolymarketMarketDataProvider().findCandidates({
+      thesis,
+    })).rejects.toBeInstanceOf(MissingConnectorConfigError);
+  });
+
+  it("requires AI result selection for Polymarket semantic discovery", async () => {
+    await expect(new PolymarketMarketDataProvider(staticPolymarketSearchClient, staticPolymarketQueryPlanner).findCandidates({
       thesis,
     })).rejects.toBeInstanceOf(MissingConnectorConfigError);
   });
@@ -777,7 +1076,7 @@ describe("market data connectors", () => {
       },
     };
 
-    const candidates = await new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner).findCandidates({
+    const candidates = await new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis: {
         claim: "ZEC price targets relative to BTC: conservative 3-5%, aggressive 15-20%, moonshot flippening.",
         direction: "bullish",
@@ -841,56 +1140,49 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
-  it("searches Polymarket through the beta SDK public search surface", async () => {
+  it("searches Polymarket through Gamma events search", async () => {
     const requests: string[] = [];
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = new URL(input instanceof Request ? input.url : String(input));
       requests.push(url.toString());
 
-      expect(url.pathname).toBe("/public-search");
-      expect(url.searchParams.get("q")).toBe("ethereum researchers");
-      expect(url.searchParams.get("events_status")).toBe("active");
-      expect(url.searchParams.get("optimized")).toBe("false");
-      expect(url.searchParams.get("limit_per_type")).toBe("7");
-      expect(url.searchParams.get("search")).toBeNull();
+      expect(url.pathname).toBe("/events");
+      expect(url.searchParams.get("search")).toBe("ethereum researchers");
+      expect(url.searchParams.get("active")).toBe("true");
+      expect(url.searchParams.get("closed")).toBe("false");
+      expect(url.searchParams.get("limit")).toBe("7");
 
-      return new Response(JSON.stringify({
-        events: [
-          {
-            id: "event_1",
-            slug: "ethereum-price-event",
-            title: "Ethereum price event",
-            state: { active: true, closed: false },
-            markets: [
-              {
-                id: "market_1",
-                slug: "will-ethereum-researchers-resign",
-                question: "Will Ethereum researchers resign?",
-                conditionId: "0x1111111111111111111111111111111111111111111111111111111111111111",
-                active: true,
-                closed: false,
-                endDate: "2026-06-01T00:00:00Z",
-                outcomes: ["Yes", "No"],
-                outcomePrices: ["0.42", "0.58"],
-                clobTokenIds: ["yes_token", "no_token"],
-                marketMakerAddress: "0x0000000000000000000000000000000000000000",
-                liquidityNum: "12000",
-                volumeNum: "50000",
-              },
-            ],
-          },
-        ],
-        tags: [],
-        profiles: [],
-        pagination: { hasMore: false, totalResults: 1 },
-      }));
+      return new Response(JSON.stringify([
+        {
+          id: "event_1",
+          slug: "ethereum-price-event",
+          title: "Ethereum price event",
+          markets: [
+            {
+              id: "market_1",
+              slug: "will-ethereum-researchers-resign",
+              question: "Will Ethereum researchers resign?",
+              conditionId: "0x1111111111111111111111111111111111111111111111111111111111111111",
+              active: true,
+              closed: false,
+              endDate: "2026-06-01T00:00:00Z",
+              outcomes: ["Yes", "No"],
+              outcomePrices: ["0.42", "0.58"],
+              clobTokenIds: ["yes_token", "no-token"],
+              marketMakerAddress: "0x0000000000000000000000000000000000000000",
+              liquidityNum: 12000,
+              volumeNum: 50000,
+            },
+          ],
+        },
+      ]));
     });
 
     const markets = await new PolymarketSdkSearchClient().searchMarkets("ethereum researchers", 7);
 
     expect(requests).toHaveLength(1);
     expect(markets[0]?.slug).toBe("will-ethereum-researchers-resign");
-    expect(markets[0]?.clobTokenIds).toBe(JSON.stringify(["yes_token", "no_token"]));
+    expect(markets[0]?.clobTokenIds).toEqual(["yes_token", "no-token"]);
     fetchMock.mockRestore();
   });
 
@@ -902,9 +1194,55 @@ describe("market data connectors", () => {
       },
     };
 
-    await expect(new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner).findCandidates({
+    await expect(new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toBeInstanceOf(ConnectorRequestError);
+  });
+
+  it("skips Polymarket markets with empty books and keeps later tradable matches", async () => {
+    const markets: PolymarketSearchMarket[] = [
+      {
+        id: "empty",
+        slug: "empty-book-market",
+        question: "Will the empty book market resolve yes?",
+        active: true,
+        closed: false,
+        liquidityNum: 1000,
+        clobTokenIds: JSON.stringify(["empty_yes", "empty_no"]),
+        outcomePrices: JSON.stringify(["0.5", "0.5"]),
+        conditionId: "empty_condition",
+      },
+      {
+        id: "tradable",
+        slug: "tradable-market",
+        question: "Will the tradable market resolve yes?",
+        active: true,
+        closed: false,
+        liquidityNum: 1000,
+        clobTokenIds: JSON.stringify(["tradable_yes", "tradable_no"]),
+        outcomePrices: JSON.stringify(["0.6", "0.4"]),
+        conditionId: "tradable_condition",
+      },
+    ];
+    const searchClient = {
+      ...polymarketSearchClientFor(markets),
+      async fetchOrderBook(tokenId: string) {
+        if (tokenId === "tradable_yes") {
+          return {
+            bids: [{ price: "0.59", size: "100" }],
+            asks: [{ price: "0.61", size: "100" }],
+          };
+        }
+        return { bids: [], asks: [] };
+      },
+    };
+
+    const candidates = await new PolymarketMarketDataProvider(searchClient, staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
+      thesis,
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]?.marketSlug).toBe("tradable-market");
   });
 
   it("rejects Polymarket markets without condition IDs", async () => {
@@ -934,7 +1272,7 @@ describe("market data connectors", () => {
         clobTokenIds: JSON.stringify(["123", "456"]),
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
       },
-    ]), staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toThrow("condition_id");
     fetchMock.mockRestore();
@@ -957,7 +1295,7 @@ describe("market data connectors", () => {
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
         conditionId: "condition_1",
       },
-    ]), staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -980,7 +1318,7 @@ describe("market data connectors", () => {
         outcomePrices: "[\"0.62\",",
         conditionId: "condition_1",
       },
-    ]), staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -1003,7 +1341,7 @@ describe("market data connectors", () => {
         outcomePrices: JSON.stringify(["bad", "0.38"]),
         conditionId: "condition_1",
       },
-    ]), staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -1026,7 +1364,7 @@ describe("market data connectors", () => {
         outcomePrices: JSON.stringify(["", "0.38"]),
         conditionId: "condition_1",
       },
-    ]), staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field outcomePrices for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -1049,7 +1387,7 @@ describe("market data connectors", () => {
         outcomePrices: JSON.stringify(["0.62", "0.38"]),
         conditionId: "condition_1",
       },
-    ]), staticPolymarketQueryPlanner).findCandidates({
+    ]), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findCandidates({
       thesis,
     })).rejects.toThrow("Malformed Polymarket provider field clobTokenIds for market solana-etf-approved");
     fetchMock.mockRestore();
@@ -1078,7 +1416,7 @@ describe("market data connectors", () => {
         question: "Will a Solana ETF be approved?",
         active: true,
         closed: false,
-        liquidityNum: 9000,
+        liquidityNum: 900,
         volumeNum: 12000,
         clobTokenIds: JSON.stringify(["yes-token", "no-token"]),
         outcomePrices: JSON.stringify(["0.37", "0.63"]),
@@ -1088,7 +1426,7 @@ describe("market data connectors", () => {
     ], {
       bids: [{ price: "0.63", size: "100" }],
       asks: [{ price: "0.65", size: "100" }],
-    }), staticPolymarketQueryPlanner).findPolymarketMarkets({
+    }), staticPolymarketQueryPlanner, staticPolymarketSearchResultSelector).findPolymarketMarkets({
       thesis: {
         ...thesis,
         direction: "bearish",
@@ -1106,7 +1444,7 @@ describe("market data connectors", () => {
       marketQuestion: "Will a Solana ETF be approved?",
       marketSlug: "solana-etf-approved",
       endDate: "2026-09-01T00:00:00Z",
-      warnings: ["liquidity_under_10000"],
+      warnings: ["liquidity_under_1000"],
     });
     fetchMock.mockRestore();
   });

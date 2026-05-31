@@ -93,6 +93,180 @@ describe("venue search", () => {
     expect(candidates).toEqual([polymarketCandidate]);
   });
 
+  it("surfaces required Polymarket failures instead of returning only direct-venue candidates", async () => {
+    const hyperliquidCandidate: MarketCandidate = {
+      ...polymarketCandidate,
+      venue: "hyperliquid",
+      instrument: "perp",
+      side: "short",
+      symbol: "BTC",
+      conditionId: null,
+      outcomeTokenId: null,
+      yesOutcomeTokenId: null,
+      noOutcomeTokenId: null,
+      marketQuestion: null,
+      marketSlug: null,
+      outcome: null,
+      yesPrice: null,
+      noPrice: null,
+      heldSidePrice: null,
+      markPrice: 100000,
+      reason: "BTC perp was found.",
+    };
+
+    await expect(searchVenues({
+      marketData: {
+        async findCandidates() {
+          return [hyperliquidCandidate];
+        },
+      },
+      polymarket: {
+        async findPolymarketMarkets() {
+          throw new Error("Polymarket order book is empty for token yes-token.");
+        },
+        async assessPolymarketMarket() {
+          throw new Error("not used");
+        },
+        async quotePolymarketMarket() {
+          throw new Error("not used");
+        },
+      },
+      thesis: {
+        claim: "Strategy may sell Bitcoin this year.",
+        direction: "bearish",
+        mentionedAssets: ["BTC"],
+        topics: ["Strategy", "Bitcoin"],
+        timeHorizon: "event_based",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.84,
+      },
+      tradeExpression: {
+        ...tradeExpression,
+        candidateExpressions: [{
+          expressionId: "strat_yes_event",
+          expressionRail: "prediction_market",
+          expressionType: "event_probability",
+          abstractMarket: "Did Strategy sell any Bitcoin by 2026-12-31?",
+          intendedSide: "yes",
+          primaryEntityOrEvent: "Strategy selling Bitcoin before year-end",
+          relatedEntities: ["Strategy", "Bitcoin"],
+          thesis: "Buy yes on the exact event.",
+          whyThisExpressesTheOpportunity: "The source claim is a date-bounded event.",
+          directness: "direct",
+          whatMustBeTrue: ["A matching event market exists."],
+          searchTerms: ["Strategy sells Bitcoin before 2026-12-31 Polymarket"],
+          requiredMarketFeatures: ["Explicit yes/no event market"],
+          requiredRuleOrContractFeatures: ["Clear sale resolution criteria"],
+          keyRisks: ["Contract wording mismatch"],
+          expectedTimeHorizon: "months",
+          priority: "high",
+          confidence: 0.9,
+        }],
+      },
+      venues: ["hyperliquid", "polymarket"],
+    })).rejects.toThrow("Required venue search failed: polymarket: Error: Polymarket order book is empty for token yes-token.");
+  });
+
+  it("orders candidates by matching expression priority and confidence", async () => {
+    const btcCandidate: MarketCandidate = {
+      ...polymarketCandidate,
+      venue: "hyperliquid",
+      instrument: "perp",
+      side: "short",
+      symbol: "BTC",
+      conditionId: null,
+      outcomeTokenId: null,
+      yesOutcomeTokenId: null,
+      noOutcomeTokenId: null,
+      marketQuestion: null,
+      marketSlug: null,
+      outcome: null,
+      yesPrice: null,
+      noPrice: null,
+      heldSidePrice: null,
+      markPrice: 100000,
+      reason: "BTC perp was found.",
+    };
+
+    const candidates = await searchVenues({
+      marketData: {
+        async findCandidates() {
+          return [btcCandidate];
+        },
+      },
+      polymarket: {
+        async findPolymarketMarkets() {
+          return [polymarketCandidate];
+        },
+        async assessPolymarketMarket() {
+          throw new Error("not used");
+        },
+        async quotePolymarketMarket() {
+          throw new Error("not used");
+        },
+      },
+      thesis: {
+        claim: "Strategy may sell Bitcoin this year.",
+        direction: "bearish",
+        mentionedAssets: ["BTC"],
+        topics: ["Strategy", "Bitcoin"],
+        timeHorizon: "event_based",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.84,
+      },
+      tradeExpression: {
+        ...tradeExpression,
+        candidateExpressions: [
+          {
+            expressionId: "btc_short",
+            expressionRail: "crypto",
+            expressionType: "directional",
+            abstractMarket: "BTC perp",
+            intendedSide: "short",
+            primaryEntityOrEvent: "Bitcoin",
+            relatedEntities: ["Strategy"],
+            thesis: "Short BTC read-through.",
+            whyThisExpressesTheOpportunity: "BTC captures the price read-through.",
+            directness: "direct",
+            whatMustBeTrue: ["BTC is listed."],
+            searchTerms: ["BTC perp"],
+            requiredMarketFeatures: ["shortable BTC market"],
+            requiredRuleOrContractFeatures: [],
+            keyRisks: ["Macro dominates."],
+            expectedTimeHorizon: "days",
+            priority: "high",
+            confidence: 0.82,
+          },
+          {
+            expressionId: "strategy_yes",
+            expressionRail: "prediction_market",
+            expressionType: "event_probability",
+            abstractMarket: "Strategy sells Bitcoin by year-end",
+            intendedSide: "yes",
+            primaryEntityOrEvent: "Strategy sells Bitcoin",
+            relatedEntities: ["BTC"],
+            thesis: "Buy yes on the exact event.",
+            whyThisExpressesTheOpportunity: "The event market directly resolves the claim.",
+            directness: "direct",
+            whatMustBeTrue: ["A matching market exists."],
+            searchTerms: ["Strategy sells Bitcoin 2026"],
+            requiredMarketFeatures: ["yes/no market"],
+            requiredRuleOrContractFeatures: ["sale definition"],
+            keyRisks: ["Rule mismatch."],
+            expectedTimeHorizon: "months",
+            priority: "high",
+            confidence: 0.86,
+          },
+        ],
+      },
+      venues: ["hyperliquid", "polymarket"],
+    });
+
+    expect(candidates.map((candidate) => candidate.venue)).toEqual(["polymarket", "hyperliquid"]);
+  });
+
   it("searches Hyperliquid and Polymarket concurrently when both are requested", async () => {
     const calls: string[] = [];
     let releaseHyperliquid!: () => void;
@@ -231,5 +405,57 @@ describe("venue search", () => {
 
     expect(candidates).toEqual([polymarketCandidate]);
     expect(marketSearches).toBe(1);
+  });
+
+  it("does not search direct venues for unsupported execution rails", async () => {
+    let marketSearches = 0;
+    const candidates = await searchVenues({
+      marketData: {
+        async findCandidates() {
+          marketSearches += 1;
+          return [polymarketCandidate];
+        },
+      },
+      thesis: {
+        claim: "Volatility should expand after the rate decision.",
+        direction: "bullish",
+        mentionedAssets: ["VIX"],
+        topics: ["volatility", "rates"],
+        timeHorizon: "days",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.5,
+      },
+      tradeExpression: {
+        ...nonTradableExpression,
+        directAsset: "VIX",
+        directAssetTradable: false,
+        decision: "no_trade",
+        candidateExpressions: [{
+          expressionId: "vix_call",
+          expressionRail: "options_volatility",
+          expressionType: "directional",
+          abstractMarket: "VIX call option",
+          intendedSide: "long",
+          primaryEntityOrEvent: "VIX",
+          relatedEntities: [],
+          thesis: "Long volatility would express the thesis.",
+          whyThisExpressesTheOpportunity: "Options exposure captures volatility expansion directly.",
+          directness: "direct",
+          whatMustBeTrue: ["A configured venue supports options execution."],
+          searchTerms: ["VIX call"],
+          requiredMarketFeatures: ["listed option"],
+          requiredRuleOrContractFeatures: ["option contract"],
+          keyRisks: ["No configured options venue exists."],
+          expectedTimeHorizon: "days",
+          priority: "high",
+          confidence: 0.4,
+        }],
+      },
+      venues: ["hyperliquid"],
+    });
+
+    expect(candidates).toEqual([]);
+    expect(marketSearches).toBe(0);
   });
 });

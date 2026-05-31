@@ -2,17 +2,34 @@ import type { StructuredAiClient } from "../ai/client.ts";
 import {
   MarketCandidateSchema,
   OpportunityFrameSchema,
+  SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
   type MarketCandidate,
   type OpportunityFrame,
   type SourcePost,
+  type SourceModeClassification,
   type TradeExpressionPlan,
 } from "../core/schemas/index.ts";
+import { isConfiguredVenueSearchableExpressionRail } from "../core/expression-rails.ts";
 import {
   opportunityFramePromptSpec,
+  sourceModeClassificationPromptSpec,
   singleStepTradeExpressionPromptSpec,
   structuredPromptInput,
 } from "../prompts/index.ts";
+
+export async function classifySourceMode(input: {
+  ai: StructuredAiClient;
+  sourcePost: SourcePost;
+  userCommand: string;
+}): Promise<SourceModeClassification> {
+  return SourceModeClassificationSchema.parse(await input.ai.generateObject({
+    ...structuredPromptInput(sourceModeClassificationPromptSpec({
+      sourcePost: input.sourcePost,
+      userCommand: input.userCommand,
+    })),
+  }));
+}
 
 export async function frameOpportunity(input: {
   ai: StructuredAiClient;
@@ -66,7 +83,7 @@ function normalizeTradeExpressionDecision(tradeExpression: TradeExpressionPlan):
 
 function hasSearchableExpression(tradeExpression: TradeExpressionPlan): boolean {
   return tradeExpression.candidateExpressions.some((candidate) =>
-    candidate.expressionRail !== "no_trade"
+    isConfiguredVenueSearchableExpressionRail(candidate.expressionRail)
       && candidate.intendedSide !== "avoid"
       && candidate.searchTerms.length > 0
       && candidate.requiredMarketFeatures.length > 0,

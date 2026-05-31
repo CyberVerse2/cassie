@@ -120,11 +120,21 @@ const opportunityFrame: OpportunityFrame = {
   userIntent: "trade",
   affectedEntities: ["Solana", "SOL"],
   affectedAssets: ["SOL"],
-  expressionFamilies: ["long SOL perp", "buy YES on Solana ETF prediction market", "no trade if already priced"],
+  expressionFamilies: ["long SOL perp", "buy YES on Solana ETF prediction market", "no trade if no matching market is found"],
   signalVerificationRisk: "medium",
   shouldVerifyTruthBeforeTrading: true,
   reason: "ETF approval claims can move SOL, but the post is social and unverified.",
   confidence: 0.72,
+};
+
+const sourceModeClassification = {
+  sourceMode: "normal",
+  userIntent: "trade",
+  headlineThesis: "Solana ETF approval could reprice SOL.",
+  affectedEntities: ["Solana", "SOL"],
+  urgency: "none",
+  verificationNeed: "medium",
+  reason: "This is an evergreen market take, not a fresh breaking-news event.",
 };
 
 const tradeExpression: TradeExpressionPlan = {
@@ -183,6 +193,7 @@ class FakeAi implements StructuredAiClient {
     this.calls.push(input.name);
     input.onThinkingTrace?.(`Model reasoning summary for ${input.name}.`);
     const outputs: Record<string, unknown> = {
+      cassie_source_mode_classification: sourceModeClassification,
       cassie_opportunity_frame: opportunityFrame,
       cassie_trade_expressions: tradeExpression,
       cassie_expression_fit: expressionFitAssessment,
@@ -229,6 +240,22 @@ async function seedTradeExpression(store: InMemoryCassieStore, runId: string, ex
   });
 }
 
+async function seedOpportunityFrame(store: InMemoryCassieStore, runId: string) {
+  await store.addRunStep({
+    runId,
+    stepType: "opportunity",
+    status: "succeeded",
+    input: {},
+    output: opportunityFrame,
+    error: null,
+    model: "gpt-5.4-mini",
+    promptName: "cassie_opportunity_frame",
+    promptVersion: "2026-05-31",
+    thinkingTrace: null,
+    completedAt: new Date().toISOString(),
+  });
+}
+
 async function seedFitAssessment(store: InMemoryCassieStore, runId: string, fitAssessment: typeof expressionFitAssessment) {
   await store.addRunStep({
     runId,
@@ -265,10 +292,19 @@ describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
-    expect(instructions).toContain("preflight user policy -> resolve source -> frame opportunity -> generate candidate trade expressions");
+    expect(instructions).toContain("preflight user policy -> classify source mode -> resolve source if needed -> frame opportunity -> generate candidate trade expressions");
+    expect(instructions).toContain("Role:");
+    expect(instructions).toContain("Progressive workflow:");
+    expect(instructions).toContain("Stage gates:");
+    expect(instructions).toContain("When uncertain:");
+    expect(instructions).not.toContain("Tool-output contract:");
+    expect(instructions).not.toContain("Reason privately in this order:");
     expect(instructions).toContain("quote validated candidates -> rank expressions");
+    expect(instructions).toContain("Classify breaking_news from source content only");
+    expect(instructions).toContain("Breaking news is a routing mode, not an execution decision");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
-    expect(instructions).toContain("create_trade_ticket creates the ticket with the user's configured default trade size");
+    expect(instructions).toContain("Before finalizing, verify internally");
+    expect(instructions).toContain("create_trade_ticket creates the ticket with the user's configured default trade size and an explicit exitPlan chosen by the agent");
     expect(instructions).toContain("The execution worker handles order submission after ticket creation");
     expect(instructions).not.toContain("Never execute");
   });
@@ -462,9 +498,7 @@ describe("AI SDK supervisor agent", () => {
     const resolved = await executeTool<SourcePost>(tools.resolve_source, {
       url: "https://x.com/example/status/2057246023974875269",
     });
-    await executeTool(tools.frame_opportunity, {
-      sourcePost: resolved,
-    });
+    await executeTool(tools.frame_opportunity, {});
 
     expect(resolved.text).toContain("OpenAI revenue growth");
     const steps = await store.getRunSteps(run.runId);
@@ -624,6 +658,102 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
   });
 
+  it("quotes persisted Polymarket fit assessments with equivalent candidate id shapes", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie quote polymarket",
+      sourcePost,
+    });
+    const candidate: MarketCandidate = {
+      ...marketSelection.selectedMarket!,
+      venue: "polymarket",
+      instrument: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      side: "buy_yes",
+      symbol: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      conditionId: "condition_strategy_sale",
+      outcomeTokenId: "yes_token",
+      yesOutcomeTokenId: "yes_token",
+      noOutcomeTokenId: "no_token",
+      marketQuestion: "MicroStrategy sells any Bitcoin by December 31, 2026?",
+      marketSlug: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      outcome: "yes",
+      yesPrice: 0.87,
+      noPrice: 0.13,
+      heldSidePrice: 0.87,
+      volumeUsd: 1_000_000,
+      liquidityUsd: 50_000,
+      endDate: "2027-01-01T05:00:00Z",
+      markPrice: 0.87,
+      minOrderSizeUsd: 1,
+      reason: "Exact Strategy BTC-sale event market.",
+    };
+    const persistedFit = {
+      ...expressionFitAssessment,
+      candidateId: "polymarket|microstrategy-sells-any-bitcoin-by-december-31-2026|buy_yes",
+      expressionId: "ce3",
+      venue: "polymarket",
+      fitStatus: "validated" as const,
+      directness: "direct" as const,
+      intendedSide: "yes" as const,
+    };
+    const suppliedFit = {
+      ...persistedFit,
+      candidateId: "polymarket:microstrategy-sells-any-bitcoin-by-december-31-2026:buy_yes",
+    };
+
+    await seedMarketCandidates(store, run.runId, [candidate]);
+    await seedFitAssessment(store, run.runId, persistedFit);
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [candidate];
+          },
+        },
+        polymarketMarketFinder: {
+          async findPolymarketMarkets() {
+            return [candidate];
+          },
+          async assessPolymarketMarket() {
+            throw new Error("not used");
+          },
+          async quotePolymarketMarket() {
+            return {
+              conditionId: candidate.conditionId!,
+              outcomeTokenId: candidate.outcomeTokenId!,
+              outcome: "yes",
+              side: "yes",
+              yesPrice: 0.87,
+              noPrice: 0.13,
+              heldSidePrice: 0.87,
+              bid: 0.86,
+              ask: 0.88,
+              midPrice: 0.87,
+              spreadBps: 120,
+              timestamp: new Date().toISOString(),
+            };
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.quote_expression, {
+      candidate,
+      fitAssessment: suppliedFit,
+      side: "yes",
+    })).resolves.toMatchObject({
+      conditionId: candidate.conditionId,
+      outcomeTokenId: candidate.outcomeTokenId,
+      outcome: "yes",
+    });
+  });
+
   it("uses AI-backed fit assessment for non-Polymarket candidates instead of auto-validating them", async () => {
     const ai = new FakeAi();
     const store = new InMemoryCassieStore();
@@ -632,6 +762,8 @@ describe("AI SDK supervisor agent", () => {
       userCommand: "@Cassie check the SOL expression",
       sourcePost,
     });
+    await seedOpportunityFrame(store, run.runId);
+    await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketCandidates(store, run.runId, [marketSelection.selectedMarket!]);
 
     const tools = createCassieSupervisorTools({
@@ -656,8 +788,6 @@ describe("AI SDK supervisor agent", () => {
     };
 
     await expect(executeTool(tools.assess_expression_fit, {
-      opportunityFrame,
-      tradeExpression,
       candidate: rewrittenCandidate,
       side: "no",
     })).resolves.toMatchObject({
@@ -681,6 +811,7 @@ describe("AI SDK supervisor agent", () => {
     });
     const persistedCandidate = marketSelection.selectedMarket!;
     const ai = new FakeAi();
+    await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketCandidates(store, run.runId, [persistedCandidate]);
     await seedFitAssessment(store, run.runId, expressionFitAssessment);
     await store.addRunStep({
@@ -714,18 +845,15 @@ describe("AI SDK supervisor agent", () => {
       safeParse: (value: unknown) => { success: boolean };
     };
     expect(rankInputSchema.safeParse({
-      tradeExpression,
       fitAssessments: [expressionFitAssessment],
     }).success).toBe(true);
     expect(rankInputSchema.safeParse({
-      tradeExpression,
       candidates: tradeExpression.candidates,
       fitAssessments: [expressionFitAssessment],
       quotes: [persistedCandidate],
     }).success).toBe(true);
 
     await expect(executeTool(tools.rank_expressions, {
-      tradeExpression,
       candidates: tradeExpression.candidates,
       fitAssessments: [expressionFitAssessment],
     })).resolves.toMatchObject({
@@ -739,6 +867,284 @@ describe("AI SDK supervisor agent", () => {
       quotes: [persistedCandidate],
     });
     expect(ai.calls).toContain("cassie_market_selection");
+  });
+
+  it("matches validated fit assessments to persisted candidates by id instead of array position", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie rank the exact event market",
+      sourcePost,
+    });
+    const hyperliquidCandidate = {
+      ...marketSelection.selectedMarket!,
+      symbol: "BTC",
+      side: "short" as const,
+      reason: "BTC fallback candidate.",
+    };
+    const polymarketCandidate: MarketCandidate = {
+      ...marketSelection.selectedMarket!,
+      venue: "polymarket",
+      instrument: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      side: "buy_yes",
+      symbol: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      conditionId: "condition_strategy_sale",
+      outcomeTokenId: "yes_token",
+      yesOutcomeTokenId: "yes_token",
+      noOutcomeTokenId: "no_token",
+      marketQuestion: "MicroStrategy sells any Bitcoin by December 31, 2026?",
+      marketSlug: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+      outcome: "yes",
+      yesPrice: 0.87,
+      noPrice: 0.13,
+      heldSidePrice: 0.87,
+      volumeUsd: 1_000_000,
+      liquidityUsd: 50_000,
+      endDate: "2027-01-01T05:00:00Z",
+      markPrice: 0.87,
+      minOrderSizeUsd: 1,
+      reason: "Exact Strategy BTC-sale event market.",
+    };
+    const polymarketFit = {
+      ...expressionFitAssessment,
+      candidateId: "polymarket:microstrategy-sells-any-bitcoin-by-december-31-2026:buy_yes",
+      expressionId: "cand1",
+      expressionRail: "prediction_market" as const,
+      venue: "polymarket",
+      intendedSide: "yes",
+      semanticFitSummary: "Exact event market.",
+    };
+    const ai: StructuredAiClient = {
+      async generateObject(input) {
+        expect(input.name).toBe("cassie_market_selection");
+        const payload = JSON.parse(String(input.messages?.[0]?.content));
+        expect(payload.candidates).toHaveLength(1);
+        expect(payload.candidates[0]).toMatchObject({
+          venue: "polymarket",
+          symbol: "microstrategy-sells-any-bitcoin-by-december-31-2026",
+        });
+        return {
+          decision: "select_market",
+          selectedMarket: payload.candidates[0],
+          selectedCandidateId: "cand1",
+          rejectionReason: null,
+          rankedCandidates: [],
+          rejectedCandidates: [],
+          noTradeReason: null,
+        } as unknown;
+      },
+    } as StructuredAiClient;
+
+    await seedTradeExpression(store, run.runId, tradeExpression);
+    await seedMarketCandidates(store, run.runId, [hyperliquidCandidate, polymarketCandidate]);
+    await seedFitAssessment(store, run.runId, polymarketFit);
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_quote",
+      status: "succeeded",
+      input: {},
+      output: {
+        conditionId: "condition_strategy_sale",
+        outcomeTokenId: "yes_token",
+        outcome: "yes",
+        yesPrice: 0.87,
+        noPrice: 0.13,
+        heldSidePrice: 0.87,
+        bid: 0.86,
+        ask: 0.88,
+        midPrice: 0.87,
+        spreadBps: 200,
+        timestamp: new Date().toISOString(),
+      },
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      thinkingTrace: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {})).resolves.toMatchObject({
+      selectedMarket: polymarketCandidate,
+      noTradeReason: null,
+    });
+  });
+
+  it("matches Hyperliquid fit assessment ids that include instrument", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie rank the BTC fallback",
+      sourcePost,
+    });
+    const btcCandidate: MarketCandidate = {
+      ...marketSelection.selectedMarket!,
+      symbol: "BTC",
+      side: "short",
+      instrument: "perp",
+      reason: "BTC perp was found in live Hyperliquid metadata.",
+    };
+    const btcFit = {
+      ...expressionFitAssessment,
+      candidateId: "hyperliquid_BTC_perp_short",
+      expressionId: "crypto_btc_short_strategy_sell_readthrough",
+      intendedSide: "short",
+      directness: "strong_proxy",
+      semanticFitSummary: "BTC perp is a valid fallback.",
+    };
+
+    await seedTradeExpression(store, run.runId, tradeExpression);
+    await seedMarketCandidates(store, run.runId, [btcCandidate]);
+    await seedFitAssessment(store, run.runId, btcFit);
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_quote",
+      status: "succeeded",
+      input: {},
+      output: btcCandidate,
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      thinkingTrace: null,
+      completedAt: new Date().toISOString(),
+    });
+    const ai: StructuredAiClient = {
+      async generateObject(input) {
+        expect(input.name).toBe("cassie_market_selection");
+        const payload = JSON.parse(String(input.messages?.[0]?.content));
+        expect(payload.candidates).toHaveLength(1);
+        expect(payload.candidates[0]).toMatchObject({
+          venue: "hyperliquid",
+          instrument: "perp",
+          symbol: "BTC",
+          side: "short",
+        });
+        return {
+          decision: "select_market",
+          selectedMarket: payload.candidates[0],
+          selectedCandidateId: "hyperliquid_BTC_perp_short",
+          rejectionReason: null,
+          rankedCandidates: [],
+          rejectedCandidates: [],
+          noTradeReason: null,
+        } as unknown;
+      },
+    } as StructuredAiClient;
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {})).resolves.toMatchObject({
+      selectedMarket: btcCandidate,
+      noTradeReason: null,
+    });
+  });
+
+  it("matches Hyperliquid fit assessment ids with instrument before symbol", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie rank the BTC synthetic",
+      sourcePost,
+    });
+    const btcCandidate: MarketCandidate = {
+      ...marketSelection.selectedMarket!,
+      symbol: "BTC",
+      side: "short",
+      instrument: "synthetic_perp",
+      reason: "BTC synthetic perp was found in live Hyperliquid metadata.",
+    };
+    const btcFit = {
+      ...expressionFitAssessment,
+      candidateId: "hyperliquid|synthetic_perp|BTC|short",
+      expressionId: "crypto_btc_short_strategy_sell_readthrough",
+      intendedSide: "short",
+      directness: "strong_proxy",
+      semanticFitSummary: "BTC synthetic perp is a valid fallback.",
+    };
+
+    await seedTradeExpression(store, run.runId, tradeExpression);
+    await seedMarketCandidates(store, run.runId, [btcCandidate]);
+    await seedFitAssessment(store, run.runId, btcFit);
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_quote",
+      status: "succeeded",
+      input: {},
+      output: btcCandidate,
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      thinkingTrace: null,
+      completedAt: new Date().toISOString(),
+    });
+    const ai: StructuredAiClient = {
+      async generateObject(input) {
+        expect(input.name).toBe("cassie_market_selection");
+        const payload = JSON.parse(String(input.messages?.[0]?.content));
+        expect(payload.candidates[0]).toMatchObject({
+          venue: "hyperliquid",
+          instrument: "synthetic_perp",
+          symbol: "BTC",
+          side: "short",
+        });
+        return {
+          decision: "select_market",
+          selectedMarket: payload.candidates[0],
+          selectedCandidateId: "hyperliquid|synthetic_perp|BTC|short",
+          rejectionReason: null,
+          rankedCandidates: [],
+          rejectedCandidates: [],
+          noTradeReason: null,
+        } as unknown;
+      },
+    } as StructuredAiClient;
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {})).resolves.toMatchObject({
+      selectedMarket: btcCandidate,
+      noTradeReason: null,
+    });
   });
 
   it("filters Hyperliquid spot out of ranking when a validated perp exists", async () => {
@@ -784,6 +1190,7 @@ describe("AI SDK supervisor agent", () => {
       },
     } as StructuredAiClient;
 
+    await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketCandidates(store, run.runId, [perpCandidate, spotCandidate]);
     await seedFitAssessment(store, run.runId, {
       ...expressionFitAssessment,
@@ -826,7 +1233,6 @@ describe("AI SDK supervisor agent", () => {
     });
 
     await expect(executeTool(tools.rank_expressions, {
-      tradeExpression,
     })).resolves.toMatchObject({
       selectedMarket: perpCandidate,
       noTradeReason: null,
@@ -846,6 +1252,7 @@ describe("AI SDK supervisor agent", () => {
       sourcePost,
     });
     const persistedCandidate = marketSelection.selectedMarket!;
+    await seedTradeExpression(store, run.runId, tradeExpression);
     await store.addRunStep({
       runId: run.runId,
       stepType: "market_candidates",
@@ -875,7 +1282,6 @@ describe("AI SDK supervisor agent", () => {
     });
 
     await expect(executeTool(tools.rank_expressions, {
-      tradeExpression,
       candidates: [persistedCandidate],
       fitAssessments: [expressionFitAssessment],
       quotes: [persistedCandidate],
@@ -895,6 +1301,7 @@ describe("AI SDK supervisor agent", () => {
       symbol: "ETH",
       reason: "Second discovered candidate.",
     };
+    await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketCandidates(store, run.runId, [firstCandidate, secondCandidate]);
     await seedFitAssessment(store, run.runId, expressionFitAssessment);
     await store.addRunStep({
@@ -926,7 +1333,6 @@ describe("AI SDK supervisor agent", () => {
     });
 
     await expect(executeTool(tools.rank_expressions, {
-      tradeExpression,
     })).resolves.toMatchObject({
       selectedMarket: firstCandidate,
       noTradeReason: null,

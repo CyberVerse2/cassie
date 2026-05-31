@@ -17,6 +17,7 @@ import {
   type PolymarketMarketFinder,
 } from "../adapters/selection.ts";
 import { formatErrorForLog } from "../core/helpers/error-format.ts";
+import { isConfiguredDirectVenueExpressionRail } from "../core/expression-rails.ts";
 import { expressionFitPromptSpec, structuredPromptInput } from "../prompts/index.ts";
 
 export type TradeExpressionIntent = {
@@ -94,20 +95,99 @@ export async function searchVenues(input: {
     .filter((result) => result.error)
     .map((result) => `${result.venue}: ${result.error}`);
 
+  const requiredFailures = results
+    .filter((result) => result.error && isRequiredVenueFailure(searchIntent.tradeExpression, result.venue))
+    .map((result) => `${result.venue}: ${result.error}`);
+
+  if (requiredFailures.length > 0) {
+    throw new Error(`Required venue search failed: ${requiredFailures.join("; ")}`);
+  }
+
   if (failures.length > 0 && failures.length === tasks.length) {
     throw new Error(`Venue search failed across all requested venues: ${failures.join("; ")}`);
   }
 
-  return uniqueMarketCandidates(results.flatMap((result) => result.candidates));
+  return sortCandidatesByExpressionPriority(
+    uniqueMarketCandidates(results.flatMap((result) => result.candidates)),
+    searchIntent.tradeExpression,
+  );
+}
+
+function isRequiredVenueFailure(
+  tradeExpression: TradeExpressionPlan,
+  venue: "hyperliquid" | "polymarket",
+): boolean {
+  if (venue !== "polymarket") return false;
+
+  return tradeExpression.candidateExpressions.some((candidate) =>
+    candidate.expressionRail === "prediction_market"
+      && candidate.priority === "high"
+      && candidate.intendedSide !== "avoid"
+      && candidate.directness === "direct"
+      && candidate.searchTerms.length > 0,
+  );
 }
 
 function shouldSearchDirectVenue(tradeExpression: TradeExpressionPlan): boolean {
   return tradeExpression.directAssetTradable
     || tradeExpression.candidateExpressions.some((candidate) =>
-      (candidate.expressionRail === "crypto" || candidate.expressionRail === "pre_ipo")
+      isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
         && candidate.intendedSide !== "avoid"
         && candidate.searchTerms.length > 0,
     );
+}
+
+function sortCandidatesByExpressionPriority(
+  candidates: VenueMarketCandidate[],
+  tradeExpression: TradeExpressionPlan,
+): VenueMarketCandidate[] {
+  return [...candidates].sort((a, b) =>
+    candidateExpressionScore(b, tradeExpression) - candidateExpressionScore(a, tradeExpression));
+}
+
+function candidateExpressionScore(
+  candidate: VenueMarketCandidate,
+  tradeExpression: TradeExpressionPlan,
+): number {
+  return Math.max(0, ...tradeExpression.candidateExpressions
+    .filter((expression) => candidateMatchesExpression(candidate, expression))
+    .map((expression) =>
+      priorityScore(expression.priority)
+        + directnessScore(expression.directness)
+        + expression.confidence,
+    ));
+}
+
+function candidateMatchesExpression(
+  candidate: VenueMarketCandidate,
+  expression: TradeExpressionPlan["candidateExpressions"][number],
+): boolean {
+  if (expression.intendedSide === "avoid") return false;
+  if (candidate.venue === "polymarket") {
+    return expression.expressionRail === "prediction_market"
+      && predictionMarketCandidateSide(candidate) === expression.intendedSide;
+  }
+  return isConfiguredDirectVenueExpressionRail(expression.expressionRail)
+    && candidate.side === expression.intendedSide;
+}
+
+function predictionMarketCandidateSide(candidate: VenueMarketCandidate): "yes" | "no" | null {
+  if (candidate.side === "buy_yes" || candidate.outcome === "yes") return "yes";
+  if (candidate.side === "buy_no" || candidate.outcome === "no") return "no";
+  return null;
+}
+
+function priorityScore(priority: string): number {
+  if (priority === "high") return 300;
+  if (priority === "medium") return 200;
+  return 100;
+}
+
+function directnessScore(directness: string): number {
+  if (directness === "direct") return 30;
+  if (directness === "strong_proxy") return 20;
+  if (directness === "weak_proxy") return 10;
+  return 0;
 }
 
 function buildVenueSearchIntent(input: {

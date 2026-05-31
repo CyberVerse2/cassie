@@ -2,7 +2,7 @@
   "tweets": [
     {
       "url": "https://x.com/maxrumpf/status/2057171304978293039",
-      "current": false,
+      "current": true,
       "authorName": "Max Rumpf",
       "handle": "@maxrumpf",
       "avatarUrl": "https://unavatar.io/x/maxrumpf",
@@ -188,7 +188,7 @@
     },
     {
       "url": "https://x.com/cryptogoos/status/2057405540477665634",
-      "current": true,
+      "current": false,
       "authorName": "CryptoGoos",
       "handle": "@cryptogoos",
       "avatarUrl": "https://unavatar.io/x/cryptogoos",

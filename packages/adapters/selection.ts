@@ -14,6 +14,7 @@ import {
 import {
   marketSelectionPromptSpec,
   polymarketDiscoveryQueryPromptSpec,
+  polymarketSearchResultSelectionPromptSpec,
   structuredPromptInput,
 } from "../prompts/index.ts";
 
@@ -57,6 +58,28 @@ export interface PolymarketDiscoveryQueryPlanner {
   }): Promise<string[]>;
 }
 
+export type PolymarketSearchResultForSelection = {
+  slug: string;
+  question: string;
+  active?: boolean;
+  closed?: boolean;
+  endDate?: string;
+  resolutionRules?: string | null;
+  outcomes?: unknown;
+  outcomePrices?: unknown;
+  liquidityUsd?: number | null;
+  volumeUsd?: number | null;
+};
+
+export interface PolymarketSearchResultSelector {
+  selectPolymarketSearchResults(input: {
+    thesis: Thesis;
+    tradeExpression?: TradeExpressionPlan;
+    markets: PolymarketSearchResultForSelection[];
+    limit?: number;
+  }): Promise<string[]>;
+}
+
 export class AiPolymarketDiscoveryQueryPlanner implements PolymarketDiscoveryQueryPlanner {
   constructor(private readonly ai: StructuredAiClient) {}
 
@@ -75,6 +98,32 @@ export class AiPolymarketDiscoveryQueryPlanner implements PolymarketDiscoveryQue
     });
 
     return Array.from(new Set(result.queries.map((query) => query.trim()).filter(Boolean))).slice(0, limit);
+  }
+}
+
+export class AiPolymarketSearchResultSelector implements PolymarketSearchResultSelector {
+  constructor(private readonly ai: StructuredAiClient) {}
+
+  async selectPolymarketSearchResults(input: {
+    thesis: Thesis;
+    tradeExpression?: TradeExpressionPlan;
+    markets: PolymarketSearchResultForSelection[];
+    limit?: number;
+  }): Promise<string[]> {
+    const limit = input.limit ?? 10;
+    const result = await this.ai.generateObject({
+      ...structuredPromptInput(polymarketSearchResultSelectionPromptSpec({
+        thesis: input.thesis,
+        tradeExpression: input.tradeExpression,
+        markets: input.markets,
+        limit,
+      })),
+    });
+    const validSlugs = new Set(input.markets.map((market) => market.slug));
+    return Array.from(new Set(result.selectedMarketSlugs
+      .map((slug) => slug.trim())
+      .filter((slug) => validSlugs.has(slug))))
+      .slice(0, limit);
   }
 }
 

@@ -185,7 +185,7 @@ describe("market selection", () => {
           return {
             fit: "strong",
             fitReason: "The contract resolves the exact approval event by the thesis horizon.",
-            warnings: ["liquidity_under_10000"],
+            warnings: [],
             trade: {
               venue: "polymarket",
               instrument: "sol-etf-approved",
@@ -211,7 +211,7 @@ describe("market selection", () => {
               minOrderSizeUsd: 1,
               thesisFit: 0.9,
               reason: "The market directly prices approval.",
-              warnings: ["liquidity_under_10000"],
+              warnings: [],
             },
           };
         },
