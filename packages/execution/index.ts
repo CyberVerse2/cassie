@@ -10,12 +10,13 @@ import {
   type HyperliquidExecutionEnvOptions,
   type PolymarketExecutionEnv,
   type PolymarketExecutionEnvOptions,
+  type RequiredHyperliquidExecutionEnv,
   type RequiredPolymarketExecutionEnv,
 } from "../core/config.ts";
 import type { OrderResponse, OrderSide, OrderType, SecureClient } from "@polymarket/client";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
-import { formatDecimal } from "./helpers/format.ts";
+import { formatDecimal, formatSignificantDecimal } from "./helpers/format.ts";
 
 export interface ExecutionClient {
   execute(
@@ -80,21 +81,32 @@ export class VenueExecutionClient implements ExecutionClient {
   }
 }
 
-export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions;
+type HyperliquidInfoClientLike = Pick<InfoClient, "allMids" | "metaAndAssetCtxs">;
+type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order">;
+type HyperliquidExecutionClients = {
+  info: HyperliquidInfoClientLike;
+  exchange: HyperliquidExchangeClientLike;
+};
+type HyperliquidExecutionClientFactory = (
+  config: RequiredHyperliquidExecutionEnv,
+) => HyperliquidExecutionClients | Promise<HyperliquidExecutionClients>;
+
+export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions & {
+  clientFactory?: HyperliquidExecutionClientFactory;
+};
 
 export class HyperliquidExecutionClient implements ExecutionClient {
   private readonly config: HyperliquidExecutionEnv;
+  private readonly clientFactory: HyperliquidExecutionClientFactory;
 
   constructor(options: HyperliquidExecutionClientOptions = {}) {
     this.config = readHyperliquidExecutionEnv(undefined, options);
+    this.clientFactory = options.clientFactory ?? createHyperliquidExecutionClients;
   }
 
   async execute(ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     const config = assertHyperliquidExecutionEnv(this.config);
-    const wallet = new EthersWallet(config.privateKey);
-    const transport = new HttpTransport();
-    const info = new InfoClient({ transport });
-    const exchange = new ExchangeClient({ transport, wallet });
+    const { info, exchange } = await this.clientFactory(config);
     const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
     const [asset, mids] = await Promise.all([
       this.resolveAsset(info, symbol),
@@ -110,29 +122,32 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     const slippage = config.slippageBps / 10_000;
     const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
     const size = ticket.sizeUsd / mid;
+    const requestedSize = formatDecimal(size, asset.sizeDecimals);
     const response = await exchange.order({
       orders: [
         {
           a: asset.id,
           b: isBuy,
-          p: formatDecimal(price, config.priceDecimals),
-          s: formatDecimal(size, asset.sizeDecimals),
+          p: formatSignificantDecimal(price, config.priceDecimals),
+          s: requestedSize,
           r: false,
           t: { limit: { tif: "Ioc" } },
         },
       ],
       grouping: "na",
     });
+    const executionResult = parseHyperliquidOrderExecution(response, {
+      requestedSize,
+      requestedSizeUsd: ticket.sizeUsd,
+    });
 
     return {
-      venueOrderId: JSON.stringify(response.response.data.statuses),
-      filledSizeUsd: ticket.sizeUsd,
-      averagePrice: mid,
+      ...executionResult,
       raw: response,
     };
   }
 
-  private async resolveAsset(info: InfoClient, symbol: string): Promise<{ id: number; sizeDecimals: number }> {
+  private async resolveAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<{ id: number; sizeDecimals: number }> {
     const [meta] = await info.metaAndAssetCtxs();
     const index = meta.universe.findIndex((asset) => asset.name === symbol);
 
@@ -145,6 +160,67 @@ export class HyperliquidExecutionClient implements ExecutionClient {
       sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
     };
   }
+}
+
+function createHyperliquidExecutionClients(config: RequiredHyperliquidExecutionEnv): HyperliquidExecutionClients {
+  const wallet = new EthersWallet(config.privateKey);
+  const transport = new HttpTransport();
+  return {
+    info: new InfoClient({ transport }),
+    exchange: new ExchangeClient({ transport, wallet }),
+  };
+}
+
+function parseHyperliquidOrderExecution(
+  response: Awaited<ReturnType<HyperliquidExchangeClientLike["order"]>>,
+  input: {
+    requestedSize: string;
+    requestedSizeUsd: number;
+  },
+): Pick<NonNullable<ExecutionJob["executionResult"]>, "venueOrderId" | "filledSizeUsd" | "averagePrice"> {
+  const status = response.response.data.statuses[0];
+  if (!status) {
+    throw new Error("Hyperliquid order response did not include an order status.");
+  }
+
+  if (typeof status === "string") {
+    return {
+      venueOrderId: null,
+      filledSizeUsd: 0,
+      averagePrice: null,
+    };
+  }
+
+  if ("filled" in status) {
+    const filledSize = readPositiveHyperliquidNumber(status.filled.totalSz, "filled size");
+    const requestedSize = readPositiveHyperliquidNumber(input.requestedSize, "requested size");
+    const averagePrice = readPositiveHyperliquidNumber(status.filled.avgPx, "average fill price");
+    const filledRatio = Math.min(1, filledSize / requestedSize);
+
+    return {
+      venueOrderId: String(status.filled.oid),
+      filledSizeUsd: input.requestedSizeUsd * filledRatio,
+      averagePrice,
+    };
+  }
+
+  if ("resting" in status) {
+    return {
+      venueOrderId: String(status.resting.oid),
+      filledSizeUsd: 0,
+      averagePrice: null,
+    };
+  }
+
+  throw new Error("Hyperliquid order response contained an unsupported order status.");
+}
+
+function readPositiveHyperliquidNumber(value: string, label: string): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid Hyperliquid ${label}: ${value}`);
+  }
+  return parsed;
 }
 
 export interface PolymarketSdkTradingClientLike {

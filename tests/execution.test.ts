@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  HyperliquidExecutionClient,
   PolymarketExecutionClient,
   type ExecutionClient,
   type PolymarketSdkTradingClientLike,
@@ -8,6 +9,7 @@ import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
 import { executeExecutionJob } from "../packages/jobs/execution-job.ts";
 import { createQueuedExecutionJob } from "../packages/jobs/state.ts";
+import { formatDecimal, formatSignificantDecimal } from "../packages/execution/helpers/format.ts";
 
 const ticket: TradeTicket = {
   ticketId: "ticket_1",
@@ -31,6 +33,91 @@ const settings: UserSettings = {
   walletAddress: "0x1111111111111111111111111111111111111111",
   defaultTradeSizeUsd: 25,
 };
+
+describe("execution decimal formatting", () => {
+  it("trims fractional zeros without removing integer magnitude", () => {
+    expect(formatDecimal(1000, 0)).toBe("1000");
+    expect(formatDecimal(1000, 2)).toBe("1000");
+    expect(formatSignificantDecimal(1000, 5)).toBe("1000");
+  });
+});
+
+describe("HyperliquidExecutionClient", () => {
+  it("submits exchange-valid IOC orders and reports actual fill size", async () => {
+    const info = {
+      metaAndAssetCtxs: vi.fn().mockResolvedValue([
+        {
+          universe: [
+            { name: "BTC", szDecimals: 5 },
+            { name: "ETH", szDecimals: 4 },
+            { name: "SOL", szDecimals: 2 },
+          ],
+        },
+        [],
+      ]),
+      allMids: vi.fn().mockResolvedValue({
+        SOL: "83.0365",
+      }),
+    };
+    const exchange = {
+      order: vi.fn().mockResolvedValue({
+        status: "ok",
+        response: {
+          type: "order",
+          data: {
+            statuses: [
+              {
+                filled: {
+                  totalSz: "0.15",
+                  avgPx: "83.05",
+                  oid: 12345,
+                },
+              },
+            ],
+          },
+        },
+      }),
+    };
+    const client = new HyperliquidExecutionClient({
+      privateKey: `0x${"1".repeat(64)}`,
+      slippageBps: 100,
+      priceDecimals: 5,
+      clientFactory: () => ({ info: info as never, exchange: exchange as never }),
+    });
+
+    const result = await client.execute({
+      ticketId: "ticket_hl_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "SOL momentum.",
+      venue: "hyperliquid",
+      instrument: "SOL-PERP",
+      side: "long",
+      sizeUsd: 25,
+      orderType: "marketable_limit",
+      venueData: { symbol: "SOL" },
+    });
+
+    expect(exchange.order).toHaveBeenCalledWith({
+      orders: [
+        {
+          a: 2,
+          b: true,
+          p: "83.867",
+          s: "0.3",
+          r: false,
+          t: { limit: { tif: "Ioc" } },
+        },
+      ],
+      grouping: "na",
+    });
+    expect(result).toMatchObject({
+      venueOrderId: "12345",
+      filledSizeUsd: 12.5,
+      averagePrice: 83.05,
+    });
+  });
+});
 
 describe("PolymarketExecutionClient", () => {
   it("uses the beta SDK client with configured credentials for market orders", async () => {
