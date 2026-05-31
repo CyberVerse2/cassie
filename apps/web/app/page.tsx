@@ -98,14 +98,14 @@ export default function Home() {
           <div className="hero-content">
             <HeroBrand />
             <h1 className="display display-1">
-              Turn a <em>tweet</em>
+              Trade the
               <br />
-              into a <em>trade</em>.
+              <em>timeline</em>.
             </h1>
             <p className="lede">
-              Cassie turns tweets into executable trade ideas.
+              Mention Cassie under a post.
               <br />
-              Mention her under any post - she makes a trade for you.
+              She figures out if there&apos;s a real trade there and builds the position.
             </p>
             <TweetDeck cards={deckCards} />
             <div className="cta-row">
