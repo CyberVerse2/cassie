@@ -1,8 +1,16 @@
+import { randomUUID } from "node:crypto";
 import { config } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { MissingConnectorConfigError } from "../core/helpers/connector-errors.ts";
-import type { ExecutionFundingSource, ExecutionJob, TradeTicket, UserSettings } from "../core/schemas/index.ts";
+import {
+  TradeTicketSchema,
+  type ExecutionFundingSource,
+  type ExecutionJob,
+  type Position,
+  type TradeTicket,
+  type UserSettings,
+} from "../core/schemas/index.ts";
 import { PrivyAdapter, type PrivyWalletGateway, type WalletUsdcTransfer } from "../adapters/privy/index.ts";
 import {
   WebhookExecutionClient,
@@ -55,6 +63,7 @@ export async function executeExecutionJob(input: {
   let settings: UserSettings | null = null;
 
   try {
+    validateExecutableTicket(ticket);
     settings = await requiredUserSettings(store, ticket.userId);
     const walletBalanceUsd = await walletGateway.getUsdcBalanceUsd(settings.privyWalletId!);
     await store.reserveWalletSpend({
@@ -97,6 +106,7 @@ export async function executeExecutionJob(input: {
     });
     reservationOpen = false;
     job = await store.updateExecutionJob(markExecutionSucceeded(job, executionResult));
+    await createPositionForFilledExecution({ store, ticket, job, executionResult });
     await store.audit({
       entityId: job.jobId,
       entityType: "execution_job",
@@ -191,6 +201,61 @@ function defaultExecutionClient(): ExecutionClient {
     throw new MissingConnectorConfigError("Treasury execution", "EXECUTION_WEBHOOK_URL");
   }
   return new WebhookExecutionClient();
+}
+
+function validateExecutableTicket(ticket: TradeTicket): void {
+  const parsed = TradeTicketSchema.safeParse(ticket);
+  if (!parsed.success) {
+    const exitPlanError = parsed.error.issues.find((issue) => issue.path[0] === "exitPlan");
+    if (exitPlanError) {
+      throw new Error("Trade execution requires a valid exit plan.");
+    }
+    throw parsed.error;
+  }
+}
+
+async function createPositionForFilledExecution(input: {
+  store: CassieStore;
+  ticket: TradeTicket;
+  job: ExecutionJob;
+  executionResult: NonNullable<ExecutionJob["executionResult"]>;
+}): Promise<Position | null> {
+  if (input.executionResult.filledSizeUsd <= 0) {
+    return null;
+  }
+
+  const existing = await input.store.getPositionByExecutionJob(input.job.jobId);
+  if (existing) {
+    return existing;
+  }
+
+  const now = new Date().toISOString();
+  const position: Position = {
+    positionId: randomUUID(),
+    userId: input.ticket.userId,
+    ticketId: input.ticket.ticketId,
+    executionJobId: input.job.jobId,
+    venue: input.ticket.venue,
+    instrument: input.ticket.instrument,
+    side: input.ticket.side,
+    status: "open",
+    entrySizeUsd: input.ticket.sizeUsd,
+    filledSizeUsd: input.executionResult.filledSizeUsd,
+    entryPrice: input.executionResult.averagePrice,
+    currentMarkPrice: input.executionResult.averagePrice,
+    currentValueUsd: input.executionResult.filledSizeUsd,
+    unrealizedPnlUsd: 0,
+    unrealizedPnlPct: 0,
+    exitPlan: input.ticket.exitPlan,
+    openedAt: now,
+    updatedAt: now,
+    lastMarkedAt: input.executionResult.averagePrice == null ? null : now,
+    closedAt: null,
+    closeExecutionJobId: null,
+    failureReason: null,
+  };
+
+  return input.store.addPosition(position);
 }
 
 async function requiredUserSettings(store: CassieStore, userId: string): Promise<UserSettings> {

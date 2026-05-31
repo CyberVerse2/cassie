@@ -360,6 +360,72 @@ describe("treasury-prefunded execution", () => {
       "trade_prefund",
       "trade_spend",
     ]);
+    expect(state.positions).toHaveLength(1);
+    expect(state.positions[0]).toMatchObject({
+      userId: "user_1",
+      ticketId: ticket.ticketId,
+      executionJobId: job.jobId,
+      venue: "polymarket",
+      instrument: "solana-etf-approved",
+      side: "buy_yes",
+      status: "open",
+      entrySizeUsd: 25,
+      filledSizeUsd: 25,
+      entryPrice: 0.5,
+      currentMarkPrice: 0.5,
+      currentValueUsd: 25,
+      unrealizedPnlUsd: 0,
+      unrealizedPnlPct: 0,
+      exitPlan,
+    });
+  });
+
+  it("does not create a position when execution returns no fill", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn().mockResolvedValue({
+        venueOrderId: "venue_order_1",
+        filledSizeUsd: 0,
+        averagePrice: null,
+      }),
+    };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
+
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
+    const state = await store.load();
+
+    expect(result.status).toBe("succeeded");
+    expect(state.positions).toEqual([]);
+  });
+
+  it("blocks execution before wallet movement when the ticket has no exit plan", async () => {
+    const store = new InMemoryCassieStore();
+    const legacyTicket = { ...ticket };
+    delete (legacyTicket as Partial<TradeTicket>).exitPlan;
+    const job = createQueuedExecutionJob(legacyTicket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn(),
+    };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
+
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(legacyTicket as TradeTicket);
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      failureReason: "Trade execution requires a valid exit plan.",
+    });
+    expect(walletGateway.getUsdcBalanceUsd).not.toHaveBeenCalled();
+    expect(walletGateway.transferUserUsdcToTreasury).not.toHaveBeenCalled();
+    expect(executionClient.execute).not.toHaveBeenCalled();
   });
 
   it("releases reserved wallet spend when venue execution fails", async () => {
