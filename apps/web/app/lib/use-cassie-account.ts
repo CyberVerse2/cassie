@@ -39,6 +39,13 @@ type TelegramConnectSession = {
   expiresAt: string;
 };
 
+type CassieUserProfile = {
+  name: string;
+  handle: string;
+  avatarUrl: string | null;
+  initial: string;
+};
+
 type SyncInput = {
   defaultTradeSizeUsd?: number;
   requireSigner?: boolean;
@@ -56,6 +63,7 @@ export function useCassieAccount() {
     () => parsePolicyIds(process.env.NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS),
     [],
   );
+  const userProfile = useMemo(() => profileFromUser(privy.user), [privy.user]);
 
   const embeddedWallet = useMemo(() => {
     const primary = privy.user?.wallet;
@@ -180,8 +188,33 @@ export function useCassieAccount() {
     return payload.telegram;
   }, [privy]);
 
+  const updateDefaultTradeSize = useCallback(async (defaultTradeSizeUsd: number) => {
+    if (!privy.authenticated) {
+      throw new Error("Log in before updating your default trade size.");
+    }
+    const accessToken = await privy.getAccessToken();
+    if (!accessToken) {
+      throw new Error("Privy access token was not available.");
+    }
+    const response = await fetch("/api/settings", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ defaultTradeSizeUsd }),
+    });
+    const payload = await response.json() as { account?: CassieAccount; error?: string };
+    if (!response.ok || !payload.account) {
+      throw new Error(payload.error ?? "Default trade size update failed.");
+    }
+    setAccount(payload.account);
+    return payload.account;
+  }, [privy]);
+
   return {
     account,
+    userProfile,
     authenticated: privy.authenticated,
     ready: privy.ready && walletsReady,
     status,
@@ -194,6 +227,24 @@ export function useCassieAccount() {
     beginTelegramConnect,
     refreshAccount,
     syncAccount,
+    updateDefaultTradeSize,
+  };
+}
+
+function profileFromUser(user: User | null): CassieUserProfile | null {
+  const twitter = user?.twitter
+    ?? user?.linkedAccounts.find((account) => account.type === "twitter_oauth");
+  if (!twitter) return null;
+
+  const handle = twitter.username ? `@${twitter.username.replace(/^@/, "")}` : "@connected";
+  const name = twitter.name?.trim() || handle;
+  const initial = (name.replace(/^@/, "").trim()[0] ?? "C").toUpperCase();
+
+  return {
+    name,
+    handle,
+    avatarUrl: twitter.profilePictureUrl,
+    initial,
   };
 }
 

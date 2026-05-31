@@ -329,6 +329,9 @@ export default function Dashboard() {
         walletAddress={account.walletAddress}
         login={account.login}
         authenticated={account.authenticated}
+        userProfile={account.userProfile}
+        defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
+        updateDefaultTradeSize={account.updateDefaultTradeSize}
       />
       <Center balanceUsd={account.account?.balance?.spendableUsd ?? 0} />
       <Voice />
@@ -340,10 +343,21 @@ function Aside({
   walletAddress,
   login,
   authenticated,
+  userProfile,
+  defaultTradeSizeUsd,
+  updateDefaultTradeSize,
 }: {
   walletAddress: string | null;
   login: () => void;
   authenticated: boolean;
+  userProfile: {
+    name: string;
+    handle: string;
+    avatarUrl: string | null;
+    initial: string;
+  } | null;
+  defaultTradeSizeUsd: number;
+  updateDefaultTradeSize: (value: number) => Promise<unknown>;
 }) {
   const [copied, setCopied] = useState(false);
   const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
@@ -401,7 +415,11 @@ function Aside({
         </button>
       </div>
 
-      <Defaults />
+      <Defaults
+        authenticated={authenticated}
+        defaultTradeSizeUsd={defaultTradeSizeUsd}
+        updateDefaultTradeSize={updateDefaultTradeSize}
+      />
 
       <nav className={s.nav} aria-label="Wallet actions">
         <span className={s.navSection}>Move</span>
@@ -428,18 +446,62 @@ function Aside({
       </nav>
 
       <div className={`${s.identity} ${s.identityDock}`}>
-        <span className={s.identityAvatar}>C</span>
+        <span className={s.identityAvatar}>
+          {userProfile?.avatarUrl ? (
+            <img src={userProfile.avatarUrl} alt="" aria-hidden />
+          ) : (
+            userProfile?.initial ?? "C"
+          )}
+        </span>
         <div className={s.identityText}>
-          <span className={s.identityName}>Celestine</span>
-          <span className={s.identityMeta}>@thecyberverse</span>
+          <span className={s.identityName}>{userProfile?.name ?? "Cassie user"}</span>
+          <span className={s.identityMeta}>{userProfile?.handle ?? "Sign in with X"}</span>
         </div>
       </div>
     </aside>
   );
 }
 
-function Defaults() {
-  const [trade, setTrade] = useState("50");
+function Defaults({
+  authenticated,
+  defaultTradeSizeUsd,
+  updateDefaultTradeSize,
+}: {
+  authenticated: boolean;
+  defaultTradeSizeUsd: number;
+  updateDefaultTradeSize: (value: number) => Promise<unknown>;
+}) {
+  const [trade, setTrade] = useState(formatTradeSize(defaultTradeSizeUsd));
+  const [savedTrade, setSavedTrade] = useState(defaultTradeSizeUsd);
+  const [error, setError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setTrade(formatTradeSize(defaultTradeSizeUsd));
+    setSavedTrade(defaultTradeSizeUsd);
+  }, [defaultTradeSizeUsd]);
+
+  async function saveTrade() {
+    if (!authenticated || saving) return;
+    const next = Number(trade);
+    if (!Number.isFinite(next) || next <= 0) {
+      setError("Enter a positive default trade size.");
+      return;
+    }
+    if (next === savedTrade) return;
+
+    setSaving(true);
+    setError(null);
+    try {
+      await updateDefaultTradeSize(next);
+      setSavedTrade(next);
+      setTrade(formatTradeSize(next));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <label className={s.defaults}>
@@ -454,12 +516,25 @@ function Defaults() {
           inputMode="decimal"
           className={s.defaultsInput}
           value={trade}
-          onChange={(e) => setTrade(e.target.value.replace(/[^0-9.]/g, ""))}
+          onChange={(e) => {
+            setError(null);
+            setTrade(e.target.value.replace(/[^0-9.]/g, ""));
+          }}
+          onBlur={saveTrade}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          disabled={!authenticated || saving}
           aria-label="Default trade size in USDC"
         />
       </span>
+      {error ? <span className={s.defaultsError} role="alert">{error}</span> : null}
     </label>
   );
+}
+
+function formatTradeSize(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value).replace(/\.?0+$/, "");
 }
 
 interface DataPoint {

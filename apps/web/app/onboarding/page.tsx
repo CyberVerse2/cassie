@@ -60,6 +60,7 @@ export default function OnboardingPage() {
             onNext={next}
             authenticated={account.authenticated}
             ready={account.ready}
+            name={account.userProfile?.name ?? "there"}
           />
         )}
         {stepId === "permissions" && (
@@ -78,7 +79,13 @@ export default function OnboardingPage() {
             error={account.error}
           />
         )}
-        {stepId === "defaults" && <StepDefaults onNext={next} syncAccount={account.syncAccount} />}
+        {stepId === "defaults" && (
+          <StepDefaults
+            onNext={next}
+            syncAccount={account.syncAccount}
+            defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
+          />
+        )}
         {stepId === "notify" && (
           <StepNotify
             onSkip={() => goto("first")}
@@ -128,10 +135,12 @@ function StepWelcome({
   onNext,
   authenticated,
   ready,
+  name,
 }: {
   onNext: () => void;
   authenticated: boolean;
   ready: boolean;
+  name: string;
 }) {
   const canBegin = ready && authenticated;
 
@@ -139,7 +148,7 @@ function StepWelcome({
     <div className={s.step}>
       <span className={s.eyebrow}>You're in</span>
       <h1 className={s.display}>
-        Welcome, <em>Celestine</em>.
+        Welcome, <em>{name}</em>.
       </h1>
       <p className={s.lede}>
         Mention me under any post — I'll find the best trade across{" "}
@@ -271,15 +280,37 @@ const presets = [25, 50, 100, 250];
 function StepDefaults({
   onNext,
   syncAccount,
+  defaultTradeSizeUsd,
 }: {
   onNext: () => void;
   syncAccount: (input?: { defaultTradeSizeUsd?: number }) => Promise<unknown>;
+  defaultTradeSizeUsd: number;
 }) {
-  const [value, setValue] = useState("50");
+  const [value, setValue] = useState(formatTradeSize(defaultTradeSizeUsd));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setValue(formatTradeSize(defaultTradeSizeUsd));
+  }, [defaultTradeSizeUsd]);
 
   async function save() {
-    await syncAccount({ defaultTradeSizeUsd: Number(value) });
-    onNext();
+    const next = Number(value);
+    if (!Number.isFinite(next) || next <= 0) {
+      setError("Enter a positive default trade size.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    try {
+      await syncAccount({ defaultTradeSizeUsd: next });
+      onNext();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -299,7 +330,10 @@ function StepDefaults({
           inputMode="decimal"
           className={s.amountInput}
           value={value}
-          onChange={(e) => setValue(e.target.value.replace(/[^0-9.]/g, ""))}
+          onChange={(e) => {
+            setError(null);
+            setValue(e.target.value.replace(/[^0-9.]/g, ""));
+          }}
           aria-label="Default trade size in USDC"
           autoFocus
         />
@@ -312,7 +346,10 @@ function StepDefaults({
             key={p}
             type="button"
             className={`${s.preset} ${value === String(p) ? s.presetActive : ""}`}
-            onClick={() => setValue(String(p))}
+            onClick={() => {
+              setError(null);
+              setValue(String(p));
+            }}
           >
             ${p}
           </button>
@@ -322,10 +359,11 @@ function StepDefaults({
       <p className={s.fineprint}>
         Counter and watch inherit this size. You can change it later from the sidebar.
       </p>
+      {error ? <p className={s.fineprint} role="alert">{error}</p> : null}
 
       <div className={s.ctaRow}>
-        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={save}>
-          Save & continue
+        <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={save} disabled={saving}>
+          {saving ? "Saving" : "Save & continue"}
           <span className={s.arrow} aria-hidden>→</span>
         </button>
       </div>
@@ -505,4 +543,8 @@ function StepFirstMention() {
       </div>
     </div>
   );
+}
+
+function formatTradeSize(value: number): string {
+  return Number.isInteger(value) ? String(value) : String(value).replace(/\.?0+$/, "");
 }
