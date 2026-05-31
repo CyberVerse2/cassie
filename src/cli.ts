@@ -107,7 +107,7 @@ Usage:
   npm run cli -- <command> [options]
 
 Setup:
-  settings:set              Create or update a test user's trading settings.
+  settings:set              Create or update the configured CLI user's trading settings.
   env                       Show required runtime dependencies, with secrets masked.
 
 App flow:
@@ -125,8 +125,8 @@ Smoke checks:
   smoke:market              Test market candidate discovery for an asset.
 
 Useful examples:
-  npm run cli -- settings:set --user local-user
-  npm run cli -- settings:set --user local-user --size 50
+  npm run cli -- settings:set
+  npm run cli -- settings:set --size 50
   npm run cli -- state
   npm run cli -- run
   npm run cli -- run --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
@@ -152,7 +152,9 @@ async function env() {
 }
 
 async function settingsSet(args: ParsedArgs) {
-  const { settings, generatedWallet } = buildCliUserSettings(args.flags);
+  const { settings, generatedWallet } = buildCliUserSettings(args.flags, {
+    defaultUserId: defaultCliUserId(),
+  });
 
   await product().upsertSettings(settings);
   return { saved: true, settings, generatedWallet };
@@ -232,9 +234,9 @@ async function state(args: ParsedArgs) {
 
 async function runs(args: ParsedArgs) {
   const snapshot = await product().state();
-  const userId = nullableFlag(args, "user");
+  const userId = userIdFromArgs(args);
   return snapshot.controlRuns
-    .filter((run) => !userId || run.userId === userId)
+    .filter((run) => run.userId === userId)
     .map((run) => ({
       runId: run.runId,
       userId: run.userId,
@@ -247,9 +249,9 @@ async function runs(args: ParsedArgs) {
 
 async function tickets(args: ParsedArgs) {
   const snapshot = await product().state();
-  const userId = nullableFlag(args, "user");
+  const userId = userIdFromArgs(args);
   return snapshot.tradeTickets
-    .filter((ticket) => !userId || ticket.userId === userId)
+    .filter((ticket) => ticket.userId === userId)
     .map((ticket) => ({
       ticketId: ticket.ticketId,
       userId: ticket.userId,
@@ -312,10 +314,19 @@ function product() {
 
 async function mentionRequestFromArgs(args: ParsedArgs) {
   return {
-    userId: flag(args, "user", "local-user"),
+    userId: userIdFromArgs(args),
     userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie trade this"),
     sourcePost: await mentionSourcePostFromArgs(args),
   };
+}
+
+function userIdFromArgs(args: ParsedArgs): string {
+  return flag(args, "user", defaultCliUserId());
+}
+
+function defaultCliUserId(): string {
+  if (config.x.webhookUserId) return config.x.webhookUserId;
+  throw new CliError("CLI default user requires X_WEBHOOK_USER_ID. Set it or pass --user.");
 }
 
 async function mentionSourcePostFromArgs(args: ParsedArgs): Promise<SourcePost> {

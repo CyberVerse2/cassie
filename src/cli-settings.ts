@@ -9,7 +9,10 @@ export type GeneratedCliWallet = {
   mnemonic: string | null;
 };
 
-export function buildCliUserSettings(flags: CliSettingsFlags): {
+export function buildCliUserSettings(
+  flags: CliSettingsFlags,
+  options: { defaultUserId: string },
+): {
   settings: UserSettings;
   generatedWallet: GeneratedCliWallet | null;
 } {
@@ -20,7 +23,7 @@ export function buildCliUserSettings(flags: CliSettingsFlags): {
     throw new Error("CLI wallet generation failed.");
   }
   const settings: UserSettings = {
-    userId: flag(flags, "user", "local-user"),
+    userId: flag(flags, "user", options.defaultUserId),
     privyUserId: null,
     privyWalletId: null,
     walletAddress,

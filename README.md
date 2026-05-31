@@ -33,7 +33,7 @@ Runtime shape:
 ```bash
 npm install
 npm run db:migrate
-npm run cli -- settings:set --user local-user
+npm run cli -- settings:set
 npm run cli -- run
 ```
 
@@ -77,7 +77,7 @@ npm run poll:telegram
 Enqueue Cassie from the CLI and show the live timeline:
 
 ```bash
-npm run cli -- run --user local-user --post "Solana ETF approval is basically inevitable now. Market is asleep."
+npm run cli -- run --post "Solana ETF approval is basically inevitable now. Market is asleep."
 ```
 
 Inspect an existing run:
