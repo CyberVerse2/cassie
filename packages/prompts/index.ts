@@ -165,6 +165,7 @@ Rules:
 - If any supplied candidate has a validated fit assessment and matching quote, decision must be select_market and selectedMarket must be one of those validated candidates.
 - Do not select rejected candidates or candidates without a matching quote.
 - Do not select a weak proxy if a direct expression exists.
+- Prefer Hyperliquid perps over Hyperliquid spot for direct asset price exposure; use spot only when no validated quoted perp candidate exists for that expression.
 - Return no_selection only when the supplied candidates contain no validated candidate with a matching quote.
 - Use selectedMarket only for a real validated candidate.
 - This tool only ranks markets; the supervisor creates the ticket after selectedMarket is set.`,

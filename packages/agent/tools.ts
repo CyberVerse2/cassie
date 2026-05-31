@@ -292,9 +292,9 @@ export function createCassieSupervisorTools(input: {
         const persistedQuotes = await latestPersistedQuotes(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : parseSuppliedRankQuotes(quotes);
         const validatedFitAssessments = persistedFitAssessments.filter((assessment) => assessment.fitStatus === "validated");
-        const rankingCandidates = persistedCandidates
+        const rankingCandidates = preferHyperliquidPerpsOverSpot(persistedCandidates
           .slice(0, persistedFitAssessments.length)
-          .filter((_, index) => persistedFitAssessments[index]?.fitStatus === "validated");
+          .filter((_, index) => persistedFitAssessments[index]?.fitStatus === "validated"));
         if (groundedQuotes.length === 0) {
           throw new Error("rank_expressions requires a persisted or supplied market quote.");
         }
@@ -490,6 +490,18 @@ function parseSuppliedMarketSelection(value: unknown): MarketSelection {
   const parsed = MarketSelectionSchema.safeParse(value);
   if (parsed.success) return parsed.data;
   throw new Error("Trade ticket creation requires a usable market selection.");
+}
+
+function preferHyperliquidPerpsOverSpot(candidates: MarketCandidate[]): MarketCandidate[] {
+  const hasHyperliquidPerp = candidates.some((candidate) =>
+    candidate.venue === "hyperliquid" && candidate.instrument !== "spot"
+  );
+
+  if (!hasHyperliquidPerp) return candidates;
+
+  return candidates.filter((candidate) =>
+    candidate.venue !== "hyperliquid" || candidate.instrument !== "spot"
+  );
 }
 
 function parseSuppliedTradeExpression(value: unknown) {

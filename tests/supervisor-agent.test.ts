@@ -722,6 +722,103 @@ describe("AI SDK supervisor agent", () => {
     expect(ai.calls).toContain("cassie_market_selection");
   });
 
+  it("filters Hyperliquid spot out of ranking when a validated perp exists", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie prefer perps",
+      sourcePost,
+    });
+    const perpCandidate: MarketCandidate = {
+      ...marketSelection.selectedMarket!,
+      symbol: "BTC",
+      side: "long",
+      instrument: "perp",
+      reason: "BTC perp was found in live Hyperliquid metadata.",
+    };
+    const spotCandidate: MarketCandidate = {
+      ...perpCandidate,
+      symbol: "UBTC/USDC",
+      side: "buy",
+      instrument: "spot",
+      reason: "UBTC spot was found in live Hyperliquid metadata.",
+    };
+    const ai: StructuredAiClient = {
+      async generateObject(input) {
+        expect(input.name).toBe("cassie_market_selection");
+        const payload = JSON.parse(String(input.messages?.[0]?.content));
+        expect(payload.candidates).toHaveLength(1);
+        expect(payload.candidates[0]).toMatchObject({
+          venue: "hyperliquid",
+          instrument: "perp",
+          symbol: "BTC",
+        });
+        return {
+          decision: "select_market",
+          selectedMarket: payload.candidates[0],
+          selectedCandidateId: "hyperliquid|BTC|long",
+          rejectionReason: null,
+          rankedCandidates: [],
+          rejectedCandidates: [],
+          noTradeReason: null,
+        } as unknown;
+      },
+    } as StructuredAiClient;
+
+    await seedMarketCandidates(store, run.runId, [perpCandidate, spotCandidate]);
+    await seedFitAssessment(store, run.runId, {
+      ...expressionFitAssessment,
+      candidateId: "hyperliquid:BTC:long",
+      intendedSide: "long",
+    });
+    await seedFitAssessment(store, run.runId, {
+      ...expressionFitAssessment,
+      candidateId: "hyperliquid:UBTC/USDC:buy",
+      intendedSide: "buy",
+    });
+    for (const candidate of [perpCandidate, spotCandidate]) {
+      await store.addRunStep({
+        runId: run.runId,
+        stepType: "market_quote",
+        status: "succeeded",
+        input: {},
+        output: candidate,
+        error: null,
+        model: null,
+        promptName: null,
+        promptVersion: null,
+        thinkingTrace: null,
+        completedAt: new Date().toISOString(),
+      });
+    }
+
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: settings,
+      deps: {
+        ai,
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.rank_expressions, {
+      tradeExpression,
+    })).resolves.toMatchObject({
+      selectedMarket: perpCandidate,
+      noTradeReason: null,
+    });
+
+    const steps = await store.getRunSteps(run.runId);
+    expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
+      candidates: [perpCandidate],
+    });
+  });
+
   it("rejects corrupt persisted venue search output instead of using supplied ranking inputs", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
