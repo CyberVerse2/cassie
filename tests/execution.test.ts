@@ -113,8 +113,88 @@ describe("HyperliquidExecutionClient", () => {
     });
     expect(result).toMatchObject({
       venueOrderId: "12345",
-      filledSizeUsd: 12.5,
+      filledSizeUsd: 12.4575,
       averagePrice: 83.05,
+    });
+  });
+
+  it("submits spot orders with spot asset ids", async () => {
+    const spotCtxs = Array.from({ length: 183 }, (_, index) =>
+      index === 182 ? { coin: "@182", midPx: "4507.75", markPx: "4507.6" } : {}
+    );
+    const info = {
+      spotMetaAndAssetCtxs: vi.fn().mockResolvedValue([
+        {
+          tokens: [
+            { name: "USDC", fullName: null, szDecimals: 8, index: 0, isCanonical: true },
+            { name: "XAUT0", fullName: "XAUT0", szDecimals: 2, index: 297, isCanonical: false },
+          ],
+          universe: [
+            { name: "@182", tokens: [297, 0], index: 182, isCanonical: false },
+          ],
+        },
+        spotCtxs,
+      ]),
+      metaAndAssetCtxs: vi.fn(),
+      allMids: vi.fn().mockResolvedValue({ "@182": "4507.75" }),
+    };
+    const exchange = {
+      order: vi.fn().mockResolvedValue({
+        status: "ok",
+        response: {
+          type: "order",
+          data: {
+            statuses: [
+              {
+                filled: {
+                  totalSz: "0.01",
+                  avgPx: "4508.5",
+                  oid: 67890,
+                },
+              },
+            ],
+          },
+        },
+      }),
+    };
+    const client = new HyperliquidExecutionClient({
+      privateKey: `0x${"1".repeat(64)}`,
+      slippageBps: 100,
+      priceDecimals: 5,
+      clientFactory: () => ({ info: info as never, exchange: exchange as never }),
+    });
+
+    const result = await client.execute({
+      ticketId: "ticket_hl_spot_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "Gold momentum.",
+      venue: "hyperliquid",
+      instrument: "spot",
+      side: "buy",
+      sizeUsd: 50,
+      orderType: "marketable_limit",
+      venueData: { symbol: "XAUT0/USDC" },
+    });
+
+    expect(exchange.order).toHaveBeenCalledWith({
+      orders: [
+        {
+          a: 10182,
+          b: true,
+          p: "4552.8",
+          s: "0.01",
+          r: false,
+          t: { limit: { tif: "Ioc" } },
+        },
+      ],
+      grouping: "na",
+    });
+    expect(info.metaAndAssetCtxs).not.toHaveBeenCalled();
+    expect(result).toMatchObject({
+      venueOrderId: "67890",
+      filledSizeUsd: 45.085,
+      averagePrice: 4508.5,
     });
   });
 });

@@ -88,6 +88,11 @@ function hyperliquidInfoFetchMock(input: {
     universe: Array<{ name: string; maxLeverage?: number; onlyIsolated?: boolean; marginMode?: string }>;
     ctxs: Array<{ dayNtlVlm?: string; markPx?: string; midPx?: string; funding?: string }>;
   }>;
+  spotMeta?: {
+    universe: Array<{ name: string; tokens: number[]; index: number; isCanonical: boolean }>;
+    tokens: Array<{ name: string; fullName: string | null; szDecimals: number; index: number; isCanonical: boolean }>;
+    ctxs: Array<{ coin?: string; dayNtlVlm?: string; markPx?: string; midPx?: string }>;
+  };
   books: Record<string, { levels: [Array<{ px: string; sz: string }>, Array<{ px: string; sz: string }>] }>;
 }) {
   return vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
@@ -102,6 +107,16 @@ function hyperliquidInfoFetchMock(input: {
       const meta = input.metas[key];
       if (!meta) throw new Error(`Unexpected Hyperliquid metadata request: ${JSON.stringify(body)}`);
       return new Response(JSON.stringify([{ universe: meta.universe }, meta.ctxs]));
+    }
+
+    if (body.type === "spotMetaAndAssetCtxs") {
+      return new Response(JSON.stringify([
+        {
+          universe: input.spotMeta?.universe ?? [],
+          tokens: input.spotMeta?.tokens ?? [],
+        },
+        input.spotMeta?.ctxs ?? [],
+      ]));
     }
 
     if (body.type === "l2Book" && body.coin) {
@@ -465,6 +480,105 @@ describe("market data connectors", () => {
     });
 
     expect(candidates.map((candidate) => candidate.symbol)).toEqual(["ZEC-USDC", "ZEC/USDC"]);
+    fetchMock.mockRestore();
+  });
+
+  it("searches Hyperliquid spot metadata with trade-expression aliases", async () => {
+    const spotCtxs = Array.from({ length: 183 }, (_, index) =>
+      index === 182
+        ? { coin: "@182", dayNtlVlm: "99206.127", markPx: "4507.6", midPx: "4507.75" }
+        : {}
+    );
+    const fetchMock = hyperliquidInfoFetchMock({
+      metas: {
+        main: {
+          universe: [{ name: "BTC" }],
+          ctxs: [{ dayNtlVlm: "100000000" }],
+        },
+      },
+      spotMeta: {
+        tokens: [
+          { name: "USDC", fullName: null, szDecimals: 8, index: 0, isCanonical: true },
+          { name: "XAUT0", fullName: "XAUT0", szDecimals: 2, index: 297, isCanonical: false },
+        ],
+        universe: [
+          { name: "@182", tokens: [297, 0], index: 182, isCanonical: false },
+        ],
+        ctxs: spotCtxs,
+      },
+      books: {
+        "@182": {
+          levels: [
+            [{ px: "4507.0", sz: "1" }],
+            [{ px: "4508.5", sz: "1" }],
+          ],
+        },
+      },
+    });
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        claim: "Tokenized gold should rally.",
+        direction: "bullish",
+        mentionedAssets: ["gold"],
+        topics: ["tokenized gold"],
+        timeHorizon: "days",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.72,
+      },
+      tradeExpression: {
+        signal: "Gold breakout",
+        coreInterpretation: "Use direct tokenized gold exposure where available.",
+        directAsset: "gold",
+        directAssetTradable: true,
+        evidenceConfidence: 0.7,
+        marketDiscoveryConfidence: 0.7,
+        tradeExpressionConfidence: 0.72,
+        highestPurityExpression: "Buy tokenized gold spot if liquid.",
+        publicMarketReadThrough: "none",
+        candidates: [],
+        rankedCandidates: [],
+        candidateExpressions: [
+          {
+            expressionId: "expr_gold_spot",
+            expressionRail: "crypto",
+            expressionType: "directional",
+            abstractMarket: "Tokenized gold spot",
+            intendedSide: "long",
+            primaryEntityOrEvent: "gold",
+            relatedEntities: ["XAUT", "PAXG"],
+            thesis: "Tokenized gold should rally.",
+            whyThisExpressesTheOpportunity: "XAUT is direct tokenized gold exposure.",
+            directness: "direct",
+            whatMustBeTrue: ["A live XAUT spot market exists."],
+            searchTerms: ["XAUT", "tokenized gold"],
+            requiredMarketFeatures: ["spot"],
+            requiredRuleOrContractFeatures: [],
+            keyRisks: [],
+            expectedTimeHorizon: "days",
+            priority: "high",
+            confidence: 0.72,
+          },
+        ],
+        discardedExpressions: [],
+        noTradeCase: null,
+        decision: "needs_market_check",
+        reason: "Needs venue check.",
+        insufficiency: null,
+        marketRouterInstructions: "Search Hyperliquid spot for XAUT or PAXG.",
+      },
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      venue: "hyperliquid",
+      instrument: "spot",
+      side: "buy",
+      symbol: "XAUT0/USDC",
+      markPrice: 4507.6,
+    });
+    expect(candidates[0]?.minOrderSizeUsd).toBeCloseTo(45.0775);
     fetchMock.mockRestore();
   });
 

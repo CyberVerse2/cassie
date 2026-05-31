@@ -15,6 +15,24 @@ export function formatSignificantDecimal(value: number, significantFigures: numb
   return trimDecimalZeros(expandExponential(Number(value.toPrecision(significantFigures)).toString()));
 }
 
+export function formatHyperliquidPrice(
+  value: number,
+  sizeDecimals: number,
+  maxPriceDecimals: number,
+  significantFigures: number,
+): string {
+  if (!Number.isInteger(sizeDecimals) || sizeDecimals < 0) {
+    throw new Error("Size decimals must be a nonnegative integer.");
+  }
+  if (!Number.isInteger(maxPriceDecimals) || maxPriceDecimals < 0) {
+    throw new Error("Maximum price decimals must be a nonnegative integer.");
+  }
+
+  const decimalPlaces = Math.max(0, maxPriceDecimals - sizeDecimals);
+  const significantValue = Number(formatSignificantDecimal(value, significantFigures));
+  return trimDecimalZeros(significantValue.toFixed(decimalPlaces));
+}
+
 function expandExponential(value: string): string {
   if (!value.toLowerCase().includes("e")) return value;
 

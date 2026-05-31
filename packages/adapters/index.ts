@@ -27,8 +27,33 @@ type HyperliquidMetaAndCtxs = [
   }>,
 ];
 
-type HyperliquidUniverseAsset = HyperliquidMetaAndCtxs[0]["universe"][number];
+type HyperliquidSpotMetaAndCtxs = [
+  {
+    universe: Array<{
+      name: string;
+      tokens: number[];
+      index: number;
+      isCanonical: boolean;
+    }>;
+    tokens: Array<{
+      name: string;
+      fullName: string | null;
+      szDecimals: number;
+      index: number;
+      isCanonical: boolean;
+    }>;
+  },
+  Array<{
+    coin?: string;
+    markPx?: string;
+    midPx?: string;
+    dayNtlVlm?: string;
+  }>,
+];
+
 type HyperliquidAssetCtx = HyperliquidMetaAndCtxs[1][number];
+type HyperliquidSpotUniverseAsset = HyperliquidSpotMetaAndCtxs[0]["universe"][number];
+type HyperliquidSpotToken = HyperliquidSpotMetaAndCtxs[0]["tokens"][number];
 type HyperliquidPerpDexs = (null | { name: string })[];
 
 type HyperliquidL2Book = {
@@ -39,10 +64,13 @@ type HyperliquidL2Book = {
 };
 
 type HyperliquidLiveAssetMatch = {
-  asset: HyperliquidUniverseAsset;
+  kind: "perp" | "spot";
+  symbol: string;
+  bookCoin: string;
+  sizeDecimals: number;
   ctx?: HyperliquidAssetCtx;
-  dex: string | null;
   instrument: string;
+  reasonAssetName: string;
 };
 
 type PolymarketMarket = {
@@ -205,12 +233,26 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     return readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
   }
 
+  private async getSpotMetaAndAssetCtxs(): Promise<HyperliquidSpotMetaAndCtxs> {
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "spotMetaAndAssetCtxs" }),
+    });
+
+    return readJsonResponse<HyperliquidSpotMetaAndCtxs>("Hyperliquid spot market data", response);
+  }
+
   private async findLiveAssetMatches(input: {
     thesis: Thesis;
     tradeExpression?: TradeExpressionPlan;
   }, exactSymbolAnchors: string[]): Promise<HyperliquidLiveAssetMatch[]> {
-    const dexes = uniqueHyperliquidDexes(await this.getPerpDexs());
     const normalizedAnchors = normalizedHyperliquidSymbolAnchors(exactSymbolAnchors);
+    const [perpDexs, spotMetaAndCtxs] = await Promise.all([
+      this.getPerpDexs(),
+      this.getSpotMetaAndAssetCtxs(),
+    ]);
+    const dexes = uniqueHyperliquidDexes(perpDexs);
     const liveMetas = await Promise.all(dexes.map(async (dex) => ({
       dex,
       data: await this.getMetaAndAssetCtxs(dex),
@@ -226,41 +268,72 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
         if (seen.has(key)) continue;
         seen.add(key);
         matches.push({
-          asset,
+          kind: "perp",
+          symbol: asset.name,
+          bookCoin: asset.name,
+          sizeDecimals: asset.szDecimals ?? 6,
           ctx: ctxs[index],
-          dex,
           instrument: hyperliquidInstrumentForLiveAsset(dex, input.tradeExpression),
+          reasonAssetName: asset.name,
         });
       }
+    }
+
+    const [spotMeta, spotCtxs] = spotMetaAndCtxs;
+    const tokensByIndex = new Map(spotMeta.tokens.map((token) => [token.index, token]));
+    for (const market of spotMeta.universe) {
+      const baseToken = tokensByIndex.get(market.tokens[0]!);
+      const quoteToken = tokensByIndex.get(market.tokens[1]!);
+      if (!baseToken || !quoteToken) continue;
+      if (!hyperliquidSpotMarketMatchesExactAnchors(market, baseToken, quoteToken, normalizedAnchors)) continue;
+
+      const key = `spot:${market.index}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const symbol = hyperliquidSpotSymbol(baseToken, quoteToken);
+      matches.push({
+        kind: "spot",
+        symbol,
+        bookCoin: market.name,
+        sizeDecimals: baseToken.szDecimals,
+        ctx: spotCtxs[market.index],
+        instrument: "spot",
+        reasonAssetName: `${baseToken.name} spot`,
+      });
     }
 
     return matches;
   }
 
   private async marketCandidateFromLiveAsset(input: {
-    asset: HyperliquidUniverseAsset;
+    kind: "perp" | "spot";
+    symbol: string;
+    bookCoin: string;
+    sizeDecimals: number;
     ctx?: HyperliquidAssetCtx;
     instrument: string;
+    reasonAssetName: string;
     thesis: Thesis;
   }): Promise<MarketCandidate | null> {
-    const side = hyperliquidSideFromThesis(input.thesis);
+    const side = hyperliquidSideFromThesis(input.thesis, input.kind);
     if (!side) {
       return null;
     }
 
     const volume = Number(input.ctx?.dayNtlVlm ?? 0);
-    const book = await this.getL2Book(input.asset.name);
+    const book = await this.getL2Book(input.bookCoin);
     const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
 
     if (!bookMetrics) {
       return null;
     }
+    const minLotNotionalUsd = bookMetrics.mid ? bookMetrics.mid * 10 ** -input.sizeDecimals : 0;
 
     return {
       venue: "hyperliquid",
       instrument: input.instrument,
       side,
-      symbol: input.asset.name,
+      symbol: input.symbol,
       conditionId: null,
       outcomeTokenId: null,
       yesOutcomeTokenId: null,
@@ -279,9 +352,9 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
       liquidityScore: Math.min(1, volume / 50_000_000),
       spreadBps: bookMetrics.spreadBps,
       estimatedSlippageBps: bookMetrics.estimatedSlippageBps,
-      minOrderSizeUsd: 10,
+      minOrderSizeUsd: Math.max(10, minLotNotionalUsd),
       thesisFit: input.thesis.confidence,
-      reason: `${input.asset.name} ${input.instrument} was found in live Hyperliquid metadata and directly maps to the thesis asset.`,
+      reason: `${input.reasonAssetName} ${input.instrument} was found in live Hyperliquid metadata and directly maps to the thesis asset.`,
     } satisfies MarketCandidate;
   }
 
@@ -305,6 +378,10 @@ function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExp
           && (candidate.directness === "direct" || candidate.directness === "strong_proxy")
           ? candidate.primaryEntityOrEvent
           : null,
+        ...((candidate.expressionRail === "crypto" || candidate.expressionRail === "pre_ipo")
+            && (candidate.directness === "direct" || candidate.directness === "strong_proxy")
+          ? candidate.searchTerms
+          : []),
       ]) ?? []),
     ]
     : thesis.mentionedAssets;
@@ -344,6 +421,25 @@ function hyperliquidAssetMatchesExactAnchors(assetName: string, normalizedAnchor
   return symbolCandidates.some((symbol) => normalizedAnchors.has(symbol));
 }
 
+function hyperliquidSpotMarketMatchesExactAnchors(
+  market: HyperliquidSpotUniverseAsset,
+  baseToken: HyperliquidSpotToken,
+  quoteToken: HyperliquidSpotToken,
+  normalizedAnchors: Set<string>,
+): boolean {
+  const symbol = hyperliquidSpotSymbol(baseToken, quoteToken);
+  const candidates = [
+    market.name,
+    symbol,
+    baseToken.name,
+    quoteToken.name,
+    baseToken.fullName ?? "",
+    ...hyperliquidMetadataWords(baseToken.fullName),
+  ].flatMap(hyperliquidSymbolVariants);
+
+  return candidates.some((candidate) => normalizedAnchors.has(candidate));
+}
+
 function normalizeHyperliquidSymbolAnchor(value: string): string {
   return value
     .trim()
@@ -351,6 +447,24 @@ function normalizeHyperliquidSymbolAnchor(value: string): string {
     .replace(/-perp$/iu, "")
     .replace(/[^a-z0-9]/giu, "")
     .toLowerCase();
+}
+
+function hyperliquidSymbolVariants(value: string): string[] {
+  const normalized = normalizeHyperliquidSymbolAnchor(value);
+  if (!normalized) return [];
+  const variants = [normalized];
+  if (normalized.endsWith("0")) {
+    variants.push(normalized.slice(0, -1));
+  }
+  return variants;
+}
+
+function hyperliquidMetadataWords(value: string | null): string[] {
+  return value?.split(/[^a-z0-9]+/iu).filter(Boolean) ?? [];
+}
+
+function hyperliquidSpotSymbol(baseToken: HyperliquidSpotToken, quoteToken: HyperliquidSpotToken): string {
+  return `${baseToken.name}/${quoteToken.name}`;
 }
 
 function hyperliquidBaseSymbol(value: string): string {
@@ -363,7 +477,12 @@ function hyperliquidInstrumentForLiveAsset(dex: string | null, tradeExpression?:
   return "synthetic_perp";
 }
 
-function hyperliquidSideFromThesis(thesis: Thesis): "long" | "short" | null {
+function hyperliquidSideFromThesis(thesis: Thesis, kind: "perp" | "spot"): "long" | "short" | "buy" | "sell" | null {
+  if (kind === "spot") {
+    if (thesis.direction === "bullish") return "buy";
+    if (thesis.direction === "bearish") return "sell";
+    return null;
+  }
   if (thesis.direction === "bullish") return "long";
   if (thesis.direction === "bearish") return "short";
   return null;

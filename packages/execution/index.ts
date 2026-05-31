@@ -16,7 +16,7 @@ import {
 import type { OrderResponse, OrderSide, OrderType, SecureClient } from "@polymarket/client";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
-import { formatDecimal, formatSignificantDecimal } from "./helpers/format.ts";
+import { formatDecimal, formatHyperliquidPrice } from "./helpers/format.ts";
 
 export interface ExecutionClient {
   execute(
@@ -81,8 +81,15 @@ export class VenueExecutionClient implements ExecutionClient {
   }
 }
 
-type HyperliquidInfoClientLike = Pick<InfoClient, "allMids" | "metaAndAssetCtxs">;
+type HyperliquidInfoClientLike = Pick<InfoClient, "allMids" | "metaAndAssetCtxs" | "spotMetaAndAssetCtxs">;
 type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order">;
+type ResolvedHyperliquidAsset = {
+  id: number;
+  sizeDecimals: number;
+  midKey: string;
+  midPx?: string;
+  isSpot: boolean;
+};
 type HyperliquidExecutionClients = {
   info: HyperliquidInfoClientLike;
   exchange: HyperliquidExchangeClientLike;
@@ -108,11 +115,9 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     const config = assertHyperliquidExecutionEnv(this.config);
     const { info, exchange } = await this.clientFactory(config);
     const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
-    const [asset, mids] = await Promise.all([
-      this.resolveAsset(info, symbol),
-      info.allMids(),
-    ]);
-    const mid = Number(mids[symbol]);
+    const asset = await this.resolveAsset(info, ticket, symbol);
+    const mids = await info.allMids();
+    const mid = Number(mids[asset.midKey] ?? asset.midPx);
 
     if (!Number.isFinite(mid) || mid <= 0) {
       throw new Error(`No Hyperliquid mid price for ${symbol}.`);
@@ -123,12 +128,15 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
     const size = ticket.sizeUsd / mid;
     const requestedSize = formatDecimal(size, asset.sizeDecimals);
+    if (Number(requestedSize) <= 0) {
+      throw new Error(`Hyperliquid order size rounds to zero for ${symbol}; increase ticket size.`);
+    }
     const response = await exchange.order({
       orders: [
         {
           a: asset.id,
           b: isBuy,
-          p: formatSignificantDecimal(price, config.priceDecimals),
+          p: formatHyperliquidPrice(price, asset.sizeDecimals, asset.isSpot ? 8 : 6, config.priceDecimals),
           s: requestedSize,
           r: false,
           t: { limit: { tif: "Ioc" } },
@@ -147,7 +155,18 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     };
   }
 
-  private async resolveAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<{ id: number; sizeDecimals: number }> {
+  private async resolveAsset(
+    info: HyperliquidInfoClientLike,
+    ticket: TradeTicket,
+    symbol: string,
+  ): Promise<ResolvedHyperliquidAsset> {
+    if (isHyperliquidSpotTicket(ticket)) {
+      return this.resolveSpotAsset(info, symbol);
+    }
+    return this.resolvePerpAsset(info, symbol);
+  }
+
+  private async resolvePerpAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
     const [meta] = await info.metaAndAssetCtxs();
     const index = meta.universe.findIndex((asset) => asset.name === symbol);
 
@@ -158,6 +177,40 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     return {
       id: index,
       sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
+      midKey: symbol,
+      isSpot: false,
+    };
+  }
+
+  private async resolveSpotAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
+    const [meta, ctxs] = await info.spotMetaAndAssetCtxs();
+    const tokensByIndex = new Map(meta.tokens.map((token) => [token.index, token]));
+    const normalizedSymbol = normalizeHyperliquidExecutionSymbol(symbol);
+    const matches = meta.universe
+      .map((market) => {
+        const baseToken = tokensByIndex.get(market.tokens[0]!);
+        const quoteToken = tokensByIndex.get(market.tokens[1]!);
+        return baseToken && quoteToken ? { market, baseToken, quoteToken } : null;
+      })
+      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+      .filter(({ market, baseToken, quoteToken }) =>
+        hyperliquidExecutionSymbolVariants(market.name, baseToken.name, quoteToken.name, baseToken.fullName)
+          .has(normalizedSymbol)
+      )
+      .sort((left, right) => Number(right.quoteToken.name === "USDC") - Number(left.quoteToken.name === "USDC"));
+
+    const match = matches[0];
+    if (!match) {
+      throw new Error(`Hyperliquid spot asset ${symbol} was not found in live spot metadata.`);
+    }
+
+    const ctx = ctxs[match.market.index];
+    return {
+      id: 10_000 + match.market.index,
+      sizeDecimals: match.baseToken.szDecimals,
+      midKey: match.market.name,
+      midPx: ctx?.midPx ?? ctx?.markPx,
+      isSpot: true,
     };
   }
 }
@@ -193,13 +246,11 @@ function parseHyperliquidOrderExecution(
 
   if ("filled" in status) {
     const filledSize = readPositiveHyperliquidNumber(status.filled.totalSz, "filled size");
-    const requestedSize = readPositiveHyperliquidNumber(input.requestedSize, "requested size");
     const averagePrice = readPositiveHyperliquidNumber(status.filled.avgPx, "average fill price");
-    const filledRatio = Math.min(1, filledSize / requestedSize);
 
     return {
       venueOrderId: String(status.filled.oid),
-      filledSizeUsd: input.requestedSizeUsd * filledRatio,
+      filledSizeUsd: Math.min(input.requestedSizeUsd, filledSize * averagePrice),
       averagePrice,
     };
   }
@@ -221,6 +272,35 @@ function readPositiveHyperliquidNumber(value: string, label: string): number {
     throw new Error(`Invalid Hyperliquid ${label}: ${value}`);
   }
   return parsed;
+}
+
+function isHyperliquidSpotTicket(ticket: TradeTicket): boolean {
+  return ticket.instrument === "spot" || ticket.instrument.includes("/");
+}
+
+function hyperliquidExecutionSymbolVariants(
+  marketName: string,
+  baseName: string,
+  quoteName: string,
+  baseFullName: string | null,
+): Set<string> {
+  const values = [
+    marketName,
+    baseName,
+    `${baseName}/${quoteName}`,
+    `${baseName}-${quoteName}`,
+    baseFullName ?? "",
+  ];
+  const variants = values.flatMap((value) => {
+    const normalized = normalizeHyperliquidExecutionSymbol(value);
+    if (!normalized) return [];
+    return normalized.endsWith("0") ? [normalized, normalized.slice(0, -1)] : [normalized];
+  });
+  return new Set(variants);
+}
+
+function normalizeHyperliquidExecutionSymbol(value: string): string {
+  return value.trim().replace(/^\$/u, "").replace(/[^a-z0-9]/giu, "").toLowerCase();
 }
 
 export interface PolymarketSdkTradingClientLike {
