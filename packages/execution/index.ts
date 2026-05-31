@@ -1,4 +1,4 @@
-import type { ExecutionFundingSource, ExecutionJob, TradeTicket } from "../core/schemas/index.ts";
+import type { ExecutionFundingSource, ExecutionJob, Position, TradeTicket } from "../core/schemas/index.ts";
 import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/connector-errors.ts";
 import {
   assertHyperliquidExecutionEnv,
@@ -23,6 +23,10 @@ export interface ExecutionClient {
     ticket: TradeTicket,
     context?: ExecutionContext,
   ): Promise<NonNullable<ExecutionJob["executionResult"]>>;
+}
+
+export interface PositionCloseClient {
+  close(position: Position, ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>>;
 }
 
 export type ExecutionContext = {
@@ -167,52 +171,112 @@ export class HyperliquidExecutionClient implements ExecutionClient {
   }
 
   private async resolvePerpAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
-    const [meta] = await info.metaAndAssetCtxs();
-    const index = meta.universe.findIndex((asset) => asset.name === symbol);
-
-    if (index < 0) {
-      throw new Error(`Hyperliquid asset ${symbol} was not found in live exchange metadata.`);
-    }
-
-    return {
-      id: index,
-      sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
-      midKey: symbol,
-      isSpot: false,
-    };
+    return resolveHyperliquidPerpAsset(info, symbol);
   }
 
   private async resolveSpotAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
-    const [meta, ctxs] = await info.spotMetaAndAssetCtxs();
-    const tokensByIndex = new Map(meta.tokens.map((token) => [token.index, token]));
-    const normalizedSymbol = normalizeHyperliquidExecutionSymbol(symbol);
-    const matches = meta.universe
-      .map((market) => {
-        const baseToken = tokensByIndex.get(market.tokens[0]!);
-        const quoteToken = tokensByIndex.get(market.tokens[1]!);
-        return baseToken && quoteToken ? { market, baseToken, quoteToken } : null;
-      })
-      .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
-      .filter(({ market, baseToken, quoteToken }) =>
-        hyperliquidExecutionSymbolVariants(market.name, baseToken.name, quoteToken.name, baseToken.fullName)
-          .has(normalizedSymbol)
-      )
-      .sort((left, right) => Number(right.quoteToken.name === "USDC") - Number(left.quoteToken.name === "USDC"));
+    return resolveHyperliquidSpotAsset(info, symbol);
+  }
+}
 
-    const match = matches[0];
-    if (!match) {
-      throw new Error(`Hyperliquid spot asset ${symbol} was not found in live spot metadata.`);
+export class HyperliquidPositionCloseClient implements PositionCloseClient {
+  private readonly config: HyperliquidExecutionEnv;
+  private readonly clientFactory: HyperliquidExecutionClientFactory;
+
+  constructor(options: HyperliquidExecutionClientOptions = {}) {
+    this.config = readHyperliquidExecutionEnv(undefined, options);
+    this.clientFactory = options.clientFactory ?? createHyperliquidExecutionClients;
+  }
+
+  async close(position: Position, ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+    const config = assertHyperliquidExecutionEnv(this.config);
+    const { info, exchange } = await this.clientFactory(config);
+    const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
+    const asset = isHyperliquidSpotTicket(ticket)
+      ? await resolveHyperliquidSpotAsset(info, symbol)
+      : await resolveHyperliquidPerpAsset(info, symbol);
+    const mids = await info.allMids();
+    const mid = Number(mids[asset.midKey] ?? asset.midPx);
+    if (!Number.isFinite(mid) || mid <= 0) {
+      throw new Error(`No Hyperliquid mid price for ${symbol}.`);
     }
-
-    const ctx = ctxs[match.market.index];
+    const isClosingBuy = position.side === "short" || position.side === "sell";
+    const slippage = config.slippageBps / 10_000;
+    const price = isClosingBuy ? mid * (1 + slippage) : mid * (1 - slippage);
+    const baseSize = position.entryPrice && position.entryPrice > 0
+      ? position.filledSizeUsd / position.entryPrice
+      : position.filledSizeUsd / mid;
+    const requestedSize = formatDecimal(baseSize, asset.sizeDecimals);
+    if (Number(requestedSize) <= 0) {
+      throw new Error(`Hyperliquid close size rounds to zero for ${symbol}.`);
+    }
+    const response = await exchange.order({
+      orders: [{
+        a: asset.id,
+        b: isClosingBuy,
+        p: formatHyperliquidPrice(price, asset.sizeDecimals, asset.isSpot ? 8 : 6, config.priceDecimals),
+        s: requestedSize,
+        r: true,
+        t: { limit: { tif: "Ioc" } },
+      }],
+      grouping: "na",
+    });
     return {
-      id: 10_000 + match.market.index,
-      sizeDecimals: match.baseToken.szDecimals,
-      midKey: match.market.name,
-      midPx: ctx?.midPx ?? ctx?.markPx,
-      isSpot: true,
+      ...parseHyperliquidOrderExecution(response, {
+        requestedSize,
+        requestedSizeUsd: position.currentValueUsd,
+      }),
+      raw: response,
     };
   }
+}
+
+async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
+  const [meta] = await info.metaAndAssetCtxs();
+  const index = meta.universe.findIndex((asset) => asset.name === symbol);
+
+  if (index < 0) {
+    throw new Error(`Hyperliquid asset ${symbol} was not found in live exchange metadata.`);
+  }
+
+  return {
+    id: index,
+    sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
+    midKey: symbol,
+    isSpot: false,
+  };
+}
+
+async function resolveHyperliquidSpotAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
+  const [meta, ctxs] = await info.spotMetaAndAssetCtxs();
+  const tokensByIndex = new Map(meta.tokens.map((token) => [token.index, token]));
+  const normalizedSymbol = normalizeHyperliquidExecutionSymbol(symbol);
+  const matches = meta.universe
+    .map((market) => {
+      const baseToken = tokensByIndex.get(market.tokens[0]!);
+      const quoteToken = tokensByIndex.get(market.tokens[1]!);
+      return baseToken && quoteToken ? { market, baseToken, quoteToken } : null;
+    })
+    .filter((candidate): candidate is NonNullable<typeof candidate> => Boolean(candidate))
+    .filter(({ market, baseToken, quoteToken }) =>
+      hyperliquidExecutionSymbolVariants(market.name, baseToken.name, quoteToken.name, baseToken.fullName)
+        .has(normalizedSymbol)
+    )
+    .sort((left, right) => Number(right.quoteToken.name === "USDC") - Number(left.quoteToken.name === "USDC"));
+
+  const match = matches[0];
+  if (!match) {
+    throw new Error(`Hyperliquid spot asset ${symbol} was not found in live spot metadata.`);
+  }
+
+  const ctx = ctxs[match.market.index];
+  return {
+    id: 10_000 + match.market.index,
+    sizeDecimals: match.baseToken.szDecimals,
+    midKey: match.market.name,
+    midPx: ctx?.midPx ?? ctx?.markPx,
+    isSpot: true,
+  };
 }
 
 function createHyperliquidExecutionClients(config: RequiredHyperliquidExecutionEnv): HyperliquidExecutionClients {
@@ -309,7 +373,7 @@ export interface PolymarketSdkTradingClientLike {
   placeMarketOrder(order: {
     tokenId: string;
     amount: number;
-    side: OrderSide.BUY;
+    side: OrderSide.BUY | OrderSide.SELL;
     orderType: OrderType.FAK;
     builderCode?: `0x${string}`;
   }): Promise<OrderResponse>;
@@ -360,6 +424,40 @@ export class PolymarketExecutionClient implements ExecutionClient {
   }
 }
 
+export class PolymarketPositionCloseClient implements PositionCloseClient {
+  private readonly config: PolymarketExecutionEnv;
+  private readonly factory: PolymarketSdkTradingClientFactory;
+
+  constructor(options: PolymarketExecutionClientOptions = {}) {
+    this.config = readPolymarketExecutionEnv(undefined, options);
+    this.factory = options.factory ?? createPolymarketSdkTradingClient;
+  }
+
+  async close(position: Position, ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+    const config = assertPolymarketExecutionEnv(this.config);
+    const tokenId = ticket.venueData?.outcomeTokenId;
+    if (!tokenId || !/^\d+$/.test(tokenId)) {
+      throw new Error("Polymarket close requires ticket venueData.outcomeTokenId.");
+    }
+    const client = await preparePolymarketTradingClient(await this.factory(config), config);
+    const { OrderSide, OrderType } = await import("@polymarket/client");
+    const response = await client.placeMarketOrder({
+      tokenId,
+      amount: position.currentValueUsd,
+      side: OrderSide.SELL,
+      orderType: OrderType.FAK,
+      builderCode: config.builderCode as `0x${string}` | undefined,
+    });
+
+    return {
+      venueOrderId: response.ok ? response.orderId : null,
+      filledSizeUsd: position.currentValueUsd,
+      averagePrice: position.currentMarkPrice,
+      raw: response,
+    };
+  }
+}
+
 async function createPolymarketSdkTradingClient(
   config: RequiredPolymarketExecutionEnv,
 ): Promise<PolymarketSdkTradingClientLike> {
@@ -386,7 +484,7 @@ function adaptPolymarketSecureClient(client: SecureClient): PolymarketSdkTrading
   return {
     isGaslessReady: () => client.isGaslessReady(),
     setupGaslessWallet: async () => adaptPolymarketSecureClient(await client.setupGaslessWallet()),
-    placeMarketOrder: (order) => client.placeMarketOrder(order),
+    placeMarketOrder: (order) => client.placeMarketOrder(order as never),
   };
 }
 

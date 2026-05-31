@@ -32,6 +32,67 @@ type CassieAccount = {
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
+  withdrawableUsd: number | null;
+};
+
+export type CassiePosition = {
+  positionId: string;
+  userId: string;
+  ticketId: string;
+  executionJobId: string;
+  venue: string;
+  instrument: string;
+  side: string;
+  status: "open" | "closing" | "closed" | "close_failed";
+  entrySizeUsd: number;
+  filledSizeUsd: number;
+  entryPrice: number | null;
+  currentMarkPrice: number | null;
+  currentValueUsd: number;
+  unrealizedPnlUsd: number;
+  unrealizedPnlPct: number;
+  exitPlan: {
+    takeProfitPct: number;
+    stopLossPct: number;
+    maxHoldDays: number;
+    reviewCadence: "daily";
+    thesis: string;
+    invalidationSignals: string[];
+  };
+  openedAt: string;
+  updatedAt: string;
+  lastMarkedAt: string | null;
+  closedAt: string | null;
+  closeExecutionJobId: string | null;
+  failureReason: string | null;
+};
+
+export type CassiePositionReview = {
+  reviewId: string;
+  positionId: string;
+  userId: string;
+  reviewedAt: string;
+  status: "succeeded" | "failed";
+  markPrice: number | null;
+  currentValueUsd: number | null;
+  unrealizedPnlUsd: number | null;
+  unrealizedPnlPct: number | null;
+  exitSignal: "none" | "take_profit" | "stop_loss" | "max_hold" | "thesis_invalidated";
+  summary: string;
+  failureReason: string | null;
+};
+
+export type CassieWithdrawal = {
+  withdrawalId: string;
+  userId: string;
+  amountUsd: number;
+  destinationAddress: string;
+  status: "queued" | "running" | "succeeded" | "failed";
+  transferId: string | null;
+  failureReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  completedAt: string | null;
 };
 
 type TelegramConnectSession = {
@@ -212,6 +273,72 @@ export function useCassieAccount() {
     return payload.account;
   }, [privy]);
 
+  const authedFetch = useCallback(async (url: string, init: RequestInit = {}) => {
+    if (!privy.authenticated) {
+      throw new Error("Log in before using account actions.");
+    }
+    const accessToken = await privy.getAccessToken();
+    if (!accessToken) {
+      throw new Error("Privy access token was not available.");
+    }
+    return fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        ...(init.body ? { "Content-Type": "application/json" } : {}),
+        ...init.headers,
+      },
+    });
+  }, [privy]);
+
+  const fetchPositions = useCallback(async () => {
+    const response = await authedFetch("/api/positions");
+    const payload = await response.json() as {
+      positions?: CassiePosition[];
+      latestReviews?: Record<string, CassiePositionReview | null>;
+      error?: string;
+    };
+    if (!response.ok || !payload.positions || !payload.latestReviews) {
+      throw new Error(payload.error ?? "Positions could not be loaded.");
+    }
+    return {
+      positions: payload.positions,
+      latestReviews: payload.latestReviews,
+    };
+  }, [authedFetch]);
+
+  const closePosition = useCallback(async (positionId: string) => {
+    const response = await authedFetch(`/api/positions/${encodeURIComponent(positionId)}/close`, {
+      method: "POST",
+    });
+    const payload = await response.json() as { position?: CassiePosition; error?: string };
+    if (!response.ok || !payload.position) {
+      throw new Error(payload.error ?? "Position close could not be queued.");
+    }
+    return payload.position;
+  }, [authedFetch]);
+
+  const fetchWithdrawals = useCallback(async () => {
+    const response = await authedFetch("/api/withdrawals");
+    const payload = await response.json() as { withdrawals?: CassieWithdrawal[]; error?: string };
+    if (!response.ok || !payload.withdrawals) {
+      throw new Error(payload.error ?? "Withdrawals could not be loaded.");
+    }
+    return payload.withdrawals;
+  }, [authedFetch]);
+
+  const createWithdrawal = useCallback(async (input: { amountUsd: number; destinationAddress: string }) => {
+    const response = await authedFetch("/api/withdrawals", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    const payload = await response.json() as { withdrawal?: CassieWithdrawal; error?: string };
+    if (!response.ok || !payload.withdrawal) {
+      throw new Error(payload.error ?? "Withdrawal could not be queued.");
+    }
+    return payload.withdrawal;
+  }, [authedFetch]);
+
   return {
     account,
     userProfile,
@@ -228,6 +355,10 @@ export function useCassieAccount() {
     refreshAccount,
     syncAccount,
     updateDefaultTradeSize,
+    fetchPositions,
+    closePosition,
+    fetchWithdrawals,
+    createWithdrawal,
   };
 }
 

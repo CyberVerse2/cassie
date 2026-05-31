@@ -45,6 +45,18 @@ class InlineCliJobQueue implements CassieJobQueue {
   async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }> {
     return { runId: run.runId, graphileJobId: null };
   }
+
+  async enqueuePositionReview(): Promise<{ graphileJobId: string | null }> {
+    return { graphileJobId: null };
+  }
+
+  async enqueueClosePosition(input: { positionId: string }): Promise<{ positionId: string; graphileJobId: string | null }> {
+    return { positionId: input.positionId, graphileJobId: null };
+  }
+
+  async enqueueWithdrawal(input: { withdrawalId: string }): Promise<{ withdrawalId: string; graphileJobId: string | null }> {
+    return { withdrawalId: input.withdrawalId, graphileJobId: null };
+  }
 }
 
 const commands = new Map<string, (args: ParsedArgs) => Promise<unknown>>([

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import tweetRun from "../../../../docs/test-run-tweets.json";
 import { StyledQR } from "../components/styled-qr";
-import { useCassieAccount } from "../lib/use-cassie-account";
+import { type CassiePosition, type CassiePositionReview, useCassieAccount } from "../lib/use-cassie-account";
 import { xHandleFromUrl } from "../lib/x-post";
 import s from "./dashboard.module.css";
 
@@ -37,85 +37,6 @@ const tickerStrip = [
   { sym: "AVNT", label: "98 trades" },
   { sym: "GOLD", label: "41 trades" },
 ];
-
-const trades = [
-  {
-    id: "SOL",
-    title: "SOL ETF approval by quarter end",
-    description: "Buy YES if approval odds pull back below 58c; cap exposure at $90 and exit above 68c.",
-    venue: "poly",
-    venueLabel: "Polymarket",
-    side: "YES",
-    sideTone: "yes",
-    current: "63c",
-    pnlPct: "+8.6%",
-    value: "$91.40",
-    pnl: "+$11.40",
-    tone: "up",
-  },
-  {
-    id: "ETH",
-    title: "ETH momentum continuation",
-    description: "Long ETH only while depth stays above 0.90 and funding remains below 0.02%.",
-    venue: "hyper",
-    venueLabel: "Hyperliquid",
-    side: "LONG",
-    sideTone: "long",
-    current: "$3,108",
-    pnlPct: "+1.8%",
-    value: "$124.70",
-    pnl: "+$4.70",
-    tone: "up",
-  },
-  {
-    id: "FED",
-    title: "Fed cut before September",
-    description: "Hold YES exposure while CPI surprise remains negative and the market prices under 45%.",
-    venue: "poly",
-    venueLabel: "Polymarket",
-    side: "YES",
-    sideTone: "yes",
-    current: "41c",
-    pnlPct: "-4.7%",
-    value: "$57.80",
-    pnl: "-$2.20",
-    tone: "down",
-  },
-  {
-    id: "BTC",
-    title: "BTC mean reversion",
-    description: "Watch only. Enter if price returns to prior range high with clean liquidity above $104k.",
-    venue: "hyper",
-    venueLabel: "Hyperliquid",
-    side: "SHORT",
-    sideTone: "short",
-    current: "$101,840",
-    pnlPct: "+1.3%",
-    value: "$74.20",
-    pnl: "+$5.90",
-    tone: "up",
-  },
-  {
-    id: "HYPE",
-    title: "HYPE breakout continuation",
-    description: "Long breakout while prior 14d resistance holds as support and volume stays above baseline.",
-    venue: "hyper",
-    venueLabel: "Hyperliquid",
-    side: "LONG",
-    sideTone: "long",
-    current: "$36.40",
-    pnlPct: "+7.3%",
-    value: "$103.74",
-    pnl: "+$8.74",
-    tone: "up",
-  },
-];
-
-const largestPortfolioMover = trades.reduce((largest, trade) =>
-  Math.abs(moneyToNumber(trade.pnl)) > Math.abs(moneyToNumber(largest.pnl))
-    ? trade
-    : largest,
-);
 
 const watching = [
   {
@@ -333,7 +254,14 @@ export default function Dashboard() {
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
         updateDefaultTradeSize={account.updateDefaultTradeSize}
       />
-      <Center balanceUsd={account.account?.balance?.spendableUsd ?? 0} />
+      <Center
+        balanceUsd={account.account?.balance?.spendableUsd ?? 0}
+        withdrawableUsd={account.account?.withdrawableUsd ?? 0}
+        fetchPositions={account.fetchPositions}
+        closePosition={account.closePosition}
+        fetchWithdrawals={account.fetchWithdrawals}
+        createWithdrawal={account.createWithdrawal}
+      />
       <Voice />
     </main>
   );
@@ -621,17 +549,107 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
   return data;
 }
 
-function Center({ balanceUsd }: { balanceUsd: number }) {
+function Center({
+  balanceUsd,
+  withdrawableUsd,
+  fetchPositions,
+  closePosition,
+  fetchWithdrawals,
+  createWithdrawal,
+}: {
+  balanceUsd: number;
+  withdrawableUsd: number;
+  fetchPositions: () => Promise<{ positions: CassiePosition[]; latestReviews: Record<string, CassiePositionReview | null> }>;
+  closePosition: (positionId: string) => Promise<CassiePosition>;
+  fetchWithdrawals: () => Promise<Array<{ withdrawalId: string; amountUsd: number; destinationAddress: string; status: string; failureReason: string | null }>>;
+  createWithdrawal: (input: { amountUsd: number; destinationAddress: string }) => Promise<unknown>;
+}) {
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
+  const [positions, setPositions] = useState<CassiePosition[]>([]);
+  const [latestReviews, setLatestReviews] = useState<Record<string, CassiePositionReview | null>>({});
+  const [positionError, setPositionError] = useState<string | null>(null);
+  const [closingId, setClosingId] = useState<string | null>(null);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawAddress, setWithdrawAddress] = useState("");
+  const [withdrawals, setWithdrawals] = useState<Array<{ withdrawalId: string; amountUsd: number; destinationAddress: string; status: string; failureReason: string | null }>>([]);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
+  const [withdrawing, setWithdrawing] = useState(false);
 
   const rangeData = useMemo(() => generateDataForRange(selectedRange), [selectedRange]);
   const currentValPoint = rangeData[rangeData.length - 1];
   const displayedPoint = hoveredData || currentValPoint;
   const balanceLabel = `$${balanceUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   const displayedBalance = hoveredData ? displayedPoint.value : balanceUsd;
+  const openPositions = positions.filter((position) => position.status === "open" || position.status === "closing" || position.status === "close_failed");
+  const closedPositions = positions.filter((position) => position.status === "closed");
+  const largestPositionMover = openPositions
+    .slice()
+    .sort((left, right) => Math.abs(right.unrealizedPnlUsd) - Math.abs(left.unrealizedPnlUsd))[0] ?? null;
+  const netInvested = openPositions.reduce((total, position) => total + position.filledSizeUsd, 0);
+  const unrealized = openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [positionPayload, withdrawalPayload] = await Promise.all([
+          fetchPositions(),
+          fetchWithdrawals(),
+        ]);
+        if (cancelled) return;
+        setPositions(positionPayload.positions);
+        setLatestReviews(positionPayload.latestReviews);
+        setWithdrawals(withdrawalPayload);
+        setPositionError(null);
+      } catch (caught) {
+        if (cancelled) return;
+        setPositionError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchPositions, fetchWithdrawals]);
+
+  async function requestClose(position: CassiePosition) {
+    if (!window.confirm(`Close ${position.instrument} ${position.side}?`)) return;
+    setClosingId(position.positionId);
+    setPositionError(null);
+    try {
+      const updated = await closePosition(position.positionId);
+      setPositions((current) => current.map((item) =>
+        item.positionId === updated.positionId ? updated : item
+      ));
+    } catch (caught) {
+      setPositionError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setClosingId(null);
+    }
+  }
+
+  async function submitWithdrawal() {
+    const amountUsd = Number(withdrawAmount);
+    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
+      setWithdrawError("Enter a positive withdrawal amount.");
+      return;
+    }
+    setWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      await createWithdrawal({ amountUsd, destinationAddress: withdrawAddress });
+      setWithdrawals(await fetchWithdrawals());
+      setWithdrawAmount("");
+      setWithdrawAddress("");
+    } catch (caught) {
+      setWithdrawError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setWithdrawing(false);
+    }
+  }
 
   return (
     <section className={s.main}>
@@ -694,44 +712,50 @@ function Center({ balanceUsd }: { balanceUsd: number }) {
             <LineChart key={selectedRange} data={rangeData} onHover={setHoveredData} />
           </div>
           <div className={s.chartFoot}>
-            <div
-              className={s.portfolioMover}
-              aria-label={`${largestPortfolioMover.id} is the position with the largest portfolio change at ${largestPortfolioMover.pnl}`}
-            >
+            <div className={s.portfolioMover}>
               <div className={s.moverHeader}>
                 <span className={s.moverLabel}>Largest position move</span>
               </div>
+              {largestPositionMover ? (
               <div className={s.moverBody}>
                 <div className={s.moverAssetInfo}>
                   <span className={`${s.tokenCell} ${s.moverTokenCell}`}>
                     <span className="tk">
-                      <img className={`${s.assetIconImage} ${s.moverTokenImage}`} src={tokenImages[largestPortfolioMover.id]} alt="" />
+                      <img className={`${s.assetIconImage} ${s.moverTokenImage}`} src={tokenImages[positionSymbol(largestPositionMover)] ?? usdcIcon} alt="" />
                     </span>
-                    <span className={`tk-venue ${largestPortfolioMover.venue}`}>
-                      <VenueIcon venue={largestPortfolioMover.venue} size={7} />
+                    <span className={`tk-venue ${venueTone(largestPositionMover.venue)}`}>
+                      <VenueIcon venue={venueTone(largestPositionMover.venue)} size={7} />
                     </span>
                   </span>
                   <div className="mover-main">
-                    <strong>{largestPortfolioMover.id}</strong>
-                    <span>{largestPortfolioMover.title}</span>
+                    <strong>{positionSymbol(largestPositionMover)}</strong>
+                    <span>{largestPositionMover.exitPlan.thesis}</span>
                   </div>
                 </div>
                 <div className="mover-value">
-                  <strong className={largestPortfolioMover.tone}>
+                  <strong className={largestPositionMover.unrealizedPnlUsd >= 0 ? "up" : "down"}>
                     <span className="mover-delta-icon" aria-hidden>
-                      {largestPortfolioMover.tone === "up" ? "▲" : "▼"}
+                      {largestPositionMover.unrealizedPnlUsd >= 0 ? "▲" : "▼"}
                     </span>
-                    {largestPortfolioMover.pnl.replace(/^[+-]/, "")}
+                    {formatUsd(Math.abs(largestPositionMover.unrealizedPnlUsd))}
                   </strong>
                   <span>
-                    <span className={`mover-side ${largestPortfolioMover.sideTone}`}>
-                      {largestPortfolioMover.side}
+                    <span className={`mover-side ${sideTone(largestPositionMover.side)}`}>
+                      {largestPositionMover.side.toUpperCase()}
                     </span>
                     <span className="mover-sep" aria-hidden>·</span>
-                    {largestPortfolioMover.value}
+                    {formatUsd(largestPositionMover.currentValueUsd)}
                   </span>
                 </div>
               </div>
+              ) : (
+                <div className={s.moverBody}>
+                  <div className="mover-main">
+                    <strong>No open positions</strong>
+                    <span>Filled Cassie trades will appear here.</span>
+                  </div>
+                </div>
+              )}
             </div>
             <div className={s.ranges}>
               {ranges.map((r) => (
@@ -765,15 +789,15 @@ function Center({ balanceUsd }: { balanceUsd: number }) {
             </div>
             <div className={s.summaryCell}>
               <span className="label">Net Invested</span>
-              <span className="value">$0.96</span>
+              <span className="value">{formatUsd(netInvested)}</span>
             </div>
             <div className={s.summaryCell}>
-              <span className="label">Realized</span>
-              <span className="value">$0.01</span>
+              <span className="label">Closed</span>
+              <span className="value">{closedPositions.length}</span>
             </div>
             <div className={s.summaryCell}>
               <span className="label">Unrealized</span>
-              <span className="value down">$-0.61</span>
+              <span className={`value ${unrealized >= 0 ? "up" : "down"}`}>{formatSignedUsd(unrealized)}</span>
             </div>
           </div>
         </div>
@@ -787,7 +811,7 @@ function Center({ balanceUsd }: { balanceUsd: number }) {
             onClick={() => setWalletView("trades")}
           >
             Trade history
-            <span className={s.walletSubtabCount}>{trades.length}</span>
+            <span className={s.walletSubtabCount}>{openPositions.length}</span>
           </button>
           <button
             type="button"
@@ -805,46 +829,62 @@ function Center({ balanceUsd }: { balanceUsd: number }) {
         <div className={s.table}>
           <div className={`${s.tr} ${s.thead}`} role="row">
             <span>Asset</span>
-            <span>Trade</span>
-            <span className={s.amountHead}>Amount</span>
+            <span>Position</span>
+            <span className={s.amountHead}>Mark</span>
             <span className={s.amountHead}>Value</span>
             <span />
           </div>
-          {trades.map((trade) => (
-            <div className={s.tr} role="row" key={trade.title}>
+          {positionError ? (
+            <div className={s.emptyState} role="alert">{positionError}</div>
+          ) : null}
+          {openPositions.length === 0 && !positionError ? (
+            <div className={s.emptyState}>No open positions.</div>
+          ) : null}
+          {openPositions.map((position) => {
+            const review = latestReviews[position.positionId];
+            return (
+            <div className={s.tr} role="row" key={position.positionId}>
               <span className={s.tokenCell}>
                 <span className="tk">
-                  <img className={s.tokenImage} src={tokenImages[trade.id]} alt="" />
+                  <img className={s.tokenImage} src={tokenImages[positionSymbol(position)] ?? usdcIcon} alt="" />
                 </span>
-                <span className={`tk-venue ${trade.venue}`} title={trade.venueLabel}>
-                  <VenueIcon venue={trade.venue} size={11} />
+                <span className={`tk-venue ${venueTone(position.venue)}`} title={position.venue}>
+                  <VenueIcon venue={venueTone(position.venue)} size={11} />
                 </span>
                 <span className="entry-mark" />
               </span>
               <span className={s.tradeCopy}>
-                <strong>{trade.title}</strong>
-                <span>{trade.description}</span>
+                <strong>{position.instrument} {position.side.toUpperCase()}</strong>
+                <span>{review?.summary ?? position.exitPlan.thesis}</span>
               </span>
               <span className={s.amountCell}>
-                <span className={s.amountValue}>{trade.current.replace("c", "¢")}</span>
+                <span className={s.amountValue}>{formatNullablePrice(position.currentMarkPrice)}</span>
                 <span
-                  className={`${s.valueDelta} ${trade.tone === "up" ? s.amountUp : s.amountDown}`}
+                  className={`${s.valueDelta} ${position.unrealizedPnlUsd >= 0 ? s.amountUp : s.amountDown}`}
                 >
                   <span className={s.amountDeltaIcon} aria-hidden>
-                    {trade.tone === "up" ? "▲" : "▼"}
+                    {position.unrealizedPnlUsd >= 0 ? "▲" : "▼"}
                   </span>
-                  {trade.pnlPct.replace(/^[+-]/, "")}
+                  {Math.abs(position.unrealizedPnlPct).toFixed(2)}%
                 </span>
               </span>
               <span className={s.valueCell}>
-                <span className={s.valuePrice}>{trade.value}</span>
-                <span className={`${s.amountSide} ${s[`amountSide_${trade.sideTone}`]}`}>
-                  {trade.side}
+                <span className={s.valuePrice}>{formatUsd(position.currentValueUsd)}</span>
+                <span className={`${s.amountSide} ${s[`amountSide_${sideTone(position.side)}`]}`}>
+                  {position.status}
                 </span>
               </span>
-              <button className={s.menuBtn} aria-label="Open trade menu">⋯</button>
+              <button
+                className={s.watchTradeBtn}
+                type="button"
+                onClick={() => void requestClose(position)}
+                disabled={position.status === "closing" || closingId === position.positionId}
+              >
+                {position.status === "closing" || closingId === position.positionId ? "Closing" : "Close"}
+              </button>
             </div>
-          ))}
+            );
+          })}
         </div>
         )}
 
@@ -901,6 +941,45 @@ function Center({ balanceUsd }: { balanceUsd: number }) {
           ))}
         </div>
         )}
+
+        <section className={s.withdrawPanel} id="send">
+          <header className={s.sectionHeader}>
+            <h2>Withdraw</h2>
+            <p>Available USDC: {formatUsd(withdrawableUsd)}</p>
+          </header>
+          <div className={s.withdrawForm}>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={withdrawAmount}
+              onChange={(event) => setWithdrawAmount(event.target.value.replace(/[^0-9.]/g, ""))}
+              placeholder="Amount"
+              aria-label="Withdrawal amount in USDC"
+            />
+            <input
+              type="text"
+              value={withdrawAddress}
+              onChange={(event) => setWithdrawAddress(event.target.value)}
+              placeholder="0x destination"
+              aria-label="Withdrawal destination address"
+            />
+            <button type="button" className={s.watchTradeBtn} disabled={withdrawing} onClick={() => void submitWithdrawal()}>
+              {withdrawing ? "Queueing" : "Withdraw"}
+            </button>
+          </div>
+          {withdrawError ? <p className={s.formError} role="alert">{withdrawError}</p> : null}
+          {withdrawals.length > 0 ? (
+            <div className={s.withdrawHistory}>
+              {withdrawals.slice(0, 4).map((withdrawal) => (
+                <div key={withdrawal.withdrawalId} className={s.withdrawRow}>
+                  <span>{formatUsd(withdrawal.amountUsd)}</span>
+                  <code>{shortAddress(withdrawal.destinationAddress)}</code>
+                  <strong>{withdrawal.status}</strong>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </section>
       </div>
       )}
     </section>
@@ -1420,6 +1499,34 @@ function shortAddress(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-function moneyToNumber(value: string) {
-  return Number(value.replace(/[$,+]/g, ""));
+function positionSymbol(position: CassiePosition) {
+  return position.instrument
+    .replace(/-PERP$/u, "")
+    .replace(/^spot$/u, position.venue.toUpperCase());
+}
+
+function venueTone(venue: string) {
+  return venue === "hyperliquid" ? "hyper" : venue === "polymarket" ? "poly" : venue;
+}
+
+function sideTone(side: string) {
+  if (side === "short" || side === "sell" || side === "buy_no") return "short";
+  if (side === "buy_yes") return "yes";
+  return "long";
+}
+
+function formatUsd(value: number) {
+  return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatSignedUsd(value: number) {
+  const absolute = formatUsd(Math.abs(value));
+  return value < 0 ? `-${absolute}` : absolute;
+}
+
+function formatNullablePrice(value: number | null) {
+  if (value == null) return "No mark";
+  return value <= 1
+    ? `${Math.round(value * 100)}¢`
+    : formatUsd(value);
 }

@@ -36,6 +36,18 @@ class FakeCassieJobQueue implements CassieJobQueue {
     this.supervisorRunIds.push(run.runId);
     return { runId: run.runId, graphileJobId: "graphile_supervisor_1" };
   }
+
+  async enqueuePositionReview() {
+    return { graphileJobId: "graphile_review_1" };
+  }
+
+  async enqueueClosePosition(input: { positionId: string }) {
+    return { positionId: input.positionId, graphileJobId: "graphile_close_1" };
+  }
+
+  async enqueueWithdrawal(input: { withdrawalId: string }) {
+    return { withdrawalId: input.withdrawalId, graphileJobId: "graphile_withdrawal_1" };
+  }
 }
 
 describe("durable run persistence", () => {

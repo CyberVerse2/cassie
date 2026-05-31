@@ -16,6 +16,11 @@ import {
   WebhookExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
+import {
+  formatExecutionFailed,
+  formatTradeExecuted,
+  notifyTradeLifecycle,
+} from "../notifications/positions.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "./queue.ts";
 import {
   createQueuedExecutionJob,
@@ -106,13 +111,20 @@ export async function executeExecutionJob(input: {
     });
     reservationOpen = false;
     job = await store.updateExecutionJob(markExecutionSucceeded(job, executionResult));
-    await createPositionForFilledExecution({ store, ticket, job, executionResult });
+    const position = await createPositionForFilledExecution({ store, ticket, job, executionResult });
     await store.audit({
       entityId: job.jobId,
       entityType: "execution_job",
       eventType: "execution_job.succeeded",
       message: "Execution job succeeded.",
       data: executionResult,
+    });
+    await notifyTradeLifecycle({
+      store,
+      settings: settings ?? await requiredUserSettings(store, ticket.userId),
+      text: formatTradeExecuted({ ticket, job, position }),
+      entityId: job.jobId,
+      eventType: "telegram.trade_executed_failed",
     });
     return job;
   } catch (error) {
@@ -145,6 +157,16 @@ export async function executeExecutionJob(input: {
       markExecutionFailed(job, failureReason),
     );
     await auditExecutionFailure(store, job);
+    const failureSettings = settings ?? await store.getUserSettings(ticket.userId);
+    if (failureSettings) {
+      await notifyTradeLifecycle({
+        store,
+        settings: failureSettings,
+        text: formatExecutionFailed({ ticket, job }),
+        entityId: job.jobId,
+        eventType: "telegram.execution_failed_failed",
+      });
+    }
     return job;
   }
 }

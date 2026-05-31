@@ -24,6 +24,7 @@ import {
 } from "../core/schemas/index.ts";
 import { selectMarket } from "../adapters/selection.ts";
 import { createTradeTicket } from "../tickets/index.ts";
+import { formatTicketCreated, notifyTradeLifecycle } from "../notifications/positions.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
 import { createRunStepCache } from "./tool-cache.ts";
@@ -420,6 +421,13 @@ export function createCassieSupervisorTools(input: {
                   exitPlan,
                 });
                 await input.store.addTradeTicket(ticket);
+                await notifyTradeLifecycle({
+                  store: input.store,
+                  settings: input.userSettings,
+                  text: formatTicketCreated(ticket),
+                  entityId: ticket.ticketId,
+                  eventType: "telegram.ticket_created_failed",
+                });
                 return ticket;
               },
             });
