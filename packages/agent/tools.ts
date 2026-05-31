@@ -11,6 +11,7 @@ import {
   PolymarketQuoteSchema,
   ExpressionFitAssessmentSchema,
   SourcePostSchema,
+  TradeExitPlanSchema,
   TradeExpressionPlanSchema,
   type ControlRun,
   type ExpressionFitAssessment,
@@ -343,12 +344,13 @@ export function createCassieSupervisorTools(input: {
       },
     }),
     create_trade_ticket: tool({
-      description: "Create a trade ticket from the selected market using the user's configured default trade size. This never executes the order directly.",
+      description: "Create a trade ticket from the selected market using the user's configured default trade size and an explicit exit plan. This never executes the order directly.",
       inputSchema: z.object({
         tradeExpression: TradeExpressionPlanSchema.nullable().default(null),
         marketSelection: z.unknown().nullable().default(null),
+        exitPlan: TradeExitPlanSchema,
       }),
-      execute: async ({ tradeExpression, marketSelection }) => {
+      execute: async ({ tradeExpression, marketSelection, exitPlan }) => {
         const persistedTradeExpression = await latestPersistedTradeExpression(input.store, input.run.runId)
           ?? parseSuppliedTradeExpression(tradeExpression);
         const persistedMarketSelection = await latestPersistedMarketSelection(input.store, input.run.runId)
@@ -376,6 +378,7 @@ export function createCassieSupervisorTools(input: {
                   userSettings: input.userSettings,
                   thesis,
                   marketSelection: persistedMarketSelection,
+                  exitPlan,
                 });
                 await input.store.addTradeTicket(ticket);
                 return ticket;

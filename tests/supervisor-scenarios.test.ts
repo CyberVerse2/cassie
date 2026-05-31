@@ -6,6 +6,7 @@ import type {
   MarketSelection,
   OpportunityFrame,
   SourcePost,
+  TradeExitPlan,
   TradeExpressionPlan,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
@@ -29,6 +30,18 @@ const baseSettings: UserSettings = {
   privyWalletId: null,
   walletAddress: "0x0000000000000000000000000000000000000000",
   defaultTradeSizeUsd: 50,
+};
+
+const exitPlan: TradeExitPlan = {
+  takeProfitPct: 12,
+  stopLossPct: 6,
+  maxHoldDays: 10,
+  reviewCadence: "daily",
+  thesis: "SOL ETF approval odds are underpriced.",
+  invalidationSignals: [
+    "Primary ETF approval evidence weakens.",
+    "SOL breaks below the post-catalyst range on rising volume.",
+  ],
 };
 
 const marketSelection: MarketSelection = {
@@ -175,6 +188,7 @@ describe("supervisor scenario coverage", () => {
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
+      exitPlan,
     });
 
     const state = await store.load();
@@ -194,10 +208,12 @@ describe("supervisor scenario coverage", () => {
     await executeTool(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
+      exitPlan,
     });
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.sizeUsd).toBe(1_000);
+    expect(state.tradeTickets[0]?.exitPlan).toEqual(exitPlan);
   });
 
   it("finalizes no-trade market routing without preserving stale route language", async () => {

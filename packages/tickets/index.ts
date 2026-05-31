@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   MarketSelection,
   Thesis,
+  TradeExitPlan,
   TradeTicket,
   UserSettings,
 } from "../core/schemas/index.ts";
@@ -11,6 +12,7 @@ export function createTradeTicket(input: {
   userSettings: UserSettings;
   thesis: Thesis;
   marketSelection: MarketSelection;
+  exitPlan: TradeExitPlan;
 }): TradeTicket {
   const market = input.marketSelection.selectedMarket;
 
@@ -37,18 +39,6 @@ export function createTradeTicket(input: {
       estimatedSlippageBps: market.estimatedSlippageBps,
       minOrderSizeUsd: market.minOrderSizeUsd,
     },
-    exitPlan: {
-      takeProfitPct: 10,
-      stopLossPct: 5,
-      maxHoldDays: 7,
-      reviewCadence: "daily",
-      thesis: input.thesis.claim,
-      invalidationSignals: input.thesis.shouldNotInferTradeBecause?.length
-        ? input.thesis.shouldNotInferTradeBecause
-        : [
-            ...input.thesis.mentionedAssets.map((asset) => `${asset} no longer matches the trade thesis.`),
-            `${input.thesis.claim} is contradicted by fresh market evidence.`,
-          ],
-    },
+    exitPlan: input.exitPlan,
   };
 }

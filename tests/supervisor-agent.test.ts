@@ -9,6 +9,7 @@ import type {
   OpportunityFrame,
   SourcePost,
   TradeExpressionPlan,
+  TradeExitPlan,
   UserSettings,
 } from "../packages/core/schemas/index.ts";
 
@@ -44,6 +45,18 @@ const settings: UserSettings = {
   privyWalletId: null,
   walletAddress: "0x0000000000000000000000000000000000000000",
   defaultTradeSizeUsd: 50,
+};
+
+const exitPlan: TradeExitPlan = {
+  takeProfitPct: 12,
+  stopLossPct: 6,
+  maxHoldDays: 10,
+  reviewCadence: "daily",
+  thesis: "SOL ETF approval odds are underpriced.",
+  invalidationSignals: [
+    "Primary ETF approval evidence weakens.",
+    "SOL breaks below the post-catalyst range on rising volume.",
+  ],
 };
 
 const marketSelection: MarketSelection = {
@@ -286,6 +299,7 @@ describe("AI SDK supervisor agent", () => {
     const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
       tradeExpression,
       marketSelection,
+      exitPlan,
     });
     await executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
@@ -296,6 +310,7 @@ describe("AI SDK supervisor agent", () => {
     const state = await store.load();
     expect(state.tradeTickets[0]).not.toHaveProperty("approvalState");
     expect(state.tradeTickets[0]?.sizeUsd).toBe(settings.defaultTradeSizeUsd);
+    expect(state.tradeTickets[0]?.exitPlan).toEqual(exitPlan);
     expect(state.tradeTickets[0]).not.toHaveProperty("riskDecision");
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["ticket", "final"]),
@@ -366,6 +381,7 @@ describe("AI SDK supervisor agent", () => {
     await executeTool(tools.create_trade_ticket, {
       tradeExpression: expressionWithHigherPriorityEventMarket,
       marketSelection: selectedMarket,
+      exitPlan,
     });
 
     const state = await store.load();
@@ -400,9 +416,11 @@ describe("AI SDK supervisor agent", () => {
     const ticketInputSchema = tools.create_trade_ticket.inputSchema as {
       safeParse: (value: unknown) => { success: boolean };
     };
-    expect(ticketInputSchema.safeParse({}).success).toBe(true);
+    expect(ticketInputSchema.safeParse({}).success).toBe(false);
+    expect(ticketInputSchema.safeParse({ exitPlan }).success).toBe(true);
 
     await expect(executeTool(tools.create_trade_ticket, {
+      exitPlan,
     })).resolves.toMatchObject({
       instrument: "perp",
       side: "long",
@@ -486,6 +504,7 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool(tools.create_trade_ticket, {
       tradeExpression,
+      exitPlan,
     })).rejects.toThrow("Trade ticket creation requires a usable market selection.");
   });
 

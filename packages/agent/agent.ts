@@ -217,7 +217,7 @@ export function buildSupervisorInstructions(): string {
     "",
     "Never invent tickers, markets, prices, liquidity, probabilities, listings, or contract rules. Venue tools may only return real configured venue candidates. If no real market validates the thesis, finalize no-trade, watchlist, or analysis-only.",
     "",
-    "Run preflight_user_policy before semantic opportunity analysis. After ranking a real validated candidate, create_trade_ticket creates the ticket with the user's configured default trade size. The execution worker handles order submission after ticket creation.",
+    "Run preflight_user_policy before semantic opportunity analysis. After ranking a real validated candidate, create_trade_ticket creates the ticket with the user's configured default trade size and an explicit exitPlan chosen by the agent. The exitPlan must include takeProfitPct, stopLossPct, maxHoldDays, daily review cadence, thesis, and concrete invalidationSignals. The execution worker handles order submission after ticket creation.",
     "",
     "Finalize every run with finalize_run after enough staged evidence exists for trade_ticket, no_trade, watchlist-style analysis, or analysis-only.",
   ].join("\n");
