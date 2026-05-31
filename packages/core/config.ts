@@ -341,9 +341,8 @@ export function assertPrivySettlementEnv(config: PrivyEnv): RequiredPrivySettlem
 export type TelegramEnv = {
   botToken?: string;
   botUsername?: string;
+  webhookSecretToken?: string;
   connectTtlMs: number;
-  pollIntervalMs: number;
-  longPollTimeoutSeconds: number;
 };
 
 export type RequiredTelegramBotEnv = TelegramEnv & {
@@ -358,24 +357,16 @@ export function readTelegramEnv(env: EnvSource = process.env): TelegramEnv {
   return z.object({
     TELEGRAM_BOT_TOKEN: configuredStringSchema,
     TELEGRAM_BOT_USERNAME: configuredStringSchema,
+    TELEGRAM_WEBHOOK_SECRET_TOKEN: configuredStringSchema,
     TELEGRAM_CONNECT_TTL_MS: numberSchema("TELEGRAM_CONNECT_TTL_MS", 10 * 60 * 1000, {
-      integer: true,
-      min: 1,
-    }),
-    TELEGRAM_POLL_INTERVAL_MS: numberSchema("TELEGRAM_POLL_INTERVAL_MS", 2_000, {
-      integer: true,
-      min: 1,
-    }),
-    TELEGRAM_LONG_POLL_TIMEOUT_SECONDS: numberSchema("TELEGRAM_LONG_POLL_TIMEOUT_SECONDS", 30, {
       integer: true,
       min: 1,
     }),
   }).transform((values) => ({
     botToken: values.TELEGRAM_BOT_TOKEN,
     botUsername: values.TELEGRAM_BOT_USERNAME?.replace(/^@/, ""),
+    webhookSecretToken: values.TELEGRAM_WEBHOOK_SECRET_TOKEN,
     connectTtlMs: values.TELEGRAM_CONNECT_TTL_MS,
-    pollIntervalMs: values.TELEGRAM_POLL_INTERVAL_MS,
-    longPollTimeoutSeconds: values.TELEGRAM_LONG_POLL_TIMEOUT_SECONDS,
   })).parse(env);
 }
 

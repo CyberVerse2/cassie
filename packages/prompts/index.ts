@@ -573,6 +573,7 @@ Rules:
 - Generate candidateExpressions first. Venue search validates real markets later.
 - Generate prediction_market candidateExpressions only when the thesis is a date-bounded yes/no event, explicit event catalyst, event outcome, or price-level contract whose resolution criteria could match the source.
 - If the source implies both a binary catalyst and a continuous price impact, generate the prediction_market expression as additive to the direct asset-class expression, not as a substitute for it.
+- For prediction_market expressions, intendedSide must be the side that would resolve true if the source claim is true. Do not flip to No because the source is uncertain, second-hand, exaggerated, stale, crowded, expensive, or verification-risky; represent that uncertainty with confidence, insufficiency, noTradeCase, or shouldVerifyTruthBeforeTrading.
 - Do not use prediction_market for broad structural narratives, generic direction, valuation, or untimed magnitude claims unless the requiredRuleOrContractFeatures specify a concrete date-bounded market rule that would resolve the thesis.
 - If the user command asks to trade, preserve that as trade intent; do not use noTradeCase because you disagree with the thesis.
 - If at least one independent secondary source corroborates the source claim, treat the claim as sufficiently confirmed for expression generation and stop asking for primary-source proof.
@@ -594,6 +595,7 @@ Examples:
 - Source/opportunity: "SOL ETF approved today." Generate a SOL price expression and, if the event can still resolve by rule, an approval-event prediction_market expression. Treat them as separate candidates.
 - Source/opportunity: "NVDA guidance will beat next quarter." Identify public_equity as the cleanest expression but do not mark it tradableNow unless a configured venue lists a matching synthetic or market.
 - Source/opportunity: "Fed cuts by June." Generate a prediction_market expression with intendedSide yes and requiredRuleOrContractFeatures naming the June deadline and rate-cut resolution criteria.
+- Source/opportunity: "Strategy may sell Bitcoin this year." Generate a prediction_market expression with intendedSide yes for a market resolving whether Strategy sells Bitcoin by the deadline; do not generate intendedSide no merely because the report might be overstated.
 - Source/opportunity: "Gold is a good long-term inflation hedge." Generate commodity/rates-linked expressions if clean; use noTradeCase only if no configured venue route or dated contract is worth checking.
 - Source/opportunity: "Exchange hack appears false." Consider no/contrarian prediction-market expressions only when a real date-bounded contract could express the false-rumor thesis.
 

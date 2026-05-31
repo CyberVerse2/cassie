@@ -273,8 +273,6 @@ describe("Polymarket env", () => {
       },
       telegram: {
         connectTtlMs: 600000,
-        pollIntervalMs: 2000,
-        longPollTimeoutSeconds: 30,
       },
     });
   });
@@ -283,15 +281,13 @@ describe("Polymarket env", () => {
     expect(readTelegramEnv({
       TELEGRAM_BOT_TOKEN: "token",
       TELEGRAM_BOT_USERNAME: "@cassie_bot",
+      TELEGRAM_WEBHOOK_SECRET_TOKEN: "secret-token",
       TELEGRAM_CONNECT_TTL_MS: "120000",
-      TELEGRAM_POLL_INTERVAL_MS: "2500",
-      TELEGRAM_LONG_POLL_TIMEOUT_SECONDS: "45",
     })).toEqual({
       botToken: "token",
       botUsername: "cassie_bot",
+      webhookSecretToken: "secret-token",
       connectTtlMs: 120000,
-      pollIntervalMs: 2500,
-      longPollTimeoutSeconds: 45,
     });
   });
 });

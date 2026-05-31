@@ -3,11 +3,11 @@ import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import {
   connectTelegramFromUpdate,
   createTelegramConnectSession,
-  pollTelegramUpdates,
+  processTelegramWebhookUpdate,
   sendTelegramNotification,
   TelegramBotApi,
+  verifyTelegramWebhookSecret,
   type TelegramGateway,
-  type TelegramPollingGateway,
 } from "../packages/notifications/telegram.ts";
 
 describe("Telegram notifications", () => {
@@ -27,8 +27,6 @@ describe("Telegram notifications", () => {
         botToken: "bot-token",
         botUsername: "cassie_bot",
         connectTtlMs: 60_000,
-        pollIntervalMs: 2_000,
-        longPollTimeoutSeconds: 30,
       },
     });
     const token = new URL(session.connectUrl).searchParams.get("start");
@@ -180,7 +178,7 @@ describe("Telegram notifications", () => {
     );
   });
 
-  it("polls Telegram updates and stores the next offset", async () => {
+  it("processes a Telegram webhook update", async () => {
     const store = new InMemoryCassieStore();
     await store.syncPrivyUser({
       privyUserId: "did:privy:user_1",
@@ -194,47 +192,50 @@ describe("Telegram notifications", () => {
         botToken: "bot-token",
         botUsername: "cassie_bot",
         connectTtlMs: 60_000,
-        pollIntervalMs: 2_000,
-        longPollTimeoutSeconds: 30,
       },
     });
     const token = new URL(session.connectUrl).searchParams.get("start");
-    const gateway = new FakeTelegramPollingGateway([{
-      update_id: 42,
-      message: {
-        message_id: 1,
-        date: 1_779_932_400,
-        chat: { id: 12345, type: "private" },
-        from: {
-          id: 12345,
-          first_name: "Celestine",
-          username: "celestine",
-        },
-        text: `/start ${token}`,
-      },
-    }]);
+    const gateway = new FakeTelegramGateway();
 
-    const result = await pollTelegramUpdates({
+    const result = await processTelegramWebhookUpdate({
       store,
       gateway,
-      env: {
-        botToken: "bot-token",
-        botUsername: "cassie_bot",
-        connectTtlMs: 60_000,
-        pollIntervalMs: 2_000,
-        longPollTimeoutSeconds: 30,
+      update: {
+        update_id: 42,
+        message: {
+          message_id: 1,
+          date: 1_779_932_400,
+          chat: { id: 12345, type: "private" },
+          from: {
+            id: 12345,
+            first_name: "Celestine",
+            username: "celestine",
+          },
+          text: `/start ${token}`,
+        },
       },
     });
 
     expect(result).toMatchObject({
-      received: 1,
       connected: 1,
       ignored: 0,
-      errors: [],
-      nextOffset: 43,
+      updateId: 42,
     });
-    expect(gateway.fetchInputs).toEqual([{ offset: undefined, timeoutSeconds: 30 }]);
-    expect(await store.getRuntimeState("telegram.poll")).toEqual({ offset: 43 });
+    expect(gateway.messages[0]).toMatchObject({
+      chatId: "12345",
+      text: expect.stringContaining("Telegram is connected"),
+    });
+  });
+
+  it("requires Telegram webhook secret token verification", () => {
+    expect(() => verifyTelegramWebhookSecret({
+      receivedSecret: "wrong",
+      expectedSecret: "expected",
+    })).toThrow("Telegram webhook secret token did not match.");
+    expect(() => verifyTelegramWebhookSecret({
+      receivedSecret: "expected",
+      expectedSecret: "expected",
+    })).not.toThrow();
   });
 });
 
@@ -247,21 +248,5 @@ class FakeTelegramGateway implements TelegramGateway {
     disableNotification?: boolean;
   }): Promise<void> {
     this.messages.push(input);
-  }
-}
-
-class FakeTelegramPollingGateway extends FakeTelegramGateway implements TelegramPollingGateway {
-  fetchInputs: Array<{ offset?: number; timeoutSeconds: number }> = [];
-
-  constructor(private readonly updates: unknown[]) {
-    super();
-  }
-
-  async getUpdates(input: {
-    offset?: number;
-    timeoutSeconds: number;
-  }): Promise<unknown[]> {
-    this.fetchInputs.push(input);
-    return this.updates;
   }
 }

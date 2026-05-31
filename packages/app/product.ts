@@ -8,7 +8,6 @@ import {
 } from "../core/schemas/index.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import { pollTelegramUpdates } from "../notifications/telegram.ts";
 import {
   GraphileExecutionJobQueue,
   type CassieJobQueue,
@@ -89,12 +88,6 @@ export class CassieProduct {
       executionClient: this.executionClient ?? undefined,
     });
     return { processed: true, job };
-  }
-
-  async pollTelegramUpdates() {
-    return pollTelegramUpdates({
-      store: this.store,
-    });
   }
 
 }

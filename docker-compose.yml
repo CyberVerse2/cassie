@@ -63,9 +63,5 @@ services:
     <<: *cassie-runtime
     command: ["npm", "run", "worker"]
 
-  telegram-poller:
-    <<: *cassie-runtime
-    command: ["npm", "run", "poll:telegram"]
-
 volumes:
   cassie-postgres-data:

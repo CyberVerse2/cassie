@@ -177,6 +177,8 @@ describe("prompts", () => {
     expect(prompts.join("\n")).toContain("Do not use no_trade when a non-no_trade candidateExpression still needs venue discovery");
     expect(prompts.join("\n")).toContain("HIP-3 pre-stock/private-company valuation perps");
     expect(prompts.join("\n")).toContain("thesis resolves to yes or no by a specific date");
+    expect(prompts.join("\n")).toContain("intendedSide must be the side that would resolve true if the source claim is true");
+    expect(prompts.join("\n")).toContain("do not generate intendedSide no merely because the report might be overstated");
     expect(prompts.join("\n")).toContain("additive to the price expression");
     expect(prompts.join("\n")).toContain("Cheap odds are not a fit defect");
     expect(prompts.join("\n")).toContain("Fed will cut rates at the June FOMC meeting");

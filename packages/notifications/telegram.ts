@@ -50,13 +50,6 @@ export type TelegramGateway = {
   }): Promise<void>;
 };
 
-export type TelegramPollingGateway = TelegramGateway & {
-  getUpdates(input: {
-    offset?: number;
-    timeoutSeconds: number;
-  }): Promise<unknown[]>;
-};
-
 export type TelegramConnectSession = {
   connectUrl: string;
   expiresAt: string;
@@ -65,18 +58,6 @@ export type TelegramConnectSession = {
 export type TelegramConnectResult =
   | { status: "connected"; connection: TelegramConnection }
   | { status: "ignored" };
-
-type TelegramGetUpdatesResponse = {
-  ok?: boolean;
-  description?: string;
-  result?: unknown[];
-};
-
-type TelegramDeleteWebhookResponse = {
-  ok?: boolean;
-  description?: string;
-  result?: boolean;
-};
 
 export class TelegramBotApi implements TelegramGateway {
   constructor(
@@ -104,39 +85,6 @@ export class TelegramBotApi implements TelegramGateway {
     }
   }
 
-  async getUpdates(input: {
-    offset?: number;
-    timeoutSeconds: number;
-  }): Promise<unknown[]> {
-    const response = await this.fetcher(`https://api.telegram.org/bot${this.token}/getUpdates`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        offset: input.offset,
-        timeout: input.timeoutSeconds,
-        allowed_updates: ["message"],
-      }),
-    });
-    const payload = await response.json().catch(() => null) as TelegramGetUpdatesResponse | null;
-    if (!response.ok || payload?.ok !== true || !Array.isArray(payload.result)) {
-      throw new Error(payload?.description ?? `Telegram getUpdates failed with HTTP ${response.status}.`);
-    }
-    return payload.result;
-  }
-
-  async deleteWebhook(input: { dropPendingUpdates?: boolean } = {}): Promise<void> {
-    const response = await this.fetcher(`https://api.telegram.org/bot${this.token}/deleteWebhook`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        drop_pending_updates: input.dropPendingUpdates ?? false,
-      }),
-    });
-    const payload = await response.json().catch(() => null) as TelegramDeleteWebhookResponse | null;
-    if (!response.ok || payload?.ok !== true || payload.result !== true) {
-      throw new Error(payload?.description ?? `Telegram deleteWebhook failed with HTTP ${response.status}.`);
-    }
-  }
 }
 
 export async function createTelegramConnectSession(input: {
@@ -262,64 +210,42 @@ export async function sendTelegramNotification(input: {
   });
 }
 
-export async function pollTelegramUpdates(input: {
+export async function processTelegramWebhookUpdate(input: {
   store: CassieStore;
-  env?: TelegramEnv;
-  gateway?: TelegramPollingGateway;
+  update: unknown;
+  gateway?: TelegramGateway;
 }): Promise<{
-  received: number;
   connected: number;
   ignored: number;
-  errors: Array<{ updateId: number; error: string }>;
-  nextOffset: number | null;
+  updateId: number;
 }> {
-  const env = assertTelegramBotEnv(input.env ?? readTelegramEnv());
-  const gateway = input.gateway ?? new TelegramBotApi(env.botToken);
-  const state = await input.store.getRuntimeState<{ offset?: number }>("telegram.poll");
-  const updates = await gateway.getUpdates({
-    offset: state?.offset,
-    timeoutSeconds: env.longPollTimeoutSeconds,
+  const parsed = TelegramUpdateSchema.safeParse(input.update);
+  if (!parsed.success) {
+    throw new Error("Telegram webhook update payload did not match the expected message schema.");
+  }
+  const result = await connectTelegramFromUpdate({
+    update: parsed.data,
+    store: input.store,
+    gateway: input.gateway,
   });
-  let connected = 0;
-  let ignored = 0;
-  let nextOffset = state?.offset ?? null;
-  const errors: Array<{ updateId: number; error: string }> = [];
-
-  for (const update of updates) {
-    const parsed = TelegramUpdateSchema.safeParse(update);
-    const updateId = parsed.success ? parsed.data.update_id : null;
-    try {
-      if (!parsed.success) {
-        throw new Error("Telegram update payload did not match the expected message schema.");
-      }
-      const result = await connectTelegramFromUpdate({
-        update: parsed.data,
-        store: input.store,
-        gateway,
-      });
-      if (result.status === "connected") connected += 1;
-      if (result.status === "ignored") ignored += 1;
-      nextOffset = Math.max(nextOffset ?? 0, parsed.data.update_id + 1);
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught);
-      errors.push({ updateId: updateId ?? -1, error: message });
-      if (updateId != null) {
-        nextOffset = Math.max(nextOffset ?? 0, updateId + 1);
-      }
-    }
-  }
-
-  if (nextOffset != null && nextOffset !== state?.offset) {
-    await input.store.setRuntimeState("telegram.poll", { offset: nextOffset });
-  }
 
   return {
-    received: updates.length,
-    connected,
-    ignored,
-    errors,
-    nextOffset,
+    connected: result.status === "connected" ? 1 : 0,
+    ignored: result.status === "ignored" ? 1 : 0,
+    updateId: parsed.data.update_id,
   };
+}
+
+export function verifyTelegramWebhookSecret(input: {
+  receivedSecret: string | null;
+  expectedSecret?: string;
+}): void {
+  if (!input.expectedSecret) {
+    throw new Error("Telegram webhook requires TELEGRAM_WEBHOOK_SECRET_TOKEN.");
+  }
+  if (input.receivedSecret !== input.expectedSecret) {
+    throw new Error("Telegram webhook secret token did not match.");
+  }
 }
 
 function connectSessionKey(token: string): string {

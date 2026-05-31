@@ -11,7 +11,6 @@
     "web:build": "next build apps/web && cp -R apps/web/public apps/web/.next/standalone/apps/web/public && cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static",
     "web:start": "node apps/web/.next/standalone/apps/web/server.js",
     "worker": "tsx src/worker.ts",
-    "poll:telegram": "tsx src/telegram-poller.ts",
     "cli": "tsx src/cli.ts",
     "hyperliquid:approve-builder": "tsx scripts/approve-hyperliquid-builder-fee.ts",
     "smoke:v4-flash": "tsx scripts/test-v4-flash.ts",

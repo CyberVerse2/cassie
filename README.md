@@ -66,10 +66,12 @@ Set `NEXT_SERVER_ACTIONS_ENCRYPTION_KEY` before building hosted images so rebuil
 openssl rand -base64 32
 ```
 
-Run the Telegram poller in another terminal to receive onboarding `/start` messages without a webhook:
+Register the Telegram bot webhook for onboarding `/start` messages:
 
 ```bash
-npm run poll:telegram
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://yourdomain.com/api/telegram/webhook","allowed_updates":["message"],"secret_token":"'"$TELEGRAM_WEBHOOK_SECRET_TOKEN"'"}'
 ```
 
 ## Operate Cassie
