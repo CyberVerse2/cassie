@@ -6,11 +6,19 @@ import {
   type PolymarketSdkTradingClientLike,
 } from "../packages/execution/index.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
-import type { TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
+import type { TradeExitPlan, TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
 import { executeExecutionJob } from "../packages/jobs/execution-job.ts";
 import { createQueuedExecutionJob } from "../packages/jobs/state.ts";
 import { formatDecimal, formatSignificantDecimal } from "../packages/execution/helpers/format.ts";
 
+const exitPlan: TradeExitPlan = {
+  takeProfitPct: 10,
+  stopLossPct: 5,
+  maxHoldDays: 7,
+  reviewCadence: "daily",
+  thesis: "Solana ETF approval odds are mispriced.",
+  invalidationSignals: ["Solana ETF approval odds are no longer mispriced."],
+};
 const ticket: TradeTicket = {
   ticketId: "ticket_1",
   runId: "run_1",
@@ -24,6 +32,7 @@ const ticket: TradeTicket = {
   venueData: {
     outcomeTokenId: "123",
   },
+  exitPlan,
 };
 const builderCode = `0x${"a".repeat(64)}`;
 const settings: UserSettings = {
@@ -96,6 +105,7 @@ describe("HyperliquidExecutionClient", () => {
       sizeUsd: 25,
       orderType: "marketable_limit",
       venueData: { symbol: "SOL" },
+      exitPlan,
     });
 
     expect(exchange.order).toHaveBeenCalledWith({
@@ -175,6 +185,7 @@ describe("HyperliquidExecutionClient", () => {
       sizeUsd: 50,
       orderType: "marketable_limit",
       venueData: { symbol: "XAUT0/USDC" },
+      exitPlan,
     });
 
     expect(exchange.order).toHaveBeenCalledWith({

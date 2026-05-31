@@ -85,6 +85,13 @@
       "when": 1780117458435,
       "tag": "0011_harden_wallet_spend_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1780272000000,
+      "tag": "0012_position_exit_strategy",
+      "breakpoints": true
     }
   ]
 }

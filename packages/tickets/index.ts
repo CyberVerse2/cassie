@@ -37,5 +37,18 @@ export function createTradeTicket(input: {
       estimatedSlippageBps: market.estimatedSlippageBps,
       minOrderSizeUsd: market.minOrderSizeUsd,
     },
+    exitPlan: {
+      takeProfitPct: 10,
+      stopLossPct: 5,
+      maxHoldDays: 7,
+      reviewCadence: "daily",
+      thesis: input.thesis.claim,
+      invalidationSignals: input.thesis.shouldNotInferTradeBecause?.length
+        ? input.thesis.shouldNotInferTradeBecause
+        : [
+            ...input.thesis.mentionedAssets.map((asset) => `${asset} no longer matches the trade thesis.`),
+            `${input.thesis.claim} is contradicted by fresh market evidence.`,
+          ],
+    },
   };
 }

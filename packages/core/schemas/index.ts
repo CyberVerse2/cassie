@@ -392,6 +392,15 @@ export const ExecutionFundingSourceSchema = z.object({
   amountUsd: z.number().positive(),
 });
 
+export const TradeExitPlanSchema = z.object({
+  takeProfitPct: z.number().positive().default(10),
+  stopLossPct: z.number().positive().default(5),
+  maxHoldDays: z.number().int().positive().default(7),
+  reviewCadence: z.literal("daily").default("daily"),
+  thesis: z.string().min(1),
+  invalidationSignals: z.array(z.string().min(1)),
+});
+
 export const TradeTicketSchema = z.object({
   ticketId: z.string(),
   runId: z.string().nullable().optional(),
@@ -403,6 +412,7 @@ export const TradeTicketSchema = z.object({
   sizeUsd: z.number().positive(),
   orderType: z.enum(["limit", "marketable_limit"]),
   venueData: TradeVenueDataSchema.optional(),
+  exitPlan: TradeExitPlanSchema,
 });
 
 export const ExecutionJobSchema = z.object({
@@ -422,10 +432,68 @@ export const ExecutionJobSchema = z.object({
     .nullable(),
 });
 
+export const PositionStatusSchema = z.enum(["open", "closing", "closed", "close_failed"]);
+export const PositionReviewStatusSchema = z.enum(["succeeded", "failed"]);
+export const ExitSignalSchema = z.enum(["none", "take_profit", "stop_loss", "max_hold", "thesis_invalidated"]);
+export const WithdrawalStatusSchema = z.enum(["queued", "running", "succeeded", "failed"]);
+
+export const PositionSchema = z.object({
+  positionId: z.string(),
+  userId: z.string(),
+  ticketId: z.string(),
+  executionJobId: z.string(),
+  venue: z.string(),
+  instrument: z.string(),
+  side: z.string(),
+  status: PositionStatusSchema,
+  entrySizeUsd: z.number().positive(),
+  filledSizeUsd: z.number().positive(),
+  entryPrice: z.number().positive().nullable(),
+  currentMarkPrice: z.number().positive().nullable(),
+  currentValueUsd: z.number().nonnegative(),
+  unrealizedPnlUsd: z.number(),
+  unrealizedPnlPct: z.number(),
+  exitPlan: TradeExitPlanSchema,
+  openedAt: z.string(),
+  updatedAt: z.string(),
+  lastMarkedAt: z.string().nullable(),
+  closedAt: z.string().nullable(),
+  closeExecutionJobId: z.string().nullable(),
+  failureReason: z.string().nullable(),
+});
+
+export const PositionReviewSchema = z.object({
+  reviewId: z.string(),
+  positionId: z.string(),
+  userId: z.string(),
+  reviewedAt: z.string(),
+  status: PositionReviewStatusSchema,
+  markPrice: z.number().positive().nullable(),
+  currentValueUsd: z.number().nonnegative().nullable(),
+  unrealizedPnlUsd: z.number().nullable(),
+  unrealizedPnlPct: z.number().nullable(),
+  exitSignal: ExitSignalSchema,
+  summary: z.string(),
+  failureReason: z.string().nullable(),
+});
+
+export const WithdrawalSchema = z.object({
+  withdrawalId: z.string(),
+  userId: z.string(),
+  amountUsd: z.number().positive(),
+  destinationAddress: z.string().min(1),
+  status: WithdrawalStatusSchema,
+  transferId: z.string().nullable(),
+  failureReason: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  completedAt: z.string().nullable(),
+});
+
 export const AuditEventSchema = z.object({
   eventId: z.string(),
   entityId: z.string(),
-  entityType: z.enum(["mention", "run", "trade_ticket", "execution_job"]),
+  entityType: z.enum(["mention", "run", "trade_ticket", "execution_job", "position", "withdrawal"]),
   eventType: z.string(),
   message: z.string(),
   data: z.unknown().optional(),
@@ -518,8 +586,16 @@ export type AccountState = z.infer<typeof AccountStateSchema>;
 export type WalletFundingBalance = z.infer<typeof WalletFundingBalanceSchema>;
 export type WalletSpendLedgerEntry = z.infer<typeof WalletSpendLedgerEntrySchema>;
 export type ExecutionFundingSource = z.infer<typeof ExecutionFundingSourceSchema>;
+export type TradeExitPlan = z.infer<typeof TradeExitPlanSchema>;
 export type TradeTicket = z.infer<typeof TradeTicketSchema>;
 export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
+export type PositionStatus = z.infer<typeof PositionStatusSchema>;
+export type PositionReviewStatus = z.infer<typeof PositionReviewStatusSchema>;
+export type ExitSignal = z.infer<typeof ExitSignalSchema>;
+export type WithdrawalStatus = z.infer<typeof WithdrawalStatusSchema>;
+export type Position = z.infer<typeof PositionSchema>;
+export type PositionReview = z.infer<typeof PositionReviewSchema>;
+export type Withdrawal = z.infer<typeof WithdrawalSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 export type ControlRunStatus = z.infer<typeof ControlRunStatusSchema>;
 export type SupervisorFinalResult = z.infer<typeof SupervisorFinalResultSchema>;

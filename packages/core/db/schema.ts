@@ -4,11 +4,14 @@ import type {
   AuditEvent,
   ControlRun,
   ExecutionJob,
+  Position,
+  PositionReview,
   RunStep,
   SourcePost,
   TradeTicket,
   UserSettings,
   WalletSpendLedgerEntry,
+  Withdrawal,
 } from "../schemas/index.ts";
 import type {
   ModelCallUsageRecord,
@@ -58,6 +61,74 @@ export const executionJobs = pgTable("execution_jobs", {
 }, (table) => [
   index("execution_jobs_status_updated_idx").on(table.status, table.updatedAt),
   index("execution_jobs_ticket_idx").on(table.ticketId),
+]);
+
+export const positions = pgTable("positions", {
+  positionId: text("position_id").primaryKey(),
+  userId: text("user_id").notNull(),
+  ticketId: text("ticket_id").notNull(),
+  executionJobId: text("execution_job_id").notNull(),
+  status: text("status").$type<Position["status"]>().notNull(),
+  position: jsonb("position").$type<Position>().notNull(),
+  openedAt: text("opened_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("positions_user_status_opened_idx").on(table.userId, table.status, table.openedAt),
+  index("positions_ticket_idx").on(table.ticketId),
+  uniqueIndex("positions_execution_job_unique_idx").on(table.executionJobId),
+  foreignKey({
+    name: "positions_user_fk",
+    columns: [table.userId],
+    foreignColumns: [userSettings.userId],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "positions_ticket_fk",
+    columns: [table.ticketId],
+    foreignColumns: [tradeTickets.ticketId],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "positions_execution_job_fk",
+    columns: [table.executionJobId],
+    foreignColumns: [executionJobs.jobId],
+  }).onDelete("cascade"),
+]);
+
+export const positionReviews = pgTable("position_reviews", {
+  reviewId: text("review_id").primaryKey(),
+  positionId: text("position_id").notNull(),
+  userId: text("user_id").notNull(),
+  status: text("status").$type<PositionReview["status"]>().notNull(),
+  review: jsonb("review").$type<PositionReview>().notNull(),
+  reviewedAt: text("reviewed_at").notNull(),
+}, (table) => [
+  index("position_reviews_position_reviewed_idx").on(table.positionId, table.reviewedAt),
+  index("position_reviews_user_reviewed_idx").on(table.userId, table.reviewedAt),
+  foreignKey({
+    name: "position_reviews_position_fk",
+    columns: [table.positionId],
+    foreignColumns: [positions.positionId],
+  }).onDelete("cascade"),
+  foreignKey({
+    name: "position_reviews_user_fk",
+    columns: [table.userId],
+    foreignColumns: [userSettings.userId],
+  }).onDelete("cascade"),
+]);
+
+export const withdrawals = pgTable("withdrawals", {
+  withdrawalId: text("withdrawal_id").primaryKey(),
+  userId: text("user_id").notNull(),
+  status: text("status").$type<Withdrawal["status"]>().notNull(),
+  withdrawal: jsonb("withdrawal").$type<Withdrawal>().notNull(),
+  createdAt: text("created_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+}, (table) => [
+  index("withdrawals_user_status_created_idx").on(table.userId, table.status, table.createdAt),
+  foreignKey({
+    name: "withdrawals_user_fk",
+    columns: [table.userId],
+    foreignColumns: [userSettings.userId],
+  }).onDelete("cascade"),
 ]);
 
 export const walletSpendLedgerEntries = pgTable("wallet_spend_ledger_entries", {

@@ -1,27 +1,33 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
   ControlRun,
   ExecutionJob,
+  Position,
+  PositionReview,
   RunStep,
   SourcePost,
   TradeTicket,
   UserSettings,
   WalletFundingBalance,
   WalletSpendLedgerEntry,
+  Withdrawal,
 } from "../schemas/index.ts";
 import {
   auditEvents,
   controlRuns,
   executionJobs,
   mentions,
+  positionReviews,
+  positions,
   runtimeState,
   runSteps,
   tradeTickets,
   modelCallUsage,
   userSettings,
   walletSpendLedgerEntries,
+  withdrawals,
 } from "./schema.ts";
 import { createCassieDb, type CassieDb } from "./client.ts";
 import type {
@@ -41,6 +47,9 @@ export class DrizzleCassieStore implements CassieStore {
       mentionRows,
       ticketRows,
       jobRows,
+      positionRows,
+      reviewRows,
+      withdrawalRows,
       auditRows,
       walletSpendLedgerRows,
       controlRunRows,
@@ -51,6 +60,9 @@ export class DrizzleCassieStore implements CassieStore {
       this.db.select().from(mentions),
       this.db.select().from(tradeTickets),
       this.db.select().from(executionJobs),
+      this.db.select().from(positions),
+      this.db.select().from(positionReviews),
+      this.db.select().from(withdrawals),
       this.db.select().from(auditEvents),
       this.db.select().from(walletSpendLedgerEntries),
       this.db.select().from(controlRuns),
@@ -63,6 +75,9 @@ export class DrizzleCassieStore implements CassieStore {
       mentions: mentionRows,
       tradeTickets: ticketRows.map((row) => row.ticket),
       executionJobs: jobRows.map((row) => row.job),
+      positions: positionRows.map((row) => row.position),
+      positionReviews: reviewRows.map((row) => row.review),
+      withdrawals: withdrawalRows.map((row) => row.withdrawal),
       walletSpendLedgerEntries: walletSpendLedgerRows.map((row) => ({
         entryId: row.entryId,
         userId: row.userId,
@@ -375,6 +390,166 @@ export class DrizzleCassieStore implements CassieStore {
       .limit(1);
 
     return rows[0]?.job;
+  }
+
+  async addPosition(position: Position): Promise<Position> {
+    await this.db.insert(positions).values({
+      positionId: position.positionId,
+      userId: position.userId,
+      ticketId: position.ticketId,
+      executionJobId: position.executionJobId,
+      status: position.status,
+      position,
+      openedAt: position.openedAt,
+      updatedAt: position.updatedAt,
+    });
+    await this.audit({
+      entityId: position.positionId,
+      entityType: "position",
+      eventType: "position.created",
+      message: "Position created.",
+      data: position,
+    });
+    return position;
+  }
+
+  async updatePosition(position: Position): Promise<Position> {
+    await this.db
+      .update(positions)
+      .set({
+        status: position.status,
+        position,
+        updatedAt: position.updatedAt,
+      })
+      .where(eq(positions.positionId, position.positionId));
+    return position;
+  }
+
+  async getPosition(positionId: string): Promise<Position | undefined> {
+    const rows = await this.db
+      .select()
+      .from(positions)
+      .where(eq(positions.positionId, positionId))
+      .limit(1);
+
+    return rows[0]?.position;
+  }
+
+  async getPositionByExecutionJob(executionJobId: string): Promise<Position | undefined> {
+    const rows = await this.db
+      .select()
+      .from(positions)
+      .where(eq(positions.executionJobId, executionJobId))
+      .limit(1);
+
+    return rows[0]?.position;
+  }
+
+  async listOpenPositions(userId?: string): Promise<Position[]> {
+    const query = this.db
+      .select()
+      .from(positions)
+      .$dynamic();
+    const rows = await (userId
+      ? query.where(and(eq(positions.status, "open"), eq(positions.userId, userId)))
+      : query.where(eq(positions.status, "open")))
+      .orderBy(asc(positions.openedAt));
+
+    return rows.map((row) => row.position);
+  }
+
+  async listUserPositions(userId: string): Promise<Position[]> {
+    const rows = await this.db
+      .select()
+      .from(positions)
+      .where(eq(positions.userId, userId))
+      .orderBy(desc(positions.openedAt));
+
+    return rows.map((row) => row.position);
+  }
+
+  async addPositionReview(review: PositionReview): Promise<PositionReview> {
+    await this.db.insert(positionReviews).values({
+      reviewId: review.reviewId,
+      positionId: review.positionId,
+      userId: review.userId,
+      status: review.status,
+      review,
+      reviewedAt: review.reviewedAt,
+    });
+    return review;
+  }
+
+  async getLatestPositionReview(positionId: string): Promise<PositionReview | undefined> {
+    const rows = await this.db
+      .select()
+      .from(positionReviews)
+      .where(eq(positionReviews.positionId, positionId))
+      .orderBy(desc(positionReviews.reviewedAt))
+      .limit(1);
+
+    return rows[0]?.review;
+  }
+
+  async listPositionReviews(positionId: string): Promise<PositionReview[]> {
+    const rows = await this.db
+      .select()
+      .from(positionReviews)
+      .where(eq(positionReviews.positionId, positionId))
+      .orderBy(asc(positionReviews.reviewedAt));
+
+    return rows.map((row) => row.review);
+  }
+
+  async addWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal> {
+    await this.db.insert(withdrawals).values({
+      withdrawalId: withdrawal.withdrawalId,
+      userId: withdrawal.userId,
+      status: withdrawal.status,
+      withdrawal,
+      createdAt: withdrawal.createdAt,
+      updatedAt: withdrawal.updatedAt,
+    });
+    await this.audit({
+      entityId: withdrawal.withdrawalId,
+      entityType: "withdrawal",
+      eventType: "withdrawal.created",
+      message: "Withdrawal created.",
+      data: withdrawal,
+    });
+    return withdrawal;
+  }
+
+  async updateWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal> {
+    await this.db
+      .update(withdrawals)
+      .set({
+        status: withdrawal.status,
+        withdrawal,
+        updatedAt: withdrawal.updatedAt,
+      })
+      .where(eq(withdrawals.withdrawalId, withdrawal.withdrawalId));
+    return withdrawal;
+  }
+
+  async getWithdrawal(withdrawalId: string): Promise<Withdrawal | undefined> {
+    const rows = await this.db
+      .select()
+      .from(withdrawals)
+      .where(eq(withdrawals.withdrawalId, withdrawalId))
+      .limit(1);
+
+    return rows[0]?.withdrawal;
+  }
+
+  async listUserWithdrawals(userId: string): Promise<Withdrawal[]> {
+    const rows = await this.db
+      .select()
+      .from(withdrawals)
+      .where(eq(withdrawals.userId, userId))
+      .orderBy(desc(withdrawals.createdAt));
+
+    return rows.map((row) => row.withdrawal);
   }
 
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {

@@ -5,10 +5,13 @@ import type {
   WalletFundingBalance,
   WalletSpendLedgerEntry,
   ExecutionJob,
+  Position,
+  PositionReview,
   RunStep,
   SourcePost,
   TradeTicket,
   UserSettings,
+  Withdrawal,
 } from "../schemas/index.ts";
 
 export interface MentionRecord {
@@ -47,6 +50,9 @@ export interface CassieStoreSnapshot {
   mentions: MentionRecord[];
   tradeTickets: TradeTicket[];
   executionJobs: ExecutionJob[];
+  positions: Position[];
+  positionReviews: PositionReview[];
+  withdrawals: Withdrawal[];
   walletSpendLedgerEntries: WalletSpendLedgerEntry[];
   auditEvents: AuditEvent[];
   userSettings: UserSettings[];
@@ -88,6 +94,19 @@ export interface CassieStore {
   addExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   getExecutionJob(jobId: string): Promise<ExecutionJob | undefined>;
+  addPosition(position: Position): Promise<Position>;
+  updatePosition(position: Position): Promise<Position>;
+  getPosition(positionId: string): Promise<Position | undefined>;
+  getPositionByExecutionJob(executionJobId: string): Promise<Position | undefined>;
+  listOpenPositions(userId?: string): Promise<Position[]>;
+  listUserPositions(userId: string): Promise<Position[]>;
+  addPositionReview(review: PositionReview): Promise<PositionReview>;
+  getLatestPositionReview(positionId: string): Promise<PositionReview | undefined>;
+  listPositionReviews(positionId: string): Promise<PositionReview[]>;
+  addWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
+  updateWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
+  getWithdrawal(withdrawalId: string): Promise<Withdrawal | undefined>;
+  listUserWithdrawals(userId: string): Promise<Withdrawal[]>;
   getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance>;
   reserveWalletSpend(input: {
     ticket: TradeTicket;
@@ -126,6 +145,9 @@ const emptySnapshot = (): CassieStoreSnapshot => ({
   mentions: [],
   tradeTickets: [],
   executionJobs: [],
+  positions: [],
+  positionReviews: [],
+  withdrawals: [],
   walletSpendLedgerEntries: [],
   auditEvents: [],
   userSettings: [],
@@ -301,6 +323,89 @@ export class InMemoryCassieStore implements CassieStore {
 
   async getExecutionJob(jobId: string): Promise<ExecutionJob | undefined> {
     return this.snapshot.executionJobs.find((job) => job.jobId === jobId);
+  }
+
+  async addPosition(position: Position): Promise<Position> {
+    this.snapshot.positions.push(position);
+    await this.audit({
+      entityId: position.positionId,
+      entityType: "position",
+      eventType: "position.created",
+      message: "Position created.",
+      data: position,
+    });
+    return position;
+  }
+
+  async updatePosition(position: Position): Promise<Position> {
+    this.snapshot.positions = this.snapshot.positions.map((candidate) =>
+      candidate.positionId === position.positionId ? position : candidate,
+    );
+    return position;
+  }
+
+  async getPosition(positionId: string): Promise<Position | undefined> {
+    return this.snapshot.positions.find((position) => position.positionId === positionId);
+  }
+
+  async getPositionByExecutionJob(executionJobId: string): Promise<Position | undefined> {
+    return this.snapshot.positions.find((position) => position.executionJobId === executionJobId);
+  }
+
+  async listOpenPositions(userId?: string): Promise<Position[]> {
+    return this.snapshot.positions.filter((position) =>
+      position.status === "open" && (!userId || position.userId === userId)
+    );
+  }
+
+  async listUserPositions(userId: string): Promise<Position[]> {
+    return this.snapshot.positions.filter((position) => position.userId === userId);
+  }
+
+  async addPositionReview(review: PositionReview): Promise<PositionReview> {
+    this.snapshot.positionReviews.push(review);
+    return review;
+  }
+
+  async getLatestPositionReview(positionId: string): Promise<PositionReview | undefined> {
+    return this.snapshot.positionReviews
+      .filter((review) => review.positionId === positionId)
+      .sort((left, right) => right.reviewedAt.localeCompare(left.reviewedAt))[0];
+  }
+
+  async listPositionReviews(positionId: string): Promise<PositionReview[]> {
+    return this.snapshot.positionReviews
+      .filter((review) => review.positionId === positionId)
+      .sort((left, right) => left.reviewedAt.localeCompare(right.reviewedAt));
+  }
+
+  async addWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal> {
+    this.snapshot.withdrawals.push(withdrawal);
+    await this.audit({
+      entityId: withdrawal.withdrawalId,
+      entityType: "withdrawal",
+      eventType: "withdrawal.created",
+      message: "Withdrawal created.",
+      data: withdrawal,
+    });
+    return withdrawal;
+  }
+
+  async updateWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal> {
+    this.snapshot.withdrawals = this.snapshot.withdrawals.map((candidate) =>
+      candidate.withdrawalId === withdrawal.withdrawalId ? withdrawal : candidate,
+    );
+    return withdrawal;
+  }
+
+  async getWithdrawal(withdrawalId: string): Promise<Withdrawal | undefined> {
+    return this.snapshot.withdrawals.find((withdrawal) => withdrawal.withdrawalId === withdrawalId);
+  }
+
+  async listUserWithdrawals(userId: string): Promise<Withdrawal[]> {
+    return this.snapshot.withdrawals
+      .filter((withdrawal) => withdrawal.userId === userId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {

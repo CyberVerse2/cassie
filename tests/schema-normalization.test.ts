@@ -4,6 +4,7 @@ import {
   ExpressionFitAssessmentSchema,
   NoTradeCaseSchema,
   OpportunityFrameSchema,
+  TradeTicketSchema,
   TradeExpressionPlanSchema,
 } from "../packages/core/schemas/index.ts";
 
@@ -103,5 +104,39 @@ describe("schema normalization", () => {
     });
 
     expect(plan.candidates[0]?.expectedEdge).toBe(-0.8);
+  });
+
+  it("requires an exit plan on trade tickets", () => {
+    const ticket = {
+      ticketId: "ticket_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "SOL may rally.",
+      venue: "hyperliquid",
+      instrument: "SOL-PERP",
+      side: "long",
+      sizeUsd: 50,
+      orderType: "marketable_limit",
+      venueData: { symbol: "SOL" },
+    };
+
+    expect(() => TradeTicketSchema.parse(ticket)).toThrow();
+    expect(TradeTicketSchema.parse({
+      ...ticket,
+      exitPlan: {
+        takeProfitPct: 10,
+        stopLossPct: 5,
+        maxHoldDays: 7,
+        reviewCadence: "daily",
+        thesis: "SOL may rally.",
+        invalidationSignals: ["SOL thesis failed."],
+      },
+    })).toMatchObject({
+      exitPlan: {
+        takeProfitPct: 10,
+        stopLossPct: 5,
+        maxHoldDays: 7,
+      },
+    });
   });
 });
