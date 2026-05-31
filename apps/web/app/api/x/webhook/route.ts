@@ -7,7 +7,6 @@ import {
 } from "../../../../../../packages/app/x-webhook";
 import { config } from "../../../../../../packages/core/config";
 import { DrizzleCassieStore } from "../../../../../../packages/core/db/drizzle-store";
-import { XApi } from "../../../../../../packages/notifications/x";
 import { apiError } from "../../_lib/account";
 
 export const runtime = "nodejs";
@@ -49,14 +48,12 @@ export async function POST(request: Request) {
     const result = await processXWebhookPayload({
       product,
       store,
-      replyGateway: new XApi({ env: config.x, store }),
       payload: JSON.parse(rawBody.toString("utf8")),
     });
     console.log(JSON.stringify({
       event: "x.webhook.processed",
       received: result.received,
       queued: result.queued,
-      replied: result.replied,
       skipped: result.skipped,
       failed: result.failed,
       runIds: result.runIds,

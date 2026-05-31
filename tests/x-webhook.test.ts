@@ -43,7 +43,6 @@ describe("X webhook", () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn(async () => ({ runId: `run_${createMentionRun.mock.calls.length}`, status: "queued" as const }));
     const product = { createMentionRun } as unknown as CassieProduct;
-    const replyToPost = vi.fn(async () => ({ id: "reply_1", text: "hi" }));
     const payload = {
       for_user_id: "205000",
       tweet_create_events: [
@@ -74,7 +73,6 @@ describe("X webhook", () => {
       product,
       store,
       payload,
-      replyGateway: { replyToPost },
       userId: "user_1",
       cassieHandle: "cassiedottrade",
     });
@@ -82,19 +80,13 @@ describe("X webhook", () => {
       product,
       store,
       payload,
-      replyGateway: { replyToPost },
       userId: "user_1",
       cassieHandle: "cassiedottrade",
     });
 
-    expect(first).toMatchObject({ received: 2, queued: 1, replied: 1, skipped: 1, failed: 0 });
-    expect(retry).toMatchObject({ received: 2, queued: 0, replied: 0, skipped: 2, failed: 0 });
+    expect(first).toMatchObject({ received: 2, queued: 1, skipped: 1, failed: 0 });
+    expect(retry).toMatchObject({ received: 2, queued: 0, skipped: 2, failed: 0 });
     expect(createMentionRun).toHaveBeenCalledTimes(1);
-    expect(replyToPost).toHaveBeenCalledTimes(1);
-    expect(replyToPost).toHaveBeenCalledWith({
-      postId: "tweet_1",
-      text: "hi",
-    });
     expect(createMentionRun).toHaveBeenCalledWith({
       userId: "user_1",
       userCommand: "hey @cassiedottrade trade this",
@@ -143,12 +135,11 @@ describe("X webhook", () => {
     expect(createMentionRun).not.toHaveBeenCalled();
   });
 
-  it("records per-tweet failures after sending the visibility reply", async () => {
+  it("records per-tweet failures without stopping the webhook batch", async () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn(async () => {
       throw new Error("No Cassie settings found for user user_1.");
     });
-    const replyToPost = vi.fn(async () => ({ id: "reply_1", text: "hi" }));
     const product = { createMentionRun } as unknown as CassieProduct;
     const payload = {
       tweet_create_events: [{
@@ -161,7 +152,6 @@ describe("X webhook", () => {
     const first = await processXWebhookPayload({
       product,
       store,
-      replyGateway: { replyToPost },
       userId: "user_1",
       cassieHandle: "cassiedottrade",
       payload,
@@ -169,7 +159,6 @@ describe("X webhook", () => {
     const retry = await processXWebhookPayload({
       product,
       store,
-      replyGateway: { replyToPost },
       userId: "user_1",
       cassieHandle: "cassiedottrade",
       payload,
@@ -178,7 +167,6 @@ describe("X webhook", () => {
     expect(first).toMatchObject({
       received: 1,
       queued: 0,
-      replied: 1,
       skipped: 0,
       failed: 1,
       errors: [{ postId: "tweet_1", error: "No Cassie settings found for user user_1." }],
@@ -186,11 +174,9 @@ describe("X webhook", () => {
     expect(retry).toMatchObject({
       received: 1,
       queued: 0,
-      replied: 0,
       skipped: 0,
       failed: 1,
     });
-    expect(replyToPost).toHaveBeenCalledTimes(1);
     expect(createMentionRun).toHaveBeenCalledTimes(2);
   });
 });
