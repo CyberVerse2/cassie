@@ -2,11 +2,11 @@
   "tweets": [
     {
       "url": "https://x.com/birdabo/status/2060720402360578345?s=20",
-      "current": true
+      "current": false
     },
     {
       "url": "https://x.com/StockSavvyShay/status/2061307192339530199?s=20",
-      "current": false
+      "current": true
     },
     {
       "url": "https://x.com/datacurve/status/2060834005998793199?s=20",
