@@ -12,7 +12,7 @@
     "test:live": "vitest run --config vitest.live.config.ts",
     "web:dev": "next dev apps/web",
     "web:build": "next build apps/web && cp -R apps/web/public apps/web/.next/standalone/apps/web/public && cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static",
-    "web:start": "node apps/web/.next/standalone/apps/web/server.js",
+    "web:start": "node --import dotenv/config apps/web/.next/standalone/apps/web/server.js",
     "worker": "tsx src/worker.ts",
     "cli": "tsx src/cli.ts",
     "hyperliquid:approve-builder": "tsx scripts/approve-hyperliquid-builder-fee.ts",
