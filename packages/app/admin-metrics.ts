@@ -2,6 +2,7 @@ import type {
   ControlRun,
   ControlRunStatus,
   ExecutionJob,
+  Position,
   RunStep,
   TradeTicket,
 } from "../core/schemas/index.ts";
@@ -427,6 +428,7 @@ export interface AdminRunDetailInput {
   steps: RunStep[];
   tickets: TradeTicket[];
   jobs: ExecutionJob[];
+  positions: Position[];
   modelCalls: AdminRunModelCall[];
 }
 
@@ -452,14 +454,55 @@ export interface AdminRunTicketDetail {
   instrument: string;
   side: string;
   sizeUsd: number;
+  orderType: string | null;
   thesis: string;
+  exitPlan: {
+    takeProfitPct: number;
+    stopLossPct: number;
+    maxHoldDays: number;
+    thesis: string;
+    invalidationSignals: string[];
+  } | null;
   job: {
     jobId: string;
     status: ExecutionJob["status"];
+    createdAt: string;
+    updatedAt: string;
     failureReason: string | null;
     filledSizeUsd: number | null;
     averagePrice: number | null;
     venueOrderId: string | null;
+  } | null;
+  position: {
+    positionId: string;
+    status: Position["status"];
+    filledSizeUsd: number;
+    entryPrice: number | null;
+    currentMarkPrice: number | null;
+    currentValueUsd: number;
+    unrealizedPnlUsd: number;
+    unrealizedPnlPct: number;
+    openedAt: string;
+    updatedAt: string;
+    closedAt: string | null;
+    failureReason: string | null;
+    closeExecutionJobId: string | null;
+  } | null;
+}
+
+export interface AdminTicketDetail extends AdminRunTicketDetail {
+  run: {
+    runId: string;
+    status: ControlRunStatus;
+    userCommand: string;
+    createdAt: string;
+    sourcePost: {
+      authorHandle: string | null;
+      authorName: string | null;
+      text: string;
+      url: string | null;
+      createdAt: string | null;
+    };
   } | null;
 }
 
@@ -505,6 +548,102 @@ function durationMs(startedAt: string, completedAt: string | null): number | nul
   return Math.max(0, end - start);
 }
 
+function latestExecutionJob(jobs: ExecutionJob[]): ExecutionJob | null {
+  return jobs.reduce<ExecutionJob | null>((latest, job) => {
+    if (!latest || job.updatedAt > latest.updatedAt) return job;
+    return latest;
+  }, null);
+}
+
+function latestPosition(positions: Position[]): Position | null {
+  return positions.reduce<Position | null>((latest, position) => {
+    if (!latest || position.updatedAt > latest.updatedAt) return position;
+    return latest;
+  }, null);
+}
+
+function buildTicketDetailFields(
+  ticket: TradeTicket,
+  jobs: ExecutionJob[],
+  positions: Position[],
+): AdminRunTicketDetail {
+  const job = latestExecutionJob(jobs);
+  const position = latestPosition(positions);
+  return {
+    ticketId: ticket.ticketId,
+    venue: ticket.venue,
+    instrument: ticket.instrument,
+    side: ticket.side,
+    sizeUsd: ticket.sizeUsd,
+    orderType: ticket.orderType ?? null,
+    thesis: ticket.thesis,
+    exitPlan: ticket.exitPlan
+      ? {
+          takeProfitPct: ticket.exitPlan.takeProfitPct,
+          stopLossPct: ticket.exitPlan.stopLossPct,
+          maxHoldDays: ticket.exitPlan.maxHoldDays,
+          thesis: ticket.exitPlan.thesis,
+          invalidationSignals: ticket.exitPlan.invalidationSignals,
+        }
+      : null,
+    job: job
+      ? {
+          jobId: job.jobId,
+          status: job.status,
+          createdAt: job.createdAt,
+          updatedAt: job.updatedAt,
+          failureReason: job.failureReason ?? null,
+          filledSizeUsd: job.executionResult?.filledSizeUsd ?? null,
+          averagePrice: job.executionResult?.averagePrice ?? null,
+          venueOrderId: job.executionResult?.venueOrderId ?? null,
+        }
+      : null,
+    position: position
+      ? {
+          positionId: position.positionId,
+          status: position.status,
+          filledSizeUsd: position.filledSizeUsd,
+          entryPrice: position.entryPrice,
+          currentMarkPrice: position.currentMarkPrice,
+          currentValueUsd: position.currentValueUsd,
+          unrealizedPnlUsd: position.unrealizedPnlUsd,
+          unrealizedPnlPct: position.unrealizedPnlPct,
+          openedAt: position.openedAt,
+          updatedAt: position.updatedAt,
+          closedAt: position.closedAt,
+          failureReason: position.failureReason,
+          closeExecutionJobId: position.closeExecutionJobId,
+        }
+      : null,
+  };
+}
+
+export function buildTicketDetail(input: {
+  ticket: TradeTicket;
+  jobs: ExecutionJob[];
+  positions: Position[];
+  run: ControlRun | null;
+}): AdminTicketDetail {
+  return {
+    ...buildTicketDetailFields(input.ticket, input.jobs, input.positions),
+    run: input.run
+      ? {
+          runId: input.run.runId,
+          status: input.run.status,
+          userCommand: input.run.userCommand,
+          createdAt: input.run.createdAt,
+          sourcePost: {
+            authorHandle: input.run.sourcePost.authorHandle,
+            authorName: input.run.sourcePost.authorName,
+            text: input.run.sourcePost.text,
+            url: input.run.sourcePost.url,
+            createdAt: input.run.sourcePost.createdAt,
+          },
+        }
+      : null,
+  };
+}
+
 export function buildRunDetail(input: AdminRunDetailInput): AdminRunDetail {
   const { run } = input;
   const result = readSupervisorResult(run.result);
@@ -538,26 +677,20 @@ export function buildRunDetail(input: AdminRunDetailInput): AdminRunDetail {
     }
   }
 
+  const positionByTicketId = new Map<string, Position>();
+  for (const position of input.positions) {
+    const existing = positionByTicketId.get(position.ticketId);
+    if (!existing || position.updatedAt > existing.updatedAt) {
+      positionByTicketId.set(position.ticketId, position);
+    }
+  }
+
   const tickets: AdminRunTicketDetail[] = input.tickets.map((ticket) => {
-    const job = jobByTicketId.get(ticket.ticketId) ?? null;
-    return {
-      ticketId: ticket.ticketId,
-      venue: ticket.venue,
-      instrument: ticket.instrument,
-      side: ticket.side,
-      sizeUsd: ticket.sizeUsd,
-      thesis: ticket.thesis,
-      job: job
-        ? {
-            jobId: job.jobId,
-            status: job.status,
-            failureReason: job.failureReason ?? null,
-            filledSizeUsd: job.executionResult?.filledSizeUsd ?? null,
-            averagePrice: job.executionResult?.averagePrice ?? null,
-            venueOrderId: job.executionResult?.venueOrderId ?? null,
-          }
-        : null,
-    };
+    return buildTicketDetailFields(
+      ticket,
+      jobByTicketId.has(ticket.ticketId) ? [jobByTicketId.get(ticket.ticketId)!] : [],
+      positionByTicketId.has(ticket.ticketId) ? [positionByTicketId.get(ticket.ticketId)!] : [],
+    );
   });
 
   const modelCalls = [...input.modelCalls].sort((a, b) => a.createdAt.localeCompare(b.createdAt));

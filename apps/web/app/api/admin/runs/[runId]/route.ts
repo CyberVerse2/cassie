@@ -6,6 +6,7 @@ import {
   controlRuns,
   executionJobs,
   modelCallUsage,
+  positions,
   runSteps,
   tradeTickets,
 } from "../../../../../../../packages/core/db/schema";
@@ -36,6 +37,9 @@ export async function GET(request: Request, context: { params: Promise<{ runId: 
     const jobRows = ticketIds.length
       ? await db.select().from(executionJobs).where(inArray(executionJobs.ticketId, ticketIds))
       : [];
+    const positionRows = ticketIds.length
+      ? await db.select().from(positions).where(inArray(positions.ticketId, ticketIds))
+      : [];
 
     const detail = buildRunDetail({
       run: { ...runRow, result: runRow.result ?? null },
@@ -47,6 +51,7 @@ export async function GET(request: Request, context: { params: Promise<{ runId: 
       })),
       tickets,
       jobs: jobRows.map((row) => row.job),
+      positions: positionRows.map((row) => row.position),
       modelCalls: modelRows.map((row) => ({
         id: row.id,
         purpose: row.purpose,

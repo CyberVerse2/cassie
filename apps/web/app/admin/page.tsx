@@ -8,6 +8,7 @@ import type {
   AdminRunDetail,
   AdminRunStepDetail,
   AdminRunRow,
+  AdminTicketDetail,
   AdminTradeRow,
   AdminUserRow,
 } from "../../../../packages/app/admin-metrics";
@@ -16,6 +17,10 @@ import s from "./admin.module.css";
 const TOKEN_KEY = "cassie_admin_token";
 
 type TabKey = "overview" | "users" | "runs" | "trades" | "ops";
+type SelectedRunDetail = {
+  runId: string;
+  ticketId: string | null;
+};
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: "overview", label: "Overview" },
@@ -87,7 +92,8 @@ function AdminConsole({ token, onSignOut }: { token: string; onSignOut: () => vo
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedRun, setSelectedRun] = useState<SelectedRunDetail | null>(null);
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -167,14 +173,22 @@ function AdminConsole({ token, onSignOut }: { token: string; onSignOut: () => vo
           {!data && loading ? <div className={s.empty}>Loading admin data…</div> : null}
           {data && tab === "overview" ? <OverviewView overview={data.overview} /> : null}
           {data && tab === "users" ? <UsersView users={data.users} /> : null}
-          {data && tab === "runs" ? <RunsView runs={data.runs} onSelectRun={setSelectedRunId} /> : null}
-          {data && tab === "trades" ? <TradesView trades={data.trades} onSelectRun={setSelectedRunId} /> : null}
+          {data && tab === "runs" ? <RunsView runs={data.runs} onSelectRun={(runId) => setSelectedRun({ runId, ticketId: null })} /> : null}
+          {data && tab === "trades" ? <TradesView trades={data.trades} onSelectTicket={(trade) => setSelectedTicketId(trade.ticketId)} /> : null}
           {data && tab === "ops" ? <OpsView ops={data.ops} /> : null}
         </div>
       </section>
 
-      {selectedRunId ? (
-        <RunDetailDrawer token={token} runId={selectedRunId} onClose={() => setSelectedRunId(null)} />
+      {selectedRun ? (
+        <RunDetailDrawer
+          token={token}
+          runId={selectedRun.runId}
+          focusedTicketId={selectedRun.ticketId}
+          onClose={() => setSelectedRun(null)}
+        />
+      ) : null}
+      {selectedTicketId ? (
+        <TicketDetailDrawer token={token} ticketId={selectedTicketId} onClose={() => setSelectedTicketId(null)} />
       ) : null}
     </main>
   );
@@ -351,7 +365,7 @@ function RunsView({ runs, onSelectRun }: { runs: AdminRunRow[]; onSelectRun: (ru
   );
 }
 
-function TradesView({ trades, onSelectRun }: { trades: AdminTradeRow[]; onSelectRun: (runId: string) => void }) {
+function TradesView({ trades, onSelectTicket }: { trades: AdminTradeRow[]; onSelectTicket: (trade: AdminTradeRow) => void }) {
   if (trades.length === 0) return <EmptyState label="No trade tickets yet." />;
   return (
     <div className={s.tableWrap}>
@@ -371,20 +385,20 @@ function TradesView({ trades, onSelectRun }: { trades: AdminTradeRow[]; onSelect
         </thead>
         <tbody>
           {trades.map((trade) => {
-            const canOpenRun = Boolean(trade.runId);
+            const canOpenTicket = Boolean(trade.ticketId);
             return (
             <tr
               key={trade.ticketId}
-              className={canOpenRun ? s.clickRow : undefined}
-              tabIndex={canOpenRun ? 0 : undefined}
-              role={canOpenRun ? "button" : undefined}
-              aria-label={canOpenRun ? `Open run for ticket ${trade.ticketId}` : undefined}
-              onClick={canOpenRun ? () => onSelectRun(trade.runId!) : undefined}
-              onKeyDown={canOpenRun
+              className={canOpenTicket ? s.clickRow : undefined}
+              tabIndex={canOpenTicket ? 0 : undefined}
+              role={canOpenTicket ? "button" : undefined}
+              aria-label={canOpenTicket ? `Open execution detail for ticket ${trade.ticketId}` : undefined}
+              onClick={canOpenTicket ? () => onSelectTicket(trade) : undefined}
+              onKeyDown={canOpenTicket
                 ? (event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelectRun(trade.runId!);
+                      onSelectTicket(trade);
                     }
                   }
                 : undefined}
@@ -406,12 +420,87 @@ function TradesView({ trades, onSelectRun }: { trades: AdminTradeRow[]; onSelect
               )}
               </td>
               <td>{trade.failureReason ? <span className={s.failText} title={trade.failureReason}>{truncate(trade.failureReason, 56)}</span> : <span className={s.muted}>—</span>}</td>
-              <td className={s.rowChevron} aria-hidden>{canOpenRun ? "›" : ""}</td>
+              <td className={s.rowChevron} aria-hidden>{canOpenTicket ? "›" : ""}</td>
             </tr>
             );
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+function TicketDetailDrawer({
+  token,
+  ticketId,
+  onClose,
+}: {
+  token: string;
+  ticketId: string;
+  onClose: () => void;
+}) {
+  const [detail, setDetail] = useState<AdminTicketDetail | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    setDetail(null);
+    (async () => {
+      try {
+        const response = await fetch(`/api/admin/tickets/${encodeURIComponent(ticketId)}`, {
+          headers: { authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload?.error ?? "Failed to load ticket.");
+        if (!cancelled) setDetail(payload as AdminTicketDetail);
+      } catch (caught) {
+        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught));
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [ticketId, token]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <div className={s.drawerOverlay} onClick={onClose} role="presentation">
+      <aside
+        className={s.drawer}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Ticket execution detail"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className={s.drawerHead}>
+          <div className={s.drawerTitleWrap}>
+            <span className={s.drawerEyebrow}>Ticket execution</span>
+            <code className={s.drawerId}>{ticketId}</code>
+          </div>
+          <button type="button" className={s.drawerClose} onClick={onClose} aria-label="Close">
+            ✕
+          </button>
+        </header>
+
+        <div className={s.drawerBody}>
+          {loading ? <div className={s.empty}>Loading ticket…</div> : null}
+          {error ? <div className={s.banner}>{error}</div> : null}
+          {detail ? <FocusedTicketDetail detail={detail} ticket={detail} /> : null}
+        </div>
+      </aside>
     </div>
   );
 }
@@ -520,10 +609,12 @@ function OpsView({ ops }: { ops: AdminOps }) {
 function RunDetailDrawer({
   token,
   runId,
+  focusedTicketId,
   onClose,
 }: {
   token: string;
   runId: string;
+  focusedTicketId: string | null;
   onClose: () => void;
 }) {
   const [detail, setDetail] = useState<AdminRunDetail | null>(null);
@@ -574,8 +665,8 @@ function RunDetailDrawer({
       >
         <header className={s.drawerHead}>
           <div className={s.drawerTitleWrap}>
-            <span className={s.drawerEyebrow}>Run</span>
-            <code className={s.drawerId}>{runId}</code>
+            <span className={s.drawerEyebrow}>{focusedTicketId ? "Ticket execution" : "Run"}</span>
+            <code className={s.drawerId}>{focusedTicketId ?? runId}</code>
           </div>
           <button type="button" className={s.drawerClose} onClick={onClose} aria-label="Close">
             ✕
@@ -585,14 +676,30 @@ function RunDetailDrawer({
         <div className={s.drawerBody}>
           {loading ? <div className={s.empty}>Loading run…</div> : null}
           {error ? <div className={s.banner}>{error}</div> : null}
-          {detail ? <RunDetailBody detail={detail} /> : null}
+          {detail ? <RunDetailBody detail={detail} focusedTicketId={focusedTicketId} /> : null}
         </div>
       </aside>
     </div>
   );
 }
 
-function RunDetailBody({ detail }: { detail: AdminRunDetail }) {
+function RunDetailBody({ detail, focusedTicketId }: { detail: AdminRunDetail; focusedTicketId: string | null }) {
+  const focusedTicket = focusedTicketId
+    ? detail.tickets.find((ticket) => ticket.ticketId === focusedTicketId) ?? null
+    : null;
+
+  if (focusedTicketId) {
+    return (
+      <div className={s.detailStack}>
+        {focusedTicket ? <FocusedTicketDetail detail={detail} ticket={focusedTicket} /> : (
+          <section className={s.detailSection}>
+            <div className={s.detailError}>Ticket {focusedTicketId} was not found on this run.</div>
+          </section>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div className={s.detailStack}>
       <section className={s.detailSection}>
@@ -720,6 +827,97 @@ function RunDetailBody({ detail }: { detail: AdminRunDetail }) {
   );
 }
 
+function FocusedTicketDetail({
+  detail,
+  ticket,
+}: {
+  detail: AdminRunDetail | AdminTicketDetail;
+  ticket: AdminRunDetail["tickets"][number] | AdminTicketDetail;
+}) {
+  const runId = "runId" in detail ? detail.runId : detail.run?.runId ?? null;
+  return (
+    <>
+      <section className={s.detailSection}>
+        <div className={s.detailTopRow}>
+          {ticket.job ? <StatusBadge status={ticket.job.status} /> : <span className={s.badge + " " + s.badgeMuted}>No job</span>}
+          <span className={s.detailMetaItem}>{ticket.venue}</span>
+          <span className={s.detailMetaItem}>{ticket.instrument}</span>
+          <span className={s.detailMetaItem}>{prettify(ticket.side)}</span>
+        </div>
+        <div className={s.detailKvGrid}>
+          <div className={s.detailKv}><span className={s.detailK}>Size</span><span>{formatUsd(ticket.sizeUsd)}</span></div>
+          <div className={s.detailKv}><span className={s.detailK}>Order</span><span>{ticket.orderType ? prettify(ticket.orderType) : "—"}</span></div>
+          <div className={s.detailKv}><span className={s.detailK}>Run</span><span>{runId ? <code className={s.mono}>{shortId(runId)}</code> : "—"}</span></div>
+        </div>
+        <p className={s.detailSummary}>{ticket.thesis}</p>
+      </section>
+
+      <section className={s.detailSection}>
+        <h3 className={s.detailHeading}>Execution</h3>
+        {ticket.job ? (
+          <>
+            <div className={s.detailKvGrid}>
+              <div className={s.detailKv}><span className={s.detailK}>Job</span><code className={s.mono}>{shortId(ticket.job.jobId)}</code></div>
+              <div className={s.detailKv}><span className={s.detailK}>Queued</span><span>{formatRelative(ticket.job.createdAt)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Updated</span><span>{formatRelative(ticket.job.updatedAt)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Filled</span><span>{ticket.job.filledSizeUsd != null ? formatUsd(ticket.job.filledSizeUsd) : "—"}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Average price</span><span>{formatNullablePrice(ticket.job.averagePrice)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Venue order</span><span>{ticket.job.venueOrderId ? <code className={s.mono}>{shortId(ticket.job.venueOrderId)}</code> : "—"}</span></div>
+            </div>
+            {ticket.job.failureReason ? <div className={s.detailError}>{ticket.job.failureReason}</div> : null}
+          </>
+        ) : (
+          <EmptyState label="No execution job has been queued for this ticket." />
+        )}
+      </section>
+
+      <section className={s.detailSection}>
+        <h3 className={s.detailHeading}>Position</h3>
+        {ticket.position ? (
+          <>
+            <div className={s.detailKvGrid}>
+              <div className={s.detailKv}><span className={s.detailK}>Position</span><code className={s.mono}>{shortId(ticket.position.positionId)}</code></div>
+              <div className={s.detailKv}><span className={s.detailK}>Status</span><StatusBadge status={ticket.position.status} /></div>
+              <div className={s.detailKv}><span className={s.detailK}>Filled</span><span>{formatUsd(ticket.position.filledSizeUsd)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Entry</span><span>{formatNullablePrice(ticket.position.entryPrice)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Mark</span><span>{formatNullablePrice(ticket.position.currentMarkPrice)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Value</span><span>{formatUsd(ticket.position.currentValueUsd)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>PnL</span><span>{formatSignedUsd(ticket.position.unrealizedPnlUsd)} ({formatSignedPct(ticket.position.unrealizedPnlPct)})</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Opened</span><span>{formatRelative(ticket.position.openedAt)}</span></div>
+            </div>
+            {ticket.position.failureReason ? <div className={s.detailError}>{ticket.position.failureReason}</div> : null}
+          </>
+        ) : (
+          <EmptyState label={ticket.job?.status === "succeeded" ? "Execution returned no position." : "No position has been opened for this ticket."} />
+        )}
+      </section>
+
+      <section className={s.detailSection}>
+        <h3 className={s.detailHeading}>Exit plan</h3>
+        {ticket.exitPlan ? (
+          <>
+            <div className={s.detailKvGrid}>
+              <div className={s.detailKv}><span className={s.detailK}>Take profit</span><span>{formatSignedPct(ticket.exitPlan.takeProfitPct)}</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Stop loss</span><span>-{ticket.exitPlan.stopLossPct.toFixed(2)}%</span></div>
+              <div className={s.detailKv}><span className={s.detailK}>Max hold</span><span>{ticket.exitPlan.maxHoldDays}d</span></div>
+            </div>
+            <p className={s.detailSummary}>{ticket.exitPlan.thesis}</p>
+            {ticket.exitPlan.invalidationSignals.length > 0 ? (
+              <ul className={s.detailWarnings}>
+                {ticket.exitPlan.invalidationSignals.map((signal) => (
+                  <li key={signal}>{signal}</li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        ) : (
+          <div className={s.detailError}>Exit plan is missing from this ticket record.</div>
+        )}
+      </section>
+    </>
+  );
+}
+
 function StepItem({ step }: { step: AdminRunStepDetail }) {
   const [open, setOpen] = useState(false);
   const hasBody = step.input != null || step.output != null || (step.thinkingTrace?.length ?? 0) > 0 || step.error != null;
@@ -837,6 +1035,21 @@ function formatUsd(value: number): string {
   if (!Number.isFinite(value)) return "$0";
   if (Math.abs(value) >= 1000) return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`;
   return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function formatSignedUsd(value: number): string {
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}${formatUsd(Math.abs(value))}`;
+}
+
+function formatSignedPct(value: number): string {
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}${Math.abs(value).toFixed(2)}%`;
+}
+
+function formatNullablePrice(value: number | null): string {
+  if (value == null) return "—";
+  return value.toLocaleString(undefined, { maximumFractionDigits: 6 });
 }
 
 function formatTokens(value: number): string {
