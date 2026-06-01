@@ -2,9 +2,13 @@ import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { selectNextTweetUrl } from "../packages/helpers/tweet-round-robin.ts";
+import { DEFAULT_TEST_RUN_TWEETS_PATH, selectNextTweetUrl } from "../packages/helpers/tweet-round-robin.ts";
 
 describe("tweet round robin", () => {
+  it("uses the CLI tweet fixture as the default round-robin source", () => {
+    expect(DEFAULT_TEST_RUN_TWEETS_PATH.endsWith("/docs/cli-run-tweets.json")).toBe(true);
+  });
+
   it("selects the current tweet and advances the persisted cursor", async () => {
     const dir = await mkdtemp(join(tmpdir(), "cassie-tweets-"));
     const filePath = join(dir, "tweets.json");

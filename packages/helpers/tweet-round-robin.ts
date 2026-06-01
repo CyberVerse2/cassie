@@ -2,7 +2,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 export const DEFAULT_TEST_RUN_TWEETS_PATH = fileURLToPath(
-  new URL("../../docs/test-run-tweets.json", import.meta.url),
+  new URL("../../docs/cli-run-tweets.json", import.meta.url),
 );
 
 type TweetEntry = {
