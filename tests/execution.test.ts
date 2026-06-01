@@ -403,6 +403,37 @@ describe("treasury-prefunded execution", () => {
     expect(state.positions).toEqual([]);
   });
 
+  it("persists execution-client setup failures instead of leaving jobs running", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
+    const getExecutionClient = vi.fn(() => {
+      throw new Error("execution client unavailable");
+    });
+
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({
+      jobId: job.jobId,
+      store,
+      getExecutionClient,
+      walletGateway,
+    });
+
+    expect(result).toMatchObject({
+      status: "failed",
+      failureReason: "execution client unavailable",
+    });
+    expect(getExecutionClient).toHaveBeenCalledOnce();
+    expect(walletGateway.getUsdcBalanceUsd).not.toHaveBeenCalled();
+    await expect(store.getExecutionJob(job.jobId)).resolves.toMatchObject({
+      status: "failed",
+      failureReason: "execution client unavailable",
+    });
+  });
+
   it("blocks execution before wallet movement when the ticket has no exit plan", async () => {
     const store = new InMemoryCassieStore();
     const legacyTicket = { ...ticket };

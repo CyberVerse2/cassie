@@ -47,7 +47,6 @@ DEEPSEEK_API_KEY
 OPENAI_API_KEY
 GEMINI_API_KEY
 XAI_API_KEY
-EXECUTION_WEBHOOK_URL
 ```
 
 Missing database, AI, market, or execution credentials fail clearly. Cassie does not downgrade semantic routing, persistence, or execution into local keyword behavior or fake fills.

@@ -1,8 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { config } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import { MissingConnectorConfigError } from "../core/helpers/connector-errors.ts";
 import {
   TradeTicketSchema,
   type ExecutionFundingSource,
@@ -13,7 +11,7 @@ import {
 } from "../core/schemas/index.ts";
 import { PrivyAdapter, type PrivyWalletGateway, type WalletUsdcTransfer } from "../adapters/privy/index.ts";
 import {
-  WebhookExecutionClient,
+  VenueExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
 import {
@@ -33,6 +31,7 @@ export async function executeExecutionJob(input: {
   jobId: string;
   store?: CassieStore;
   executionClient?: ExecutionClient;
+  getExecutionClient?: () => ExecutionClient;
   walletGateway?: Pick<
     PrivyWalletGateway,
     "getUsdcBalanceUsd" | "getTreasuryWalletAddress" | "transferUserUsdcToTreasury" | "refundUserUsdcFromTreasury"
@@ -58,7 +57,6 @@ export async function executeExecutionJob(input: {
   }
 
   let job = await store.updateExecutionJob(markExecutionRunning(jobToRun));
-  const executionClient = input.executionClient ?? defaultExecutionClient();
   const walletGateway = input.walletGateway ?? new PrivyAdapter();
   let funding: ExecutionFundingSource | null = null;
   let reservedWalletBalanceUsd: number | null = null;
@@ -69,6 +67,7 @@ export async function executeExecutionJob(input: {
 
   try {
     validateExecutableTicket(ticket);
+    const executionClient = input.executionClient ?? (input.getExecutionClient ?? defaultExecutionClient)();
     settings = await requiredUserSettings(store, ticket.userId);
     const walletBalanceUsd = await walletGateway.getUsdcBalanceUsd(settings.privyWalletId!);
     await store.reserveWalletSpend({
@@ -219,10 +218,7 @@ export async function queueExecutionJob(input: {
 }
 
 function defaultExecutionClient(): ExecutionClient {
-  if (!config.execution.webhookUrl) {
-    throw new MissingConnectorConfigError("Treasury execution", "EXECUTION_WEBHOOK_URL");
-  }
-  return new WebhookExecutionClient();
+  return new VenueExecutionClient();
 }
 
 function validateExecutableTicket(ticket: TradeTicket): void {
