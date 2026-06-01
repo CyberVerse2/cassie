@@ -13,6 +13,7 @@
     "web:dev": "next dev apps/web",
     "web:build": "next build apps/web && cp -R apps/web/public apps/web/.next/standalone/apps/web/public && cp -R apps/web/.next/static apps/web/.next/standalone/apps/web/.next/static",
     "web:start": "node --import dotenv/config apps/web/.next/standalone/apps/web/server.js",
+    "og:trade": "tsx scripts/capture-og.ts",
     "worker": "tsx src/worker.ts",
     "cli": "tsx src/cli.ts",
     "hyperliquid:approve-builder": "tsx scripts/approve-hyperliquid-builder-fee.ts",
@@ -55,6 +56,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "drizzle-kit": "^0.31.10",
+    "playwright": "^1.60.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   }

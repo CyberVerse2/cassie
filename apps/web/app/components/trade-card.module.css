@@ -1,0 +1,477 @@
+/* --- Trade result / PnL share card ---------------------------
+   Black & gold to match the app's terminal theme. Fixed 1690x944
+   design, scaled fluidly via container-query units (1cqw = 1% of
+   the card's width) so every measure stays in proportion. */
+
+.frame {
+  /* local palette - black panels, brass trim, cream ink */
+  --tc-bg: oklch(0.08 0.006 90);
+  --tc-panel: oklch(0.165 0.008 92);
+  --tc-panel-2: oklch(0.205 0.01 92);
+  --tc-ink: oklch(0.94 0.013 88);
+  --tc-ink-soft: oklch(0.78 0.016 86);
+  --tc-ink-mute: oklch(0.6 0.016 86);
+  --tc-gilt: oklch(0.82 0.12 84);
+  --tc-gilt-soft: oklch(0.72 0.1 82);
+  --tc-gilt-glow: oklch(0.88 0.1 86);
+  --tc-gilt-deep: oklch(0.6 0.1 76);
+  /* functional result accent: green = gain, red = loss */
+  --tc-up: oklch(0.74 0.16 157);
+  --tc-down: oklch(0.68 0.17 28);
+  --tc-result: var(--tc-up);
+  --tc-line: var(--tc-result);
+  --tc-mono: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+
+  position: relative;
+  width: min(1080px, 96vw);
+  aspect-ratio: 1690 / 944;
+  padding: 1.05%;
+  border-radius: 26px;
+  background:
+    radial-gradient(140% 120% at 88% 2%, color-mix(in oklab, var(--tc-gilt) 16%, transparent) 0%, transparent 48%),
+    linear-gradient(160deg, oklch(0.12 0.01 88) 0%, var(--tc-bg) 46%, #050402 100%);
+  border: 1px solid color-mix(in oklab, var(--tc-gilt) 36%, transparent);
+  box-shadow:
+    0 40px 130px -42px oklch(0 0 0 / 0.88),
+    inset 0 0 0 1px oklch(0 0 0 / 0.5),
+    inset 0 1px 0 color-mix(in oklab, var(--tc-gilt) 14%, transparent);
+}
+
+.frame[data-positive="false"] {
+  --tc-result: var(--tc-down);
+}
+
+.card {
+  container-type: inline-size;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: 18px;
+  background:
+    radial-gradient(62% 84% at 84% 10%, color-mix(in oklab, var(--tc-gilt) 14%, transparent) 0%, transparent 56%),
+    radial-gradient(46% 56% at 10% 98%, color-mix(in oklab, var(--tc-gilt) 5%, transparent) 0%, transparent 60%),
+    linear-gradient(158deg, oklch(0.13 0.01 90) 0%, oklch(0.09 0.007 90) 58%, #050402 100%);
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+/* shared panel surface */
+.tweet,
+.pnl,
+.market {
+  background: linear-gradient(165deg, var(--tc-panel) 0%, oklch(0.13 0.007 92) 100%);
+  border: 1px solid color-mix(in oklab, var(--tc-gilt) 30%, transparent);
+  box-shadow:
+    0 2cqw 4.2cqw -1.4cqw oklch(0 0 0 / 0.7),
+    inset 0 1px 0 color-mix(in oklab, var(--tc-gilt) 12%, transparent);
+}
+
+/* -- contained chart (inside the PnL card) ----------------- */
+.pnlChartWrap {
+  width: 100%;
+  margin-top: 1.6cqw;
+  border-radius: 1cqw;
+  background:
+    radial-gradient(80% 120% at 50% 0%, color-mix(in oklab, var(--tc-result) 9%, transparent) 0%, transparent 60%),
+    color-mix(in oklab, var(--tc-bg) 60%, #000);
+  border: 1px solid color-mix(in oklab, var(--tc-gilt) 16%, transparent);
+}
+
+.pnlChart {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1000 / 560;
+}
+
+.baseline {
+  stroke: color-mix(in oklab, var(--tc-gilt) 32%, transparent);
+  stroke-width: 1.4;
+  stroke-dasharray: 4 8;
+}
+
+.areaFill {
+  fill: var(--tc-result);
+  opacity: 0.14;
+}
+
+.line {
+  fill: none;
+  stroke: var(--tc-line);
+  stroke-width: 5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 9px color-mix(in oklab, var(--tc-result) 60%, transparent));
+}
+
+.node {
+  fill: oklch(0.98 0.015 150);
+  stroke: var(--tc-line);
+  stroke-width: 4;
+}
+
+.nodeMajor {
+  fill: oklch(0.99 0.01 150);
+  stroke: var(--tc-line);
+  stroke-width: 5;
+  filter: drop-shadow(0 0 7px color-mix(in oklab, var(--tc-result) 70%, transparent));
+}
+
+.nodeLabel {
+  fill: var(--tc-ink);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+/* -- brand ------------------------------------------------- */
+.brand {
+  position: absolute;
+  top: 2.6%;
+  left: 3.2%;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.9cqw;
+}
+
+.brandLogo {
+  height: 4.6cqw;
+  width: auto;
+  object-fit: contain;
+  /* tint the dark transparent mark to brass + soft glow */
+  filter:
+    invert(1) sepia(0.5) saturate(2.6) hue-rotate(-12deg) brightness(1.04)
+    drop-shadow(0 0 12px color-mix(in oklab, var(--tc-gilt) 45%, transparent))
+    drop-shadow(0 0 40px color-mix(in oklab, var(--tc-gilt) 20%, transparent));
+}
+
+.brandWord {
+  font-family: var(--font-display), Georgia, serif;
+  font-style: italic;
+  font-weight: 500;
+  font-size: 3.2cqw;
+  line-height: 1;
+  letter-spacing: -0.01em;
+  background: linear-gradient(125deg, var(--tc-gilt) 0%, var(--tc-gilt-glow) 52%, var(--tc-gilt-soft) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 1px 9px color-mix(in oklab, var(--tc-gilt) 36%, transparent));
+}
+
+/* -- source tweet ------------------------------------------ */
+.tweet {
+  position: absolute;
+  top: 15.5%;
+  left: 3.8%;
+  width: 49.5%;
+  padding: 2.1cqw 2.4cqw 2.4cqw;
+  border-radius: 1.5cqw;
+  box-shadow: none;
+}
+
+.tweetHead {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1cqw;
+  align-items: center;
+  margin-bottom: 1.6cqw;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 3.5cqw;
+  height: 3.5cqw;
+  border-radius: 50%;
+  object-fit: cover;
+  background: linear-gradient(145deg, var(--tc-gilt) 0%, var(--tc-gilt-deep) 100%);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--tc-gilt) 40%, transparent);
+  color: oklch(0.18 0.01 80);
+  font-size: 1.3cqw;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.tweetId {
+  display: grid;
+  gap: 0.15cqw;
+  min-width: 0;
+}
+
+.tweetName {
+  font-size: 1.55cqw;
+  font-weight: 700;
+  color: var(--tc-ink);
+  letter-spacing: -0.01em;
+}
+
+.tweetDate {
+  font-size: 1.05cqw;
+  color: var(--tc-ink-mute);
+}
+
+.headline {
+  margin: 0 0 1.7cqw;
+  font-family: var(--font-display), Georgia, serif;
+  font-weight: 500;
+  font-size: 2.55cqw;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  color: var(--tc-ink);
+}
+
+.thesis {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+}
+
+.thesisRow {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1.2cqw;
+  align-items: center;
+  padding: 1.1cqw 0;
+  border-top: 1px dashed color-mix(in oklab, var(--tc-gilt) 22%, transparent);
+}
+
+.thesisRow:first-child {
+  border-top: none;
+  padding-top: 0.3cqw;
+}
+
+.thesisNum {
+  display: grid;
+  place-items: center;
+  width: 2.2cqw;
+  height: 2.2cqw;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in oklab, var(--tc-gilt) 70%, transparent);
+  color: var(--tc-gilt);
+  font-size: 1.2cqw;
+  font-weight: 600;
+}
+
+.thesisText {
+  font-size: 1.5cqw;
+  line-height: 1.35;
+  color: var(--tc-ink-soft);
+}
+
+.thesisText b {
+  color: var(--tc-ink);
+  font-weight: 700;
+}
+
+/* -- realized pnl + contained chart ------------------------ */
+.pnl {
+  position: absolute;
+  top: 15.5%;
+  right: 3.5%;
+  width: 41%;
+  display: flex;
+  flex-direction: column;
+  padding: 2.2cqw 2.4cqw 2.4cqw;
+  border-radius: 1.5cqw;
+  border-color: color-mix(in oklab, var(--tc-gilt) 46%, transparent);
+}
+
+.pnlHead {
+  flex-shrink: 0;
+}
+
+.pnlLabel {
+  display: block;
+  font-size: 1.12cqw;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--tc-gilt-soft);
+}
+
+.pnlValue {
+  margin: 0.5cqw 0 0.9cqw;
+  font-weight: 700;
+  font-size: 5.6cqw;
+  line-height: 0.92;
+  letter-spacing: -0.03em;
+  color: var(--tc-result);
+  text-shadow: 0 0 26px color-mix(in oklab, var(--tc-result) 30%, transparent);
+}
+
+.pnlSub {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  margin-bottom: 1.5cqw;
+}
+
+.sideBadge {
+  display: inline-grid;
+  place-items: center;
+  padding: 0.4cqw 1.1cqw;
+  border-radius: 0.5cqw;
+  background: var(--tc-result);
+  color: oklch(0.99 0.005 150);
+  font-size: 1.32cqw;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.pnlWhen {
+  font-size: 1.18cqw;
+  color: var(--tc-ink-mute);
+}
+
+/* -- venue / market footer --------------------------------- */
+.market {
+  position: absolute;
+  left: 3.4%;
+  right: 3.4%;
+  bottom: 3%;
+  display: flex;
+  align-items: center;
+  gap: 2cqw;
+  height: 13.6%;
+  padding: 0 2.4cqw;
+  border-radius: 1.4cqw;
+  border-color: color-mix(in oklab, var(--tc-gilt) 40%, transparent);
+}
+
+.venue {
+  display: flex;
+  align-items: center;
+  gap: 1cqw;
+  flex-shrink: 0;
+}
+
+.venueMark {
+  display: block;
+  width: 2.9cqw;
+  height: 2.9cqw;
+  border-radius: 0.7cqw;
+  overflow: hidden;
+  object-fit: cover;
+  box-shadow: 0 0.4cqw 1.1cqw -0.4cqw oklch(0 0 0 / 0.5);
+}
+
+.venueName {
+  font-size: 1.66cqw;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--tc-ink);
+}
+
+.marketMain {
+  display: grid;
+  gap: 0.3cqw;
+  flex: 1;
+  min-width: 0;
+  padding-left: 2cqw;
+  border-left: 1px solid color-mix(in oklab, var(--tc-gilt) 20%, transparent);
+}
+
+.marketCell {
+  display: grid;
+  gap: 0.3cqw;
+  flex-shrink: 0;
+}
+
+.marketKicker {
+  font-size: 0.92cqw;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--tc-gilt-soft);
+}
+
+.marketCell .marketKicker {
+  color: var(--tc-ink-mute);
+}
+
+.marketQuestion {
+  font-family: var(--tc-mono);
+  font-size: 1.78cqw;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--tc-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.marketSide {
+  font-family: var(--tc-mono);
+  font-size: 1.78cqw;
+  font-weight: 700;
+  color: var(--tc-result);
+}
+
+.marketMono {
+  font-family: var(--tc-mono);
+  font-size: 1.78cqw;
+  font-weight: 600;
+  color: var(--tc-ink);
+}
+
+/* -- band variant: PnL hero top-right + full-width chart band -- */
+.pnlStats {
+  position: absolute;
+  top: 15%;
+  right: 4%;
+  width: 40%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.frame[data-variant="band"] .pnlValue {
+  font-size: 8.4cqw;
+  margin: 0.4cqw 0 1cqw;
+}
+
+.frame[data-variant="band"] .pnlSub {
+  justify-content: flex-end;
+  margin-bottom: 0;
+}
+
+.chartBand {
+  position: absolute;
+  left: 3.5%;
+  right: 3.5%;
+  top: 33%;
+  bottom: 16%;
+  z-index: 0; /* sits behind the opaque panels */
+}
+
+.chartBand .pnlChart {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+/* band mode: panels paint above the chart, so the opaque tweet card
+   occludes the line - it never visually crosses the thesis text. */
+.frame[data-variant="band"] .brand,
+.frame[data-variant="band"] .pnlStats,
+.frame[data-variant="band"] .market {
+  z-index: 2;
+}
+
+.frame[data-variant="band"] .tweet {
+  top: 13%;
+  width: 49.5%;
+  z-index: 2;
+}
+
+/* below the card's natural breakpoint, nudge type up for legibility */
+@container (max-width: 560px) {
+  .marketQuestion,
+  .marketSide,
+  .marketMono {
+    font-size: 1.9cqw;
+  }
+}

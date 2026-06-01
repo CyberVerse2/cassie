@@ -11,3 +11,10 @@ export const socialImage = {
   height: 500,
   alt: "Cassie - Turn a tweet into a trade",
 };
+
+export const tradeCardSocialImage = {
+  url: "/og-trade.png",
+  width: 1200,
+  height: 630,
+  alt: "Cassie trade card showing a realized trade result",
+};
