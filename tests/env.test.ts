@@ -218,6 +218,7 @@ describe("Polymarket env", () => {
       DEEPSEEK_API_KEY: "deepseek",
       OPENAI_API_KEY: "openai",
       XAI_API_KEY: "xai",
+      CASSIE_CLI_USER_ID: "did:privy:user_1",
       X_BEARER_TOKEN: "bearer",
       X_CONSUMER_SECRET: "secret",
       CASSIE_X_HANDLE: "cassiedottrade",
@@ -246,6 +247,9 @@ describe("Polymarket env", () => {
       },
       structuredAi: {
         maxRetries: 4,
+      },
+      cli: {
+        userId: "did:privy:user_1",
       },
       x: {
         bearerToken: "bearer",

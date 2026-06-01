@@ -52,6 +52,9 @@ export type CassieRuntimeConfig = {
   structuredAi: {
     maxRetries: number;
   };
+  cli: {
+    userId?: string;
+  };
   database: {
     url?: string;
   };
@@ -161,6 +164,9 @@ export function readCassieConfig(
     ai: readAiProviderEnv(env, aiDefaults),
     structuredAi: {
       maxRetries: numberEnv("CASSIE_STRUCTURED_MAX_RETRIES", 2, env, { integer: true, min: 1 }),
+    },
+    cli: {
+      userId: optionalEnv("CASSIE_CLI_USER_ID", env),
     },
     database: {
       url: optionalEnv("DATABASE_URL", env),

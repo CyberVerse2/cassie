@@ -337,8 +337,9 @@ function userIdFromArgs(args: ParsedArgs): string {
 }
 
 function defaultCliUserId(): string {
+  if (config.cli.userId) return config.cli.userId;
   if (config.x.webhookUserId) return config.x.webhookUserId;
-  throw new CliError("CLI default user requires X_WEBHOOK_USER_ID. Set it or pass --user.");
+  throw new CliError("CLI default user requires CASSIE_CLI_USER_ID or X_WEBHOOK_USER_ID. Set one or pass --user.");
 }
 
 async function mentionSourcePostFromArgs(args: ParsedArgs): Promise<SourcePost> {
