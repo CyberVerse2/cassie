@@ -801,14 +801,19 @@ function Center({
                   {position.status}
                 </span>
               </span>
-              <button
-                className={s.watchTradeBtn}
-                type="button"
-                onClick={() => void requestClose(position)}
-                disabled={position.status === "closing" || closingId === position.positionId}
-              >
-                {position.status === "closing" || closingId === position.positionId ? "Closing" : "Close"}
-              </button>
+              <span className={s.tradeActions}>
+                <a className={`${s.watchTradeBtn} ${s.shareTradeBtn}`} href={`/trades/${encodeURIComponent(position.positionId)}`}>
+                  Share
+                </a>
+                <button
+                  className={s.watchTradeBtn}
+                  type="button"
+                  onClick={() => void requestClose(position)}
+                  disabled={position.status === "closing" || closingId === position.positionId}
+                >
+                  {position.status === "closing" || closingId === position.positionId ? "Closing" : "Close"}
+                </button>
+              </span>
             </div>
             );
           })}

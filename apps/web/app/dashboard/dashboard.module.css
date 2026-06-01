@@ -1646,6 +1646,22 @@
   transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
 }
 
+.tradeActions {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.shareTradeBtn {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  background: color-mix(in oklab, var(--panel) 70%, transparent);
+  color: var(--gilt-glow);
+}
+
 .watchTradeBtn:hover {
   filter: brightness(1.06);
   box-shadow:
