@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import tweetRun from "../../../../docs/test-run-tweets.json";
 import { StyledQR } from "../components/styled-qr";
+import type { CassieActivityItem } from "../lib/activity";
 import { type CassiePosition, type CassiePositionReview, useCassieAccount } from "../lib/use-cassie-account";
 import { xHandleFromUrl } from "../lib/x-post";
 import s from "./dashboard.module.css";
@@ -134,109 +135,6 @@ const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
 
 const usdcIcon = "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
 
-type ActivityCommand = "trade" | "watch" | "counter";
-
-type ActivityAsset = {
-  sym: string;
-  amount: string;
-  value: string;
-  icon: string;
-};
-
-type ActivityWatchAsset = {
-  sym: string;
-  icon: string;
-  side: string;
-  sideTone: "long" | "short" | "yes";
-};
-
-type ActivityRow = {
-  time: string;
-  command: ActivityCommand;
-  source: "cassie" | "x";
-  from?: ActivityAsset;
-  to?: ActivityAsset;
-  asset?: ActivityWatchAsset;
-  watchedAt?: string;
-  via?: string;
-};
-
-type ActivityGroup = {
-  date: string;
-  items: ActivityRow[];
-};
-
-const activityFeed: ActivityGroup[] = [
-  {
-    date: "May 26, 2026",
-    items: [
-      {
-        time: "11:18am",
-        command: "trade",
-        source: "x",
-        from: { sym: "USDC", amount: "-91.40", value: "$91.40", icon: usdcIcon },
-        to: { sym: "SOL YES", amount: "+157.59", value: "$91.40", icon: tokenImages.SOL },
-      },
-      {
-        time: "10:42am",
-        command: "watch",
-        source: "x",
-        asset: { sym: "BTC", icon: tokenImages.BTC, side: "LONG", sideTone: "long" },
-        watchedAt: "$101,840",
-        via: "@maya_trades",
-      },
-    ],
-  },
-  {
-    date: "May 25, 2026",
-    items: [
-      {
-        time: "3:14pm",
-        command: "counter",
-        source: "x",
-        from: { sym: "USDC", amount: "-57.80", value: "$57.80", icon: usdcIcon },
-        to: { sym: "FED NO", amount: "+128.44", value: "$57.80", icon: tokenImages.FED },
-      },
-      {
-        time: "1:50pm",
-        command: "trade",
-        source: "x",
-        from: { sym: "USDC", amount: "-124.70", value: "$124.70", icon: usdcIcon },
-        to: { sym: "ETH LONG", amount: "+0.040", value: "$124.70", icon: tokenImages.ETH },
-      },
-    ],
-  },
-  {
-    date: "May 23, 2026",
-    items: [
-      {
-        time: "2:13pm",
-        command: "counter",
-        source: "cassie",
-        from: { sym: "USDC", amount: "-74.20", value: "$74.20", icon: usdcIcon },
-        to: { sym: "BTC SHORT", amount: "+0.0007", value: "$74.20", icon: tokenImages.BTC },
-      },
-      {
-        time: "9:31am",
-        command: "watch",
-        source: "x",
-        asset: { sym: "SOL YES", icon: tokenImages.SOL, side: "YES", sideTone: "yes" },
-        watchedAt: "61¢",
-        via: "@ira_markets",
-      },
-      {
-        time: "8:08am",
-        command: "trade",
-        source: "x",
-        from: { sym: "USDC", amount: "-103.74", value: "$103.74", icon: usdcIcon },
-        to: { sym: "HYPE LONG", amount: "+2.852", value: "$103.74", icon: tokenImages.HYPE },
-      },
-    ],
-  },
-];
-
-const activityItemCount = activityFeed.reduce((n, g) => n + g.items.length, 0);
-
 export default function Dashboard() {
   const account = useCassieAccount();
 
@@ -261,6 +159,7 @@ export default function Dashboard() {
         closePosition={account.closePosition}
         fetchWithdrawals={account.fetchWithdrawals}
         createWithdrawal={account.createWithdrawal}
+        fetchActivity={account.fetchActivity}
       />
       <Voice />
     </main>
@@ -556,6 +455,7 @@ function Center({
   closePosition,
   fetchWithdrawals,
   createWithdrawal,
+  fetchActivity,
 }: {
   balanceUsd: number;
   withdrawableUsd: number;
@@ -563,6 +463,7 @@ function Center({
   closePosition: (positionId: string) => Promise<CassiePosition>;
   fetchWithdrawals: () => Promise<Array<{ withdrawalId: string; amountUsd: number; destinationAddress: string; status: string; failureReason: string | null }>>;
   createWithdrawal: (input: { amountUsd: number; destinationAddress: string }) => Promise<unknown>;
+  fetchActivity: () => Promise<CassieActivityItem[]>;
 }) {
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
@@ -571,6 +472,8 @@ function Center({
   const [positions, setPositions] = useState<CassiePosition[]>([]);
   const [latestReviews, setLatestReviews] = useState<Record<string, CassiePositionReview | null>>({});
   const [positionError, setPositionError] = useState<string | null>(null);
+  const [activity, setActivity] = useState<CassieActivityItem[]>([]);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawAddress, setWithdrawAddress] = useState("");
@@ -615,6 +518,25 @@ function Center({
     };
   }, [fetchPositions, fetchWithdrawals]);
 
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const payload = await fetchActivity();
+        if (cancelled) return;
+        setActivity(payload);
+        setActivityError(null);
+      } catch (caught) {
+        if (cancelled) return;
+        setActivityError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchActivity]);
+
   async function requestClose(position: CassiePosition) {
     if (!window.confirm(`Close ${position.instrument} ${position.side}?`)) return;
     setClosingId(position.positionId);
@@ -641,7 +563,12 @@ function Center({
     setWithdrawError(null);
     try {
       await createWithdrawal({ amountUsd, destinationAddress: withdrawAddress });
-      setWithdrawals(await fetchWithdrawals());
+      const [nextWithdrawals, nextActivity] = await Promise.all([
+        fetchWithdrawals(),
+        fetchActivity(),
+      ]);
+      setWithdrawals(nextWithdrawals);
+      setActivity(nextActivity);
       setWithdrawAmount("");
       setWithdrawAddress("");
     } catch (caught) {
@@ -686,11 +613,11 @@ function Center({
           onClick={() => setActiveTab("activity")}
         >
           Activity
-          <span className="tab-count">{activityItemCount}</span>
+          <span className="tab-count">{activity.length}</span>
         </button>
       </div>
 
-      {activeTab === "activity" && <ActivityPanel />}
+      {activeTab === "activity" && <ActivityPanel activity={activity} error={activityError} />}
 
       {activeTab === "wallet" && (
       <div className={s.content}>
@@ -986,7 +913,8 @@ function Center({
   );
 }
 
-function ActivityPanel() {
+function ActivityPanel({ activity, error }: { activity: CassieActivityItem[]; error: string | null }) {
+  const groups = groupActivity(activity);
   return (
     <div className={s.activity}>
       <header className={s.activityHeader}>
@@ -1005,12 +933,14 @@ function ActivityPanel() {
       </header>
 
       <div className={s.activityFeed}>
-        {activityFeed.map((group) => (
+        {error ? <div className={s.emptyState} role="alert">{error}</div> : null}
+        {!error && groups.length === 0 ? <div className={s.emptyState}>No activity yet.</div> : null}
+        {groups.map((group) => (
           <section className={s.activityGroup} key={group.date}>
             <h3 className={s.activityDate}>{group.date}</h3>
             <ul className={s.activityList}>
-              {group.items.map((row, i) => (
-                <ActivityItem row={row} key={`${group.date}-${i}`} />
+              {group.items.map((item) => (
+                <ActivityItem item={item} key={item.id} />
               ))}
             </ul>
           </section>
@@ -1020,73 +950,47 @@ function ActivityPanel() {
   );
 }
 
-function ActivityItem({ row }: { row: ActivityRow }) {
+function ActivityItem({ item }: { item: CassieActivityItem }) {
+  const statusTone = item.error ? s.amountDown : item.status === "succeeded" || item.status === "completed" ? s.amountUp : "";
   return (
     <li className={s.activityRow}>
-      <span className={`${s.activityCmdBadge} ${s[`activityCmd_${row.command}`]}`} aria-hidden>
-        <CommandGlyph command={row.command} />
+      <span className={`${s.activityCmdBadge} ${s[`activityCmd_${activityCommand(item.kind)}`]}`} aria-hidden>
+        <CommandGlyph kind={item.kind} />
       </span>
       <div className={s.activityLabel}>
-        <span className={s.activityCmd}>{row.command}</span>
-        <span className={s.activityTime}>{row.time}</span>
+        <span className={s.activityCmd}>{activityCommand(item.kind)}</span>
+        <span className={s.activityTime}>{formatActivityTime(item.at)}</span>
       </div>
 
-      {row.from && row.to ? (
-        <>
-          <div className={s.activityAsset}>
-            <span className={s.activityAssetIcon}>
-              <img src={row.from.icon} alt="" aria-hidden />
+      <div className={s.activityWatch}>
+        <span className={s.activityAssetIcon}>
+          <img src={activityIcon(item)} alt="" aria-hidden />
+        </span>
+        <div className={s.activityWatchText}>
+          <strong>
+            <span className={s.activityAssetSym}>{item.title}</span>
+            <span className={`${s.amountSide} ${item.side ? s[`amountSide_${sideTone(item.side)}`] : ""}`}>
+              {item.side?.toUpperCase() ?? item.status}
             </span>
-            <div className={s.activityAssetText}>
-              <strong>
-                {row.from.amount} <span className={s.activityAssetSym}>{row.from.sym}</span>
-              </strong>
-              <span>{row.from.value}</span>
-            </div>
-          </div>
-          <span className={s.activityArrow} aria-hidden>→</span>
-          <div className={s.activityAsset}>
-            <span className={s.activityAssetIcon}>
-              <img src={row.to.icon} alt="" aria-hidden />
-            </span>
-            <div className={s.activityAssetText}>
-              <strong className={s.activityAssetTo}>
-                {row.to.amount} <span className={s.activityAssetSym}>{row.to.sym}</span>
-              </strong>
-              <span>{row.to.value}</span>
-            </div>
-          </div>
-        </>
-      ) : row.asset ? (
-        <div className={s.activityWatch}>
-          <span className={s.activityAssetIcon}>
-            <img src={row.asset.icon} alt="" aria-hidden />
+          </strong>
+          <span>
+            {item.amountUsd != null ? `${formatUsd(item.amountUsd)} · ` : ""}
+            {item.subtitle}
+            {item.error ? (
+              <>
+                <span className={s.activityWatchSep} aria-hidden> · </span>
+                <span className={statusTone}>{item.error}</span>
+              </>
+            ) : null}
           </span>
-          <div className={s.activityWatchText}>
-            <strong>
-              <span className={s.activityAssetSym}>{row.asset.sym}</span>
-              <span className={`${s.amountSide} ${s[`amountSide_${row.asset.sideTone}`]}`}>
-                {row.asset.side}
-              </span>
-            </strong>
-            <span>
-              entry {row.watchedAt}
-              {row.via && (
-                <>
-                  <span className={s.activityWatchSep} aria-hidden> · </span>
-                  via <span className={s.watchingSource}>{row.via}</span>
-                </>
-              )}
-            </span>
-          </div>
         </div>
-      ) : null}
+      </div>
 
       <span className={s.activitySources}>
         <span className={s.activitySourceChip} title="Cassie">
           <img src="/cassie-logo-transparent.png" alt="Cassie" />
         </span>
-        {row.source === "x" && (
+        {item.source === "x" && (
           <span className={s.activitySourceChip} title="X">
             <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -1098,8 +1002,8 @@ function ActivityItem({ row }: { row: ActivityRow }) {
   );
 }
 
-function CommandGlyph({ command }: { command: ActivityCommand }) {
-  if (command === "trade") {
+function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
+  if (kind === "trade") {
     return (
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M7 17 17 7" />
@@ -1107,7 +1011,7 @@ function CommandGlyph({ command }: { command: ActivityCommand }) {
       </svg>
     );
   }
-  if (command === "watch") {
+  if (kind === "run") {
     return (
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
@@ -1121,6 +1025,43 @@ function CommandGlyph({ command }: { command: ActivityCommand }) {
       <path d="M17 17H7l3 3" />
     </svg>
   );
+}
+
+function groupActivity(activity: CassieActivityItem[]): Array<{ date: string; items: CassieActivityItem[] }> {
+  const groups = new Map<string, CassieActivityItem[]>();
+  for (const item of activity) {
+    const date = formatActivityDate(item.at);
+    groups.set(date, [...(groups.get(date) ?? []), item]);
+  }
+  return [...groups].map(([date, items]) => ({ date, items }));
+}
+
+function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "watch" | "counter" {
+  if (kind === "trade") return "trade";
+  if (kind === "run") return "watch";
+  return "counter";
+}
+
+function activityIcon(item: CassieActivityItem): string {
+  const symbol = item.instrument?.replace(/-PERP$/u, "").split(/\s+/u)[0]?.toUpperCase();
+  if (symbol && tokenImages[symbol]) return tokenImages[symbol];
+  if (item.instrument === "USDC" || item.kind === "wallet" || item.kind === "withdrawal") return usdcIcon;
+  return "/cassie-logo-transparent.png";
+}
+
+function formatActivityDate(value: string): string {
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function formatActivityTime(value: string): string {
+  return new Date(value).toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function Voice() {

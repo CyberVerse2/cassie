@@ -8,6 +8,7 @@ import {
   type User,
   type Wallet,
 } from "@privy-io/react-auth";
+import type { CassieActivityItem } from "./activity";
 
 type WalletFundingBalance = {
   walletBalanceUsd: number;
@@ -339,6 +340,15 @@ export function useCassieAccount() {
     return payload.withdrawal;
   }, [authedFetch]);
 
+  const fetchActivity = useCallback(async () => {
+    const response = await authedFetch("/api/activity");
+    const payload = await response.json() as { activity?: CassieActivityItem[]; error?: string };
+    if (!response.ok || !payload.activity) {
+      throw new Error(payload.error ?? "Activity could not be loaded.");
+    }
+    return payload.activity;
+  }, [authedFetch]);
+
   return {
     account,
     userProfile,
@@ -359,6 +369,7 @@ export function useCassieAccount() {
     closePosition,
     fetchWithdrawals,
     createWithdrawal,
+    fetchActivity,
   };
 }
 
