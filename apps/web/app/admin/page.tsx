@@ -168,7 +168,7 @@ function AdminConsole({ token, onSignOut }: { token: string; onSignOut: () => vo
           {data && tab === "overview" ? <OverviewView overview={data.overview} /> : null}
           {data && tab === "users" ? <UsersView users={data.users} /> : null}
           {data && tab === "runs" ? <RunsView runs={data.runs} onSelectRun={setSelectedRunId} /> : null}
-          {data && tab === "trades" ? <TradesView trades={data.trades} /> : null}
+          {data && tab === "trades" ? <TradesView trades={data.trades} onSelectRun={setSelectedRunId} /> : null}
           {data && tab === "ops" ? <OpsView ops={data.ops} /> : null}
         </div>
       </section>
@@ -351,7 +351,7 @@ function RunsView({ runs, onSelectRun }: { runs: AdminRunRow[]; onSelectRun: (ru
   );
 }
 
-function TradesView({ trades }: { trades: AdminTradeRow[] }) {
+function TradesView({ trades, onSelectRun }: { trades: AdminTradeRow[]; onSelectRun: (runId: string) => void }) {
   if (trades.length === 0) return <EmptyState label="No trade tickets yet." />;
   return (
     <div className={s.tableWrap}>
@@ -366,11 +366,29 @@ function TradesView({ trades }: { trades: AdminTradeRow[] }) {
             <th>Status</th>
             <th>Fill / result</th>
             <th>Failure</th>
+            <th aria-label="Open" />
           </tr>
         </thead>
         <tbody>
-          {trades.map((trade) => (
-            <tr key={trade.ticketId}>
+          {trades.map((trade) => {
+            const canOpenRun = Boolean(trade.runId);
+            return (
+            <tr
+              key={trade.ticketId}
+              className={canOpenRun ? s.clickRow : undefined}
+              tabIndex={canOpenRun ? 0 : undefined}
+              role={canOpenRun ? "button" : undefined}
+              aria-label={canOpenRun ? `Open run for ticket ${trade.ticketId}` : undefined}
+              onClick={canOpenRun ? () => onSelectRun(trade.runId!) : undefined}
+              onKeyDown={canOpenRun
+                ? (event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectRun(trade.runId!);
+                    }
+                  }
+                : undefined}
+            >
               <td><code className={s.mono}>{shortId(trade.ticketId)}</code></td>
               <td><span className={s.chipNeutral}>{trade.venue}</span></td>
               <td className={s.mono}>{trade.instrument}</td>
@@ -385,11 +403,13 @@ function TradesView({ trades }: { trades: AdminTradeRow[] }) {
                   </span>
                 ) : (
                   <span className={s.muted}>—</span>
-                )}
+              )}
               </td>
               <td>{trade.failureReason ? <span className={s.failText} title={trade.failureReason}>{truncate(trade.failureReason, 56)}</span> : <span className={s.muted}>—</span>}</td>
+              <td className={s.rowChevron} aria-hidden>{canOpenRun ? "›" : ""}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>
