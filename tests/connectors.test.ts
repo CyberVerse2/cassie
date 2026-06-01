@@ -669,6 +669,91 @@ describe("market data connectors", () => {
     fetchMock.mockRestore();
   });
 
+  it("extracts exact Hyperliquid symbols from routed equity expression phrases", async () => {
+    const fetchMock = hyperliquidInfoFetchMock({
+      dexes: [{ name: "xyz" }],
+      metas: {
+        main: {
+          universe: [],
+          ctxs: [],
+        },
+        xyz: {
+          universe: [{ name: "xyz:NVDA" }],
+          ctxs: [{ dayNtlVlm: "18000000", markPx: "216.1" }],
+        },
+      },
+      books: {
+        "xyz:NVDA": {
+          levels: [
+            [{ px: "216.0", sz: "100" }],
+            [{ px: "216.2", sz: "100" }],
+          ],
+        },
+      },
+    });
+
+    const candidates = await new HyperliquidMarketDataProvider("https://example.test/info").findCandidates({
+      thesis: {
+        claim: "Nvidia and Microsoft benefit from local AI PC adoption.",
+        direction: "bullish",
+        mentionedAssets: ["NVDA", "MSFT"],
+        topics: ["AI PC"],
+        timeHorizon: "days",
+        evidenceQuality: "medium",
+        manipulationRisk: "medium",
+        confidence: 0.82,
+      },
+      tradeExpression: {
+        signal: "bullish",
+        coreInterpretation: "Bullish read-through for NVDA and MSFT.",
+        directAsset: "NVDA",
+        directAssetTradable: false,
+        evidenceConfidence: 0.82,
+        marketDiscoveryConfidence: 0.31,
+        tradeExpressionConfidence: 0.77,
+        highestPurityExpression: "long NVDA",
+        publicMarketReadThrough: "strong",
+        candidates: [],
+        rankedCandidates: [],
+        candidateExpressions: [{
+          expressionId: "nvda_public_equity_long",
+          expressionRail: "public_equity",
+          expressionType: "directional",
+          abstractMarket: "NVDA common stock",
+          intendedSide: "long",
+          primaryEntityOrEvent: "Nvidia",
+          relatedEntities: ["Microsoft"],
+          thesis: "AI-PC messaging is bullish for Nvidia.",
+          whyThisExpressesTheOpportunity: "Nvidia is the direct public-equity expression.",
+          directness: "direct",
+          whatMustBeTrue: ["A configured venue lists NVDA exposure."],
+          searchTerms: ["NVDA synthetic", "NVDA perp", "Nvidia Hyperliquid"],
+          requiredMarketFeatures: ["direct NVDA exposure"],
+          requiredRuleOrContractFeatures: ["tracks NVDA"],
+          keyRisks: ["No configured listing exists."],
+          expectedTimeHorizon: "days",
+          priority: "high",
+          confidence: 0.9,
+        }],
+        discardedExpressions: [],
+        noTradeCase: null,
+        decision: "needs_market_check",
+        reason: "Venue discovery determines actionability.",
+        insufficiency: null,
+        marketRouterInstructions: "Search Hyperliquid live metadata for NVDA synthetic listings.",
+      },
+    });
+
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0]).toMatchObject({
+      venue: "hyperliquid",
+      instrument: "synthetic_perp",
+      side: "long",
+      symbol: "xyz:NVDA",
+    });
+    fetchMock.mockRestore();
+  });
+
   it("searches Hyperliquid spot metadata with trade-expression aliases", async () => {
     const spotCtxs = Array.from({ length: 183 }, (_, index) =>
       index === 182

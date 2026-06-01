@@ -373,12 +373,16 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
 function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
   const anchors = tradeExpression
     ? [
-      ...(tradeExpression.directAssetTradable ? [tradeExpression.directAsset] : []),
+      ...exactSymbolAnchorCandidates(tradeExpression.directAsset),
       ...(tradeExpression.candidateExpressions.flatMap((candidate) => [
         isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
           && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
           ? candidate.primaryEntityOrEvent
           : null,
+        ...(isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
+          && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
+          ? exactSymbolAnchorCandidates(candidate.abstractMarket)
+          : []),
         ...(isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
             && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
           ? candidate.searchTerms
@@ -390,6 +394,14 @@ function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExp
   return anchors
     .filter((value): value is string => Boolean(value))
     .filter(isExactSymbolAnchor);
+}
+
+function exactSymbolAnchorCandidates(value: string | null): string[] {
+  if (!value) return [];
+  return [
+    value,
+    ...value.split(/[^a-z0-9:_/-]+/iu),
+  ];
 }
 
 function isExactSymbolAnchor(value: string): boolean {
