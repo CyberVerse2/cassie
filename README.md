@@ -76,7 +76,7 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 
 ## Operate Cassie
 
-Enqueue Cassie from the CLI and show the live timeline:
+Enqueue Cassie from the CLI:
 
 ```bash
 cassie run --post "Solana ETF approval is basically inevitable now. Market is asleep."

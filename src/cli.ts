@@ -10,8 +10,7 @@ import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";
 import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
 import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
-import type { CassieJobQueue } from "../packages/jobs/queue.ts";
-import type { ControlRun, ExecutionJob } from "../packages/core/schemas/index.ts";
+import { enqueueTradeTicketsForRun } from "../packages/jobs/execution-job.ts";
 import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools.ts";
 import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
@@ -35,28 +34,6 @@ class CliError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CliError";
-  }
-}
-
-class InlineCliJobQueue implements CassieJobQueue {
-  async enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
-    return { executionJobId: job.jobId, graphileJobId: null };
-  }
-
-  async enqueueSupervisor(run: ControlRun): Promise<{ runId: string; graphileJobId: string | null }> {
-    return { runId: run.runId, graphileJobId: null };
-  }
-
-  async enqueuePositionReview(): Promise<{ graphileJobId: string | null }> {
-    return { graphileJobId: null };
-  }
-
-  async enqueueClosePosition(input: { positionId: string }): Promise<{ positionId: string; graphileJobId: string | null }> {
-    return { positionId: input.positionId, graphileJobId: null };
-  }
-
-  async enqueueWithdrawal(input: { withdrawalId: string }): Promise<{ withdrawalId: string; graphileJobId: string | null }> {
-    return { withdrawalId: input.withdrawalId, graphileJobId: null };
   }
 }
 
@@ -124,9 +101,9 @@ Setup:
   env                       Show required runtime dependencies, with secrets masked.
 
 App flow:
-  run                       Create a run, execute Cassie once inline, and show the live timeline.
+  run                       Create a durable queued run for the background worker.
   mention                   Create a durable queued run without executing it.
-  run-supervisor <runId>    Execute an existing queued run.
+  run-supervisor <runId>    Execute an existing queued run and enqueue trade execution.
   control-run <runId>       Show a durable run, recorded steps, and timeline.
   state                     Show the persisted app state summary.
   runs                      List durable runs.
@@ -175,14 +152,15 @@ async function settingsSet(args: ParsedArgs) {
 
 async function run(args: ParsedArgs) {
   const store = new ControlPlaneStore();
-  const queued = await new CassieProduct(store, null, undefined, new InlineCliJobQueue())
-    .createMentionRun(await mentionRequestFromArgs(args));
-  return executeRunWithTimeline({
-    args,
-    store,
-    runId: queued.runId,
-    queued,
-  });
+  const queued = await new CassieProduct(store).createMentionRun(await mentionRequestFromArgs(args));
+  const snapshot = await store.load();
+  const timeline = formatRunTimeline(snapshot, queued.runId);
+  if (!args.flags.json && !args.flags["quiet-timeline"]) {
+    console.error(timeline);
+  }
+  if (args.flags.json) return { queued, timeline };
+  if (args.flags.full) return { queued };
+  return summarizeRun(snapshot, queued.runId);
 }
 
 async function mention(args: ParsedArgs) {
@@ -208,8 +186,10 @@ async function executeRunWithTimeline(input: {
   const showTimeline = !args.flags.json && !args.flags["quiet-timeline"];
   const liveTimeline = showTimeline ? startLiveRunTimeline(store, runId) : null;
   let result: unknown;
+  let executionQueue: unknown;
   try {
     result = await runCassieSupervisorForRun({ runId, store });
+    executionQueue = await enqueueTradeTicketsForRun({ runId, store });
   } finally {
     await liveTimeline?.stop();
   }
@@ -218,8 +198,8 @@ async function executeRunWithTimeline(input: {
   if (showTimeline) {
     console.error(timeline);
   }
-  if (args.flags.json) return { runId, queued, result, timeline };
-  if (args.flags.full) return { runId, queued, result };
+  if (args.flags.json) return { runId, queued, result, executionQueue, timeline };
+  if (args.flags.full) return { runId, queued, result, executionQueue };
   return summarizeRun(snapshot, runId);
 }
 
