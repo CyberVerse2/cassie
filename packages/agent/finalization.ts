@@ -46,7 +46,8 @@ export async function finalizeRunFromPersistedSteps(input: {
   const steps = await input.store.getRunSteps(input.run.runId);
   const tradeExpression = readPersistedStepOutput<TradeExpressionPlan>(steps, "trade_expression", TradeExpressionPlanSchema);
   const marketCandidates = readPersistedStepOutput<MarketCandidate[]>(steps, "market_candidates", MarketCandidateSchema.array());
-  const expressionFit = readPersistedStepOutput<ExpressionFitAssessment>(steps, "market_assessment", ExpressionFitAssessmentSchema);
+  const expressionFits = readPersistedStepOutputs<ExpressionFitAssessment>(steps, "market_assessment", ExpressionFitAssessmentSchema);
+  const expressionFit = bestPersistedFitAssessment(expressionFits);
   const quote = latestPersistedStepOutput(steps, "market_quote");
   const marketSelection = readPersistedStepOutput<MarketSelection>(steps, "market_selection", MarketSelectionSchema)
     ?? noTradeSelectionFromCompletedMarketCheck(marketCandidates, expressionFit);
@@ -235,10 +236,26 @@ function readPersistedStepOutput<T>(
   return persisted == null ? undefined : schema.parse(persisted);
 }
 
+function readPersistedStepOutputs<T>(
+  steps: RunStep[],
+  stepType: RunStepType,
+  schema: z.ZodType<T>,
+): T[] {
+  return steps
+    .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
+    .map((step) => schema.parse(step.output));
+}
+
 function latestPersistedStepOutput(steps: RunStep[], stepType: RunStepType): unknown {
   return steps
     .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
     .at(-1)?.output;
+}
+
+function bestPersistedFitAssessment(fitAssessments: ExpressionFitAssessment[]): ExpressionFitAssessment | undefined {
+  const validated = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+  const pool = validated.length > 0 ? validated : fitAssessments;
+  return [...pool].sort((left, right) => right.fitScore - left.fitScore)[0];
 }
 
 function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState {

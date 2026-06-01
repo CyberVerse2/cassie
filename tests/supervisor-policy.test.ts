@@ -216,7 +216,7 @@ describe("supervisor step policy", () => {
     ])).toEqual(["create_trade_ticket"]);
   });
 
-  it("keeps assessing candidates before quoting a validated direct candidate", () => {
+  it("quotes a validated direct candidate before assessing unrelated candidates", () => {
     const opportunity = step("frame_opportunity", {});
     const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
     const candidates = step("search_venues", [
@@ -230,7 +230,7 @@ describe("supervisor step policy", () => {
       directness: "direct",
     });
 
-    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["assess_expression_fit"]);
+    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["quote_expression"]);
   });
 
   it("keeps assessing venue candidates when no direct candidate has validated", () => {
@@ -270,13 +270,13 @@ describe("supervisor step policy", () => {
     } as never) as { activeTools: string[]; messages: unknown[] };
 
     const serialized = JSON.stringify(prepared.messages);
-    expect(prepared.activeTools).toEqual(["assess_expression_fit"]);
+    expect(prepared.activeTools).toEqual(["quote_expression"]);
     expect(serialized).toContain("venueDiscoveryProgress");
-    expect(serialized).toContain("nextUnassessedCandidate");
-    expect(serialized).toContain("btc-price-market");
+    expect(serialized).toContain("nextUnquotedCandidate");
+    expect(serialized).toContain("BTC");
   });
 
-  it("quotes every validated venue candidate before ranking", () => {
+  it("ranks after quoting the best validated venue candidate", () => {
     const opportunity = step("frame_opportunity", {});
     const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
     const candidates = step("search_venues", [
@@ -287,15 +287,17 @@ describe("supervisor step policy", () => {
       candidateId: "hyperliquid:BTC:short",
       fitStatus: "validated",
       venue: "hyperliquid",
+      fitScore: 0.9,
     });
     const secondFit = step("assess_expression_fit", {
       candidateId: "polymarket:condition_1:token_no:buy_no",
       fitStatus: "validated",
       venue: "polymarket",
+      fitScore: 0.7,
     });
     const firstQuote = step("quote_expression", { venue: "hyperliquid", symbol: "BTC", side: "short" });
 
-    expect(selectActiveTools([opportunity, expression, candidates, firstFit, secondFit, firstQuote])).toEqual(["quote_expression"]);
+    expect(selectActiveTools([opportunity, expression, candidates, firstFit, secondFit, firstQuote])).toEqual(["rank_expressions"]);
   });
 
   it("forces the exact next tool and injects authoritative persisted state", () => {

@@ -68,20 +68,19 @@ export function selectActiveTools(
       .filter((assessment) => typeof assessment.fitStatus === "string");
     const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
 
+    const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+    if (validatedFitAssessments.length > 0) {
+      if (quotes.length < 1) {
+        return ["quote_expression"];
+      }
+      return ["rank_expressions"];
+    }
+
     if (fitAssessments.length < marketCandidates.length) {
       return ["assess_expression_fit"];
     }
 
-    const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
-    if (validatedFitAssessments.length === 0) {
-      return ["finalize_run"];
-    }
-
-    if (quotes.length < validatedFitAssessments.length) {
-      return ["quote_expression"];
-    }
-
-    return ["rank_expressions"];
+    return ["finalize_run"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
@@ -146,19 +145,18 @@ function selectBreakingNewsActiveTools(
     const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
     const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
 
+    if (validatedFitAssessments.length > 0) {
+      if (quotes.length < 1) {
+        return ["quote_expression"];
+      }
+      return ["rank_expressions"];
+    }
+
     if (fitAssessments.length < marketCandidates.length) {
       return ["assess_expression_fit"];
     }
 
-    if (validatedFitAssessments.length === 0) {
-      return ["finalize_run"];
-    }
-
-    if (quotes.length < validatedFitAssessments.length) {
-      return ["quote_expression"];
-    }
-
-    return ["rank_expressions"];
+    return ["finalize_run"];
   }
 
   const tradeExpression = objectRecord(latestToolOutput(steps, "generate_trade_expressions"));
@@ -374,11 +372,11 @@ function buildVenueDiscoveryProgress(
     .map(objectRecord)
     .filter((assessment) => typeof assessment.fitStatus === "string");
   const validatedFitAssessments = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
-  const validatedCandidateIndexes = fitAssessments
-    .map((assessment, index) => validatedFitAssessments.includes(assessment) ? index : null)
-    .filter((index): index is number => index !== null);
+  const bestValidatedFitIndex = fitAssessments
+    .map((assessment, index) => ({ assessment, index }))
+    .filter(({ assessment }) => assessment.fitStatus === "validated")
+    .sort((left, right) => numericScore(right.assessment.fitScore) - numericScore(left.assessment.fitScore))[0]?.index ?? null;
   const quotes = toolOutputsAfterLatest(steps, "quote_expression", "search_venues");
-  const nextUnquotedCandidateIndex = validatedCandidateIndexes[quotes.length] ?? null;
 
   return {
     candidateCount: candidates.length,
@@ -389,12 +387,15 @@ function buildVenueDiscoveryProgress(
       ? summarizeToolOutput(candidates[fitAssessments.length])
       : null,
     nextUnquotedCandidate: quotes.length < validatedFitAssessments.length
-      ? summarizeToolOutput(candidates[nextUnquotedCandidateIndex ?? quotes.length])
+      ? summarizeToolOutput(candidates[bestValidatedFitIndex ?? quotes.length])
       : null,
     readyToRank: validatedFitAssessments.length > 0
-      && quotes.length >= validatedFitAssessments.length
-      && fitAssessments.length >= candidates.length,
+      && quotes.length >= 1,
   };
+}
+
+function numericScore(value: unknown): number {
+  return typeof value === "number" ? value : 0;
 }
 
 function summarizeToolOutput(output: unknown): unknown {

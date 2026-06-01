@@ -3,6 +3,7 @@ import type { StructuredAiClient } from "../packages/ai/client.ts";
 import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../packages/agent/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
+  MarketCandidate,
   MarketSelection,
   OpportunityFrame,
   SourcePost,
@@ -399,5 +400,106 @@ describe("supervisor scenario coverage", () => {
 
     await expect(finalizeRunFromPersistedSteps({ store, run }))
       .rejects.toThrow("Market-check finalization requires expression-fit assessment.");
+  });
+
+  it("does not let a later rejected assessment override an earlier validated best fit", async () => {
+    const { store, run } = await createScenario("@Cassie trade this");
+    const solCandidate = marketSelection.selectedMarket!;
+    const hmtCandidate: MarketCandidate = {
+      ...solCandidate,
+      instrument: "spot",
+      side: "buy",
+      symbol: "HMT/USDC",
+      liquidityScore: 0.1,
+      reason: "HMT spot was found during broad venue search.",
+    };
+
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "trade_expression",
+      status: "succeeded",
+      input: null,
+      output: {
+        ...tradeExpression,
+        decision: "needs_market_check",
+        reason: "Venue confirmation is required before this can be treated as tradable.",
+      },
+      error: null,
+      model: "deepseek-v4-pro",
+      promptName: "cassie_trade_expression",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_candidates",
+      status: "succeeded",
+      input: null,
+      output: [solCandidate, hmtCandidate],
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      completedAt: new Date().toISOString(),
+    });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_assessment",
+      status: "succeeded",
+      input: null,
+      output: {
+        candidateId: "hyperliquid:SOL:long",
+        expressionId: "expr_sol_long",
+        expressionRail: "crypto",
+        venue: "hyperliquid",
+        fitStatus: "validated",
+        intendedSide: "long",
+        sideFit: "correct",
+        directness: "direct",
+        fitScore: 0.96,
+        semanticFitSummary: "Direct SOL perp cleanly expresses the thesis.",
+        ruleOrContractFitSummary: "SOL perpetual supports the intended long exposure.",
+        basisRisks: [],
+        mismatchReasons: [],
+        requiredFollowUp: [],
+        confidence: 0.97,
+      },
+      error: null,
+      model: "deepseek-v4-pro",
+      promptName: "cassie_expression_fit",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+    await store.addRunStep({
+      runId: run.runId,
+      stepType: "market_assessment",
+      status: "succeeded",
+      input: null,
+      output: {
+        candidateId: "hyperliquid:HMT/USDC:buy",
+        expressionId: "expr_hmt_spot",
+        expressionRail: "crypto",
+        venue: "hyperliquid",
+        fitStatus: "rejected",
+        intendedSide: "buy",
+        sideFit: "unknown",
+        directness: "unrelated",
+        fitScore: 0.01,
+        semanticFitSummary: "HMT spot does not express the SOL thesis.",
+        ruleOrContractFitSummary: "The market references HMT, not SOL.",
+        basisRisks: [],
+        mismatchReasons: ["Wrong asset"],
+        requiredFollowUp: [],
+        confidence: 0.99,
+      },
+      error: null,
+      model: "deepseek-v4-pro",
+      promptName: "cassie_expression_fit",
+      promptVersion: "test",
+      completedAt: new Date().toISOString(),
+    });
+
+    await expect(finalizeRunFromPersistedSteps({ store, run }))
+      .rejects.toThrow("Validated expression finalization requires a quote.");
   });
 });

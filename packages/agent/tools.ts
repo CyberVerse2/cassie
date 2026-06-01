@@ -22,7 +22,6 @@ import {
   type TradeExpressionPlan,
   type UserSettings,
 } from "../core/schemas/index.ts";
-import { selectMarket } from "../adapters/selection.ts";
 import { createTradeTicket } from "../tickets/index.ts";
 import { formatTicketCreated, notifyTradeLifecycle } from "../notifications/positions.ts";
 import { recordRunStep } from "./steps.ts";
@@ -332,52 +331,49 @@ export function createCassieSupervisorTools(input: {
         const persistedQuotes = await latestPersistedQuotes(input.store, input.run.runId);
         const groundedQuotes = persistedQuotes.length > 0 ? persistedQuotes : parseSuppliedRankQuotes(quotes);
         const validatedFitAssessments = persistedFitAssessments.filter((assessment) => assessment.fitStatus === "validated");
-        const rankingCandidates = preferHyperliquidPerpsOverSpot(candidatesForFitAssessments(
-          persistedCandidates,
-          validatedFitAssessments,
-        ));
+        const selectedFitAssessment = bestFitAssessment(validatedFitAssessments);
+        const selectedCandidate = selectedFitAssessment
+          ? candidateForFitAssessment(persistedCandidates, selectedFitAssessment)
+          : null;
         if (groundedQuotes.length === 0) {
           throw new Error("rank_expressions requires a persisted or supplied market quote.");
         }
-        if (validatedFitAssessments.length > groundedQuotes.length) {
-          throw new Error("rank_expressions requires quotes for every validated venue candidate.");
-        }
-        if (rankingCandidates.length === 0) {
+        if (!selectedFitAssessment || !selectedCandidate) {
           throw new Error("rank_expressions requires at least one validated venue candidate.");
         }
+        if (!groundedQuotes.some((quote) => quoteMatchesCandidate(quote, selectedCandidate))) {
+          throw new Error("rank_expressions requires a quote for the best validated venue candidate.");
+        }
+        const marketSelection = marketSelectionFromBestFit({
+          selectedCandidate,
+          selectedFitAssessment,
+          candidates: persistedCandidates,
+          fitAssessments: persistedFitAssessments,
+        });
 
         return runStepOnce(
           "market_selection",
           {
             tradeExpression,
-            candidates: rankingCandidates,
+            candidates: [selectedCandidate],
             fitAssessments: persistedFitAssessments,
             quotes: groundedQuotes,
           },
           async () => {
-            const thesis = thesisFromTradeExpression(tradeExpression);
             return recordRunStep({
               store: input.store,
               runId: input.run.runId,
               stepType: "market_selection",
-              promptName: "cassie_market_selection",
-              promptVersion,
-              model: cheapModel,
+              promptName: null,
+              promptVersion: null,
+              model: null,
               stepInput: {
                 tradeExpression,
-                candidates: rankingCandidates,
+                candidates: [selectedCandidate],
                 fitAssessments: persistedFitAssessments,
                 quotes: groundedQuotes,
               },
-              execute: ({ setThinkingTrace }) => selectMarket({
-                ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
-                marketData: input.deps.marketData,
-                thesis,
-                tradeExpression,
-                candidates: rankingCandidates,
-                fitAssessments: persistedFitAssessments,
-                quotes: groundedQuotes,
-              }),
+              execute: async () => marketSelection,
             });
           },
         );
@@ -565,32 +561,83 @@ function parseSuppliedMarketSelection(value: unknown): MarketSelection {
   throw new Error("Trade ticket creation requires a usable market selection.");
 }
 
-function preferHyperliquidPerpsOverSpot(candidates: MarketCandidate[]): MarketCandidate[] {
-  const hasHyperliquidPerp = candidates.some((candidate) =>
-    candidate.venue === "hyperliquid" && candidate.instrument !== "spot"
+function bestFitAssessment(fitAssessments: ExpressionFitAssessment[]): ExpressionFitAssessment | null {
+  return [...fitAssessments]
+    .sort((left, right) => right.fitScore - left.fitScore)[0] ?? null;
+}
+
+function candidateForFitAssessment(
+  candidates: MarketCandidate[],
+  fitAssessment: ExpressionFitAssessment,
+): MarketCandidate {
+  const match = candidates.find((candidate) =>
+    marketCandidateAssessmentKeys(candidate).some((key) =>
+      normalizedCandidateId(key) === normalizedCandidateId(fitAssessment.candidateId)
+    )
   );
+  if (!match) {
+    throw new Error(`Validated candidate ${fitAssessment.candidateId} was not found in persisted venue-search results.`);
+  }
+  return match;
+}
 
-  if (!hasHyperliquidPerp) return candidates;
+function quoteMatchesCandidate(quote: unknown, candidate: MarketCandidate): boolean {
+  const quotedCandidate = MarketCandidateSchema.safeParse(quote);
+  if (quotedCandidate.success) {
+    return marketCandidateLookupKey(quotedCandidate.data) === marketCandidateLookupKey(candidate);
+  }
 
-  return candidates.filter((candidate) =>
-    candidate.venue !== "hyperliquid" || candidate.instrument !== "spot"
+  const polymarketQuote = PolymarketQuoteSchema.safeParse(quote);
+  if (!polymarketQuote.success || candidate.venue !== "polymarket") {
+    return false;
+  }
+
+  return Boolean(
+    candidate.conditionId === polymarketQuote.data.conditionId &&
+      candidate.outcomeTokenId === polymarketQuote.data.outcomeTokenId,
   );
 }
 
-function candidatesForFitAssessments(
-  candidates: MarketCandidate[],
-  fitAssessments: ExpressionFitAssessment[],
-): MarketCandidate[] {
-  return fitAssessments.map((assessment) => {
-    const match = candidates.find((candidate) =>
-      marketCandidateAssessmentKeys(candidate).some((key) =>
-        normalizedCandidateId(key) === normalizedCandidateId(assessment.candidateId)
-      )
-    );
-    if (!match) {
-      throw new Error(`Validated candidate ${assessment.candidateId} was not found in persisted venue-search results.`);
-    }
-    return match;
+function marketSelectionFromBestFit(input: {
+  selectedCandidate: MarketCandidate;
+  selectedFitAssessment: ExpressionFitAssessment;
+  candidates: MarketCandidate[];
+  fitAssessments: ExpressionFitAssessment[];
+}): MarketSelection {
+  const rankedCandidates = input.fitAssessments
+    .filter((assessment) => assessment.fitStatus === "validated")
+    .sort((left, right) => right.fitScore - left.fitScore)
+    .map((assessment) => {
+      const candidate = candidateForFitAssessment(input.candidates, assessment);
+      return {
+        candidateId: assessment.candidateId,
+        venue: candidate.venue,
+        symbol: candidate.symbol,
+        thesisFit: assessment.fitScore,
+        liquidityFit: candidate.liquidityScore ?? 0,
+        payoffFit: assessment.confidence,
+        reason: assessment.semanticFitSummary,
+      };
+    });
+  const rejectedCandidates = input.fitAssessments
+    .filter((assessment) => assessment.fitStatus !== "validated")
+    .map((assessment) => ({
+      venue: assessment.venue,
+      symbol: assessment.candidateId,
+      reason: [
+        assessment.semanticFitSummary,
+        ...assessment.mismatchReasons,
+      ].filter(Boolean).join(" "),
+    }));
+
+  return MarketSelectionSchema.parse({
+    decision: "select_market",
+    selectedMarket: input.selectedCandidate,
+    selectedCandidateId: input.selectedFitAssessment.candidateId,
+    rejectionReason: null,
+    rankedCandidates,
+    rejectedCandidates,
+    noTradeReason: null,
   });
 }
 

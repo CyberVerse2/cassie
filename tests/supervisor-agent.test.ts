@@ -866,7 +866,7 @@ describe("AI SDK supervisor agent", () => {
       candidates: [persistedCandidate],
       quotes: [persistedCandidate],
     });
-    expect(ai.calls).toContain("cassie_market_selection");
+    expect(ai.calls).not.toContain("cassie_market_selection");
   });
 
   it("matches validated fit assessments to persisted candidates by id instead of array position", async () => {
@@ -1147,11 +1147,11 @@ describe("AI SDK supervisor agent", () => {
     });
   });
 
-  it("filters Hyperliquid spot out of ranking when a validated perp exists", async () => {
+  it("selects the validated candidate with the best fit score", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
-      userCommand: "@Cassie prefer perps",
+      userCommand: "@Cassie choose the best fit score",
       sourcePost,
     });
     const perpCandidate: MarketCandidate = {
@@ -1168,39 +1168,19 @@ describe("AI SDK supervisor agent", () => {
       instrument: "spot",
       reason: "UBTC spot was found in live Hyperliquid metadata.",
     };
-    const ai: StructuredAiClient = {
-      async generateObject(input) {
-        expect(input.name).toBe("cassie_market_selection");
-        const payload = JSON.parse(String(input.messages?.[0]?.content));
-        expect(payload.candidates).toHaveLength(1);
-        expect(payload.candidates[0]).toMatchObject({
-          venue: "hyperliquid",
-          instrument: "perp",
-          symbol: "BTC",
-        });
-        return {
-          decision: "select_market",
-          selectedMarket: payload.candidates[0],
-          selectedCandidateId: "hyperliquid|BTC|long",
-          rejectionReason: null,
-          rankedCandidates: [],
-          rejectedCandidates: [],
-          noTradeReason: null,
-        } as unknown;
-      },
-    } as StructuredAiClient;
-
     await seedTradeExpression(store, run.runId, tradeExpression);
     await seedMarketCandidates(store, run.runId, [perpCandidate, spotCandidate]);
     await seedFitAssessment(store, run.runId, {
       ...expressionFitAssessment,
       candidateId: "hyperliquid:BTC:long",
       intendedSide: "long",
+      fitScore: 0.86,
     });
     await seedFitAssessment(store, run.runId, {
       ...expressionFitAssessment,
       candidateId: "hyperliquid:UBTC/USDC:buy",
       intendedSide: "buy",
+      fitScore: 0.94,
     });
     for (const candidate of [perpCandidate, spotCandidate]) {
       await store.addRunStep({
@@ -1223,7 +1203,7 @@ describe("AI SDK supervisor agent", () => {
       run,
       userSettings: settings,
       deps: {
-        ai,
+        ai: new FakeAi(),
         marketData: {
           async findCandidates() {
             return [];
@@ -1234,13 +1214,13 @@ describe("AI SDK supervisor agent", () => {
 
     await expect(executeTool(tools.rank_expressions, {
     })).resolves.toMatchObject({
-      selectedMarket: perpCandidate,
+      selectedMarket: spotCandidate,
       noTradeReason: null,
     });
 
     const steps = await store.getRunSteps(run.runId);
     expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
-      candidates: [perpCandidate],
+      candidates: [spotCandidate],
     });
   });
 
