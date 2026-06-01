@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "type": "module",
   "private": true,
+  "bin": {
+    "cassie": "./src/cli.ts"
+  },
   "scripts": {
     "build": "tsc --noEmit",
     "test": "vitest run",

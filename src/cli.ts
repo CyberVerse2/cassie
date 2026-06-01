@@ -1,3 +1,4 @@
+#!/usr/bin/env -S node --import tsx
 import "dotenv/config";
 import { inspect } from "node:util";
 import { CassieStructuredClient } from "../packages/ai/client.ts";
@@ -89,7 +90,7 @@ async function main() {
   const handler = commands.get(args.command);
 
   if (!handler) {
-    throw new CliError(`Unknown command "${args.command}". Run "npm run cli -- help".`);
+    throw new CliError(`Unknown command "${args.command}". Run "cassie help".`);
   }
 
   let result = await handler(args);
@@ -116,7 +117,7 @@ async function help() {
   console.log(`Cassie CLI
 
 Usage:
-  npm run cli -- <command> [options]
+  cassie <command> [options]
 
 Setup:
   settings:set              Create or update the configured CLI user's trading settings.
@@ -137,16 +138,16 @@ Smoke checks:
   smoke:market              Test market candidate discovery for an asset.
 
 Useful examples:
-  npm run cli -- settings:set
-  npm run cli -- settings:set --size 50
-  npm run cli -- state
-  npm run cli -- run
-  npm run cli -- run --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
-  npm run cli -- run --post "SOL looks underpriced into ETF approval."
-  npm run cli -- run --post "Exa raised $250M" --audit
-  npm run cli -- run-supervisor <runId>
-  npm run cli -- tickets --json
-  npm run cli -- execute-next --yes
+  cassie settings:set
+  cassie settings:set --size 50
+  cassie state
+  cassie run
+  cassie run --tweet-url "https://x.com/_proxystudio/status/2057246023974875269"
+  cassie run --post "SOL looks underpriced into ETF approval."
+  cassie run --post "Exa raised $250M" --audit
+  cassie run-supervisor <runId>
+  cassie tickets --json
+  cassie execute-next --yes
 `);
 }
 

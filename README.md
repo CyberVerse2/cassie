@@ -33,8 +33,8 @@ Runtime shape:
 ```bash
 npm install
 npm run db:migrate
-npm run cli -- settings:set
-npm run cli -- run
+cassie settings:set
+cassie run
 ```
 
 ## Configuration
@@ -79,13 +79,13 @@ curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
 Enqueue Cassie from the CLI and show the live timeline:
 
 ```bash
-npm run cli -- run --post "Solana ETF approval is basically inevitable now. Market is asleep."
+cassie run --post "Solana ETF approval is basically inevitable now. Market is asleep."
 ```
 
 Inspect an existing run:
 
 ```bash
-npm run cli -- control-run RUN_ID --json
+cassie control-run RUN_ID --json
 ```
 
 ## Current Test Surface
