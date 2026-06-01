@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { positionToTradeShareData } from "../apps/web/app/lib/trade-card-data.ts";
+import {
+  compactTradeCardThesisDetails,
+  positionToTradeShareData,
+  type TradeCardThesisDetails,
+} from "../apps/web/app/lib/trade-card-data.ts";
+import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type { ControlRun, Position, RunStep, TradeTicket } from "../packages/core/schemas/index.ts";
 
 const ticket: TradeTicket = {
@@ -97,7 +102,12 @@ const steps: RunStep[] = [
 
 describe("trade card data", () => {
   it("maps a persisted position and ticket into share-card data", () => {
-    const share = positionToTradeShareData({ position, ticket, run });
+    const thesisDetails: TradeCardThesisDetails = {
+      signal: "As long as BTC holds $65k, I think $75k trades next.",
+      why: "BTC breaks higher if the $65k level holds.",
+      invalidation: "BTC loses $65k.",
+    };
+    const share = positionToTradeShareData({ position, ticket, run, thesisDetails });
 
     expect(share.title).toBe("BTC-75K YES +36.5%");
     expect(share.pnlLabel).toBe("Unrealized PnL");
@@ -118,7 +128,41 @@ describe("trade card data", () => {
     });
   });
 
-  it("uses compact thesis details for the share card", () => {
+  it("uses AI-compacted thesis details for the share card", async () => {
+    let prompt = "";
+    const ai: StructuredAiClient = {
+      async generateObject<T>(input: Parameters<StructuredAiClient["generateObject"]>[0]): Promise<T> {
+        expect(input.name).toBe("cassie_trade_card_thesis_compaction");
+        expect(input.system).toContain("Do not include venue names, ticker symbols");
+        prompt = input.prompt;
+        return {
+          signal: "Google is behind in the AI race despite having vast data.",
+          why: "Short Alphabet on bearish Google AI-leadership weakness.",
+          invalidation: "Alphabet sentiment improves on credible AI product traction re-rating.",
+        } as T;
+      },
+    };
+    const hyperliquidTicket: TradeTicket = {
+      ...ticket,
+      venue: "hyperliquid",
+      instrument: "synthetic_perp",
+      side: "short",
+      venueData: { symbol: "xyz:GOOGL", markPrice: 379.83 },
+      thesis: "Best direct short expression with highest liquidity and low spread.",
+      exitPlan: {
+        ...ticket.exitPlan,
+        thesis: "Short Alphabet/GOOGL on the market's bearish read-through that Google is lagging in the AI race; the trade is a direct sentiment expression on Google AI-leadership weakness.",
+        invalidationSignals: [
+          "Alphabet sentiment improves on credible AI product/traction re-rating",
+        ],
+      },
+    };
+    const thesisDetails = await compactTradeCardThesisDetails({
+      run,
+      steps,
+      ticket: hyperliquidTicket,
+      ai,
+    });
     const share = positionToTradeShareData({
       position: {
         ...position,
@@ -128,25 +172,14 @@ describe("trade card data", () => {
         entryPrice: 379.83,
         currentMarkPrice: 361.44,
       },
-      ticket: {
-        ...ticket,
-        venue: "hyperliquid",
-        instrument: "synthetic_perp",
-        side: "short",
-        venueData: { symbol: "xyz:GOOGL", markPrice: 379.83 },
-        thesis: "Best direct short expression with highest liquidity and low spread.",
-        exitPlan: {
-          ...ticket.exitPlan,
-          thesis: "Short Alphabet/GOOGL on the market's bearish read-through that Google is lagging in the AI race; the trade is a direct sentiment expression on Google AI-leadership weakness.",
-          invalidationSignals: [
-            "Alphabet sentiment improves on credible AI product/traction re-rating",
-          ],
-        },
-      },
+      ticket: hyperliquidTicket,
       run,
       steps,
+      thesisDetails,
     });
 
+    expect(prompt).toContain("xyz:GOOGL");
+    expect(prompt).toContain("Google is behind in the AI race despite having vast data.");
     expect(share.cardProps.thesis).toEqual([
       { label: "Signal", text: "Google is behind in the AI race despite having vast data." },
       { label: "Why", text: "Short Alphabet on bearish Google AI-leadership weakness." },

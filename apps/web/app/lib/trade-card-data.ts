@@ -1,6 +1,8 @@
 import { DrizzleCassieStore } from "../../../../packages/core/db/drizzle-store.ts";
 import type { CassieStore } from "../../../../packages/core/db/store.ts";
 import type { ControlRun, Position, PositionReview, RunStep, TradeTicket } from "../../../../packages/core/schemas/index.ts";
+import { CassieStructuredClient, type StructuredAiClient } from "../../../../packages/ai/client.ts";
+import { z } from "zod";
 
 type TradeCardThesis = {
   label: string;
@@ -41,6 +43,14 @@ type TradeCardProps = {
   variant?: "split" | "band";
 };
 
+export const TradeCardThesisDetailsSchema = z.object({
+  signal: z.string().min(8).max(92),
+  why: z.string().min(8).max(78),
+  invalidation: z.string().min(8).max(72),
+});
+
+export type TradeCardThesisDetails = z.infer<typeof TradeCardThesisDetailsSchema>;
+
 export class TradeShareNotFoundError extends Error {
   constructor(positionId: string) {
     super(`Trade position ${positionId} was not found.`);
@@ -54,6 +64,7 @@ export type TradeShareData = {
   run: ControlRun | undefined;
   steps: RunStep[];
   review: PositionReview | undefined;
+  thesisDetails: TradeCardThesisDetails;
   cardProps: TradeCardProps;
   title: string;
   description: string;
@@ -70,6 +81,7 @@ export type TradeShareData = {
 export async function getTradeShareData(
   positionId: string,
   store: CassieStore = new DrizzleCassieStore(),
+  ai: StructuredAiClient = new CassieStructuredClient(),
 ): Promise<TradeShareData> {
   const position = await store.getPosition(positionId);
   if (!position) throw new TradeShareNotFoundError(positionId);
@@ -82,8 +94,9 @@ export async function getTradeShareData(
     ticket.runId ? store.getRunSteps(ticket.runId) : Promise.resolve([]),
     store.getLatestPositionReview(position.positionId),
   ]);
+  const thesisDetails = await compactTradeCardThesisDetails({ run, steps, ticket, ai });
 
-  return positionToTradeShareData({ position, ticket, run, steps, review });
+  return positionToTradeShareData({ position, ticket, run, steps, review, thesisDetails });
 }
 
 export function positionToTradeShareData(input: {
@@ -92,8 +105,9 @@ export function positionToTradeShareData(input: {
   run?: ControlRun;
   steps?: RunStep[];
   review?: PositionReview;
+  thesisDetails: TradeCardThesisDetails;
 }): TradeShareData {
-  const { position, ticket, run, review } = input;
+  const { position, ticket, run, review, thesisDetails } = input;
   const steps = input.steps ?? [];
   const symbol = positionSymbol(position, ticket);
   const venueLabel = venueName(position.venue);
@@ -104,11 +118,6 @@ export function positionToTradeShareData(input: {
   const entryLabel = formatPrice(position.entryPrice, position.venue);
   const exitLabel = formatPrice(position.currentMarkPrice ?? position.entryPrice, position.venue);
   const headline = run?.sourcePost.text.trim() || ticket.thesis;
-  const signal = stepOutputString(steps, "intake", "headlineThesis")
-    ?? stepOutputString(steps, "opportunity", "literalClaim")
-    ?? compactCardSentence(run?.sourcePost.text.trim() || ticket.thesis, 92);
-  const why = compactWhy(ticket.exitPlan.thesis);
-  const invalidation = compactInvalidation(ticket.exitPlan.invalidationSignals[0] ?? "The original thesis is invalidated.");
   const authorHandle = run?.sourcePost.authorHandle?.trim();
   const authorName = run?.sourcePost.authorName?.trim();
   const authorLabel = authorHandle ? `@${authorHandle.replace(/^@/u, "")}` : authorName || "Cassie trade";
@@ -121,9 +130,9 @@ export function positionToTradeShareData(input: {
     },
     headline,
     thesis: [
-      { label: "Signal", text: signal },
-      { label: "Why", text: why },
-      { label: "Invalidation", text: invalidation },
+      { label: "Signal", text: thesisDetails.signal },
+      { label: "Why", text: thesisDetails.why },
+      { label: "Invalidation", text: thesisDetails.invalidation },
     ],
     points: tradeTrendPoints(position.unrealizedPnlPct),
     pnl: {
@@ -151,6 +160,7 @@ export function positionToTradeShareData(input: {
     run,
     steps,
     review,
+    thesisDetails,
     cardProps,
     title: `${symbol} ${sideLabel} ${pnlPercent}`,
     description: review?.summary ?? ticket.thesis,
@@ -163,6 +173,56 @@ export function positionToTradeShareData(input: {
     entryLabel,
     exitLabel,
   };
+}
+
+export async function compactTradeCardThesisDetails(input: {
+  run?: ControlRun;
+  steps: RunStep[];
+  ticket: TradeTicket;
+  ai?: StructuredAiClient;
+}): Promise<TradeCardThesisDetails> {
+  const ai = input.ai ?? new CassieStructuredClient();
+  const payload = {
+    sourcePostText: input.run?.sourcePost.text ?? null,
+    sourceAuthor: input.run?.sourcePost.authorHandle ?? input.run?.sourcePost.authorName ?? null,
+    headlineThesis: stepOutputString(input.steps, "intake", "headlineThesis"),
+    literalClaim: stepOutputString(input.steps, "opportunity", "literalClaim"),
+    marketImplication: stepOutputString(input.steps, "opportunity", "marketImplication"),
+    tradeExpressionSignal: stepOutputString(input.steps, "trade_expression", "signal"),
+    coreInterpretation: stepOutputString(input.steps, "trade_expression", "coreInterpretation"),
+    ticketThesis: input.ticket.thesis,
+    exitPlanThesis: input.ticket.exitPlan.thesis,
+    invalidationSignals: input.ticket.exitPlan.invalidationSignals,
+    venue: input.ticket.venue,
+    symbol: input.ticket.venueData?.symbol ?? null,
+    side: input.ticket.side,
+  };
+  const payloadJson = JSON.stringify(payload, null, 2);
+  const system = `You write compact public copy for Cassie trade-share cards.
+
+Return exactly three complete, polished card lines:
+- signal: the source claim or catalyst in plain market language.
+- why: the semantic trade rationale only.
+- invalidation: the clearest condition that would break the thesis.
+
+Constraints:
+- Keep each field within the provided schema length.
+- Use one sentence per field.
+- Preserve the economic meaning; do not invent facts.
+- Do not include venue names, ticker symbols, exchange names, entry prices, exit prices, or execution mechanics in why.
+- Keep wording suitable for an image card, not an internal log.`;
+
+  return TradeCardThesisDetailsSchema.parse(await ai.generateObject({
+    name: "cassie_trade_card_thesis_compaction",
+    tier: "expensive",
+    schema: TradeCardThesisDetailsSchema,
+    system,
+    prompt: `${system}\n\nInput:\n${payloadJson}`,
+    messages: [{
+      role: "user",
+      content: payloadJson,
+    }],
+  }));
 }
 
 function stepOutputString(steps: RunStep[], stepType: RunStep["stepType"], key: string) {
@@ -223,47 +283,6 @@ function formatSignedPct(value: number) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   })}%`;
-}
-
-function compactWhy(value: string) {
-  const firstClause = value.split(";")[0]?.trim() || value.trim();
-  const match = /^(short|long|buy|sell)\s+(.+?)\s+on\s+(.+)$/iu.exec(firstClause);
-  if (!match) return compactCardSentence(firstClause, 78);
-
-  const verb = capitalize(match[1]!);
-  const asset = cleanAssetName(match[2]!);
-  const premise = match[3]!
-    .replace(/^the market(?:'|\u2019)s bearish read-through that\s+/iu, "bearish ")
-    .replace(/^the market(?:'|\u2019)s bullish read-through that\s+/iu, "bullish ")
-    .replace(/\bGoogle is lagging in the AI race\b/iu, "Google AI-leadership weakness")
-    .replace(/\bGoogle is behind in the AI race\b/iu, "Google AI-leadership weakness")
-    .replace(/\bthe trade is\b.+$/iu, "")
-    .trim();
-
-  return compactCardSentence(`${verb} ${asset} on ${premise}`, 78);
-}
-
-function compactInvalidation(value: string) {
-  return compactCardSentence(value.replace(/product\/traction/giu, "product traction"), 72);
-}
-
-function compactCardSentence(value: string, maxLength: number) {
-  const clean = value.replace(/\s+/gu, " ").trim().replace(/[.;,:\s]+$/u, "");
-  if (clean.length <= maxLength) return `${clean}.`;
-  const clipped = clean.slice(0, maxLength - 1);
-  const breakAt = clipped.lastIndexOf(" ");
-  return `${clipped.slice(0, breakAt > 32 ? breakAt : maxLength - 1).trim()}.`;
-}
-
-function cleanAssetName(value: string) {
-  return value
-    .replace(/\/.+$/u, "")
-    .replace(/\(.+\)$/u, "")
-    .trim();
-}
-
-function capitalize(value: string) {
-  return `${value.slice(0, 1).toUpperCase()}${value.slice(1).toLowerCase()}`;
 }
 
 function formatShortDate(value: string) {
