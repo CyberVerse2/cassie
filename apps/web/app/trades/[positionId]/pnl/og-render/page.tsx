@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
-import { getTradeShareData, TradeShareNotFoundError } from "../../../../lib/trade-card-data";
-import { TradeShareClient } from "../../trade-share-client";
+import { TradeCard } from "../../../../components/trade-card";
+import { getTradeCardRenderData, TradeShareNotFoundError } from "../../../../lib/trade-card-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,14 +25,14 @@ export default async function TradePnlOgRenderPage({ params }: OgRenderPageProps
         background: "#040504",
       }}
     >
-      <TradeShareClient initialShare={share} frameWidth={1110} />
+      <TradeCard {...share.cardProps} frameWidth={1110} />
     </main>
   );
 }
 
 async function readShare(positionId: string) {
   try {
-    return await getTradeShareData(positionId);
+    return await getTradeCardRenderData(positionId);
   } catch (error) {
     if (error instanceof TradeShareNotFoundError) notFound();
     throw error;

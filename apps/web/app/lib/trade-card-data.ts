@@ -7,7 +7,7 @@ type TradeCardPerson = {
   avatarUrl?: string;
 };
 
-type TradeCardProps = {
+export type TradeCardProps = {
   author?: TradeCardPerson;
   trader?: TradeCardPerson;
   headline?: string;
@@ -60,10 +60,30 @@ export type TradeShareData = {
   exitLabel: string;
 };
 
+export type TradeCardRenderData = {
+  cardProps: TradeCardProps;
+};
+
 export async function getTradeShareData(
   positionId: string,
   store: CassieStore = new DrizzleCassieStore(),
 ): Promise<TradeShareData> {
+  return positionToTradeShareData(await readTradeShareSource(positionId, store, { includeReview: true }));
+}
+
+export async function getTradeCardRenderData(
+  positionId: string,
+  store: CassieStore = new DrizzleCassieStore(),
+): Promise<TradeCardRenderData> {
+  const share = positionToTradeShareData(await readTradeShareSource(positionId, store, { includeReview: false }));
+  return { cardProps: share.cardProps };
+}
+
+async function readTradeShareSource(
+  positionId: string,
+  store: CassieStore,
+  options: { includeReview: boolean },
+) {
   const position = await store.getPosition(positionId);
   if (!position) throw new TradeShareNotFoundError(positionId);
 
@@ -73,14 +93,14 @@ export async function getTradeShareData(
   const [run, steps, review, settings] = await Promise.all([
     ticket.runId ? store.getRun(ticket.runId) : Promise.resolve(undefined),
     ticket.runId ? store.getRunSteps(ticket.runId) : Promise.resolve([]),
-    store.getLatestPositionReview(position.positionId),
+    options.includeReview ? store.getLatestPositionReview(position.positionId) : Promise.resolve(undefined),
     store.getUserSettings(position.userId),
   ]);
   if (!settings) throw new Error(`Cassie user settings ${position.userId} were not found.`);
   const copy = deriveTradeCardCopy({ run, steps, ticket });
   const trader = traderFromSettings(settings);
 
-  return positionToTradeShareData({ position, ticket, run, steps, review, trader, copy });
+  return { position, ticket, run, steps, review, trader, copy };
 }
 
 export function positionToTradeShareData(input: {
@@ -246,7 +266,12 @@ function sideName(side: string) {
 
 function formatPrice(value: number | null, venue: string) {
   if (value == null) return "No mark";
-  if (venue === "polymarket" || value <= 1) return `${Math.round(value * 100)}c`;
+  if (venue === "polymarket" || value <= 1) {
+    return `${(value * 100).toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}c`;
+  }
   return `$${value.toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
