@@ -57,5 +57,13 @@ export async function accountResponse(
 
 export function apiError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error);
+  if (isAuthenticationError(message)) {
+    return NextResponse.json({ error: "Session expired. Log in again." }, { status: 401 });
+  }
   return NextResponse.json({ error: message }, { status: 400 });
+}
+
+function isAuthenticationError(message: string) {
+  return message === "Missing Privy access token."
+    || message === "Failed to verify authentication token";
 }

@@ -127,6 +127,11 @@ export function useCassieAccount() {
     [],
   );
   const userProfile = useMemo(() => profileFromUser(privy.user), [privy.user]);
+  const clearExpiredSession = useCallback(async (response: Response) => {
+    if (response.status !== 401) return;
+    setAccount(null);
+    await privy.logout();
+  }, [privy]);
 
   const embeddedWallet = useMemo(() => {
     const primary = privy.user?.wallet;
@@ -189,6 +194,7 @@ export function useCassieAccount() {
         defaultTradeSizeUsd: input.defaultTradeSizeUsd,
       }),
     });
+    await clearExpiredSession(response);
     const payload = await response.json() as { account?: CassieAccount; error?: string };
     if (!response.ok || !payload.account) {
       throw new Error(payload.error ?? "Cassie account sync failed.");
@@ -196,7 +202,7 @@ export function useCassieAccount() {
     setAccount(payload.account);
     setStatus("idle");
     return payload.account;
-  }, [addSigners, embeddedWallet, privy, signerId, signerPolicyIds, walletsReady]);
+  }, [addSigners, clearExpiredSession, embeddedWallet, privy, signerId, signerPolicyIds, walletsReady]);
 
   const prepareAccount = useCallback(async (input: SyncInput = {}) => {
     try {
@@ -217,6 +223,7 @@ export function useCassieAccount() {
       const response = await fetch("/api/account", {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
+      await clearExpiredSession(response);
       if (response.status === 404) return null;
       const payload = await response.json() as { account?: CassieAccount; error?: string };
       if (!response.ok || !payload.account) {
@@ -230,7 +237,7 @@ export function useCassieAccount() {
       setStatus("error");
       return null;
     }
-  }, [privy]);
+  }, [clearExpiredSession, privy]);
 
   const beginTelegramConnect = useCallback(async () => {
     if (!privy.authenticated) {
@@ -244,12 +251,13 @@ export function useCassieAccount() {
       method: "POST",
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    await clearExpiredSession(response);
     const payload = await response.json() as { telegram?: TelegramConnectSession; error?: string };
     if (!response.ok || !payload.telegram) {
       throw new Error(payload.error ?? "Telegram connection could not be started.");
     }
     return payload.telegram;
-  }, [privy]);
+  }, [clearExpiredSession, privy]);
 
   const updateDefaultTradeSize = useCallback(async (defaultTradeSizeUsd: number) => {
     if (!privy.authenticated) {
@@ -267,13 +275,14 @@ export function useCassieAccount() {
       },
       body: JSON.stringify({ defaultTradeSizeUsd }),
     });
+    await clearExpiredSession(response);
     const payload = await response.json() as { account?: CassieAccount; error?: string };
     if (!response.ok || !payload.account) {
       throw new Error(payload.error ?? "Default trade size update failed.");
     }
     setAccount(payload.account);
     return payload.account;
-  }, [privy]);
+  }, [clearExpiredSession, privy]);
 
   const authedFetch = useCallback(async (url: string, init: RequestInit = {}) => {
     if (!privy.authenticated) {
@@ -283,7 +292,7 @@ export function useCassieAccount() {
     if (!accessToken) {
       throw new Error("Privy access token was not available.");
     }
-    return fetch(url, {
+    const response = await fetch(url, {
       ...init,
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -291,7 +300,9 @@ export function useCassieAccount() {
         ...init.headers,
       },
     });
-  }, [privy]);
+    await clearExpiredSession(response);
+    return response;
+  }, [clearExpiredSession, privy]);
 
   const fetchPositions = useCallback(async () => {
     const response = await authedFetch("/api/positions");
