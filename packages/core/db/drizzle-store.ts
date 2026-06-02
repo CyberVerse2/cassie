@@ -349,6 +349,17 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.ticket;
   }
 
+  async getTradeTickets(ticketIds: string[]): Promise<TradeTicket[]> {
+    const uniqueIds = [...new Set(ticketIds)];
+    if (uniqueIds.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(tradeTickets)
+      .where(inArray(tradeTickets.ticketId, uniqueIds));
+
+    return rows.map((row) => row.ticket);
+  }
+
   async addExecutionJob(job: ExecutionJob): Promise<ExecutionJob> {
     await this.db.insert(executionJobs).values({
       jobId: job.jobId,
@@ -489,6 +500,23 @@ export class DrizzleCassieStore implements CassieStore {
       .limit(1);
 
     return rows[0]?.review;
+  }
+
+  async getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]> {
+    const uniqueIds = [...new Set(positionIds)];
+    if (uniqueIds.length === 0) return [];
+    const rows = await this.db
+      .select()
+      .from(positionReviews)
+      .where(inArray(positionReviews.positionId, uniqueIds))
+      .orderBy(desc(positionReviews.reviewedAt));
+    const latest = new Map<string, PositionReview>();
+    for (const row of rows) {
+      if (!latest.has(row.positionId)) {
+        latest.set(row.positionId, row.review);
+      }
+    }
+    return [...latest.values()];
   }
 
   async listPositionReviews(positionId: string): Promise<PositionReview[]> {

@@ -91,6 +91,7 @@ export interface CassieStore {
   addTradeTicket(ticket: TradeTicket): Promise<TradeTicket>;
   updateTradeTicket(ticket: TradeTicket): Promise<TradeTicket>;
   getTradeTicket(ticketId: string): Promise<TradeTicket | undefined>;
+  getTradeTickets(ticketIds: string[]): Promise<TradeTicket[]>;
   addExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob>;
   getExecutionJob(jobId: string): Promise<ExecutionJob | undefined>;
@@ -102,6 +103,7 @@ export interface CassieStore {
   listUserPositions(userId: string): Promise<Position[]>;
   addPositionReview(review: PositionReview): Promise<PositionReview>;
   getLatestPositionReview(positionId: string): Promise<PositionReview | undefined>;
+  getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]>;
   listPositionReviews(positionId: string): Promise<PositionReview[]>;
   addWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
   updateWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
@@ -302,6 +304,11 @@ export class InMemoryCassieStore implements CassieStore {
     return this.snapshot.tradeTickets.find((ticket) => ticket.ticketId === ticketId);
   }
 
+  async getTradeTickets(ticketIds: string[]): Promise<TradeTicket[]> {
+    const ids = new Set(ticketIds);
+    return this.snapshot.tradeTickets.filter((ticket) => ids.has(ticket.ticketId));
+  }
+
   async addExecutionJob(job: ExecutionJob): Promise<ExecutionJob> {
     this.snapshot.executionJobs.push(job);
     await this.audit({
@@ -371,6 +378,19 @@ export class InMemoryCassieStore implements CassieStore {
     return this.snapshot.positionReviews
       .filter((review) => review.positionId === positionId)
       .sort((left, right) => right.reviewedAt.localeCompare(left.reviewedAt))[0];
+  }
+
+  async getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]> {
+    const ids = new Set(positionIds);
+    const latest = new Map<string, PositionReview>();
+    for (const review of this.snapshot.positionReviews) {
+      if (!ids.has(review.positionId)) continue;
+      const current = latest.get(review.positionId);
+      if (!current || review.reviewedAt > current.reviewedAt) {
+        latest.set(review.positionId, review);
+      }
+    }
+    return [...latest.values()];
   }
 
   async listPositionReviews(positionId: string): Promise<PositionReview[]> {

@@ -3,7 +3,6 @@ import {
   apiError,
   authenticatedContext,
 } from "../_lib/account";
-import type { TradeTicket } from "../../../../../packages/core/schemas";
 import { decoratePosition } from "./_lib/position-response";
 
 export const runtime = "nodejs";
@@ -17,20 +16,20 @@ export async function GET(request: Request) {
     }
     const positions = await store.listUserPositions(settings.userId);
     const tickets = new Map(
-      (await Promise.all(positions.map((position) => store.getTradeTicket(position.ticketId))))
-        .filter((ticket): ticket is TradeTicket => Boolean(ticket))
+      (await store.getTradeTickets(positions.map((position) => position.ticketId)))
         .map((ticket) => [ticket.ticketId, ticket]),
     );
     const displayPositions = positions.map((position) =>
       decoratePosition(position, tickets.get(position.ticketId))
     );
-    const latestReviews = await Promise.all(positions.map(async (position) => ({
-      positionId: position.positionId,
-      review: await store.getLatestPositionReview(position.positionId),
-    })));
+    const latestReviewRows = await store.getLatestPositionReviews(positions.map((position) => position.positionId));
+    const latestReviews = new Map(latestReviewRows.map((review) => [review.positionId, review]));
     return NextResponse.json({
       positions: displayPositions,
-      latestReviews: Object.fromEntries(latestReviews.map((item) => [item.positionId, item.review ?? null])),
+      latestReviews: Object.fromEntries(positions.map((position) => [
+        position.positionId,
+        latestReviews.get(position.positionId) ?? null,
+      ])),
     });
   } catch (error) {
     return apiError(error);

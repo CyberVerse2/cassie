@@ -4,7 +4,7 @@ import {
   apiError,
   authenticatedContext,
 } from "../../_lib/account";
-import type { Position, TradeTicket } from "../../../../../../packages/core/schemas";
+import type { Position } from "../../../../../../packages/core/schemas";
 import { markUserFacingHyperliquidPositions } from "../../../../../../packages/positions/user-facing";
 import { decoratePosition } from "../_lib/position-response";
 
@@ -31,8 +31,7 @@ export async function POST(request: Request) {
           && position.venue === "hyperliquid";
       });
     const tickets = new Map(
-      (await Promise.all(positions.map((position) => store.getTradeTicket(position.ticketId))))
-        .filter((ticket): ticket is TradeTicket => Boolean(ticket))
+      (await store.getTradeTickets(positions.map((position) => position.ticketId)))
         .map((ticket) => [ticket.ticketId, ticket]),
     );
     const markedPositions = await markUserFacingHyperliquidPositions(positions, tickets);

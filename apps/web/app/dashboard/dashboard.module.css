@@ -2171,6 +2171,14 @@
   border-top: 1px solid var(--line);
 }
 
+.liveMarkStatus {
+  grid-column: 1 / -1;
+  padding: 10px 20px;
+  color: var(--ink-faint);
+  font-size: 11.5px;
+  border-top: 1px solid var(--line-soft);
+}
+
 .withdrawPanel {
   display: grid;
   gap: 12px;
