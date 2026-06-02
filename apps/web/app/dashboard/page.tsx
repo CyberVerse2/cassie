@@ -517,6 +517,8 @@ function Center({
   const activityQuery = useQuery({
     queryKey: dashboardQueryKeys.activity,
     queryFn: fetchActivity,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
   });
   const positions = useMemo(() =>
     mergePositions(storedPositions, positionMarksQuery.data ?? []),

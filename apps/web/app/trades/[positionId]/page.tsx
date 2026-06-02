@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { TradeCard } from "../../components/trade-card";
 import { getTradeShareData, TradeShareNotFoundError } from "../../lib/trade-card-data";
 import { siteName, siteUrl } from "../../metadata-config";
+import { TradeShareClient } from "./trade-share-client";
 
 export const runtime = "nodejs";
 
@@ -53,7 +53,7 @@ export default async function TradeSharePage({ params }: TradePageProps) {
         background: "#040504",
       }}
     >
-      <TradeCard {...share.cardProps} variant="band" />
+      <TradeShareClient initialShare={share} />
     </main>
   );
 }

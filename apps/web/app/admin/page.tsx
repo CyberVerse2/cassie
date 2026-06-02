@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type {
   AdminData,
@@ -29,6 +30,12 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: "trades", label: "Trades" },
   { key: "ops", label: "Ops" },
 ];
+
+const adminQueryKeys = {
+  overview: (token: string) => ["admin", "overview", token] as const,
+  run: (token: string, runId: string) => ["admin", "run", token, runId] as const,
+  ticket: (token: string, ticketId: string) => ["admin", "ticket", token, ticketId] as const,
+};
 
 export default function AdminPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -88,38 +95,22 @@ function TokenGate({ onSubmit }: { onSubmit: (token: string) => void }) {
 }
 
 function AdminConsole({ token, onSignOut }: { token: string; onSignOut: () => void }) {
+  const queryClient = useQueryClient();
   const [tab, setTab] = useState<TabKey>("overview");
-  const [data, setData] = useState<AdminData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const [selectedRun, setSelectedRun] = useState<SelectedRunDetail | null>(null);
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await fetch("/api/admin/overview", {
-        headers: { authorization: `Bearer ${token}` },
-        cache: "no-store",
-      });
-      if (response.status === 401) {
-        onSignOut();
-        return;
-      }
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload?.error ?? "Failed to load admin data.");
-      setData(payload as AdminData);
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setLoading(false);
-    }
-  }, [token, onSignOut]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  const adminQuery = useQuery({
+    queryKey: adminQueryKeys.overview(token),
+    queryFn: () => adminFetch<AdminData>("/api/admin/overview", token, onSignOut),
+    refetchInterval: 15_000,
+    staleTime: 5_000,
+  });
+  const data = adminQuery.data ?? null;
+  const loading = adminQuery.isLoading;
+  const error = errorMessage(adminQuery.error);
+  const refresh = useCallback(() => {
+    void queryClient.invalidateQueries({ queryKey: adminQueryKeys.overview(token) });
+  }, [queryClient, token]);
 
   return (
     <main className={s.shell}>
@@ -161,8 +152,8 @@ function AdminConsole({ token, onSignOut }: { token: string; onSignOut: () => vo
                   : "No data"}
             </p>
           </div>
-          <button type="button" className={s.refresh} onClick={() => void load()} disabled={loading}>
-            <RefreshIcon spinning={loading} />
+          <button type="button" className={s.refresh} onClick={refresh} disabled={adminQuery.isFetching}>
+            <RefreshIcon spinning={adminQuery.isFetching} />
             Refresh
           </button>
         </header>
@@ -439,34 +430,13 @@ function TicketDetailDrawer({
   ticketId: string;
   onClose: () => void;
 }) {
-  const [detail, setDetail] = useState<AdminTicketDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setDetail(null);
-    (async () => {
-      try {
-        const response = await fetch(`/api/admin/tickets/${encodeURIComponent(ticketId)}`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload?.error ?? "Failed to load ticket.");
-        if (!cancelled) setDetail(payload as AdminTicketDetail);
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [ticketId, token]);
+  const detailQuery = useQuery({
+    queryKey: adminQueryKeys.ticket(token, ticketId),
+    queryFn: () => adminFetch<AdminTicketDetail>(`/api/admin/tickets/${encodeURIComponent(ticketId)}`, token),
+    staleTime: 5_000,
+  });
+  const detail = detailQuery.data ?? null;
+  const error = errorMessage(detailQuery.error);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -496,7 +466,7 @@ function TicketDetailDrawer({
         </header>
 
         <div className={s.drawerBody}>
-          {loading ? <div className={s.empty}>Loading ticket…</div> : null}
+          {detailQuery.isLoading ? <div className={s.empty}>Loading ticket…</div> : null}
           {error ? <div className={s.banner}>{error}</div> : null}
           {detail ? <FocusedTicketDetail detail={detail} ticket={detail} /> : null}
         </div>
@@ -617,34 +587,14 @@ function RunDetailDrawer({
   focusedTicketId: string | null;
   onClose: () => void;
 }) {
-  const [detail, setDetail] = useState<AdminRunDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    setDetail(null);
-    (async () => {
-      try {
-        const response = await fetch(`/api/admin/runs/${encodeURIComponent(runId)}`, {
-          headers: { authorization: `Bearer ${token}` },
-          cache: "no-store",
-        });
-        const payload = await response.json();
-        if (!response.ok) throw new Error(payload?.error ?? "Failed to load run.");
-        if (!cancelled) setDetail(payload as AdminRunDetail);
-      } catch (caught) {
-        if (!cancelled) setError(caught instanceof Error ? caught.message : String(caught));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [runId, token]);
+  const detailQuery = useQuery({
+    queryKey: adminQueryKeys.run(token, runId),
+    queryFn: () => adminFetch<AdminRunDetail>(`/api/admin/runs/${encodeURIComponent(runId)}`, token),
+    refetchInterval: 10_000,
+    staleTime: 5_000,
+  });
+  const detail = detailQuery.data ?? null;
+  const error = errorMessage(detailQuery.error);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -674,7 +624,7 @@ function RunDetailDrawer({
         </header>
 
         <div className={s.drawerBody}>
-          {loading ? <div className={s.empty}>Loading run…</div> : null}
+          {detailQuery.isLoading ? <div className={s.empty}>Loading run…</div> : null}
           {error ? <div className={s.banner}>{error}</div> : null}
           {detail ? <RunDetailBody detail={detail} focusedTicketId={focusedTicketId} /> : null}
         </div>
@@ -1095,4 +1045,22 @@ function prettify(value: string): string {
 
 function withAt(handle: string): string {
   return handle.startsWith("@") ? handle : `@${handle}`;
+}
+
+async function adminFetch<T>(url: string, token: string, onUnauthorized?: () => void): Promise<T> {
+  const response = await fetch(url, {
+    headers: { authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (response.status === 401) {
+    onUnauthorized?.();
+    throw new Error("Admin session expired.");
+  }
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload?.error ?? "Failed to load admin data.");
+  return payload as T;
+}
+
+function errorMessage(error: unknown): string | null {
+  return error instanceof Error ? error.message : null;
 }
