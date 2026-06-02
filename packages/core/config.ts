@@ -281,7 +281,7 @@ export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWor
     GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: numberSchema("GRAPHILE_SUPERVISOR_MAX_ATTEMPTS", 3, { integer: true, min: 1 }),
     GRAPHILE_WORKER_CONCURRENCY: numberSchema("GRAPHILE_WORKER_CONCURRENCY", 1, { integer: true, min: 1 }),
     GRAPHILE_WORKER_POLL_INTERVAL_MS: numberSchema("GRAPHILE_WORKER_POLL_INTERVAL_MS", 2_000, { integer: true, min: 1 }),
-    CASSIE_POSITION_REVIEW_INTERVAL_MINUTES: numberSchema("CASSIE_POSITION_REVIEW_INTERVAL_MINUTES", 15, { integer: true, min: 1, max: 59 }),
+    CASSIE_POSITION_REVIEW_INTERVAL_MINUTES: numberSchema("CASSIE_POSITION_REVIEW_INTERVAL_MINUTES", 2, { integer: true, min: 1, max: 59 }),
   }).transform((values) => ({
     executionMaxAttempts: values.GRAPHILE_EXECUTION_MAX_ATTEMPTS,
     supervisorMaxAttempts: values.GRAPHILE_SUPERVISOR_MAX_ATTEMPTS,
