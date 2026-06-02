@@ -1,6 +1,6 @@
 import { DrizzleCassieStore } from "../../../../packages/core/db/drizzle-store.ts";
 import type { CassieStore } from "../../../../packages/core/db/store.ts";
-import type { ControlRun, Position, PositionReview, RunStep, TradeTicket } from "../../../../packages/core/schemas/index.ts";
+import type { ControlRun, Position, PositionReview, RunStep, TradeTicket, UserSettings } from "../../../../packages/core/schemas/index.ts";
 
 type TradeCardPerson = {
   name: string;
@@ -45,6 +45,7 @@ export type TradeShareData = {
   run: ControlRun | undefined;
   steps: RunStep[];
   review: PositionReview | undefined;
+  trader: TradeCardPerson;
   copy: TradeCardCopy;
   cardProps: TradeCardProps;
   title: string;
@@ -69,14 +70,17 @@ export async function getTradeShareData(
   const ticket = await store.getTradeTicket(position.ticketId);
   if (!ticket) throw new Error(`Trade ticket ${position.ticketId} was not found.`);
 
-  const [run, steps, review] = await Promise.all([
+  const [run, steps, review, settings] = await Promise.all([
     ticket.runId ? store.getRun(ticket.runId) : Promise.resolve(undefined),
     ticket.runId ? store.getRunSteps(ticket.runId) : Promise.resolve([]),
     store.getLatestPositionReview(position.positionId),
+    store.getUserSettings(position.userId),
   ]);
+  if (!settings) throw new Error(`Cassie user settings ${position.userId} were not found.`);
   const copy = deriveTradeCardCopy({ run, steps, ticket });
+  const trader = traderFromSettings(settings);
 
-  return positionToTradeShareData({ position, ticket, run, steps, review, copy });
+  return positionToTradeShareData({ position, ticket, run, steps, review, trader, copy });
 }
 
 export function positionToTradeShareData(input: {
@@ -85,9 +89,10 @@ export function positionToTradeShareData(input: {
   run?: ControlRun;
   steps?: RunStep[];
   review?: PositionReview;
+  trader: TradeCardPerson;
   copy: TradeCardCopy;
 }): TradeShareData {
-  const { position, ticket, run, review, copy } = input;
+  const { position, ticket, run, review, trader, copy } = input;
   const steps = input.steps ?? [];
   const symbol = positionSymbol(position, ticket);
   const venueLabel = venueName(position.venue);
@@ -107,9 +112,7 @@ export function positionToTradeShareData(input: {
       name: authorLabel,
       avatarUrl: authorHandle ? `https://unavatar.io/x/${authorHandle}` : undefined,
     },
-    // TODO(trader): no trader identity (handle/avatar) exists in the
-    // schema yet. Wire the executing user's X profile once available.
-    trader: { name: "Cassie" },
+    trader,
     headline: copy.headline,
     why: copy.why,
     tradeResult: {
@@ -133,6 +136,7 @@ export function positionToTradeShareData(input: {
     run,
     steps,
     review,
+    trader,
     copy,
     cardProps,
     title: `${symbol} ${sideLabel} ${pnlPercent}`,
@@ -145,6 +149,13 @@ export function positionToTradeShareData(input: {
     pnlTone,
     entryLabel,
     exitLabel,
+  };
+}
+
+function traderFromSettings(settings: UserSettings): TradeCardPerson {
+  return {
+    name: settings.profile.name,
+    avatarUrl: settings.profile.avatarUrl ?? undefined,
   };
 }
 

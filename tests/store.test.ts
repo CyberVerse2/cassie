@@ -15,6 +15,7 @@ const settings: UserSettings = {
   privyUserId: null,
   privyWalletId: null,
   walletAddress: "0x0000000000000000000000000000000000000000",
+  profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
   defaultTradeSizeUsd: 50,
 };
 const exitPlan: TradeExitPlan = {
@@ -148,11 +149,13 @@ describe("InMemoryCassieStore", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_1",
       walletAddress: "0x1111111111111111111111111111111111111111",
+      profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
     });
     const updated = await store.syncPrivyUser({
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_2",
       walletAddress: "0x2222222222222222222222222222222222222222",
+      profile: { name: "Cassie Trader", handle: "@cassietrader", avatarUrl: "https://example.com/avatar.png" },
       defaultTradeSizeUsd: 25,
     });
 
@@ -162,6 +165,7 @@ describe("InMemoryCassieStore", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_2",
       walletAddress: "0x2222222222222222222222222222222222222222",
+      profile: { name: "Cassie Trader", handle: "@cassietrader", avatarUrl: "https://example.com/avatar.png" },
       defaultTradeSizeUsd: 25,
     });
     expect((await store.load()).userSettings).toHaveLength(1);

@@ -8,6 +8,7 @@ const userSettings: UserSettings = {
   privyUserId: "did:privy:user_1",
   privyWalletId: "wallet_1",
   walletAddress: "0x1111111111111111111111111111111111111111",
+  profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
   defaultTradeSizeUsd: 2,
 };
 

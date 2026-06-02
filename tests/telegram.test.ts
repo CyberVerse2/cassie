@@ -17,6 +17,7 @@ describe("Telegram notifications", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_1",
       walletAddress: "0x1111111111111111111111111111111111111111",
+      profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
     });
     const gateway = new FakeTelegramGateway();
 
@@ -92,6 +93,7 @@ describe("Telegram notifications", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_1",
       walletAddress: "0x1111111111111111111111111111111111111111",
+      profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
     });
     const gateway = new FakeTelegramGateway();
 
@@ -151,6 +153,7 @@ describe("Telegram notifications", () => {
         privyUserId: "did:privy:user_1",
         privyWalletId: null,
         walletAddress: null,
+        profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
         defaultTradeSizeUsd: 50,
         telegram: {
           chatId: "12345",
@@ -184,6 +187,7 @@ describe("Telegram notifications", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_1",
       walletAddress: "0x1111111111111111111111111111111111111111",
+      profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
     });
     const session = await createTelegramConnectSession({
       privyUserId: "did:privy:user_1",

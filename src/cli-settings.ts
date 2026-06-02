@@ -27,6 +27,7 @@ export function buildCliUserSettings(
     privyUserId: null,
     privyWalletId: null,
     walletAddress,
+    profile: { name: "Cassie CLI", handle: "@cassie-cli", avatarUrl: null },
     defaultTradeSizeUsd: numberFlag(flags, "size", 50),
   };
 

@@ -6,6 +6,11 @@ import {
 } from "../apps/web/app/lib/trade-card-data.ts";
 import type { ControlRun, Position, RunStep, TradeTicket } from "../packages/core/schemas/index.ts";
 
+const trader = {
+  name: "Cassie",
+  avatarUrl: "https://example.com/cassie.png",
+};
+
 const ticket: TradeTicket = {
   ticketId: "ticket_1",
   runId: "run_1",
@@ -105,13 +110,14 @@ describe("trade card data", () => {
       headline: "As long as BTC holds $65k, I think $75k trades next.",
       why: "BTC breaks higher if the $65k level holds.",
     };
-    const share = positionToTradeShareData({ position, ticket, run, copy });
+    const share = positionToTradeShareData({ position, ticket, run, trader, copy });
 
     expect(share.title).toBe("BTC-75K YES +36.5%");
     expect(share.pnlLabel).toBe("Unrealized PnL");
     expect(share.entryLabel).toBe("52c");
     expect(share.exitLabel).toBe("71c");
     expect(share.cardProps.author?.name).toBe("@source");
+    expect(share.cardProps.trader).toEqual(trader);
     expect(share.cardProps.headline).toBe("As long as BTC holds $65k, I think $75k trades next.");
     expect(share.cardProps.why).toBe("BTC breaks higher if the $65k level holds.");
     expect(share.cardProps.tradeResult).toEqual({
@@ -161,6 +167,7 @@ describe("trade card data", () => {
       ticket: hyperliquidTicket,
       run,
       steps,
+      trader,
       copy,
     });
 

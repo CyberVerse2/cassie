@@ -198,12 +198,14 @@ export async function syncPrivyAccount(input: {
   privyUserId: string;
   walletAddress: string | null;
   privyWalletId: string | null;
+  profile: UserSettings["profile"];
   defaultTradeSizeUsd?: number;
 }): Promise<UserSettings> {
   return input.store.syncPrivyUser({
     privyUserId: input.privyUserId,
     privyWalletId: input.privyWalletId,
     walletAddress: input.walletAddress,
+    profile: input.profile,
     defaultTradeSizeUsd: input.defaultTradeSizeUsd,
   });
 }

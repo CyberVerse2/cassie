@@ -41,11 +41,18 @@ export const SourcePostSchema = z.object({
   mediaDescriptions: z.array(z.string()),
 });
 
+export const UserProfileSchema = z.object({
+  name: z.string().min(1),
+  handle: z.string().min(1),
+  avatarUrl: z.string().nullable(),
+});
+
 export const UserSettingsSchema = z.object({
   userId: z.string(),
   privyUserId: z.string().nullable().default(null),
   privyWalletId: z.string().nullable().default(null),
   walletAddress: z.string().nullable().default(null),
+  profile: UserProfileSchema,
   defaultTradeSizeUsd: z.number().positive(),
   telegram: z.object({
     chatId: z.string().min(1),
@@ -633,6 +640,7 @@ export type CassieIntent = z.infer<typeof CassieIntentSchema>;
 export type SourceMode = z.infer<typeof SourceModeSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
 export type TelegramConnection = NonNullable<z.infer<typeof UserSettingsSchema>["telegram"]>;
+export type UserProfile = z.infer<typeof UserProfileSchema>;
 export type UserSettings = z.infer<typeof UserSettingsSchema>;
 export type UserAccount = z.infer<typeof UserAccountSchema>;
 export type Thesis = z.infer<typeof ThesisSchema>;

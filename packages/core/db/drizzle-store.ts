@@ -167,6 +167,7 @@ export class DrizzleCassieStore implements CassieStore {
     privyUserId: string;
     privyWalletId: string | null;
     walletAddress: string | null;
+    profile: UserSettings["profile"];
     defaultTradeSizeUsd?: number;
   }): Promise<UserSettings> {
     const existing = await this.getUserSettingsByPrivyUserId(input.privyUserId);
@@ -175,6 +176,7 @@ export class DrizzleCassieStore implements CassieStore {
       privyUserId: input.privyUserId,
       privyWalletId: input.privyWalletId,
       walletAddress: input.walletAddress,
+      profile: input.profile,
       defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
       telegram: existing?.telegram ?? null,
     };

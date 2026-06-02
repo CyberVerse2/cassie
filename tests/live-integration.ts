@@ -72,6 +72,7 @@ liveDescribe("live integration", () => {
       privyUserId: null,
       privyWalletId: null,
       walletAddress: null,
+      profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
       defaultTradeSizeUsd: 25,
     };
 

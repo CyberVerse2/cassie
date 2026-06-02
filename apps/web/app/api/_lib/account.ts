@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { authenticatePrivyRequest, PrivyAdapter } from "../../../../../packages/adapters/privy";
 import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
+import { UserProfileSchema } from "../../../../../packages/core/schemas";
 import { withdrawableBalanceUsd } from "../../../../../packages/withdrawals";
 
 export const accountSyncSchema = z.object({
   walletAddress: z.string().min(1).nullable(),
   privyWalletId: z.string().min(1).nullable(),
+  profile: UserProfileSchema,
   defaultTradeSizeUsd: z.number().positive().optional(),
 });
 
@@ -47,6 +49,7 @@ export async function accountResponse(
       privyUserId: settings.privyUserId,
       privyWalletId: settings.privyWalletId,
       walletAddress: settings.walletAddress,
+      profile: settings.profile,
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       telegram: settings.telegram ?? null,
       balance: balance ?? null,

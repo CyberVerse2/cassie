@@ -15,6 +15,7 @@ export async function POST(request: Request) {
       privyUserId: claims.user_id,
       privyWalletId: body.privyWalletId,
       walletAddress: body.walletAddress,
+      profile: body.profile,
       defaultTradeSizeUsd: body.defaultTradeSizeUsd,
     });
     return accountResponse(claims.user_id, store);

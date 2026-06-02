@@ -44,6 +44,7 @@ const settings: UserSettings = {
   privyUserId: null,
   privyWalletId: null,
   walletAddress: "0x0000000000000000000000000000000000000000",
+  profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
   defaultTradeSizeUsd: 50,
 };
 

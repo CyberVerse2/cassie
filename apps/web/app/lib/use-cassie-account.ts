@@ -31,6 +31,7 @@ type CassieAccount = {
   privyUserId: string | null;
   privyWalletId: string | null;
   walletAddress: string | null;
+  profile: PersistedUserProfile;
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
@@ -110,6 +111,8 @@ type CassieUserProfile = {
   initial: string;
 };
 
+type PersistedUserProfile = Omit<CassieUserProfile, "initial">;
+
 type SyncInput = {
   defaultTradeSizeUsd?: number;
   requireSigner?: boolean;
@@ -179,6 +182,9 @@ export function useCassieAccount() {
     if (!privy.authenticated) {
       throw new Error("Log in with Twitter before continuing onboarding.");
     }
+    if (!userProfile) {
+      throw new Error("Twitter profile was not available for this Cassie account.");
+    }
     if (!embeddedWallet) return null;
 
     let walletForSync = embeddedWallet;
@@ -213,6 +219,11 @@ export function useCassieAccount() {
       body: JSON.stringify({
         walletAddress: walletForSync.address,
         privyWalletId: walletForSync.id ?? null,
+        profile: {
+          name: userProfile.name,
+          handle: userProfile.handle,
+          avatarUrl: userProfile.avatarUrl,
+        },
         defaultTradeSizeUsd: input.defaultTradeSizeUsd,
       }),
     });
@@ -222,7 +233,7 @@ export function useCassieAccount() {
       throw new Error(payload.error ?? "Cassie account sync failed.");
     }
     return payload.account;
-  }, [addSigners, clearExpiredSession, embeddedWallet, privy, signerId, signerPolicyIds, walletsReady]);
+  }, [addSigners, clearExpiredSession, embeddedWallet, privy, signerId, signerPolicyIds, userProfile, walletsReady]);
 
   const syncAccountMutation = useMutation({
     mutationFn: syncAccountRequest,
