@@ -22,7 +22,7 @@ export function TradeShareClient({ initialShare, frameWidth }: { initialShare: T
   });
   const share = markQuery.data ? applyLivePosition(initialShare, markQuery.data) : initialShare;
 
-  return <TradeCard {...share.cardProps} variant="band" frameWidth={frameWidth} />;
+  return <TradeCard {...share.cardProps} frameWidth={frameWidth} />;
 }
 
 function applyLivePosition(share: TradeShareData, position: Position): TradeShareData {

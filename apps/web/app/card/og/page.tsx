@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { TradeCard, densePoints, type TradeCardProps } from "../../components/trade-card";
+import { TradeCard, type TradeCardProps } from "../../components/trade-card";
 
 export const metadata: Metadata = {
   title: "Trade card - OG",
@@ -14,10 +14,9 @@ const OG_H = 630;
 const CARD_W = Math.round((OG_H * 1690) / 944); // 1128 -> height lands on 630
 
 const hyperliquid: TradeCardProps = {
-  author: { name: "@CredibleCrypto" },
-  headline: "Flat funding, rising OI, and ETH coiling under range high made the breakout trade clean.",
-  why: "ETH reclaimed range high while leverage stayed controlled.",
-  points: densePoints({ yStart: 690, yEnd: 150, seed: 11 }),
+  author: { name: "@CredibleCrypto", avatarUrl: "https://unavatar.io/x/CredibleCrypto" },
+  trader: { name: "@0xWhaleHunter", avatarUrl: "https://unavatar.io/x/0xWhaleHunter" },
+  headline: "ETH coiled under the range high while funding stayed flat.",
   tradeResult: {
     percent: "+221.4%",
     side: "LONG",
@@ -45,7 +44,6 @@ export default async function OgStagePage({
 }) {
   const sp = await searchParams;
   const pick = (k: string) => (Array.isArray(sp[k]) ? sp[k][0] : sp[k]);
-  const variant = pick("v") === "split" ? "split" : "band";
   const example = EXAMPLES[pick("ex") ?? "default"] ?? EXAMPLES.default;
 
   return (
@@ -62,7 +60,7 @@ export default async function OgStagePage({
         overflow: "hidden",
       }}
     >
-      <TradeCard variant={variant} frameWidth={CARD_W} {...example} />
+      <TradeCard frameWidth={CARD_W} {...example} />
     </div>
   );
 }

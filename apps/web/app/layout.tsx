@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { EB_Garamond, Manrope } from "next/font/google";
+import { Bodoni_Moda, EB_Garamond, Manrope } from "next/font/google";
 import { siteDescription, siteName, siteUrl, socialImage } from "./metadata-config";
 import { AppProviders } from "./providers";
 import "./globals.css";
@@ -14,6 +14,14 @@ const garamond = EB_Garamond({
 const manrope = Manrope({
   subsets: ["latin"],
   variable: "--font-sans",
+  display: "swap",
+});
+
+// High-contrast didone for the trade card's hero figure - fashion-plate luxe.
+const bodoni = Bodoni_Moda({
+  subsets: ["latin"],
+  variable: "--font-numeral",
+  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -87,7 +95,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${garamond.variable} ${manrope.variable}`}>
+    <html lang="en" className={`${garamond.variable} ${manrope.variable} ${bodoni.variable}`}>
       <body>
         <AppProviders>{children}</AppProviders>
       </body>

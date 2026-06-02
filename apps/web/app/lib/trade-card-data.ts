@@ -2,20 +2,16 @@ import { DrizzleCassieStore } from "../../../../packages/core/db/drizzle-store.t
 import type { CassieStore } from "../../../../packages/core/db/store.ts";
 import type { ControlRun, Position, PositionReview, RunStep, TradeTicket } from "../../../../packages/core/schemas/index.ts";
 
-type TradeCardPoint = {
-  x: number;
-  y: number;
-  label: string;
+type TradeCardPerson = {
+  name: string;
+  avatarUrl?: string;
 };
 
 type TradeCardProps = {
-  author?: {
-    name: string;
-    avatarUrl?: string;
-  };
+  author?: TradeCardPerson;
+  trader?: TradeCardPerson;
   headline?: string;
   why?: string;
-  points?: TradeCardPoint[];
   tradeResult?: {
     percent: string;
     side: string;
@@ -29,7 +25,6 @@ type TradeCardProps = {
     side: string;
     logoUrl?: string;
   };
-  variant?: "split" | "band";
 };
 
 export type TradeCardCopy = {
@@ -102,18 +97,21 @@ export function positionToTradeShareData(input: {
   const pnlTone = position.unrealizedPnlPct < 0 ? "down" : "up";
   const entryLabel = formatPrice(position.entryPrice, position.venue);
   const exitLabel = formatPrice(position.currentMarkPrice ?? position.entryPrice, position.venue);
-  const authorHandle = run?.sourcePost.authorHandle?.trim();
+  const authorHandle = run?.sourcePost.authorHandle?.trim().replace(/^@/u, "");
   const authorName = run?.sourcePost.authorName?.trim();
-  const authorLabel = authorHandle ? `@${authorHandle.replace(/^@/u, "")}` : authorName || "Cassie trade";
+  const authorLabel = authorHandle ? `@${authorHandle}` : authorName || "Cassie trade";
   const marketQuestion = marketQuestionFromTicket(ticket, position, symbol);
 
   const cardProps: TradeCardProps = {
     author: {
       name: authorLabel,
+      avatarUrl: authorHandle ? `https://unavatar.io/x/${authorHandle}` : undefined,
     },
+    // TODO(trader): no trader identity (handle/avatar) exists in the
+    // schema yet. Wire the executing user's X profile once available.
+    trader: { name: "Cassie" },
     headline: copy.headline,
     why: copy.why,
-    points: tradeTrendPoints(position.unrealizedPnlPct),
     tradeResult: {
       percent: pnlPercent,
       side: sideLabel,
@@ -127,7 +125,6 @@ export function positionToTradeShareData(input: {
       side: sideLabel,
       logoUrl: venueLogo(position.venue),
     },
-    variant: "band",
   };
 
   return {
@@ -260,30 +257,4 @@ function ageLabel(value: string) {
   const elapsedHours = Math.floor(elapsedMs / 3_600_000);
   if (elapsedHours >= 1) return `${elapsedHours}h ago`;
   return "now";
-}
-
-function tradeTrendPoints(pnlPct: number): TradeCardPoint[] {
-  const positive = pnlPct >= 0;
-  const yStart = positive ? 690 : 250;
-  const yEnd = positive ? 180 : 720;
-  const amp = positive ? 34 : 28;
-  let seed = Math.max(7, Math.round(Math.abs(pnlPct) * 10));
-  const rand = () => {
-    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
-    return seed / 0x7fffffff;
-  };
-
-  return Array.from({ length: 120 }, (_, index) => {
-    const t = index / 119;
-    const trend = yStart + (yEnd - yStart) * t;
-    const wobble =
-      Math.sin(t * 13 + seed) * amp +
-      Math.sin(t * 37 + seed * 2) * amp * 0.45 +
-      (rand() - 0.5) * amp;
-    return {
-      x: 95 + (1565 - 95) * t,
-      y: trend + wobble,
-      label: "",
-    };
-  });
 }

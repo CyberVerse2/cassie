@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
-import { TradeCard, densePoints, type TradeCardProps } from "../components/trade-card";
+import { TradeCard, type TradeCardProps } from "../components/trade-card";
 import { siteDescription, siteName, tradeCardSocialImage } from "../metadata-config";
 
 export const metadata: Metadata = {
@@ -22,11 +22,10 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-const hyperliquid: TradeCardProps = {
-  author: { name: "@CredibleCrypto" },
-  headline: "Flat funding, rising OI, and ETH coiling under range high made the breakout trade clean.",
-  why: "ETH reclaimed range high while leverage stayed controlled.",
-  points: densePoints({ yStart: 690, yEnd: 150, seed: 11 }),
+const hyperliquidWin: TradeCardProps = {
+  author: { name: "@CredibleCrypto", avatarUrl: "https://unavatar.io/x/CredibleCrypto" },
+  trader: { name: "@0xWhaleHunter", avatarUrl: "https://unavatar.io/x/0xWhaleHunter" },
+  headline: "ETH coiled under the range high while funding stayed flat.",
   tradeResult: {
     percent: "+221.4%",
     side: "LONG",
@@ -43,10 +42,9 @@ const hyperliquid: TradeCardProps = {
 };
 
 const hyperliquidLoss: TradeCardProps = {
-  author: { name: "@DeFiDegen" },
-  headline: "The dip-buy missed confirmation and ETH broke lower before the bounce arrived.",
-  why: "Support failed before buyers reclaimed momentum.",
-  points: densePoints({ yStart: 250, yEnd: 720, seed: 19 }),
+  author: { name: "@DeFiDegen", avatarUrl: "https://unavatar.io/x/DeFiDegen" },
+  trader: { name: "@apescout", avatarUrl: "https://unavatar.io/x/apescout" },
+  headline: "The dip-buy missed confirmation and ETH broke lower.",
   tradeResult: {
     percent: "-72.3%",
     side: "LONG",
@@ -74,15 +72,14 @@ export default function CardPreviewPage() {
         background: "#040504",
       }}
     >
-      <Label>Split - thesis left - PnL + chart right</Label>
-      <TradeCard variant="split" />
-      <TradeCard variant="split" {...hyperliquid} />
-      <TradeCard variant="split" {...hyperliquidLoss} />
+      <Label>Default</Label>
+      <TradeCard />
 
-      <Label>Hero band - PnL top-right - full-width chart</Label>
-      <TradeCard variant="band" />
-      <TradeCard variant="band" {...hyperliquid} />
-      <TradeCard variant="band" {...hyperliquidLoss} />
+      <Label>Win - Hyperliquid</Label>
+      <TradeCard {...hyperliquidWin} />
+
+      <Label>Loss - Hyperliquid</Label>
+      <TradeCard {...hyperliquidLoss} />
     </main>
   );
 }
