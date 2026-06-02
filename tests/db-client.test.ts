@@ -41,34 +41,13 @@ describe("Cassie DB client", () => {
     await pool.end();
   });
 
-  it("summarizes database URLs without exposing credentials", async () => {
-    const { summarizeDatabaseUrl } = await import("../packages/core/db/client.ts");
-
-    expect(summarizeDatabaseUrl("postgresql://postgres:postgres@postgres:5432/cassie", "postgres")).toEqual({
-      protocol: "postgresql:",
-      username: "postgres",
-      host: "postgres",
-      port: "5432",
-      database: "cassie",
-      passwordLength: 8,
-      passwordMatchesPostgresPassword: true,
-      passwordIsDefaultPostgres: true,
-    });
-    expect(summarizeDatabaseUrl("postgresql://postgres:wrong@postgres:5432/cassie", "postgres"))
-      .toMatchObject({
-        passwordLength: 5,
-        passwordMatchesPostgresPassword: false,
-        passwordIsDefaultPostgres: false,
-      });
-  });
-
   it("rejects malformed database URLs without exposing credentials", async () => {
-    const { summarizeDatabaseUrl } = await import("../packages/core/db/client.ts");
+    const { postgresPoolConfig } = await import("../packages/core/db/client.ts");
     const malformedUrl = "postgresql://postgres:secret/with/slash@postgres:5432/cassie";
 
-    expect(() => summarizeDatabaseUrl(malformedUrl)).toThrow(
+    expect(() => postgresPoolConfig(malformedUrl)).toThrow(
       "DATABASE_URL is not a valid Postgres URL. Percent-encode the username and password before putting them in the URL.",
     );
-    expect(() => summarizeDatabaseUrl(malformedUrl)).not.toThrow(/secret\/with\/slash/u);
+    expect(() => postgresPoolConfig(malformedUrl)).not.toThrow(/secret\/with\/slash/u);
   });
 });

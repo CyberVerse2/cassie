@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
-import { createCassieDb, summarizeDatabaseUrl } from "../packages/core/db/client.ts";
+import { createCassieDb } from "../packages/core/db/client.ts";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -18,8 +18,6 @@ if (!Number.isInteger(lockTimeoutMs) || lockTimeoutMs <= 0) {
 if (!Number.isInteger(statementTimeoutMs) || statementTimeoutMs <= 0) {
   throw new Error("DB_MIGRATION_STATEMENT_TIMEOUT_MS must be a positive integer.");
 }
-
-console.log("Migration database target:", JSON.stringify(summarizeDatabaseUrl(databaseUrl)));
 
 const pool = new Pool({
   connectionString: databaseUrl,
