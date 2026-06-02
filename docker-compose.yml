@@ -47,7 +47,7 @@ services:
 
   web:
     <<: *cassie-runtime
-    command: ["npm", "run", "web:start"]
+    command: ["npm", "run", "web:start:migrated"]
     environment:
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/cassie
       PORT: 3000
@@ -63,7 +63,7 @@ services:
 
   worker:
     <<: *cassie-runtime
-    command: ["npm", "run", "worker"]
+    command: ["npm", "run", "worker:migrated"]
 
 volumes:
   cassie-postgres-data:
