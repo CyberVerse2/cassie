@@ -22,7 +22,10 @@ import {
   type TradeExpressionPlan,
   type UserSettings,
 } from "../core/schemas/index.ts";
-import { createTradeTicket } from "../tickets/index.ts";
+import {
+  createTradeTicket,
+  MIN_HYPERLIQUID_PERP_MARGIN_USD,
+} from "../tickets/index.ts";
 import { formatTicketCreated, notifyTradeLifecycle } from "../notifications/positions.ts";
 import { recordRunStep } from "./steps.ts";
 import { prepareFinalInput } from "./public-summary.ts";
@@ -50,6 +53,8 @@ const PreflightUserPolicySchema = z.object({
   warnings: z.array(z.string()),
   policy: z.object({
     defaultTradeSizeUsd: z.number(),
+    minHyperliquidPerpMarginUsd: z.number(),
+    effectiveHyperliquidPerpMarginUsd: z.number(),
     hasWalletAddress: z.boolean(),
   }),
 });
@@ -729,6 +734,8 @@ function preflightUserPolicy(userSettings: UserSettings) {
     warnings,
     policy: {
       defaultTradeSizeUsd: userSettings.defaultTradeSizeUsd,
+      minHyperliquidPerpMarginUsd: MIN_HYPERLIQUID_PERP_MARGIN_USD,
+      effectiveHyperliquidPerpMarginUsd: Math.max(userSettings.defaultTradeSizeUsd, MIN_HYPERLIQUID_PERP_MARGIN_USD),
       hasWalletAddress: Boolean(userSettings.walletAddress),
     },
   });

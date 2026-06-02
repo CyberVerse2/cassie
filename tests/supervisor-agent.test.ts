@@ -309,6 +309,39 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).not.toContain("Never execute");
   });
 
+  it("preflights the effective Hyperliquid perp margin floor", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie get me in",
+      sourcePost,
+    });
+    const tools = createCassieSupervisorTools({
+      store,
+      run,
+      userSettings: {
+        ...settings,
+        defaultTradeSizeUsd: 2,
+      },
+      deps: {
+        ai: new FakeAi(),
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
+        },
+      },
+    });
+
+    await expect(executeTool(tools.preflight_user_policy, {})).resolves.toMatchObject({
+      policy: {
+        defaultTradeSizeUsd: 2,
+        minHyperliquidPerpMarginUsd: 4,
+        effectiveHyperliquidPerpMarginUsd: 4,
+      },
+    });
+  });
+
   it("records bounded tool steps and creates an executable trade ticket", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
