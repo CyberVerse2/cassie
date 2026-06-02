@@ -119,11 +119,21 @@ const aiProviderEnvSchema = z.object({
 });
 
 export const RuntimeConfigSchema = z.object({
-  DATABASE_URL: requiredConfiguredStringSchema(),
+  DATABASE_URL: configuredStringSchema,
+  CASSIE_POSTGRES_HOST: configuredStringSchema,
+  CASSIE_POSTGRES_PASSWORD: configuredStringSchema,
   GEMINI_API_KEY: requiredConfiguredStringSchema(),
   DEEPSEEK_API_KEY: requiredConfiguredStringSchema(),
   OPENAI_API_KEY: requiredConfiguredStringSchema(),
   XAI_API_KEY: requiredConfiguredStringSchema(),
+}).superRefine((values, context) => {
+  if (!values.DATABASE_URL && (!values.CASSIE_POSTGRES_HOST || !values.CASSIE_POSTGRES_PASSWORD)) {
+    context.addIssue({
+      code: "custom",
+      message: "DATABASE_URL or CASSIE_POSTGRES_HOST/CASSIE_POSTGRES_PASSWORD is required.",
+      path: ["DATABASE_URL"],
+    });
+  }
 });
 
 export function currentEnv(): EnvSource {
@@ -179,7 +189,7 @@ export function readCassieConfig(
       userId: optionalEnv("CASSIE_CLI_USER_ID", env),
     },
     database: {
-      url: optionalEnv("DATABASE_URL", env),
+      url: readDatabaseUrl(env),
       pool: readDatabasePoolEnv(env),
     },
     graphileWorker: readGraphileWorkerEnv(env),
@@ -201,6 +211,25 @@ export function readCassieConfig(
       noColor: optionalEnv("NO_COLOR", env) != null,
     },
   };
+}
+
+export function readDatabaseUrl(env: EnvSource = process.env): string | undefined {
+  const host = optionalEnv("CASSIE_POSTGRES_HOST", env);
+  if (!host) {
+    return optionalEnv("DATABASE_URL", env);
+  }
+
+  const password = requiredConfiguredStringSchema().parse(env.CASSIE_POSTGRES_PASSWORD);
+  const user = optionalEnv("CASSIE_POSTGRES_USER", env) ?? "postgres";
+  const database = optionalEnv("CASSIE_POSTGRES_DATABASE", env) ?? "cassie";
+  const port = numberEnv("CASSIE_POSTGRES_PORT", 5432, env, { integer: true, min: 1, max: 65535 });
+  const url = new URL("postgresql://localhost");
+  url.username = user;
+  url.password = password;
+  url.hostname = host;
+  url.port = String(port);
+  url.pathname = `/${database}`;
+  return url.toString();
 }
 
 export function readDatabasePoolEnv(env: EnvSource = process.env) {

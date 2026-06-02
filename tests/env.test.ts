@@ -6,6 +6,7 @@ import {
   readAiProviderEnv,
   readCassieConfig,
   readDatabasePoolEnv,
+  readDatabaseUrl,
   readGraphileWorkerEnv,
   assertHyperliquidExecutionEnv,
   normalizePrivateKey,
@@ -117,6 +118,17 @@ describe("Polymarket env", () => {
     expect(requiredConnectorEnv("DeepSeek", "DEEPSEEK_API_KEY", {
       DEEPSEEK_API_KEY: "key",
     })).toBe("key");
+  });
+
+  it("builds an encoded Postgres URL from raw container database parts", () => {
+    expect(readDatabaseUrl({
+      DATABASE_URL: "postgres://postgres:wrong@remote.example.com:5432/cassie",
+      CASSIE_POSTGRES_HOST: "postgres",
+      CASSIE_POSTGRES_PORT: "5432",
+      CASSIE_POSTGRES_USER: "postgres",
+      CASSIE_POSTGRES_PASSWORD: "pa#ss/word?",
+      CASSIE_POSTGRES_DATABASE: "cassie",
+    })).toBe("postgresql://postgres:pa%23ss%2Fword%3F@postgres:5432/cassie");
   });
 
   it("validates Privy treasury settlement config", () => {

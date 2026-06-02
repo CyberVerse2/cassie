@@ -11,7 +11,11 @@ x-cassie-service: &cassie-service
   init: true
   restart: unless-stopped
   environment:
-    DATABASE_URL: postgresql://postgres:${CASSIE_LOCAL_POSTGRES_PASSWORD:-postgres}@postgres:5432/cassie
+    CASSIE_POSTGRES_HOST: postgres
+    CASSIE_POSTGRES_PORT: 5432
+    CASSIE_POSTGRES_USER: postgres
+    CASSIE_POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:-postgres}
+    CASSIE_POSTGRES_DATABASE: cassie
   depends_on:
     postgres:
       condition: service_healthy
@@ -29,7 +33,7 @@ services:
     environment:
       POSTGRES_DB: cassie
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${CASSIE_LOCAL_POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:-postgres}
     ports:
       - "${POSTGRES_EXTERNAL_PORT:-5433}:5432"
     volumes:
@@ -49,7 +53,11 @@ services:
     <<: *cassie-runtime
     command: ["npm", "run", "web:start:migrated"]
     environment:
-      DATABASE_URL: postgresql://postgres:${CASSIE_LOCAL_POSTGRES_PASSWORD:-postgres}@postgres:5432/cassie
+      CASSIE_POSTGRES_HOST: postgres
+      CASSIE_POSTGRES_PORT: 5432
+      CASSIE_POSTGRES_USER: postgres
+      CASSIE_POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:-postgres}
+      CASSIE_POSTGRES_DATABASE: cassie
       PORT: 3000
       HOSTNAME: 0.0.0.0
     expose:

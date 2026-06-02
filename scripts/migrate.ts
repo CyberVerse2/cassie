@@ -1,12 +1,13 @@
 import "dotenv/config";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { Pool } from "pg";
+import { config } from "../packages/core/config.ts";
 import { createCassieDb } from "../packages/core/db/client.ts";
 
-const databaseUrl = process.env.DATABASE_URL;
+const databaseUrl = config.database.url;
 
 if (!databaseUrl) {
-  throw new Error("DATABASE_URL is required to run migrations.");
+  throw new Error("DATABASE_URL or CASSIE_POSTGRES_HOST/CASSIE_POSTGRES_PASSWORD is required to run migrations.");
 }
 
 const lockTimeoutMs = Number(process.env.DB_MIGRATION_LOCK_TIMEOUT_MS ?? 10_000);
