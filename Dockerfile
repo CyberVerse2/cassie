@@ -14,6 +14,7 @@ ENV NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS=$NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS
 
 COPY package.json package-lock.json .npmrc ./
 RUN npm ci
+RUN npx playwright install --with-deps chromium
 
 COPY . .
 RUN npm run build && npm run web:build
