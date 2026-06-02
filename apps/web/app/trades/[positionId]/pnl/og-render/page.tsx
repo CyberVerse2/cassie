@@ -25,7 +25,7 @@ export default async function TradePnlOgRenderPage({ params }: OgRenderPageProps
         background: "#040504",
       }}
     >
-      <TradeCard {...share.cardProps} frameWidth={1110} />
+      <TradeCard {...share.cardProps} frameWidth={1200} />
     </main>
   );
 }
