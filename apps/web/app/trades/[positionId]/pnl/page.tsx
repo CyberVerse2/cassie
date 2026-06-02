@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getTradeShareData, TradeShareNotFoundError } from "../../lib/trade-card-data";
-import { siteName, siteUrl } from "../../metadata-config";
-import { TradeShareClient } from "./trade-share-client";
+import { getTradeShareData, TradeShareNotFoundError } from "../../../lib/trade-card-data";
+import { siteName, siteUrl } from "../../../metadata-config";
+import { TradeShareClient } from "../trade-share-client";
 
 export const runtime = "nodejs";
 
@@ -13,7 +13,7 @@ type TradePageProps = {
 export async function generateMetadata({ params }: TradePageProps): Promise<Metadata> {
   const { positionId } = await params;
   const share = await readShare(positionId);
-  const path = `/trades/${encodeURIComponent(positionId)}`;
+  const path = `/trades/${encodeURIComponent(positionId)}/pnl`;
   const image = `${path}/opengraph-image`;
 
   return {

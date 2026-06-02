@@ -830,7 +830,7 @@ function Center({
                 </span>
               </span>
               <span className={s.tradeActions}>
-                <a className={`${s.tradeActionBtn} ${s.shareTradeBtn}`} href={`/trades/${encodeURIComponent(position.positionId)}`}>
+                <a className={`${s.tradeActionBtn} ${s.shareTradeBtn}`} href={`/trades/${encodeURIComponent(position.positionId)}/pnl`}>
                   Share
                 </a>
                 <button

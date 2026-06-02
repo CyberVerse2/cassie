@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { notFound } from "next/navigation";
-import { getTradeShareData, TradeShareNotFoundError, type TradeShareData } from "../../lib/trade-card-data";
+import { getTradeShareData, TradeShareNotFoundError, type TradeShareData } from "../../../lib/trade-card-data";
 
 export const runtime = "nodejs";
 export const alt = "Cassie trade result";
