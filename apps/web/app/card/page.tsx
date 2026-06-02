@@ -30,8 +30,8 @@ const hyperliquidWin: TradeCardProps = {
     percent: "+221.4%",
     side: "LONG",
     when: "3 days ago",
-    entry: "$2,980",
-    exit: "$3,640",
+    entry: "$2,980.00",
+    exit: "$3,640.00",
   },
   market: {
     venue: "Hyperliquid",
@@ -49,8 +49,8 @@ const hyperliquidLoss: TradeCardProps = {
     percent: "-72.3%",
     side: "LONG",
     when: "1 wk ago",
-    entry: "$3,180",
-    exit: "$2,720",
+    entry: "$3,180.00",
+    exit: "$2,720.00",
   },
   market: {
     venue: "Hyperliquid",
