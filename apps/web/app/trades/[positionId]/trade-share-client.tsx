@@ -6,7 +6,7 @@ import type { TradeShareData } from "../../lib/trade-card-data";
 
 type Position = TradeShareData["position"];
 
-export function TradeShareClient({ initialShare }: { initialShare: TradeShareData }) {
+export function TradeShareClient({ initialShare, frameWidth }: { initialShare: TradeShareData; frameWidth?: number }) {
   const markQuery = useQuery({
     queryKey: ["tradeShare", initialShare.position.positionId, "mark"],
     queryFn: async () => {
@@ -22,7 +22,7 @@ export function TradeShareClient({ initialShare }: { initialShare: TradeShareDat
   });
   const share = markQuery.data ? applyLivePosition(initialShare, markQuery.data) : initialShare;
 
-  return <TradeCard {...share.cardProps} variant="band" />;
+  return <TradeCard {...share.cardProps} variant="band" frameWidth={frameWidth} />;
 }
 
 function applyLivePosition(share: TradeShareData, position: Position): TradeShareData {

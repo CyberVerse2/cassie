@@ -444,7 +444,11 @@
   right: 3.5%;
   top: 33%;
   bottom: 16%;
-  z-index: 0; /* sits behind the opaque panels */
+  z-index: 0; /* sits behind the panels */
+  /* the run is the hero on the right and dissolves to nothing on the left,
+     so the borderless thesis card can rest on clean background. */
+  -webkit-mask-image: linear-gradient(to right, transparent 0%, transparent 52%, oklch(0 0 0) 70%);
+  mask-image: linear-gradient(to right, transparent 0%, transparent 52%, oklch(0 0 0) 70%);
 }
 
 .chartBand .pnlChart {
@@ -453,8 +457,8 @@
   aspect-ratio: auto;
 }
 
-/* band mode: panels paint above the chart, so the opaque tweet card
-   occludes the line - it never visually crosses the thesis text. */
+/* band mode: the chart is masked away on the left, so the thesis card
+   sheds its border/panel and reads as text floating on the background. */
 .frame[data-variant="band"] .brand,
 .frame[data-variant="band"] .pnlStats,
 .frame[data-variant="band"] .market {
@@ -465,6 +469,9 @@
   top: 13%;
   width: 49.5%;
   z-index: 2;
+  background: none;
+  border: none;
+  box-shadow: none;
 }
 
 /* below the card's natural breakpoint, nudge type up for legibility */

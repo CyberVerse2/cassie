@@ -10,6 +10,13 @@ dotenv.config({ path: path.join(workspaceDir, ".env") });
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": [
+      "../../node_modules/playwright-core/browsers.json",
+      "../../node_modules/playwright-core/lib/**",
+      "../../node_modules/playwright/lib/**",
+    ],
+  },
   env: {
     NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
     NEXT_PUBLIC_PRIVY_SIGNER_ID: process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID ?? process.env.PRIVY_AUTHORIZATION_KEY_ID,
