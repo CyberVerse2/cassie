@@ -9,6 +9,8 @@ export type NumberEnvOptions = {
   min?: number;
 };
 
+export const DEFAULT_HYPERLIQUID_PERP_LEVERAGE = 3;
+
 export type AiProviderEnvDefaults = {
   cheapModel: string;
   importantModel: string;
@@ -425,12 +427,14 @@ export type HyperliquidExecutionEnvOptions = {
   privateKey?: string;
   slippageBps?: number;
   priceDecimals?: number;
+  perpLeverage?: number;
 };
 
 export type HyperliquidExecutionEnv = {
   privateKey?: `0x${string}`;
   slippageBps: number;
   priceDecimals: number;
+  perpLeverage: number;
 };
 
 export type RequiredHyperliquidExecutionEnv = HyperliquidExecutionEnv & {
@@ -445,6 +449,7 @@ export function readHyperliquidExecutionEnv(
     HYPERLIQUID_PRIVATE_KEY: configuredStringSchema,
     HYPERLIQUID_EXECUTION_SLIPPAGE_BPS: numberSchema("HYPERLIQUID_EXECUTION_SLIPPAGE_BPS", 100, { min: 0 }),
     HYPERLIQUID_PRICE_DECIMALS: numberSchema("HYPERLIQUID_PRICE_DECIMALS", 5, { integer: true, min: 0 }),
+    HYPERLIQUID_PERP_LEVERAGE: numberSchema("HYPERLIQUID_PERP_LEVERAGE", DEFAULT_HYPERLIQUID_PERP_LEVERAGE, { integer: true, min: 1 }),
   }).transform((values) => {
     const privateKey = firstConfigured(options.privateKey, values.HYPERLIQUID_PRIVATE_KEY);
 
@@ -452,6 +457,7 @@ export function readHyperliquidExecutionEnv(
       privateKey: privateKey ? normalizePrivateKey(privateKey, "HYPERLIQUID_PRIVATE_KEY") : undefined,
       slippageBps: options.slippageBps ?? values.HYPERLIQUID_EXECUTION_SLIPPAGE_BPS,
       priceDecimals: options.priceDecimals ?? values.HYPERLIQUID_PRICE_DECIMALS,
+      perpLeverage: options.perpLeverage ?? values.HYPERLIQUID_PERP_LEVERAGE,
     };
   });
 

@@ -889,9 +889,9 @@ function normalizedFilledSizeCents(
   if (!Number.isFinite(executionResult.filledSizeUsd) || executionResult.filledSizeUsd < 0) {
     throw new Error("Execution result filledSizeUsd must be nonnegative.");
   }
-  const filledSizeCents = usdToCents(executionResult.filledSizeUsd);
+  const filledSizeCents = usdToCents(executionResult.collateralUsedUsd ?? executionResult.filledSizeUsd);
   if (filledSizeCents > positiveUsdToCents(ticket.sizeUsd)) {
-    throw new Error("Execution result filled more than the reserved ticket size.");
+    throw new Error("Execution result used more collateral than the reserved ticket size.");
   }
   return filledSizeCents;
 }

@@ -168,6 +168,8 @@ export const TradeVenueDataSchema = z.object({
   spreadBps: z.number().nonnegative().optional(),
   estimatedSlippageBps: z.number().nonnegative().optional(),
   minOrderSizeUsd: z.number().nonnegative().optional(),
+  leverage: z.number().int().positive().optional(),
+  notionalSizeUsd: z.number().positive().optional(),
 });
 
 export const MarketSelectionSchema = z.object({
@@ -486,6 +488,7 @@ export const ExecutionJobSchema = z.object({
     .object({
       venueOrderId: z.string().nullable(),
       filledSizeUsd: z.number().nonnegative(),
+      collateralUsedUsd: z.number().nonnegative().optional(),
       averagePrice: z.number().nonnegative().nullable(),
       raw: z.unknown().optional(),
     })

@@ -95,6 +95,7 @@ describe("Polymarket env", () => {
       privateKey: `0x${"2".repeat(64)}`,
       slippageBps: 150,
       priceDecimals: 4,
+      perpLeverage: 3,
     });
     expect(assertHyperliquidExecutionEnv(config).privateKey).toBe(`0x${"2".repeat(64)}`);
     expect(() => assertHyperliquidExecutionEnv(readHyperliquidExecutionEnv({})))

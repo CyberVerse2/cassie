@@ -348,9 +348,9 @@ function unfilledTicketSizeUsd(
   executionResult: NonNullable<ExecutionJob["executionResult"]>,
 ): number {
   const ticketCents = usdToCents(ticket.sizeUsd);
-  const filledCents = usdToCents(executionResult.filledSizeUsd);
+  const filledCents = usdToCents(executionResult.collateralUsedUsd ?? executionResult.filledSizeUsd);
   if (filledCents < 0 || filledCents > ticketCents) {
-    throw new Error("Execution result filledSizeUsd must be between zero and the reserved ticket size.");
+    throw new Error("Execution result collateralUsedUsd must be between zero and the reserved ticket size.");
   }
   return (ticketCents - filledCents) / 100;
 }

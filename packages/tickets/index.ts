@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { DEFAULT_HYPERLIQUID_PERP_LEVERAGE } from "../core/config.ts";
 import type {
   MarketSelection,
   Thesis,
@@ -6,6 +7,8 @@ import type {
   TradeTicket,
   UserSettings,
 } from "../core/schemas/index.ts";
+
+export const MIN_HYPERLIQUID_PERP_MARGIN_USD = 4;
 
 export function createTradeTicket(input: {
   runId?: string | null;
@@ -19,6 +22,11 @@ export function createTradeTicket(input: {
   if (!market) {
     throw new Error("Cannot create a trade ticket without a selected market.");
   }
+  const isHyperliquidPerp = market.venue === "hyperliquid" && (market.side === "long" || market.side === "short");
+  const sizeUsd = isHyperliquidPerp
+    ? Math.max(input.userSettings.defaultTradeSizeUsd, MIN_HYPERLIQUID_PERP_MARGIN_USD)
+    : input.userSettings.defaultTradeSizeUsd;
+  const leverage = isHyperliquidPerp ? DEFAULT_HYPERLIQUID_PERP_LEVERAGE : undefined;
 
   return {
     ticketId: randomUUID(),
@@ -28,7 +36,7 @@ export function createTradeTicket(input: {
     venue: market.venue,
     instrument: market.instrument,
     side: market.side,
-    sizeUsd: input.userSettings.defaultTradeSizeUsd,
+    sizeUsd,
     orderType: "marketable_limit",
     venueData: {
       symbol: market.symbol,
@@ -38,6 +46,8 @@ export function createTradeTicket(input: {
       spreadBps: market.spreadBps,
       estimatedSlippageBps: market.estimatedSlippageBps,
       minOrderSizeUsd: market.minOrderSizeUsd,
+      leverage,
+      notionalSizeUsd: leverage ? sizeUsd * leverage : undefined,
     },
     exitPlan: input.exitPlan,
   };

@@ -90,13 +90,14 @@ type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order">;
 type ResolvedHyperliquidAsset = {
   id: number;
   sizeDecimals: number;
+  maxLeverage?: number;
   midKey: string;
   midPx?: string;
   isSpot: boolean;
 };
 type HyperliquidExecutionClients = {
   info: HyperliquidInfoClientLike;
-  exchange: HyperliquidExchangeClientLike;
+  exchange: HyperliquidExchangeClientLike & Pick<ExchangeClient, "updateLeverage">;
 };
 type HyperliquidExecutionClientFactory = (
   config: RequiredHyperliquidExecutionEnv,
@@ -130,7 +131,15 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     const isBuy = ticket.side === "long" || ticket.side === "buy";
     const slippage = config.slippageBps / 10_000;
     const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
-    const size = ticket.sizeUsd / mid;
+    const leverage = asset.isSpot ? 1 : config.perpLeverage;
+    if (!asset.isSpot) {
+      if (asset.maxLeverage != null && leverage > asset.maxLeverage) {
+        throw new Error(`Hyperliquid ${symbol} max leverage is ${asset.maxLeverage}x; configured leverage is ${leverage}x.`);
+      }
+      await exchange.updateLeverage({ asset: asset.id, isCross: true, leverage });
+    }
+    const requestedSizeUsd = ticket.sizeUsd * leverage;
+    const size = requestedSizeUsd / mid;
     const requestedSize = formatDecimal(size, asset.sizeDecimals);
     if (Number(requestedSize) <= 0) {
       throw new Error(`Hyperliquid order size rounds to zero for ${symbol}; increase ticket size.`);
@@ -150,7 +159,9 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     });
     const executionResult = parseHyperliquidOrderExecution(response, {
       requestedSize,
-      requestedSizeUsd: ticket.sizeUsd,
+      requestedSizeUsd,
+      collateralUsd: ticket.sizeUsd,
+      leverage,
     });
 
     return {
@@ -225,6 +236,8 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
       ...parseHyperliquidOrderExecution(response, {
         requestedSize,
         requestedSizeUsd: position.currentValueUsd,
+        collateralUsd: position.currentValueUsd,
+        leverage: 1,
       }),
       raw: response,
     };
@@ -242,6 +255,7 @@ async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symb
   return {
     id: index,
     sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
+    maxLeverage: meta.universe[index]?.maxLeverage,
     midKey: symbol,
     isSpot: false,
   };
@@ -293,8 +307,10 @@ function parseHyperliquidOrderExecution(
   input: {
     requestedSize: string;
     requestedSizeUsd: number;
+    collateralUsd: number;
+    leverage: number;
   },
-): Pick<NonNullable<ExecutionJob["executionResult"]>, "venueOrderId" | "filledSizeUsd" | "averagePrice"> {
+): Pick<NonNullable<ExecutionJob["executionResult"]>, "venueOrderId" | "filledSizeUsd" | "collateralUsedUsd" | "averagePrice"> {
   const status = response.response.data.statuses[0];
   if (!status) {
     throw new Error("Hyperliquid order response did not include an order status.");
@@ -304,6 +320,7 @@ function parseHyperliquidOrderExecution(
     return {
       venueOrderId: null,
       filledSizeUsd: 0,
+      collateralUsedUsd: 0,
       averagePrice: null,
     };
   }
@@ -312,9 +329,11 @@ function parseHyperliquidOrderExecution(
     const filledSize = readPositiveHyperliquidNumber(status.filled.totalSz, "filled size");
     const averagePrice = readPositiveHyperliquidNumber(status.filled.avgPx, "average fill price");
 
+    const filledSizeUsd = Math.min(input.requestedSizeUsd, filledSize * averagePrice);
     return {
       venueOrderId: String(status.filled.oid),
-      filledSizeUsd: Math.min(input.requestedSizeUsd, filledSize * averagePrice),
+      filledSizeUsd,
+      collateralUsedUsd: Math.min(input.collateralUsd, filledSizeUsd / input.leverage),
       averagePrice,
     };
   }
@@ -323,6 +342,7 @@ function parseHyperliquidOrderExecution(
     return {
       venueOrderId: String(status.resting.oid),
       filledSizeUsd: 0,
+      collateralUsedUsd: 0,
       averagePrice: null,
     };
   }

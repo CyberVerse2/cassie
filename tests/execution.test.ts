@@ -69,6 +69,7 @@ describe("HyperliquidExecutionClient", () => {
       }),
     };
     const exchange = {
+      updateLeverage: vi.fn().mockResolvedValue({ status: "ok" }),
       order: vi.fn().mockResolvedValue({
         status: "ok",
         response: {
@@ -91,6 +92,7 @@ describe("HyperliquidExecutionClient", () => {
       privateKey: `0x${"1".repeat(64)}`,
       slippageBps: 100,
       priceDecimals: 5,
+      perpLeverage: 3,
       clientFactory: () => ({ info: info as never, exchange: exchange as never }),
     });
 
@@ -108,13 +110,14 @@ describe("HyperliquidExecutionClient", () => {
       exitPlan,
     });
 
+    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 2, isCross: true, leverage: 3 });
     expect(exchange.order).toHaveBeenCalledWith({
       orders: [
         {
           a: 2,
           b: true,
           p: "83.867",
-          s: "0.3",
+          s: "0.9",
           r: false,
           t: { limit: { tif: "Ioc" } },
         },
@@ -124,6 +127,7 @@ describe("HyperliquidExecutionClient", () => {
     expect(result).toMatchObject({
       venueOrderId: "12345",
       filledSizeUsd: 12.4575,
+      collateralUsedUsd: 4.1525,
       averagePrice: 83.05,
     });
   });
@@ -149,6 +153,7 @@ describe("HyperliquidExecutionClient", () => {
       allMids: vi.fn().mockResolvedValue({ "@182": "4507.75" }),
     };
     const exchange = {
+      updateLeverage: vi.fn(),
       order: vi.fn().mockResolvedValue({
         status: "ok",
         response: {
@@ -171,6 +176,7 @@ describe("HyperliquidExecutionClient", () => {
       privateKey: `0x${"1".repeat(64)}`,
       slippageBps: 100,
       priceDecimals: 5,
+      perpLeverage: 3,
       clientFactory: () => ({ info: info as never, exchange: exchange as never }),
     });
 
@@ -188,6 +194,7 @@ describe("HyperliquidExecutionClient", () => {
       exitPlan,
     });
 
+    expect(exchange.updateLeverage).not.toHaveBeenCalled();
     expect(exchange.order).toHaveBeenCalledWith({
       orders: [
         {
