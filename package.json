@@ -20,7 +20,7 @@
     "smoke:v4-flash": "tsx scripts/test-v4-flash.ts",
     "smoke:polymarket-clob": "tsx scripts/test-polymarket-clob.ts",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate"
+    "db:migrate": "tsx scripts/migrate.ts"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.35",
