@@ -1,8 +1,4 @@
 import { chromium, type Browser } from "playwright";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-import { renderTradeCardDocument } from "../../../../lib/trade-card-document";
-import { getTradeCardRenderData } from "../../../../lib/trade-card-data";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,18 +9,15 @@ const RENDER_TIMEOUT_MS = 20_000;
 const IMAGE_CACHE_TTL_MS = 60_000;
 
 let browserPromise: Promise<Browser> | null = null;
-let assetsPromise: Promise<TradeCardDocumentAssets> | null = null;
 const imageCache = new Map<string, { createdAt: number; image: Promise<ArrayBuffer> }>();
-
-type TradeCardDocumentAssets = Parameters<typeof renderTradeCardDocument>[1];
 
 type RouteContext = {
   params: Promise<{ positionId: string }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const { positionId } = await context.params;
-  const image = await getCachedImage(positionId);
+  const image = await getCachedImage(positionId, request);
 
   return new Response(image, {
     headers: {
@@ -34,12 +27,12 @@ export async function GET(_request: Request, context: RouteContext) {
   });
 }
 
-async function getCachedImage(positionId: string) {
+async function getCachedImage(positionId: string, request: Request) {
   const now = Date.now();
   const cached = imageCache.get(positionId);
   if (cached && now - cached.createdAt < IMAGE_CACHE_TTL_MS) return cached.image;
 
-  const image = renderImage(positionId).catch((error) => {
+  const image = renderImage(positionId, request).catch((error) => {
     imageCache.delete(positionId);
     throw error;
   });
@@ -47,12 +40,11 @@ async function getCachedImage(positionId: string) {
   return image;
 }
 
-async function renderImage(positionId: string) {
-  const [{ cardProps }, assets] = await Promise.all([
-    getTradeCardRenderData(positionId),
-    getTradeCardDocumentAssets(),
-  ]);
-  const html = renderTradeCardDocument({ ...cardProps, frameWidth: 1110 }, assets, await tradeCardCss());
+async function renderImage(positionId: string, request: Request) {
+  const renderUrl = new URL(
+    `/trades/${encodeURIComponent(positionId)}/pnl/og-render`,
+    renderOrigin(request),
+  );
   const browser = await getBrowser();
   const browserContext = await browser.newContext({
     viewport: { width: OG_WIDTH, height: OG_HEIGHT },
@@ -62,7 +54,7 @@ async function renderImage(positionId: string) {
   const page = await browserContext.newPage();
 
   try {
-    await page.setContent(html, {
+    await page.goto(renderUrl.toString(), {
       waitUntil: "domcontentloaded",
       timeout: RENDER_TIMEOUT_MS,
     });
@@ -70,7 +62,7 @@ async function renderImage(positionId: string) {
     await renderTarget.waitFor({ state: "visible", timeout: RENDER_TIMEOUT_MS });
     const errorPageVisible = await page.getByText("This page couldn’t load").isVisible().catch(() => false);
     if (errorPageVisible) {
-      throw new Error(`Trade PnL OG render document failed to load for ${positionId}`);
+      throw new Error(`Trade PnL OG render page failed to load: ${renderUrl.toString()}`);
     }
     await page.evaluate(() => (document as Document & { fonts: FontFaceSet }).fonts.ready);
     await page.evaluate(() => new Promise<void>((resolve) => {
@@ -95,30 +87,16 @@ function getBrowser() {
   return browserPromise;
 }
 
-function getTradeCardDocumentAssets() {
-  assetsPromise ??= Promise.all([
-    publicImageDataUrl("cassie-logo-transparent.png"),
-    publicImageDataUrl("hyperliquid-logo.png"),
-    publicImageDataUrl("polymarket-logo.png"),
-  ]).then(([cassieLogo, hyperliquidLogo, polymarketLogo]) => ({
-    cassieLogo,
-    hyperliquidLogo,
-    polymarketLogo,
-  }));
-  return assetsPromise;
-}
+function renderOrigin(request: Request) {
+  if (process.env.NODE_ENV === "production") {
+    return `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
+  }
 
-async function publicImageDataUrl(filename: string) {
-  const buffer = await readFile(path.join(process.cwd(), "apps/web/public", filename));
-  return `data:${imageMimeType(filename)};base64,${buffer.toString("base64")}`;
-}
-
-async function tradeCardCss() {
-  return await readFile(path.join(process.cwd(), "apps/web/app/components/trade-card.module.css"), "utf8");
-}
-
-function imageMimeType(filename: string) {
-  if (filename.endsWith(".png")) return "image/png";
-  if (filename.endsWith(".jpg") || filename.endsWith(".jpeg")) return "image/jpeg";
-  throw new Error(`Unsupported OG card asset type: ${filename}`);
+  const requestUrl = new URL(request.url);
+  const forwardedProto = request.headers.get("x-forwarded-proto");
+  const protocol = forwardedProto ?? requestUrl.protocol.replace(/:$/u, "");
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const host = forwardedHost ?? request.headers.get("host") ?? requestUrl.host;
+  const browserHost = host.replace(/^0\.0\.0\.0(?::|$)/u, (match) => match.replace("0.0.0.0", "localhost"));
+  return `${protocol}://${browserHost}`;
 }
