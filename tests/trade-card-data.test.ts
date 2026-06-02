@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  deriveTradeCardThesisDetails,
+  deriveTradeCardCopy,
   positionToTradeShareData,
-  type TradeCardThesisDetails,
+  type TradeCardCopy,
 } from "../apps/web/app/lib/trade-card-data.ts";
 import type { ControlRun, Position, RunStep, TradeTicket } from "../packages/core/schemas/index.ts";
 
@@ -101,12 +101,11 @@ const steps: RunStep[] = [
 
 describe("trade card data", () => {
   it("maps a persisted position and ticket into share-card data", () => {
-    const thesisDetails: TradeCardThesisDetails = {
-      signal: "As long as BTC holds $65k, I think $75k trades next.",
+    const copy: TradeCardCopy = {
+      headline: "As long as BTC holds $65k, I think $75k trades next.",
       why: "BTC breaks higher if the $65k level holds.",
-      invalidation: "BTC loses $65k.",
     };
-    const share = positionToTradeShareData({ position, ticket, run, thesisDetails });
+    const share = positionToTradeShareData({ position, ticket, run, copy });
 
     expect(share.title).toBe("BTC-75K YES +36.5%");
     expect(share.pnlLabel).toBe("Unrealized PnL");
@@ -114,20 +113,22 @@ describe("trade card data", () => {
     expect(share.exitLabel).toBe("71c");
     expect(share.cardProps.author?.name).toBe("@source");
     expect(share.cardProps.headline).toBe("As long as BTC holds $65k, I think $75k trades next.");
-    expect(share.cardProps.thesis).toEqual([
-      { label: "Signal", text: "As long as BTC holds $65k, I think $75k trades next." },
-      { label: "Why", text: "BTC breaks higher if the $65k level holds." },
-      { label: "Invalidation", text: "BTC loses $65k." },
-    ]);
-    expect(share.cardProps.market).toMatchObject({
-      venue: "Polymarket",
+    expect(share.cardProps.why).toBe("BTC breaks higher if the $65k level holds.");
+    expect(share.cardProps.tradeResult).toEqual({
+      percent: "+36.5%",
       side: "YES",
+      when: expect.any(String),
       entry: "52c",
       exit: "71c",
     });
+    expect(share.cardProps.market).toMatchObject({
+      venue: "Polymarket",
+      side: "YES",
+      question: "BTC breaks higher if the $65k level holds.",
+    });
   });
 
-  it("derives public thesis details from persisted run and ticket data", () => {
+  it("derives public card copy from persisted run and ticket data", () => {
     const hyperliquidTicket: TradeTicket = {
       ...ticket,
       venue: "hyperliquid",
@@ -143,7 +144,7 @@ describe("trade card data", () => {
         ],
       },
     };
-    const thesisDetails = deriveTradeCardThesisDetails({
+    const copy = deriveTradeCardCopy({
       run,
       steps,
       ticket: hyperliquidTicket,
@@ -160,13 +161,10 @@ describe("trade card data", () => {
       ticket: hyperliquidTicket,
       run,
       steps,
-      thesisDetails,
+      copy,
     });
 
-    expect(share.cardProps.thesis).toEqual([
-      { label: "Signal", text: "Google is behind in the AI race despite having vast data." },
-      { label: "Why", text: "Short Alphabet/GOOGL on the market's bearish read-through that Google is la..." },
-      { label: "Invalidation", text: "Alphabet sentiment improves on credible AI product/traction re-rating" },
-    ]);
+    expect(share.cardProps.headline).toBe("Google is behind in the AI race despite having vast data.");
+    expect(share.cardProps.why).toBe("Short Alphabet/GOOGL on the market's bearish read-through that Google is la...");
   });
 });

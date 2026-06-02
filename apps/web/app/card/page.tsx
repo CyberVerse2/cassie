@@ -22,19 +22,12 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-/** Hyperliquid perps example - directional LONG with leverage, USD prices. */
 const hyperliquid: TradeCardProps = {
-  author: { name: "@CredibleCrypto", date: "Apr 2, 2026" },
-  headline:
-    "ETH is coiling right under range high and I'm long here with a tight stop. Funding is flat, OI is building - this resolves up.",
-  thesis: [
-    { label: "Target", text: "ETH reclaims $3,600" },
-    { label: "Market", text: "ETH-PERP - 10x Long" },
-    { label: "Trade", text: "Long from $2,980 to $3,640" },
-  ],
+  author: { name: "@CredibleCrypto" },
+  headline: "Flat funding, rising OI, and ETH coiling under range high made the breakout trade clean.",
+  why: "ETH reclaimed range high while leverage stayed controlled.",
   points: densePoints({ yStart: 690, yEnd: 150, seed: 11 }),
-  pnl: {
-    label: "Realized PnL",
+  tradeResult: {
     percent: "+221.4%",
     side: "LONG",
     when: "3 days ago",
@@ -45,25 +38,16 @@ const hyperliquid: TradeCardProps = {
     venue: "Hyperliquid",
     question: "ETH-PERP - 10x Long",
     side: "LONG",
-    entry: "$2,980",
-    exit: "$3,640",
     logoUrl: "/hyperliquid-logo.png",
   },
 };
 
-/** Losing Hyperliquid LONG - price fell against the position, so the line
-    descends (line direction = the trade's outcome, not raw price action). */
 const hyperliquidLoss: TradeCardProps = {
-  author: { name: "@DeFiDegen", date: "Feb 18, 2026" },
-  headline: "Buying this dip - bounce is right here, full size.",
-  thesis: [
-    { label: "Target", text: "ETH bounces to $3,400" },
-    { label: "Market", text: "ETH-PERP - 5x Long" },
-    { label: "Trade", text: "Long from $3,180, stopped at $2,720" },
-  ],
+  author: { name: "@DeFiDegen" },
+  headline: "The dip-buy missed confirmation and ETH broke lower before the bounce arrived.",
+  why: "Support failed before buyers reclaimed momentum.",
   points: densePoints({ yStart: 250, yEnd: 720, seed: 19 }),
-  pnl: {
-    label: "Realized PnL",
+  tradeResult: {
     percent: "-72.3%",
     side: "LONG",
     when: "1 wk ago",
@@ -74,8 +58,6 @@ const hyperliquidLoss: TradeCardProps = {
     venue: "Hyperliquid",
     question: "ETH-PERP - 5x Long",
     side: "LONG",
-    entry: "$3,180",
-    exit: "$2,720",
     logoUrl: "/hyperliquid-logo.png",
   },
 };

@@ -2,11 +2,6 @@ import { DrizzleCassieStore } from "../../../../packages/core/db/drizzle-store.t
 import type { CassieStore } from "../../../../packages/core/db/store.ts";
 import type { ControlRun, Position, PositionReview, RunStep, TradeTicket } from "../../../../packages/core/schemas/index.ts";
 
-type TradeCardThesis = {
-  label: string;
-  text: string;
-};
-
 type TradeCardPoint = {
   x: number;
   y: number;
@@ -16,14 +11,12 @@ type TradeCardPoint = {
 type TradeCardProps = {
   author?: {
     name: string;
-    date: string;
     avatarUrl?: string;
   };
   headline?: string;
-  thesis?: TradeCardThesis[];
+  why?: string;
   points?: TradeCardPoint[];
-  pnl?: {
-    label: string;
+  tradeResult?: {
     percent: string;
     side: string;
     when: string;
@@ -34,17 +27,14 @@ type TradeCardProps = {
     venue: string;
     question: string;
     side: string;
-    entry: string;
-    exit: string;
     logoUrl?: string;
   };
   variant?: "split" | "band";
 };
 
-export type TradeCardThesisDetails = {
-  signal: string;
+export type TradeCardCopy = {
+  headline: string;
   why: string;
-  invalidation: string;
 };
 
 export class TradeShareNotFoundError extends Error {
@@ -60,7 +50,7 @@ export type TradeShareData = {
   run: ControlRun | undefined;
   steps: RunStep[];
   review: PositionReview | undefined;
-  thesisDetails: TradeCardThesisDetails;
+  copy: TradeCardCopy;
   cardProps: TradeCardProps;
   title: string;
   description: string;
@@ -89,9 +79,9 @@ export async function getTradeShareData(
     ticket.runId ? store.getRunSteps(ticket.runId) : Promise.resolve([]),
     store.getLatestPositionReview(position.positionId),
   ]);
-  const thesisDetails = deriveTradeCardThesisDetails({ run, steps, ticket });
+  const copy = deriveTradeCardCopy({ run, steps, ticket });
 
-  return positionToTradeShareData({ position, ticket, run, steps, review, thesisDetails });
+  return positionToTradeShareData({ position, ticket, run, steps, review, copy });
 }
 
 export function positionToTradeShareData(input: {
@@ -100,9 +90,9 @@ export function positionToTradeShareData(input: {
   run?: ControlRun;
   steps?: RunStep[];
   review?: PositionReview;
-  thesisDetails: TradeCardThesisDetails;
+  copy: TradeCardCopy;
 }): TradeShareData {
-  const { position, ticket, run, review, thesisDetails } = input;
+  const { position, ticket, run, review, copy } = input;
   const steps = input.steps ?? [];
   const symbol = positionSymbol(position, ticket);
   const venueLabel = venueName(position.venue);
@@ -112,7 +102,6 @@ export function positionToTradeShareData(input: {
   const pnlTone = position.unrealizedPnlPct < 0 ? "down" : "up";
   const entryLabel = formatPrice(position.entryPrice, position.venue);
   const exitLabel = formatPrice(position.currentMarkPrice ?? position.entryPrice, position.venue);
-  const headline = run?.sourcePost.text.trim() || ticket.thesis;
   const authorHandle = run?.sourcePost.authorHandle?.trim();
   const authorName = run?.sourcePost.authorName?.trim();
   const authorLabel = authorHandle ? `@${authorHandle.replace(/^@/u, "")}` : authorName || "Cassie trade";
@@ -121,17 +110,11 @@ export function positionToTradeShareData(input: {
   const cardProps: TradeCardProps = {
     author: {
       name: authorLabel,
-      date: formatShortDate(run?.sourcePost.createdAt ?? position.openedAt),
     },
-    headline,
-    thesis: [
-      { label: "Signal", text: thesisDetails.signal },
-      { label: "Why", text: thesisDetails.why },
-      { label: "Invalidation", text: thesisDetails.invalidation },
-    ],
+    headline: copy.headline,
+    why: copy.why,
     points: tradeTrendPoints(position.unrealizedPnlPct),
-    pnl: {
-      label: pnlLabel,
+    tradeResult: {
       percent: pnlPercent,
       side: sideLabel,
       when: position.status === "closed" && position.closedAt ? "closed" : ageLabel(position.openedAt),
@@ -142,8 +125,6 @@ export function positionToTradeShareData(input: {
       venue: venueLabel,
       question: marketQuestion,
       side: sideLabel,
-      entry: entryLabel,
-      exit: exitLabel,
       logoUrl: venueLogo(position.venue),
     },
     variant: "band",
@@ -155,7 +136,7 @@ export function positionToTradeShareData(input: {
     run,
     steps,
     review,
-    thesisDetails,
+    copy,
     cardProps,
     title: `${symbol} ${sideLabel} ${pnlPercent}`,
     description: review?.summary ?? ticket.thesis,
@@ -170,13 +151,13 @@ export function positionToTradeShareData(input: {
   };
 }
 
-export function deriveTradeCardThesisDetails(input: {
+export function deriveTradeCardCopy(input: {
   run?: ControlRun;
   steps: RunStep[];
   ticket: TradeTicket;
-}): TradeCardThesisDetails {
+}): TradeCardCopy {
   return {
-    signal: compactPublicLine(
+    headline: compactPublicLine(
       stepOutputString(input.steps, "intake", "headlineThesis")
       ?? stepOutputString(input.steps, "opportunity", "literalClaim")
       ?? input.run?.sourcePost.text
@@ -189,11 +170,6 @@ export function deriveTradeCardThesisDetails(input: {
       ?? stepOutputString(input.steps, "opportunity", "marketImplication")
       ?? input.ticket.thesis,
       78,
-    ),
-    invalidation: compactPublicLine(
-      input.ticket.exitPlan.invalidationSignals[0]
-      ?? input.ticket.thesis,
-      72,
     ),
   };
 }
@@ -272,12 +248,6 @@ function formatSignedPct(value: number) {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
   })}%`;
-}
-
-function formatShortDate(value: string) {
-  const date = new Date(value);
-  if (!Number.isFinite(date.valueOf())) return "Cassie trade";
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
 function ageLabel(value: string) {

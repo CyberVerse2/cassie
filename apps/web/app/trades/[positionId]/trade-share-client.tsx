@@ -37,16 +37,10 @@ function applyLivePosition(share: TradeShareData, position: Position): TradeShar
     exitLabel,
     cardProps: {
       ...share.cardProps,
-      pnl: share.cardProps.pnl
+      tradeResult: share.cardProps.tradeResult
         ? {
-          ...share.cardProps.pnl,
+          ...share.cardProps.tradeResult,
           percent: pnlPercent,
-          exit: exitLabel,
-        }
-        : undefined,
-      market: share.cardProps.market
-        ? {
-          ...share.cardProps.market,
           exit: exitLabel,
         }
         : undefined,

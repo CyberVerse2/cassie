@@ -14,17 +14,11 @@ const OG_H = 630;
 const CARD_W = Math.round((OG_H * 1690) / 944); // 1128 -> height lands on 630
 
 const hyperliquid: TradeCardProps = {
-  author: { name: "@CredibleCrypto", date: "Apr 2, 2026" },
-  headline:
-    "ETH is coiling right under range high and I'm long here with a tight stop. Funding is flat, OI is building - this resolves up.",
-  thesis: [
-    { label: "Target", text: "ETH reclaims $3,600" },
-    { label: "Market", text: "ETH-PERP - 10x Long" },
-    { label: "Trade", text: "Long from $2,980 to $3,640" },
-  ],
+  author: { name: "@CredibleCrypto" },
+  headline: "Flat funding, rising OI, and ETH coiling under range high made the breakout trade clean.",
+  why: "ETH reclaimed range high while leverage stayed controlled.",
   points: densePoints({ yStart: 690, yEnd: 150, seed: 11 }),
-  pnl: {
-    label: "Realized PnL",
+  tradeResult: {
     percent: "+221.4%",
     side: "LONG",
     when: "3 days ago",
@@ -35,8 +29,6 @@ const hyperliquid: TradeCardProps = {
     venue: "Hyperliquid",
     question: "ETH-PERP - 10x Long",
     side: "LONG",
-    entry: "$2,980",
-    exit: "$3,640",
     logoUrl: "/hyperliquid-logo.png",
   },
 };
