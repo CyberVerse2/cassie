@@ -579,7 +579,6 @@ function Center({
   });
 
   const positionLoadError = errorMessage(positionsQuery.error);
-  const liveMarkError = errorMessage(positionMarksQuery.error);
   const closeError = errorMessage(closeMutation.error);
   const effectivePositionError = positionLoadError ?? closeError;
   const effectiveWithdrawError = withdrawError
@@ -785,12 +784,6 @@ function Center({
           </div>
           {effectivePositionError ? (
             <div className={s.emptyState} role="alert">{effectivePositionError}</div>
-          ) : null}
-          {!effectivePositionError && liveMarkError ? (
-            <div className={s.liveMarkStatus} role="status">Live P/L unavailable. Showing last stored marks.</div>
-          ) : null}
-          {!effectivePositionError && positionMarksQuery.isFetching && openPositions.length > 0 ? (
-            <div className={s.liveMarkStatus} role="status">Refreshing live P/L…</div>
           ) : null}
           {openPositions.length === 0 && !effectivePositionError ? (
             <div className={s.emptyState}>No open positions.</div>
