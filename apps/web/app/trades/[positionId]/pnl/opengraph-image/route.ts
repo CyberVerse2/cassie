@@ -9,7 +9,7 @@ const RENDER_TIMEOUT_MS = 20_000;
 const IMAGE_CACHE_TTL_MS = 60_000;
 
 let browserPromise: Promise<Browser> | null = null;
-const imageCache = new Map<string, { createdAt: number; image: Promise<Uint8Array> }>();
+const imageCache = new Map<string, { createdAt: number; image: Promise<ArrayBuffer> }>();
 
 type RouteContext = {
   params: Promise<{ positionId: string }>;
@@ -68,11 +68,13 @@ async function renderImage(positionId: string, request: Request) {
     await page.evaluate(() => new Promise<void>((resolve) => {
       requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
     }));
-    return await page.screenshot({
+    const screenshot = await page.screenshot({
       type: "png",
       clip: { x: 0, y: 0, width: OG_WIDTH, height: OG_HEIGHT },
       scale: "css",
     });
+    const bytes = new Uint8Array(screenshot);
+    return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
   } finally {
     await browserContext.close();
   }
