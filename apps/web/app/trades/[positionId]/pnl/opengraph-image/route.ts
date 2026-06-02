@@ -55,7 +55,7 @@ async function renderImage(positionId: string, request: Request) {
 
   try {
     await page.goto(renderUrl.toString(), {
-      waitUntil: "domcontentloaded",
+      waitUntil: "load",
       timeout: RENDER_TIMEOUT_MS,
     });
     const renderTarget = page.locator('[data-og-render-ready="true"]');
@@ -64,10 +64,6 @@ async function renderImage(positionId: string, request: Request) {
     if (errorPageVisible) {
       throw new Error(`Trade PnL OG render page failed to load: ${renderUrl.toString()}`);
     }
-    await page.evaluate(() => (document as Document & { fonts: FontFaceSet }).fonts.ready);
-    await page.evaluate(() => new Promise<void>((resolve) => {
-      requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
-    }));
     const screenshot = await page.screenshot({
       type: "png",
       clip: { x: 0, y: 0, width: OG_WIDTH, height: OG_HEIGHT },
