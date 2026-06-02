@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import type {
   ControlRun,
   ExecutionJob,
+  Position,
+  RunStep,
   TradeTicket,
-  WalletSpendLedgerEntry,
   Withdrawal,
 } from "../../../../../packages/core/schemas/index";
 import type { CassieActivityItem } from "../../lib/activity";
@@ -28,23 +29,22 @@ export async function GET(request: Request) {
     const runs = snapshot.controlRuns.filter((run) => run.userId === settings.userId);
     const runById = new Map(runs.map((run) => [run.runId, run]));
     const tickets = snapshot.tradeTickets.filter((ticket) => ticket.userId === settings.userId);
-    const jobByTicketId = new Map<string, ExecutionJob>();
-    for (const job of snapshot.executionJobs) {
-      const existing = jobByTicketId.get(job.ticketId);
-      if (!existing || job.updatedAt > existing.updatedAt) {
-        jobByTicketId.set(job.ticketId, job);
-      }
-    }
+    const ticketById = new Map(tickets.map((ticket) => [ticket.ticketId, ticket]));
+    const jobById = new Map(snapshot.executionJobs.map((job) => [job.jobId, job]));
+    const intentByRunId = buildIntentByRunId(snapshot.runSteps);
 
     const activity = [
-      ...runs.map(runActivity),
-      ...tickets.flatMap((ticket) => {
-        const item = tradeActivity(ticket, jobByTicketId.get(ticket.ticketId) ?? null, runById.get(ticket.runId ?? ""));
+      ...runs.flatMap((run) => {
+        const item = runActivity(run, intentByRunId.get(run.runId));
         return item ? [item] : [];
       }),
-      ...snapshot.walletSpendLedgerEntries
-        .filter((entry) => entry.userId === settings.userId)
-        .map(walletActivity),
+      ...snapshot.positions
+        .filter((position) => position.userId === settings.userId)
+        .flatMap((position) => {
+          const ticket = ticketById.get(position.ticketId);
+          if (!ticket) return [];
+          return [tradeActivity(position, ticket, jobById.get(position.executionJobId) ?? null, runById.get(ticket.runId ?? ""))];
+        }),
       ...snapshot.withdrawals
         .filter((withdrawal) => withdrawal.userId === settings.userId)
         .map(withdrawalActivity),
@@ -58,10 +58,11 @@ export async function GET(request: Request) {
   }
 }
 
-function runActivity(run: ControlRun): CassieActivityItem {
+function runActivity(run: ControlRun, intent: "watch" | "countertrade" | undefined): CassieActivityItem | null {
+  if (!intent) return null;
   return {
     id: run.runId,
-    kind: "run",
+    kind: intent === "countertrade" ? "counter" : "watch",
     at: run.createdAt,
     title: commandTitle(run.userCommand),
     subtitle: summarize(run.sourcePost.text),
@@ -77,44 +78,27 @@ function runActivity(run: ControlRun): CassieActivityItem {
   };
 }
 
-function tradeActivity(ticket: TradeTicket, job: ExecutionJob | null, run: ControlRun | undefined): CassieActivityItem | null {
-  const filledUsd = job?.executionResult?.filledSizeUsd ?? null;
-  const at = job?.createdAt ?? run?.createdAt ?? null;
-  if (!at) return null;
+function tradeActivity(
+  position: Position,
+  ticket: TradeTicket,
+  job: ExecutionJob | null,
+  run: ControlRun | undefined,
+): CassieActivityItem {
   return {
-    id: ticket.ticketId,
+    id: position.positionId,
     kind: "trade",
-    at,
+    at: position.openedAt,
     title: `${ticket.instrument} ${ticket.side.toUpperCase()}`,
     subtitle: summarize(ticket.thesis),
-    status: job?.status ?? "ticketed",
-    amountUsd: filledUsd ?? ticket.sizeUsd,
+    status: position.status,
+    amountUsd: position.filledSizeUsd,
     instrument: ticket.instrument,
     venue: ticket.venue,
     side: ticket.side,
     source: run?.sourcePost.url ? "x" : "cassie",
     sourceUrl: run?.sourcePost.url ?? null,
     authorHandle: run?.sourcePost.authorHandle ?? null,
-    error: job?.failureReason ?? null,
-  };
-}
-
-function walletActivity(entry: WalletSpendLedgerEntry): CassieActivityItem {
-  return {
-    id: entry.entryId,
-    kind: "wallet",
-    at: entry.createdAt,
-    title: walletTitle(entry.type),
-    subtitle: walletSubtitle(entry.type),
-    status: entry.type,
-    amountUsd: entry.amountUsd,
-    instrument: "USDC",
-    venue: null,
-    side: null,
-    source: "cassie",
-    sourceUrl: null,
-    authorHandle: null,
-    error: null,
+    error: position.failureReason ?? job?.failureReason ?? null,
   };
 }
 
@@ -148,21 +132,25 @@ function summarize(value: string): string {
   return `${cleaned.slice(0, cutoff > 90 ? cutoff : 140).trim()}...`;
 }
 
-function walletTitle(type: WalletSpendLedgerEntry["type"]): string {
-  if (type === "trade_reserve") return "Reserved trade funds";
-  if (type === "trade_prefund") return "Prefunded venue wallet";
-  if (type === "trade_release") return "Released trade reserve";
-  return "Spent trade funds";
-}
-
-function walletSubtitle(type: WalletSpendLedgerEntry["type"]): string {
-  if (type === "trade_reserve") return "USDC reserved before execution";
-  if (type === "trade_prefund") return "USDC moved for execution";
-  if (type === "trade_release") return "Unused USDC returned to spendable balance";
-  return "USDC spent on a filled trade";
-}
-
 function shortAddress(address: string): string {
   if (address.length <= 12) return address;
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
+}
+
+function buildIntentByRunId(steps: RunStep[]): Map<string, "watch" | "countertrade"> {
+  const intents = new Map<string, "watch" | "countertrade">();
+  for (const step of steps) {
+    if (step.stepType !== "intake" || step.status !== "succeeded" || step.promptName !== "cassie_source_mode_classification") {
+      continue;
+    }
+    const output = objectRecord(step.output);
+    if (output.userIntent === "watch" || output.userIntent === "countertrade") {
+      intents.set(step.runId, output.userIntent);
+    }
+  }
+  return intents;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }

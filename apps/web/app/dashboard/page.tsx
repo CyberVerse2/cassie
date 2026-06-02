@@ -1041,16 +1041,17 @@ function groupActivity(activity: CassieActivityItem[]): Array<{ date: string; it
   return [...groups].map(([date, items]) => ({ date, items }));
 }
 
-function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "watch" | "counter" {
+function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "watch" | "counter" | "withdrawal" {
   if (kind === "trade") return "trade";
-  if (kind === "run") return "watch";
-  return "counter";
+  if (kind === "watch") return "watch";
+  if (kind === "counter") return "counter";
+  return "withdrawal";
 }
 
 function activityIcon(item: CassieActivityItem): string {
   const symbol = item.instrument?.replace(/-PERP$/u, "").split(/\s+/u)[0]?.toUpperCase();
   if (symbol && tokenImages[symbol]) return tokenImages[symbol];
-  if (item.instrument === "USDC" || item.kind === "wallet" || item.kind === "withdrawal") return usdcIcon;
+  if (item.instrument === "USDC" || item.kind === "withdrawal") return usdcIcon;
   return "/cassie-logo-transparent.png";
 }
 

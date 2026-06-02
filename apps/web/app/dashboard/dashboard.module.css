@@ -805,6 +805,11 @@
   border-color: color-mix(in oklab, var(--coral) 26%, var(--line-soft));
 }
 
+.activityCmd_withdrawal {
+  color: var(--mint);
+  border-color: color-mix(in oklab, var(--mint) 28%, var(--line-soft));
+}
+
 .activityLabel {
   display: flex;
   flex-direction: column;
