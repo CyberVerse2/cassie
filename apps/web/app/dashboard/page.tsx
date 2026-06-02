@@ -1,5 +1,6 @@
 "use client";
 
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
 import tweetRun from "../../../../docs/test-run-tweets.json";
@@ -134,6 +135,26 @@ const taggedTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).
 const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
 
 const usdcIcon = "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
+
+const dashboardQueryKeys = {
+  activity: ["dashboard", "activity"] as const,
+  positions: ["dashboard", "positions"] as const,
+  positionMarks: (positionIds: string[]) => ["dashboard", "positionMarks", positionIds] as const,
+  withdrawals: ["dashboard", "withdrawals"] as const,
+};
+
+type PositionsPayload = {
+  positions: CassiePosition[];
+  latestReviews: Record<string, CassiePositionReview | null>;
+};
+
+type DashboardWithdrawal = {
+  withdrawalId: string;
+  amountUsd: number;
+  destinationAddress: string;
+  status: string;
+  failureReason: string | null;
+};
 
 export default function Dashboard() {
   const account = useCassieAccount();
@@ -461,28 +482,54 @@ function Center({
 }: {
   balanceUsd: number;
   withdrawableUsd: number;
-  fetchPositions: () => Promise<{ positions: CassiePosition[]; latestReviews: Record<string, CassiePositionReview | null> }>;
+  fetchPositions: () => Promise<PositionsPayload>;
   fetchPositionMarks: (positionIds: string[]) => Promise<CassiePosition[]>;
   closePosition: (positionId: string) => Promise<CassiePosition>;
-  fetchWithdrawals: () => Promise<Array<{ withdrawalId: string; amountUsd: number; destinationAddress: string; status: string; failureReason: string | null }>>;
+  fetchWithdrawals: () => Promise<DashboardWithdrawal[]>;
   createWithdrawal: (input: { amountUsd: number; destinationAddress: string }) => Promise<unknown>;
   fetchActivity: () => Promise<CassieActivityItem[]>;
 }) {
+  const queryClient = useQueryClient();
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
-  const [positions, setPositions] = useState<CassiePosition[]>([]);
-  const [latestReviews, setLatestReviews] = useState<Record<string, CassiePositionReview | null>>({});
-  const [positionError, setPositionError] = useState<string | null>(null);
-  const [activity, setActivity] = useState<CassieActivityItem[]>([]);
-  const [activityError, setActivityError] = useState<string | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [withdrawAddress, setWithdrawAddress] = useState("");
-  const [withdrawals, setWithdrawals] = useState<Array<{ withdrawalId: string; amountUsd: number; destinationAddress: string; status: string; failureReason: string | null }>>([]);
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [withdrawing, setWithdrawing] = useState(false);
+  const positionsQuery = useQuery({
+    queryKey: dashboardQueryKeys.positions,
+    queryFn: fetchPositions,
+  });
+  const storedPositions = positionsQuery.data?.positions ?? [];
+  const liveMarkIds = useMemo(() => storedPositions
+    .filter((position) => position.status === "open" && position.venue === "hyperliquid")
+    .map((position) => position.positionId)
+    .sort(), [storedPositions]);
+  const positionMarksQuery = useQuery({
+    queryKey: dashboardQueryKeys.positionMarks(liveMarkIds),
+    queryFn: () => fetchPositionMarks(liveMarkIds),
+    enabled: liveMarkIds.length > 0,
+    refetchInterval: 30_000,
+    staleTime: 5_000,
+  });
+  const withdrawalsQuery = useQuery({
+    queryKey: dashboardQueryKeys.withdrawals,
+    queryFn: fetchWithdrawals,
+  });
+  const activityQuery = useQuery({
+    queryKey: dashboardQueryKeys.activity,
+    queryFn: fetchActivity,
+  });
+  const positions = useMemo(() =>
+    mergePositions(storedPositions, positionMarksQuery.data ?? []),
+    [positionMarksQuery.data, storedPositions]
+  );
+  const latestReviews = positionsQuery.data?.latestReviews ?? {};
+  const withdrawals = withdrawalsQuery.data ?? [];
+  const activity = activityQuery.data ?? [];
+  const activityError = errorMessage(activityQuery.error);
 
   const rangeData = useMemo(() => generateDataForRange(selectedRange), [selectedRange]);
   const currentValPoint = rangeData[rangeData.length - 1];
@@ -497,84 +544,52 @@ function Center({
   const netInvested = openPositions.reduce((total, position) => total + position.filledSizeUsd, 0);
   const unrealized = openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const positionPayload = await fetchPositions();
-        if (cancelled) return;
-        setPositions(positionPayload.positions);
-        setLatestReviews(positionPayload.latestReviews);
-        setPositionError(null);
-        const liveMarkIds = positionPayload.positions
-          .filter((position) => position.status === "open" && position.venue === "hyperliquid")
-          .map((position) => position.positionId);
-        if (liveMarkIds.length === 0) return;
-        const markedPositions = await fetchPositionMarks(liveMarkIds);
-        if (cancelled) return;
-        setPositions((current) => mergePositions(current, markedPositions));
-      } catch (caught) {
-        if (cancelled) return;
-        setPositionError(caught instanceof Error ? caught.message : String(caught));
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchPositionMarks, fetchPositions]);
+  const closeMutation = useMutation({
+    mutationFn: closePosition,
+    onMutate: (positionId) => {
+      setClosingId(positionId);
+    },
+    onSuccess: (updated) => {
+      queryClient.setQueryData<PositionsPayload>(dashboardQueryKeys.positions, (current) =>
+        current
+          ? {
+            ...current,
+            positions: mergePositions(current.positions, [updated]),
+          }
+          : current
+      );
+      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.activity });
+    },
+    onSettled: () => {
+      setClosingId(null);
+    },
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const withdrawalPayload = await fetchWithdrawals();
-        if (cancelled) return;
-        setWithdrawals(withdrawalPayload);
-      } catch (caught) {
-        if (cancelled) return;
-        setWithdrawError(caught instanceof Error ? caught.message : String(caught));
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchWithdrawals]);
+  const withdrawalMutation = useMutation({
+    mutationFn: createWithdrawal,
+    onMutate: () => {
+      setWithdrawError(null);
+    },
+    onSuccess: async () => {
+      setWithdrawAmount("");
+      setWithdrawAddress("");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.withdrawals }),
+        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.activity }),
+      ]);
+    },
+  });
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      try {
-        const payload = await fetchActivity();
-        if (cancelled) return;
-        setActivity(payload);
-        setActivityError(null);
-      } catch (caught) {
-        if (cancelled) return;
-        setActivityError(caught instanceof Error ? caught.message : String(caught));
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [fetchActivity]);
+  const effectivePositionError = errorMessage(positionsQuery.error)
+    ?? errorMessage(positionMarksQuery.error)
+    ?? errorMessage(closeMutation.error);
+  const effectiveWithdrawError = withdrawError
+    ?? errorMessage(withdrawalsQuery.error)
+    ?? errorMessage(withdrawalMutation.error);
 
   async function requestClose(position: CassiePosition) {
     if (!window.confirm(`Close ${positionSymbol(position)} ${position.side}?`)) return;
-    setClosingId(position.positionId);
-    setPositionError(null);
-    try {
-      const updated = await closePosition(position.positionId);
-      setPositions((current) => current.map((item) =>
-        item.positionId === updated.positionId ? updated : item
-      ));
-    } catch (caught) {
-      setPositionError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setClosingId(null);
-    }
+    closeMutation.mutate(position.positionId);
   }
 
   async function submitWithdrawal() {
@@ -583,23 +598,7 @@ function Center({
       setWithdrawError("Enter a positive withdrawal amount.");
       return;
     }
-    setWithdrawing(true);
-    setWithdrawError(null);
-    try {
-      await createWithdrawal({ amountUsd, destinationAddress: withdrawAddress });
-      const [nextWithdrawals, nextActivity] = await Promise.all([
-        fetchWithdrawals(),
-        fetchActivity(),
-      ]);
-      setWithdrawals(nextWithdrawals);
-      setActivity(nextActivity);
-      setWithdrawAmount("");
-      setWithdrawAddress("");
-    } catch (caught) {
-      setWithdrawError(caught instanceof Error ? caught.message : String(caught));
-    } finally {
-      setWithdrawing(false);
-    }
+    withdrawalMutation.mutate({ amountUsd, destinationAddress: withdrawAddress });
   }
 
   return (
@@ -785,10 +784,10 @@ function Center({
             <span className={s.amountHead}>Value</span>
             <span />
           </div>
-          {positionError ? (
-            <div className={s.emptyState} role="alert">{positionError}</div>
+          {effectivePositionError ? (
+            <div className={s.emptyState} role="alert">{effectivePositionError}</div>
           ) : null}
-          {openPositions.length === 0 && !positionError ? (
+          {openPositions.length === 0 && !effectivePositionError ? (
             <div className={s.emptyState}>No open positions.</div>
           ) : null}
           {openPositions.map((position) => {
@@ -919,11 +918,11 @@ function Center({
               placeholder="0x destination"
               aria-label="Withdrawal destination address"
             />
-            <button type="button" className={s.watchTradeBtn} disabled={withdrawing} onClick={() => void submitWithdrawal()}>
-              {withdrawing ? "Queueing" : "Withdraw"}
+            <button type="button" className={s.watchTradeBtn} disabled={withdrawalMutation.isPending} onClick={() => void submitWithdrawal()}>
+              {withdrawalMutation.isPending ? "Queueing" : "Withdraw"}
             </button>
           </div>
-          {withdrawError ? <p className={s.formError} role="alert">{withdrawError}</p> : null}
+          {effectiveWithdrawError ? <p className={s.formError} role="alert">{effectiveWithdrawError}</p> : null}
           {withdrawals.length > 0 ? (
             <div className={s.withdrawHistory}>
               {withdrawals.slice(0, 4).map((withdrawal) => (
@@ -1479,6 +1478,10 @@ function positionSymbol(position: CassiePosition) {
 function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
   const updatesById = new Map(updates.map((position) => [position.positionId, position]));
   return current.map((position) => updatesById.get(position.positionId) ?? position);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : null;
 }
 
 function venueTone(venue: string) {
