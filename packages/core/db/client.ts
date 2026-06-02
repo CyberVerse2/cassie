@@ -5,6 +5,17 @@ import * as schema from "./schema.ts";
 
 export type CassieDb = NodePgDatabase<typeof schema>;
 
+export type DatabaseUrlSummary = {
+  protocol: string;
+  username: string;
+  host: string;
+  port: string;
+  database: string;
+  passwordLength: number;
+  passwordMatchesPostgresPassword: boolean | null;
+  passwordIsDefaultPostgres: boolean;
+};
+
 let sharedPostgresPool: Pool | null = null;
 
 export class MissingDatabaseConfigError extends Error {
@@ -33,6 +44,23 @@ export function postgresPoolConfig(databaseUrl: string): PoolConfig {
     connectionTimeoutMillis: config.database.pool.connectionTimeoutMs,
     idleTimeoutMillis: config.database.pool.idleTimeoutMs,
     maxLifetimeSeconds: config.database.pool.maxLifetimeSeconds,
+  };
+}
+
+export function summarizeDatabaseUrl(
+  databaseUrl: string,
+  postgresPassword = process.env.POSTGRES_PASSWORD,
+): DatabaseUrlSummary {
+  const url = new URL(databaseUrl);
+  return {
+    protocol: url.protocol,
+    username: url.username,
+    host: url.hostname,
+    port: url.port,
+    database: url.pathname.replace(/^\//u, ""),
+    passwordLength: url.password.length,
+    passwordMatchesPostgresPassword: postgresPassword == null ? null : url.password === postgresPassword,
+    passwordIsDefaultPostgres: url.password === "postgres",
   };
 }
 

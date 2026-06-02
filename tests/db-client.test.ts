@@ -40,4 +40,25 @@ describe("Cassie DB client", () => {
 
     await pool.end();
   });
+
+  it("summarizes database URLs without exposing credentials", async () => {
+    const { summarizeDatabaseUrl } = await import("../packages/core/db/client.ts");
+
+    expect(summarizeDatabaseUrl("postgresql://postgres:postgres@postgres:5432/cassie", "postgres")).toEqual({
+      protocol: "postgresql:",
+      username: "postgres",
+      host: "postgres",
+      port: "5432",
+      database: "cassie",
+      passwordLength: 8,
+      passwordMatchesPostgresPassword: true,
+      passwordIsDefaultPostgres: true,
+    });
+    expect(summarizeDatabaseUrl("postgresql://postgres:wrong@postgres:5432/cassie", "postgres"))
+      .toMatchObject({
+        passwordLength: 5,
+        passwordMatchesPostgresPassword: false,
+        passwordIsDefaultPostgres: false,
+      });
+  });
 });
