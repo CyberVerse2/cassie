@@ -80,7 +80,7 @@ async function reviewPosition(input: {
 
   try {
     const mark = await input.markProvider.markPosition({ position: input.position, ticket });
-    const updated = withMark(input.position, mark.markPrice, mark.currentValueUsd, mark.markedAt);
+    const updated = applyPositionMark(input.position, mark.markPrice, mark.currentValueUsd, mark.markedAt);
     await input.store.updatePosition(updated);
     const exitSignal = exitSignalForPosition(updated);
     const review: PositionReview = {
@@ -103,7 +103,7 @@ async function reviewPosition(input: {
   }
 }
 
-function withMark(position: Position, markPrice: number, currentValueUsd: number, markedAt: string): Position {
+export function applyPositionMark(position: Position, markPrice: number, currentValueUsd: number, markedAt: string): Position {
   const unrealizedPnlUsd = roundUsd(currentValueUsd - position.filledSizeUsd);
   const unrealizedPnlPct = position.filledSizeUsd > 0
     ? roundPct((unrealizedPnlUsd / position.filledSizeUsd) * 100)
