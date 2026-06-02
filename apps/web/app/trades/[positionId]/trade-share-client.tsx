@@ -56,6 +56,8 @@ function formatSignedPct(value: number): string {
 function formatPrice(value: number | null, venue: string): string {
   if (value == null) return "—";
   if (venue === "polymarket") return `${Math.round(value * 100)}c`;
-  if (value >= 100) return `$${value.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  return `$${value.toLocaleString(undefined, { maximumFractionDigits: 4 })}`;
+  return `$${value.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }

@@ -161,8 +161,8 @@ describe("trade card data", () => {
         venue: "hyperliquid",
         instrument: "synthetic_perp",
         side: "short",
-        entryPrice: 379.83,
-        currentMarkPrice: 361.44,
+        entryPrice: 71.58,
+        currentMarkPrice: 72.335,
       },
       ticket: hyperliquidTicket,
       run,
@@ -173,5 +173,7 @@ describe("trade card data", () => {
 
     expect(share.cardProps.headline).toBe("Google is behind in the AI race despite having vast data.");
     expect(share.cardProps.why).toBe("Short Alphabet/GOOGL on the market's bearish read-through that Google is la...");
+    expect(share.cardProps.tradeResult?.entry).toBe("$71.58");
+    expect(share.cardProps.tradeResult?.exit).toBe("$72.34");
   });
 });

@@ -247,7 +247,10 @@ function sideName(side: string) {
 function formatPrice(value: number | null, venue: string) {
   if (value == null) return "No mark";
   if (venue === "polymarket" || value <= 1) return `${Math.round(value * 100)}c`;
-  return `$${value.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  return `$${value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function formatSignedPct(value: number) {
