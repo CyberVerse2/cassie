@@ -12,6 +12,16 @@ describe("Cassie DB client", () => {
     expect(sharedCassiePostgresPool()).toBe(sharedCassiePostgresPool());
   });
 
+  it("reuses the default Postgres pool across module reloads", async () => {
+    const { sharedCassiePostgresPool } = await import("../packages/core/db/client.ts");
+    const pool = sharedCassiePostgresPool();
+
+    vi.resetModules();
+    const reloaded = await import("../packages/core/db/client.ts");
+
+    expect(reloaded.sharedCassiePostgresPool()).toBe(pool);
+  });
+
   it("can create multiple Drizzle clients over the shared pool", async () => {
     const { createCassieDb, sharedCassiePostgresPool } = await import("../packages/core/db/client.ts");
 

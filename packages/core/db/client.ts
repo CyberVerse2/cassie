@@ -15,7 +15,11 @@ export class InvalidDatabaseUrlError extends Error {
   }
 }
 
-let sharedPostgresPool: Pool | null = null;
+const sharedPostgresPoolKey = Symbol.for("cassie.postgres.pool");
+
+type CassieGlobal = typeof globalThis & {
+  [sharedPostgresPoolKey]?: Pool;
+};
 
 export class MissingDatabaseConfigError extends Error {
   constructor() {
@@ -60,10 +64,11 @@ function parseDatabaseUrl(databaseUrl: string): URL {
 }
 
 export function sharedCassiePostgresPool(): Pool {
-  if (!sharedPostgresPool) {
-    sharedPostgresPool = createPostgresPool();
+  const cassieGlobal = globalThis as CassieGlobal;
+  if (!cassieGlobal[sharedPostgresPoolKey]) {
+    cassieGlobal[sharedPostgresPoolKey] = createPostgresPool();
   }
-  return sharedPostgresPool;
+  return cassieGlobal[sharedPostgresPoolKey];
 }
 
 export function createCassieDb(pool = sharedCassiePostgresPool()): CassieDb {

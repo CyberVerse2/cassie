@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 import { getTradeShareData, TradeShareNotFoundError } from "../../../lib/trade-card-data";
 import { siteName, siteUrl } from "../../../metadata-config";
 import { TradeShareClient } from "../trade-share-client";
@@ -58,11 +59,11 @@ export default async function TradeSharePage({ params }: TradePageProps) {
   );
 }
 
-async function readShare(positionId: string) {
+const readShare = cache(async (positionId: string) => {
   try {
     return await getTradeShareData(positionId);
   } catch (error) {
     if (error instanceof TradeShareNotFoundError) notFound();
     throw error;
   }
-}
+});
