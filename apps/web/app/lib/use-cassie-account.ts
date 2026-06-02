@@ -43,6 +43,7 @@ export type CassiePosition = {
   executionJobId: string;
   venue: string;
   instrument: string;
+  symbol: string | null;
   side: string;
   status: "open" | "closing" | "closed" | "close_failed";
   entrySizeUsd: number;

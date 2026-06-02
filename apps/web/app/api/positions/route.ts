@@ -5,6 +5,7 @@ import {
 } from "../_lib/account";
 import type { TradeTicket } from "../../../../../packages/core/schemas";
 import { markUserFacingHyperliquidPositions } from "../../../../../packages/positions/user-facing";
+import { decoratePosition } from "./_lib/position-response";
 
 export const runtime = "nodejs";
 
@@ -22,12 +23,15 @@ export async function GET(request: Request) {
         .map((ticket) => [ticket.ticketId, ticket]),
     );
     const markedPositions = await markUserFacingHyperliquidPositions(positions, tickets);
+    const displayPositions = markedPositions.map((position) =>
+      decoratePosition(position, tickets.get(position.ticketId))
+    );
     const latestReviews = await Promise.all(markedPositions.map(async (position) => ({
       positionId: position.positionId,
       review: await store.getLatestPositionReview(position.positionId),
     })));
     return NextResponse.json({
-      positions: markedPositions,
+      positions: displayPositions,
       latestReviews: Object.fromEntries(latestReviews.map((item) => [item.positionId, item.review ?? null])),
     });
   } catch (error) {

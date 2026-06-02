@@ -4,6 +4,7 @@ import {
   authenticatedContext,
 } from "../../../_lib/account";
 import { queueClosePosition } from "../../../../../../../packages/positions/close";
+import { decoratePosition } from "../../_lib/position-response";
 
 export const runtime = "nodejs";
 
@@ -23,7 +24,8 @@ export async function POST(
       return NextResponse.json({ error: "Position was not found." }, { status: 404 });
     }
     const updated = await queueClosePosition({ positionId, store });
-    return NextResponse.json({ position: updated });
+    const ticket = await store.getTradeTicket(updated.ticketId);
+    return NextResponse.json({ position: decoratePosition(updated, ticket ?? undefined) });
   } catch (error) {
     return apiError(error);
   }

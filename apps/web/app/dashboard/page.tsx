@@ -538,7 +538,7 @@ function Center({
   }, [fetchActivity]);
 
   async function requestClose(position: CassiePosition) {
-    if (!window.confirm(`Close ${position.instrument} ${position.side}?`)) return;
+    if (!window.confirm(`Close ${positionSymbol(position)} ${position.side}?`)) return;
     setClosingId(position.positionId);
     setPositionError(null);
     try {
@@ -781,7 +781,7 @@ function Center({
                 <span className="entry-mark" />
               </span>
               <span className={s.tradeCopy}>
-                <strong>{position.instrument} {position.side.toUpperCase()}</strong>
+                <strong>{positionSymbol(position)} {position.side.toUpperCase()}</strong>
                 <span>{review?.summary ?? position.exitPlan.thesis}</span>
               </span>
               <span className={s.amountCell}>
@@ -802,11 +802,11 @@ function Center({
                 </span>
               </span>
               <span className={s.tradeActions}>
-                <a className={`${s.watchTradeBtn} ${s.shareTradeBtn}`} href={`/trades/${encodeURIComponent(position.positionId)}`}>
+                <a className={`${s.tradeActionBtn} ${s.shareTradeBtn}`} href={`/trades/${encodeURIComponent(position.positionId)}`}>
                   Share
                 </a>
                 <button
-                  className={s.watchTradeBtn}
+                  className={s.tradeActionBtn}
                   type="button"
                   onClick={() => void requestClose(position)}
                   disabled={position.status === "closing" || closingId === position.positionId}
@@ -1447,7 +1447,7 @@ function shortAddress(address: string) {
 }
 
 function positionSymbol(position: CassiePosition) {
-  return position.instrument
+  return (position.symbol?.trim() || position.instrument)
     .replace(/-PERP$/u, "")
     .replace(/^spot$/u, position.venue.toUpperCase());
 }
