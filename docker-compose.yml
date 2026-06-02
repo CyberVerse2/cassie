@@ -11,7 +11,7 @@ x-cassie-service: &cassie-service
   init: true
   restart: unless-stopped
   environment:
-    DATABASE_URL: ${DATABASE_URL}
+    DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD_URL_ENCODED:-postgres}@postgres:5432/cassie
   depends_on:
     postgres:
       condition: service_healthy
@@ -49,7 +49,7 @@ services:
     <<: *cassie-runtime
     command: ["npm", "run", "web:start:migrated"]
     environment:
-      DATABASE_URL: ${DATABASE_URL}
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD_URL_ENCODED:-postgres}@postgres:5432/cassie
       PORT: 3000
       HOSTNAME: 0.0.0.0
     expose:
