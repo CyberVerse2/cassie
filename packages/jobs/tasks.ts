@@ -31,9 +31,9 @@ export function createExecutionTaskList(): TaskList {
     [REVIEW_OPEN_POSITIONS_TASK]: async (payload) => {
       const parsed = ReviewOpenPositionsPayloadSchema.parse(payload);
       if (parsed.userId) {
-        await reviewOpenPositionsForUser({ userId: parsed.userId });
+        await reviewOpenPositionsForUser({ userId: parsed.userId, notify: false });
       } else {
-        await reviewAllOpenPositions();
+        await reviewAllOpenPositions({ notify: false });
       }
     },
     [CLOSE_POSITION_TASK]: async (payload) => {
