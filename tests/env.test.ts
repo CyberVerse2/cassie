@@ -167,6 +167,8 @@ describe("Polymarket env", () => {
       .toThrow("COUNT must be a number.");
     expect(() => numberEnv("COUNT", 3, { COUNT: "-1" }, { min: 1 }))
       .toThrow("COUNT must be at least 1.");
+    expect(() => numberEnv("COUNT", 3, { COUNT: "61" }, { max: 59 }))
+      .toThrow("COUNT must be at most 59.");
     expect(() => readCassieConfig({ CASSIE_STRUCTURED_MAX_RETRIES: "0" }))
       .toThrow("CASSIE_STRUCTURED_MAX_RETRIES must be at least 1.");
   });
@@ -201,6 +203,7 @@ describe("Polymarket env", () => {
       GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: "4",
       GRAPHILE_WORKER_CONCURRENCY: "3",
       GRAPHILE_WORKER_POLL_INTERVAL_MS: "2500",
+      CASSIE_POSITION_REVIEW_INTERVAL_MINUTES: "10",
     };
 
     expect(readAiProviderEnv(env, {
@@ -223,6 +226,7 @@ describe("Polymarket env", () => {
       supervisorMaxAttempts: 4,
       concurrency: 3,
       pollIntervalMs: 2500,
+      positionReviewIntervalMinutes: 10,
     });
   });
 

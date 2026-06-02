@@ -7,6 +7,7 @@ export type EnvSource = Record<string, string | undefined>;
 export type NumberEnvOptions = {
   integer?: boolean;
   min?: number;
+  max?: number;
 };
 
 export const DEFAULT_HYPERLIQUID_PERP_LEVERAGE = 3;
@@ -34,6 +35,7 @@ export type GraphileWorkerEnv = {
   supervisorMaxAttempts: number;
   concurrency: number;
   pollIntervalMs: number;
+  positionReviewIntervalMinutes: number;
 };
 
 export type HttpRuntimeEnv = {
@@ -250,11 +252,13 @@ export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWor
     GRAPHILE_SUPERVISOR_MAX_ATTEMPTS: numberSchema("GRAPHILE_SUPERVISOR_MAX_ATTEMPTS", 3, { integer: true, min: 1 }),
     GRAPHILE_WORKER_CONCURRENCY: numberSchema("GRAPHILE_WORKER_CONCURRENCY", 1, { integer: true, min: 1 }),
     GRAPHILE_WORKER_POLL_INTERVAL_MS: numberSchema("GRAPHILE_WORKER_POLL_INTERVAL_MS", 2_000, { integer: true, min: 1 }),
+    CASSIE_POSITION_REVIEW_INTERVAL_MINUTES: numberSchema("CASSIE_POSITION_REVIEW_INTERVAL_MINUTES", 15, { integer: true, min: 1, max: 59 }),
   }).transform((values) => ({
     executionMaxAttempts: values.GRAPHILE_EXECUTION_MAX_ATTEMPTS,
     supervisorMaxAttempts: values.GRAPHILE_SUPERVISOR_MAX_ATTEMPTS,
     concurrency: values.GRAPHILE_WORKER_CONCURRENCY,
     pollIntervalMs: values.GRAPHILE_WORKER_POLL_INTERVAL_MS,
+    positionReviewIntervalMinutes: values.CASSIE_POSITION_REVIEW_INTERVAL_MINUTES,
   })).parse(env);
 }
 
@@ -603,6 +607,9 @@ function parseConfiguredNumber(
   const normalized = options.integer ? Math.floor(parsed) : parsed;
   if (options.min != null && normalized < options.min) {
     throw new Error(`${name} must be at least ${options.min}.`);
+  }
+  if (options.max != null && normalized > options.max) {
+    throw new Error(`${name} must be at most ${options.max}.`);
   }
   return normalized;
 }
