@@ -39,6 +39,7 @@ const job: ExecutionJob = {
   failureReason: null,
   executionResult: {
     venueOrderId: "order_1",
+    filledBaseSize: 1,
     filledSizeUsd: 100,
     averagePrice: 100,
   },
@@ -54,6 +55,7 @@ const position: Position = {
   side: "long",
   status: "open",
   entrySizeUsd: 100,
+  filledBaseSize: 1,
   filledSizeUsd: 100,
   entryPrice: 100,
   currentMarkPrice: 112,

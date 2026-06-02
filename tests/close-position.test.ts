@@ -48,6 +48,7 @@ const position: Position = {
   side: "long",
   status: "open",
   entrySizeUsd: 100,
+  filledBaseSize: 1,
   filledSizeUsd: 100,
   entryPrice: 100,
   currentMarkPrice: 112,
@@ -94,6 +95,7 @@ describe("close positions", () => {
       async close() {
         return {
           venueOrderId: "close_order_1",
+          filledBaseSize: 1,
           filledSizeUsd: 112,
           averagePrice: 112,
         };
@@ -157,6 +159,7 @@ describe("close positions", () => {
       async close() {
         return {
           venueOrderId: "close_order_1",
+          filledBaseSize: 1,
           filledSizeUsd: 112,
           averagePrice: 112,
         };
@@ -179,5 +182,34 @@ describe("close positions", () => {
       closedAt: null,
       failureReason: "treasury transfer failed",
     });
+  });
+
+  it("does not mark the position closed or refund when the venue only partially closes", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addPosition({ ...position, status: "closing" });
+    const closeClient: PositionCloseClient = {
+      async close() {
+        return {
+          venueOrderId: "partial_close_order_1",
+          filledBaseSize: 0.4,
+          filledSizeUsd: 44.8,
+          averagePrice: 112,
+        };
+      },
+    };
+    const walletGateway = {
+      refundUserUsdcFromTreasury: vi.fn(),
+    };
+
+    const failed = await executeClosePosition({ positionId: "position_1", store, closeClient, walletGateway });
+
+    expect(failed).toMatchObject({
+      status: "close_failed",
+      closedAt: null,
+      failureReason: "Position close filled 0.4 base units, expected 1.",
+    });
+    expect(walletGateway.refundUserUsdcFromTreasury).not.toHaveBeenCalled();
   });
 });

@@ -74,6 +74,7 @@ export async function executeClosePosition(input: {
       throw new Error("Position close refund requires a user wallet address.");
     }
     const result = await closeClient.close(position, ticket);
+    assertFullCloseFill(position, result);
     const walletGateway = input.walletGateway ?? new PrivyAdapter();
     const refundTransfer = await refundClosedPosition({
       walletGateway,
@@ -121,6 +122,19 @@ export async function executeClosePosition(input: {
       data: { failureReason: failed.failureReason },
     });
     return failed;
+  }
+}
+
+function assertFullCloseFill(position: Position, result: PositionCloseResult): void {
+  if (position.filledBaseSize == null || position.filledBaseSize <= 0) {
+    throw new Error(`Position ${position.positionId} is missing filledBaseSize.`);
+  }
+  if (result.filledBaseSize == null || result.filledBaseSize <= 0) {
+    throw new Error(`Position close returned no filled base size for ${position.positionId}.`);
+  }
+  const tolerance = Math.max(0.00000001, position.filledBaseSize * 0.000001);
+  if (result.filledBaseSize + tolerance < position.filledBaseSize) {
+    throw new Error(`Position close filled ${result.filledBaseSize} base units, expected ${position.filledBaseSize}.`);
   }
 }
 

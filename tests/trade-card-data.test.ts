@@ -46,6 +46,7 @@ const position: Position = {
   side: "buy_yes",
   status: "open",
   entrySizeUsd: 50,
+  filledBaseSize: 96.1538461538,
   filledSizeUsd: 50,
   entryPrice: 0.52,
   currentMarkPrice: 0.71,

@@ -251,6 +251,7 @@ describe("InMemoryCassieStore", () => {
       walletBalanceUsd: 100,
       executionResult: {
         venueOrderId: "order_1",
+        filledBaseSize: 66.66,
         filledSizeUsd: 33.33,
         averagePrice: 0.5,
       },
@@ -283,6 +284,7 @@ describe("InMemoryCassieStore", () => {
       side: "long",
       status: "open",
       entrySizeUsd: 50,
+      filledBaseSize: 0.5,
       filledSizeUsd: 50,
       entryPrice: 100,
       currentMarkPrice: 110,

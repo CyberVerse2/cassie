@@ -127,6 +127,7 @@ describe("HyperliquidExecutionClient", () => {
     });
     expect(result).toMatchObject({
       venueOrderId: "12345",
+      filledBaseSize: 0.15,
       filledSizeUsd: 12.4575,
       collateralUsedUsd: 4.1525,
       averagePrice: 83.05,
@@ -212,6 +213,7 @@ describe("HyperliquidExecutionClient", () => {
     expect(info.metaAndAssetCtxs).not.toHaveBeenCalled();
     expect(result).toMatchObject({
       venueOrderId: "67890",
+      filledBaseSize: 0.01,
       filledSizeUsd: 45.085,
       averagePrice: 4508.5,
     });
@@ -274,6 +276,7 @@ describe("PolymarketExecutionClient", () => {
     });
     expect(result).toMatchObject({
       venueOrderId: "order_1",
+      filledBaseSize: null,
       filledSizeUsd: 25,
       averagePrice: null,
     });
@@ -330,6 +333,7 @@ describe("treasury-prefunded execution", () => {
     const job = createQueuedExecutionJob(ticket.ticketId);
     const execute = vi.fn().mockResolvedValue({
       venueOrderId: "venue_order_1",
+      filledBaseSize: 50,
       filledSizeUsd: 25,
       averagePrice: 0.5,
     });
@@ -378,6 +382,7 @@ describe("treasury-prefunded execution", () => {
       side: "buy_yes",
       status: "open",
       entrySizeUsd: 25,
+      filledBaseSize: 50,
       filledSizeUsd: 25,
       entryPrice: 0.5,
       currentMarkPrice: 0.5,
@@ -545,6 +550,7 @@ describe("treasury-prefunded execution", () => {
     const executionClient: ExecutionClient = {
       execute: vi.fn().mockResolvedValue({
         venueOrderId: "venue_order_1",
+        filledBaseSize: 20,
         filledSizeUsd: 10,
         averagePrice: 0.5,
       }),

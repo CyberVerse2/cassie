@@ -36,6 +36,7 @@ const hyperliquidPosition: Position = {
   side: "long",
   status: "open",
   entrySizeUsd: 4,
+  filledBaseSize: 0.12,
   filledSizeUsd: 12,
   entryPrice: 100,
   currentMarkPrice: 100,

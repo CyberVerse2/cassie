@@ -494,6 +494,7 @@ export const ExecutionJobSchema = z.object({
   executionResult: z
     .object({
       venueOrderId: z.string().nullable(),
+      filledBaseSize: z.number().nonnegative().nullable(),
       filledSizeUsd: z.number().nonnegative(),
       collateralUsedUsd: z.number().nonnegative().optional(),
       averagePrice: z.number().nonnegative().nullable(),
@@ -516,6 +517,7 @@ export const PositionSchema = z.object({
   side: z.string(),
   status: PositionStatusSchema,
   entrySizeUsd: z.number().positive(),
+  filledBaseSize: z.number().positive().nullable(),
   filledSizeUsd: z.number().positive(),
   entryPrice: z.number().positive().nullable(),
   currentMarkPrice: z.number().positive().nullable(),

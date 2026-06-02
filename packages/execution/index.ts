@@ -52,14 +52,20 @@ export class WebhookExecutionClient implements ExecutionClient {
 
     const payload = await readJsonResponse<{
       venueOrderId?: string | null;
+      filledBaseSize?: number | null;
       filledSizeUsd?: number;
       averagePrice?: number | null;
       raw?: unknown;
     }>("Execution worker", response);
+    const filledSizeUsd = payload.filledSizeUsd ?? 0;
+    if (filledSizeUsd > 0 && payload.filledBaseSize == null) {
+      throw new Error("Execution worker response must include filledBaseSize for filled orders.");
+    }
 
     return {
       venueOrderId: payload.venueOrderId ?? null,
-      filledSizeUsd: payload.filledSizeUsd ?? 0,
+      filledBaseSize: payload.filledBaseSize ?? null,
+      filledSizeUsd,
       averagePrice: payload.averagePrice ?? null,
       raw: payload.raw ?? payload,
     };
@@ -214,9 +220,10 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
     const isClosingBuy = position.side === "short" || position.side === "sell";
     const slippage = config.slippageBps / 10_000;
     const price = isClosingBuy ? mid * (1 + slippage) : mid * (1 - slippage);
-    const baseSize = position.entryPrice && position.entryPrice > 0
-      ? position.filledSizeUsd / position.entryPrice
-      : position.filledSizeUsd / mid;
+    if (position.filledBaseSize == null || position.filledBaseSize <= 0) {
+      throw new Error(`Hyperliquid position ${position.positionId} is missing filledBaseSize.`);
+    }
+    const baseSize = position.filledBaseSize;
     const requestedSize = formatDecimal(baseSize, asset.sizeDecimals);
     if (Number(requestedSize) <= 0) {
       throw new Error(`Hyperliquid close size rounds to zero for ${symbol}.`);
@@ -310,7 +317,7 @@ function parseHyperliquidOrderExecution(
     collateralUsd: number;
     leverage: number;
   },
-): Pick<NonNullable<ExecutionJob["executionResult"]>, "venueOrderId" | "filledSizeUsd" | "collateralUsedUsd" | "averagePrice"> {
+): Pick<NonNullable<ExecutionJob["executionResult"]>, "venueOrderId" | "filledBaseSize" | "filledSizeUsd" | "collateralUsedUsd" | "averagePrice"> {
   const status = response.response.data.statuses[0];
   if (!status) {
     throw new Error("Hyperliquid order response did not include an order status.");
@@ -319,6 +326,7 @@ function parseHyperliquidOrderExecution(
   if (typeof status === "string") {
     return {
       venueOrderId: null,
+      filledBaseSize: 0,
       filledSizeUsd: 0,
       collateralUsedUsd: 0,
       averagePrice: null,
@@ -332,6 +340,7 @@ function parseHyperliquidOrderExecution(
     const filledSizeUsd = Math.min(input.requestedSizeUsd, filledSize * averagePrice);
     return {
       venueOrderId: String(status.filled.oid),
+      filledBaseSize: filledSize,
       filledSizeUsd,
       collateralUsedUsd: Math.min(input.collateralUsd, filledSizeUsd / input.leverage),
       averagePrice,
@@ -341,6 +350,7 @@ function parseHyperliquidOrderExecution(
   if ("resting" in status) {
     return {
       venueOrderId: String(status.resting.oid),
+      filledBaseSize: 0,
       filledSizeUsd: 0,
       collateralUsedUsd: 0,
       averagePrice: null,
@@ -437,6 +447,7 @@ export class PolymarketExecutionClient implements ExecutionClient {
 
     return {
       venueOrderId: response.ok ? response.orderId : null,
+      filledBaseSize: null,
       filledSizeUsd: ticket.sizeUsd,
       averagePrice: null,
       raw: response,
@@ -471,6 +482,7 @@ export class PolymarketPositionCloseClient implements PositionCloseClient {
 
     return {
       venueOrderId: response.ok ? response.orderId : null,
+      filledBaseSize: position.filledBaseSize,
       filledSizeUsd: position.currentValueUsd,
       averagePrice: position.currentMarkPrice,
       raw: response,

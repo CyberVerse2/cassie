@@ -258,6 +258,9 @@ async function createPositionForFilledExecution(input: {
     side: input.ticket.side,
     status: "open",
     entrySizeUsd: input.ticket.sizeUsd,
+    filledBaseSize: input.executionResult.filledBaseSize && input.executionResult.filledBaseSize > 0
+      ? input.executionResult.filledBaseSize
+      : null,
     filledSizeUsd: input.executionResult.filledSizeUsd,
     entryPrice: input.executionResult.averagePrice,
     currentMarkPrice: input.executionResult.averagePrice,

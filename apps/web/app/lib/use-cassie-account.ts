@@ -48,6 +48,7 @@ export type CassiePosition = {
   side: string;
   status: "open" | "closing" | "closed" | "close_failed";
   entrySizeUsd: number;
+  filledBaseSize: number | null;
   filledSizeUsd: number;
   entryPrice: number | null;
   currentMarkPrice: number | null;
