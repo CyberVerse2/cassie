@@ -1016,7 +1016,7 @@ function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
       </svg>
     );
   }
-  if (kind === "run") {
+  if (kind === "watch") {
     return (
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
