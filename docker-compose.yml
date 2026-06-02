@@ -51,7 +51,7 @@ services:
 
   web:
     <<: *cassie-runtime
-    command: ["npm", "run", "web:start:migrated"]
+    command: ["npm", "run", "web:start"]
     environment:
       CASSIE_POSTGRES_HOST: postgres
       CASSIE_POSTGRES_PORT: 5432
@@ -71,7 +71,7 @@ services:
 
   worker:
     <<: *cassie-runtime
-    command: ["npm", "run", "worker:migrated"]
+    command: ["npm", "run", "worker"]
 
 volumes:
   cassie-postgres-data:
