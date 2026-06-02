@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useCallback, useMemo } from "react";
 import {
   usePrivy,
   useSigners,
@@ -114,13 +115,13 @@ type SyncInput = {
   requireSigner?: boolean;
 };
 
+const cassieAccountQueryKey = ["cassie", "account"] as const;
+
 export function useCassieAccount() {
   const privy = usePrivy();
   const { wallets, ready: walletsReady } = useWallets();
   const { addSigners } = useSigners();
-  const [account, setAccount] = useState<CassieAccount | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
   const signerId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID;
   const signerPolicyIds = useMemo(
     () => parsePolicyIds(process.env.NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS),
@@ -129,9 +130,9 @@ export function useCassieAccount() {
   const userProfile = useMemo(() => profileFromUser(privy.user), [privy.user]);
   const clearExpiredSession = useCallback(async (response: Response) => {
     if (response.status !== 401) return;
-    setAccount(null);
+    queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, null);
     await privy.logout();
-  }, [privy]);
+  }, [privy, queryClient]);
 
   const embeddedWallet = useMemo(() => {
     const primary = privy.user?.wallet;
@@ -150,15 +151,36 @@ export function useCassieAccount() {
       : null;
   }, [privy.user?.wallet, wallets]);
 
-  const syncAccount = useCallback(async (input: SyncInput = {}) => {
+  const fetchAccount = useCallback(async () => {
+    if (!privy.authenticated) return null;
+    const accessToken = await privy.getAccessToken();
+    if (!accessToken) return null;
+    const response = await fetch("/api/account", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    await clearExpiredSession(response);
+    if (response.status === 404) return null;
+    const payload = await response.json() as { account?: CassieAccount; error?: string };
+    if (!response.ok || !payload.account) {
+      throw new Error(payload.error ?? "Cassie account refresh failed.");
+    }
+    return payload.account;
+  }, [clearExpiredSession, privy]);
+
+  const accountQuery = useQuery({
+    queryKey: cassieAccountQueryKey,
+    queryFn: fetchAccount,
+    enabled: privy.ready && privy.authenticated,
+    staleTime: 15_000,
+  });
+
+  const syncAccountRequest = useCallback(async (input: SyncInput = {}) => {
     if (!privy.ready || !walletsReady) return null;
     if (!privy.authenticated) {
       throw new Error("Log in with Twitter before continuing onboarding.");
     }
     if (!embeddedWallet) return null;
 
-    setStatus("loading");
-    setError(null);
     let walletForSync = embeddedWallet;
     if (input.requireSigner && !embeddedWallet.delegated) {
       if (!signerId) {
@@ -199,45 +221,15 @@ export function useCassieAccount() {
     if (!response.ok || !payload.account) {
       throw new Error(payload.error ?? "Cassie account sync failed.");
     }
-    setAccount(payload.account);
-    setStatus("idle");
     return payload.account;
   }, [addSigners, clearExpiredSession, embeddedWallet, privy, signerId, signerPolicyIds, walletsReady]);
 
-  const prepareAccount = useCallback(async (input: SyncInput = {}) => {
-    try {
-      return await syncAccount({ ...input, requireSigner: true });
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught);
-      setError(message);
-      setStatus("error");
-      return null;
-    }
-  }, [syncAccount]);
-
-  const refreshAccount = useCallback(async () => {
-    try {
-      if (!privy.authenticated) return null;
-      const accessToken = await privy.getAccessToken();
-      if (!accessToken) return null;
-      const response = await fetch("/api/account", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      await clearExpiredSession(response);
-      if (response.status === 404) return null;
-      const payload = await response.json() as { account?: CassieAccount; error?: string };
-      if (!response.ok || !payload.account) {
-        throw new Error(payload.error ?? "Cassie account refresh failed.");
-      }
-      setAccount(payload.account);
-      return payload.account;
-    } catch (caught) {
-      const message = caught instanceof Error ? caught.message : String(caught);
-      setError(message);
-      setStatus("error");
-      return null;
-    }
-  }, [clearExpiredSession, privy]);
+  const syncAccountMutation = useMutation({
+    mutationFn: syncAccountRequest,
+    onSuccess: (nextAccount) => {
+      queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
+    },
+  });
 
   const beginTelegramConnect = useCallback(async () => {
     if (!privy.authenticated) {
@@ -259,7 +251,7 @@ export function useCassieAccount() {
     return payload.telegram;
   }, [clearExpiredSession, privy]);
 
-  const updateDefaultTradeSize = useCallback(async (defaultTradeSizeUsd: number) => {
+  const updateDefaultTradeSizeRequest = useCallback(async (defaultTradeSizeUsd: number) => {
     if (!privy.authenticated) {
       throw new Error("Log in before updating your default trade size.");
     }
@@ -280,9 +272,46 @@ export function useCassieAccount() {
     if (!response.ok || !payload.account) {
       throw new Error(payload.error ?? "Default trade size update failed.");
     }
-    setAccount(payload.account);
     return payload.account;
   }, [clearExpiredSession, privy]);
+
+  const updateDefaultTradeSizeMutation = useMutation({
+    mutationFn: updateDefaultTradeSizeRequest,
+    onSuccess: (nextAccount) => {
+      queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
+    },
+  });
+
+  const syncAccount = useCallback((input: SyncInput = {}) =>
+    syncAccountMutation.mutateAsync(input), [syncAccountMutation]);
+
+  const prepareAccount = useCallback(async (input: SyncInput = {}) => {
+    try {
+      return await syncAccountMutation.mutateAsync({ ...input, requireSigner: true });
+    } catch {
+      return null;
+    }
+  }, [syncAccountMutation]);
+
+  const refreshAccount = useCallback(async () => {
+    try {
+      return await queryClient.fetchQuery({
+        queryKey: cassieAccountQueryKey,
+        queryFn: fetchAccount,
+        staleTime: 0,
+      });
+    } catch {
+      return null;
+    }
+  }, [fetchAccount, queryClient]);
+
+  const updateDefaultTradeSize = useCallback((defaultTradeSizeUsd: number) =>
+    updateDefaultTradeSizeMutation.mutateAsync(defaultTradeSizeUsd), [updateDefaultTradeSizeMutation]);
+
+  const logout = useCallback(async () => {
+    queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, null);
+    await privy.logout();
+  }, [privy, queryClient]);
 
   const authedFetch = useCallback(async (url: string, init: RequestInit = {}) => {
     if (!privy.authenticated) {
@@ -377,6 +406,17 @@ export function useCassieAccount() {
     return payload.activity;
   }, [authedFetch]);
 
+  const account = accountQuery.data ?? null;
+  const actionError = syncAccountMutation.error
+    ?? updateDefaultTradeSizeMutation.error
+    ?? accountQuery.error;
+  const status: "idle" | "loading" | "error" = syncAccountMutation.isPending || updateDefaultTradeSizeMutation.isPending
+    ? "loading"
+    : actionError
+      ? "error"
+      : "idle";
+  const error = actionError instanceof Error ? actionError.message : null;
+
   return {
     account,
     userProfile,
@@ -387,7 +427,7 @@ export function useCassieAccount() {
     walletAddress: embeddedWallet?.address ?? account?.walletAddress ?? null,
     walletReadyForSpending: Boolean(embeddedWallet?.id && embeddedWallet.delegated),
     login: privy.login,
-    logout: privy.logout,
+    logout,
     prepareAccount,
     beginTelegramConnect,
     refreshAccount,

@@ -159,10 +159,6 @@ type DashboardWithdrawal = {
 export default function Dashboard() {
   const account = useCassieAccount();
 
-  useEffect(() => {
-    void account.refreshAccount();
-  }, [account.refreshAccount]);
-
   return (
     <main className={s.shell}>
       <Aside
