@@ -75,7 +75,7 @@ describe("user-facing positions", () => {
       currentMarkPrice: 110,
       currentValueUsd: 13.2,
       unrealizedPnlUsd: 1.2,
-      unrealizedPnlPct: 10,
+      unrealizedPnlPct: 30,
       lastMarkedAt: "2026-06-02T00:00:00.000Z",
     });
   });

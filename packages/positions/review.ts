@@ -105,8 +105,9 @@ async function reviewPosition(input: {
 
 export function applyPositionMark(position: Position, markPrice: number, currentValueUsd: number, markedAt: string): Position {
   const unrealizedPnlUsd = roundUsd(currentValueUsd - position.filledSizeUsd);
-  const unrealizedPnlPct = position.filledSizeUsd > 0
-    ? roundPct((unrealizedPnlUsd / position.filledSizeUsd) * 100)
+  const pnlBasisUsd = position.entrySizeUsd > 0 ? position.entrySizeUsd : position.filledSizeUsd;
+  const unrealizedPnlPct = pnlBasisUsd > 0
+    ? roundPct((unrealizedPnlUsd / pnlBasisUsd) * 100)
     : 0;
   return {
     ...position,
