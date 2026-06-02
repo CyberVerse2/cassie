@@ -156,6 +156,7 @@ export default function Dashboard() {
         balanceUsd={account.account?.balance?.spendableUsd ?? 0}
         withdrawableUsd={account.account?.withdrawableUsd ?? 0}
         fetchPositions={account.fetchPositions}
+        fetchPositionMarks={account.fetchPositionMarks}
         closePosition={account.closePosition}
         fetchWithdrawals={account.fetchWithdrawals}
         createWithdrawal={account.createWithdrawal}
@@ -452,6 +453,7 @@ function Center({
   balanceUsd,
   withdrawableUsd,
   fetchPositions,
+  fetchPositionMarks,
   closePosition,
   fetchWithdrawals,
   createWithdrawal,
@@ -460,6 +462,7 @@ function Center({
   balanceUsd: number;
   withdrawableUsd: number;
   fetchPositions: () => Promise<{ positions: CassiePosition[]; latestReviews: Record<string, CassiePositionReview | null> }>;
+  fetchPositionMarks: (positionIds: string[]) => Promise<CassiePosition[]>;
   closePosition: (positionId: string) => Promise<CassiePosition>;
   fetchWithdrawals: () => Promise<Array<{ withdrawalId: string; amountUsd: number; destinationAddress: string; status: string; failureReason: string | null }>>;
   createWithdrawal: (input: { amountUsd: number; destinationAddress: string }) => Promise<unknown>;
@@ -498,15 +501,18 @@ function Center({
     let cancelled = false;
     async function load() {
       try {
-        const [positionPayload, withdrawalPayload] = await Promise.all([
-          fetchPositions(),
-          fetchWithdrawals(),
-        ]);
+        const positionPayload = await fetchPositions();
         if (cancelled) return;
         setPositions(positionPayload.positions);
         setLatestReviews(positionPayload.latestReviews);
-        setWithdrawals(withdrawalPayload);
         setPositionError(null);
+        const liveMarkIds = positionPayload.positions
+          .filter((position) => position.status === "open" && position.venue === "hyperliquid")
+          .map((position) => position.positionId);
+        if (liveMarkIds.length === 0) return;
+        const markedPositions = await fetchPositionMarks(liveMarkIds);
+        if (cancelled) return;
+        setPositions((current) => mergePositions(current, markedPositions));
       } catch (caught) {
         if (cancelled) return;
         setPositionError(caught instanceof Error ? caught.message : String(caught));
@@ -516,7 +522,25 @@ function Center({
     return () => {
       cancelled = true;
     };
-  }, [fetchPositions, fetchWithdrawals]);
+  }, [fetchPositionMarks, fetchPositions]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const withdrawalPayload = await fetchWithdrawals();
+        if (cancelled) return;
+        setWithdrawals(withdrawalPayload);
+      } catch (caught) {
+        if (cancelled) return;
+        setWithdrawError(caught instanceof Error ? caught.message : String(caught));
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchWithdrawals]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1450,6 +1474,11 @@ function positionSymbol(position: CassiePosition) {
   return (position.symbol?.trim() || position.instrument)
     .replace(/-PERP$/u, "")
     .replace(/^spot$/u, position.venue.toUpperCase());
+}
+
+function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
+  const updatesById = new Map(updates.map((position) => [position.positionId, position]));
+  return current.map((position) => updatesById.get(position.positionId) ?? position);
 }
 
 function venueTone(venue: string) {

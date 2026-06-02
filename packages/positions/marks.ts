@@ -36,21 +36,32 @@ export class CompositePositionMarkProvider implements PositionMarkProvider {
 }
 
 export class HyperliquidPositionMarkProvider implements PositionMarkProvider {
+  private allMidsPromise: Promise<HyperliquidAllMids> | null = null;
+
   constructor(private readonly endpoint = "https://api.hyperliquid.xyz/info") {}
 
   async markPosition(input: { position: Position; ticket: TradeTicket }): Promise<PositionMark> {
     const symbol = hyperliquidSymbol(input.ticket, input.position);
-    const response = await fetch(this.endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "allMids" }),
-    });
-    const mids = await readJsonResponse<HyperliquidAllMids>("Hyperliquid position mark", response);
+    const mids = await this.allMids();
     const markPrice = Number(mids[symbol]);
     if (!Number.isFinite(markPrice) || markPrice <= 0) {
       throw new Error(`No Hyperliquid mark price for ${symbol}.`);
     }
     return markFromPrice(input.position, markPrice);
+  }
+
+  private allMids(): Promise<HyperliquidAllMids> {
+    this.allMidsPromise ??= this.fetchAllMids();
+    return this.allMidsPromise;
+  }
+
+  private async fetchAllMids(): Promise<HyperliquidAllMids> {
+    const response = await fetch(this.endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "allMids" }),
+    });
+    return readJsonResponse<HyperliquidAllMids>("Hyperliquid position mark", response);
   }
 }
 

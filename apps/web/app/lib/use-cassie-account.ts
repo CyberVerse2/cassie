@@ -320,6 +320,22 @@ export function useCassieAccount() {
     };
   }, [authedFetch]);
 
+  const fetchPositionMarks = useCallback(async (positionIds: string[]) => {
+    if (positionIds.length === 0) return [];
+    const response = await authedFetch("/api/positions/marks", {
+      method: "POST",
+      body: JSON.stringify({ positionIds }),
+    });
+    const payload = await response.json() as {
+      positions?: CassiePosition[];
+      error?: string;
+    };
+    if (!response.ok || !payload.positions) {
+      throw new Error(payload.error ?? "Position marks could not be loaded.");
+    }
+    return payload.positions;
+  }, [authedFetch]);
+
   const closePosition = useCallback(async (positionId: string) => {
     const response = await authedFetch(`/api/positions/${encodeURIComponent(positionId)}/close`, {
       method: "POST",
@@ -378,6 +394,7 @@ export function useCassieAccount() {
     syncAccount,
     updateDefaultTradeSize,
     fetchPositions,
+    fetchPositionMarks,
     closePosition,
     fetchWithdrawals,
     createWithdrawal,

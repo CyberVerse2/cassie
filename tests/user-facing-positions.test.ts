@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { markUserFacingHyperliquidPositions } from "../packages/positions/user-facing.ts";
 import type { Position, TradeExitPlan, TradeTicket } from "../packages/core/schemas/index.ts";
+import { HyperliquidPositionMarkProvider } from "../packages/positions/marks.ts";
 
 const exitPlan: TradeExitPlan = {
   takeProfitPct: 10,
@@ -90,5 +91,31 @@ describe("user-facing positions", () => {
       markProvider,
     )).resolves.toEqual([closedHyperliquid, openPolymarket]);
     expect(markProvider.markPosition).not.toHaveBeenCalled();
+  });
+
+  it("shares one Hyperliquid allMids request across positions in a refresh", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ SOL: "110" }),
+      text: async () => JSON.stringify({ SOL: "110" }),
+    });
+    const provider = new HyperliquidPositionMarkProvider("https://hyperliquid.test/info");
+    vi.stubGlobal("fetch", fetchMock);
+
+    const positions = await Promise.all([
+      provider.markPosition({ position: hyperliquidPosition, ticket: hyperliquidTicket }),
+      provider.markPosition({
+        position: { ...hyperliquidPosition, positionId: "position_hl_2" },
+        ticket: hyperliquidTicket,
+      }),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(positions).toHaveLength(2);
+    expect(positions[0]).toMatchObject({
+      markPrice: 110,
+      currentValueUsd: 13.2,
+    });
+    vi.unstubAllGlobals();
   });
 });
