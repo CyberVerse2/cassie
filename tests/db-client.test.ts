@@ -61,4 +61,14 @@ describe("Cassie DB client", () => {
         passwordIsDefaultPostgres: false,
       });
   });
+
+  it("rejects malformed database URLs without exposing credentials", async () => {
+    const { summarizeDatabaseUrl } = await import("../packages/core/db/client.ts");
+    const malformedUrl = "postgresql://postgres:secret/with/slash@postgres:5432/cassie";
+
+    expect(() => summarizeDatabaseUrl(malformedUrl)).toThrow(
+      "DATABASE_URL is not a valid Postgres URL. Percent-encode the username and password before putting them in the URL.",
+    );
+    expect(() => summarizeDatabaseUrl(malformedUrl)).not.toThrow(/secret\/with\/slash/u);
+  });
 });

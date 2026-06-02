@@ -16,6 +16,16 @@ export type DatabaseUrlSummary = {
   passwordIsDefaultPostgres: boolean;
 };
 
+export class InvalidDatabaseUrlError extends Error {
+  constructor(cause: unknown) {
+    super(
+      "DATABASE_URL is not a valid Postgres URL. Percent-encode the username and password before putting them in the URL.",
+    );
+    this.name = "InvalidDatabaseUrlError";
+    this.cause = cause;
+  }
+}
+
 let sharedPostgresPool: Pool | null = null;
 
 export class MissingDatabaseConfigError extends Error {
@@ -38,6 +48,7 @@ export function createPostgresPool(databaseUrl = config.database.url): Pool {
 }
 
 export function postgresPoolConfig(databaseUrl: string): PoolConfig {
+  validateDatabaseUrl(databaseUrl);
   return {
     connectionString: databaseUrl,
     max: config.database.pool.max,
@@ -51,7 +62,7 @@ export function summarizeDatabaseUrl(
   databaseUrl: string,
   postgresPassword = process.env.POSTGRES_PASSWORD,
 ): DatabaseUrlSummary {
-  const url = new URL(databaseUrl);
+  const url = parseDatabaseUrl(databaseUrl);
   return {
     protocol: url.protocol,
     username: url.username,
@@ -62,6 +73,18 @@ export function summarizeDatabaseUrl(
     passwordMatchesPostgresPassword: postgresPassword == null ? null : url.password === postgresPassword,
     passwordIsDefaultPostgres: url.password === "postgres",
   };
+}
+
+export function validateDatabaseUrl(databaseUrl: string): void {
+  parseDatabaseUrl(databaseUrl);
+}
+
+function parseDatabaseUrl(databaseUrl: string): URL {
+  try {
+    return new URL(databaseUrl);
+  } catch (error) {
+    throw new InvalidDatabaseUrlError(error);
+  }
 }
 
 export function sharedCassiePostgresPool(): Pool {
