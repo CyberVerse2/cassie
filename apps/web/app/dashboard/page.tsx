@@ -757,7 +757,7 @@ function Center({
           <div className={`${s.tr} ${s.thead}`} role="row">
             <span>Asset</span>
             <span>Position</span>
-            <span className={s.amountHead}>Mark</span>
+            <span className={s.amountHead}>P/L</span>
             <span className={s.amountHead}>Value</span>
             <span />
           </div>
