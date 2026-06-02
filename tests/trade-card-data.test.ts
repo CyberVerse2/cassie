@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  compactTradeCardThesisDetails,
+  deriveTradeCardThesisDetails,
   positionToTradeShareData,
   type TradeCardThesisDetails,
 } from "../apps/web/app/lib/trade-card-data.ts";
-import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type { ControlRun, Position, RunStep, TradeTicket } from "../packages/core/schemas/index.ts";
 
 const ticket: TradeTicket = {
@@ -128,20 +127,7 @@ describe("trade card data", () => {
     });
   });
 
-  it("uses AI-compacted thesis details for the share card", async () => {
-    let prompt = "";
-    const ai: StructuredAiClient = {
-      async generateObject<T>(input: Parameters<StructuredAiClient["generateObject"]>[0]): Promise<T> {
-        expect(input.name).toBe("cassie_trade_card_thesis_compaction");
-        expect(input.system).toContain("Do not include venue names, ticker symbols");
-        prompt = input.prompt;
-        return {
-          signal: "Google is behind in the AI race despite having vast data.",
-          why: "Short Alphabet on bearish Google AI-leadership weakness.",
-          invalidation: "Alphabet sentiment improves on credible AI product traction re-rating.",
-        } as T;
-      },
-    };
+  it("derives public thesis details from persisted run and ticket data", () => {
     const hyperliquidTicket: TradeTicket = {
       ...ticket,
       venue: "hyperliquid",
@@ -157,11 +143,10 @@ describe("trade card data", () => {
         ],
       },
     };
-    const thesisDetails = await compactTradeCardThesisDetails({
+    const thesisDetails = deriveTradeCardThesisDetails({
       run,
       steps,
       ticket: hyperliquidTicket,
-      ai,
     });
     const share = positionToTradeShareData({
       position: {
@@ -178,12 +163,10 @@ describe("trade card data", () => {
       thesisDetails,
     });
 
-    expect(prompt).toContain("xyz:GOOGL");
-    expect(prompt).toContain("Google is behind in the AI race despite having vast data.");
     expect(share.cardProps.thesis).toEqual([
       { label: "Signal", text: "Google is behind in the AI race despite having vast data." },
-      { label: "Why", text: "Short Alphabet on bearish Google AI-leadership weakness." },
-      { label: "Invalidation", text: "Alphabet sentiment improves on credible AI product traction re-rating." },
+      { label: "Why", text: "Short Alphabet/GOOGL on the market's bearish read-through that Google is la..." },
+      { label: "Invalidation", text: "Alphabet sentiment improves on credible AI product/traction re-rating" },
     ]);
   });
 });

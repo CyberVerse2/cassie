@@ -22,6 +22,10 @@ function TradeOgImage({ share }: { share: TradeShareData }) {
   const positive = share.pnlTone === "up";
   const accent = positive ? "#35d28b" : "#ef6b5a";
   const chartPoints = buildChartPoints(positive);
+  const headline = `"${clampText(String(share.cardProps.headline ?? share.description), 150)}"`;
+  const market = clampText(share.cardProps.market?.question ?? share.ticket.thesis, 44);
+  const trade = `${share.sideLabel} from ${share.entryLabel} to ${share.exitLabel}`;
+  const positionLabel = `${share.symbol} ${share.sideLabel}`;
 
   return (
     <div
@@ -95,24 +99,38 @@ function TradeOgImage({ share }: { share: TradeShareData }) {
               </div>
             </div>
             <div style={{ marginTop: 24, fontSize: 32, lineHeight: 1.16, fontFamily: "Georgia" }}>
-              "{clampText(String(share.cardProps.headline ?? share.description), 150)}"
+              {headline}
             </div>
             <div style={{ marginTop: "auto", display: "flex", flexDirection: "column", gap: 10, fontSize: 22 }}>
-              <div><b>Market:</b> {clampText(share.cardProps.market?.question ?? share.ticket.thesis, 44)}</div>
-              <div><b>Trade:</b> {share.sideLabel} from {share.entryLabel} to {share.exitLabel}</div>
+              <LabelValue label="Market" value={market} />
+              <LabelValue label="Trade" value={trade} />
             </div>
           </div>
 
           <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "flex-end", paddingTop: 44 }}>
             <div style={{ color: "#c9a847", fontSize: 18, letterSpacing: 6, fontWeight: 700 }}>{share.pnlLabel.toUpperCase()}</div>
-            <div style={{ color: accent, fontSize: 96, lineHeight: 1, fontWeight: 800, marginTop: 18 }}>{share.pnlPercent}</div>
-            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 18 }}>
+            <div
+              style={{
+                color: accent,
+                fontSize: 66,
+                lineHeight: 1,
+                fontWeight: 800,
+                marginTop: 38,
+                height: 66,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "flex-end",
+              }}
+            >
+              {share.pnlPercent}
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 14, marginTop: 20 }}>
               <div style={{ background: accent, color: "#05110b", borderRadius: 10, padding: "10px 18px", fontSize: 24, fontWeight: 800 }}>
                 {share.sideLabel}
               </div>
               <div style={{ color: "#9e988b", fontSize: 22 }}>{share.cardProps.pnl?.when}</div>
             </div>
-            <svg width="500" height="210" viewBox="0 0 500 210" style={{ marginTop: 26 }}>
+            <svg width="500" height="170" viewBox="0 0 500 210" style={{ marginTop: 18 }}>
               <polyline
                 points={chartPoints}
                 fill="none"
@@ -141,11 +159,20 @@ function TradeOgImage({ share }: { share: TradeShareData }) {
           <div style={{ width: 1, height: 44, background: "#60491d" }} />
           <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
             <div style={{ color: "#c9a847", fontSize: 14, letterSpacing: 3, fontWeight: 700 }}>POSITION</div>
-            <div style={{ fontSize: 30, fontWeight: 700 }}>{share.symbol} {share.sideLabel}</div>
+            <div style={{ fontSize: 30, fontWeight: 700 }}>{positionLabel}</div>
           </div>
           <div style={{ color: accent, fontSize: 28, fontWeight: 800 }}>{share.position.status.toUpperCase()}</div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function LabelValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: "flex", gap: 8 }}>
+      <div style={{ fontWeight: 700 }}>{`${label}:`}</div>
+      <div>{value}</div>
     </div>
   );
 }

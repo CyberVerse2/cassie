@@ -1,8 +1,6 @@
 import { DrizzleCassieStore } from "../../../../packages/core/db/drizzle-store.ts";
 import type { CassieStore } from "../../../../packages/core/db/store.ts";
 import type { ControlRun, Position, PositionReview, RunStep, TradeTicket } from "../../../../packages/core/schemas/index.ts";
-import { CassieStructuredClient, type StructuredAiClient } from "../../../../packages/ai/client.ts";
-import { z } from "zod";
 
 type TradeCardThesis = {
   label: string;
@@ -43,13 +41,11 @@ type TradeCardProps = {
   variant?: "split" | "band";
 };
 
-export const TradeCardThesisDetailsSchema = z.object({
-  signal: z.string().min(8).max(92),
-  why: z.string().min(8).max(78),
-  invalidation: z.string().min(8).max(72),
-});
-
-export type TradeCardThesisDetails = z.infer<typeof TradeCardThesisDetailsSchema>;
+export type TradeCardThesisDetails = {
+  signal: string;
+  why: string;
+  invalidation: string;
+};
 
 export class TradeShareNotFoundError extends Error {
   constructor(positionId: string) {
@@ -81,7 +77,6 @@ export type TradeShareData = {
 export async function getTradeShareData(
   positionId: string,
   store: CassieStore = new DrizzleCassieStore(),
-  ai: StructuredAiClient = new CassieStructuredClient(),
 ): Promise<TradeShareData> {
   const position = await store.getPosition(positionId);
   if (!position) throw new TradeShareNotFoundError(positionId);
@@ -94,7 +89,7 @@ export async function getTradeShareData(
     ticket.runId ? store.getRunSteps(ticket.runId) : Promise.resolve([]),
     store.getLatestPositionReview(position.positionId),
   ]);
-  const thesisDetails = await compactTradeCardThesisDetails({ run, steps, ticket, ai });
+  const thesisDetails = deriveTradeCardThesisDetails({ run, steps, ticket });
 
   return positionToTradeShareData({ position, ticket, run, steps, review, thesisDetails });
 }
@@ -175,54 +170,32 @@ export function positionToTradeShareData(input: {
   };
 }
 
-export async function compactTradeCardThesisDetails(input: {
+export function deriveTradeCardThesisDetails(input: {
   run?: ControlRun;
   steps: RunStep[];
   ticket: TradeTicket;
-  ai?: StructuredAiClient;
-}): Promise<TradeCardThesisDetails> {
-  const ai = input.ai ?? new CassieStructuredClient();
-  const payload = {
-    sourcePostText: input.run?.sourcePost.text ?? null,
-    sourceAuthor: input.run?.sourcePost.authorHandle ?? input.run?.sourcePost.authorName ?? null,
-    headlineThesis: stepOutputString(input.steps, "intake", "headlineThesis"),
-    literalClaim: stepOutputString(input.steps, "opportunity", "literalClaim"),
-    marketImplication: stepOutputString(input.steps, "opportunity", "marketImplication"),
-    tradeExpressionSignal: stepOutputString(input.steps, "trade_expression", "signal"),
-    coreInterpretation: stepOutputString(input.steps, "trade_expression", "coreInterpretation"),
-    ticketThesis: input.ticket.thesis,
-    exitPlanThesis: input.ticket.exitPlan.thesis,
-    invalidationSignals: input.ticket.exitPlan.invalidationSignals,
-    venue: input.ticket.venue,
-    symbol: input.ticket.venueData?.symbol ?? null,
-    side: input.ticket.side,
+}): TradeCardThesisDetails {
+  return {
+    signal: compactPublicLine(
+      stepOutputString(input.steps, "intake", "headlineThesis")
+      ?? stepOutputString(input.steps, "opportunity", "literalClaim")
+      ?? input.run?.sourcePost.text
+      ?? input.ticket.thesis,
+      92,
+    ),
+    why: compactPublicLine(
+      input.ticket.exitPlan.thesis
+      ?? stepOutputString(input.steps, "trade_expression", "coreInterpretation")
+      ?? stepOutputString(input.steps, "opportunity", "marketImplication")
+      ?? input.ticket.thesis,
+      78,
+    ),
+    invalidation: compactPublicLine(
+      input.ticket.exitPlan.invalidationSignals[0]
+      ?? input.ticket.thesis,
+      72,
+    ),
   };
-  const payloadJson = JSON.stringify(payload, null, 2);
-  const system = `You write compact public copy for Cassie trade-share cards.
-
-Return exactly three complete, polished card lines:
-- signal: the source claim or catalyst in plain market language.
-- why: the semantic trade rationale only.
-- invalidation: the clearest condition that would break the thesis.
-
-Constraints:
-- Keep each field within the provided schema length.
-- Use one sentence per field.
-- Preserve the economic meaning; do not invent facts.
-- Do not include venue names, ticker symbols, exchange names, entry prices, exit prices, or execution mechanics in why.
-- Keep wording suitable for an image card, not an internal log.`;
-
-  return TradeCardThesisDetailsSchema.parse(await ai.generateObject({
-    name: "cassie_trade_card_thesis_compaction",
-    tier: "expensive",
-    schema: TradeCardThesisDetailsSchema,
-    system,
-    prompt: `${system}\n\nInput:\n${payloadJson}`,
-    messages: [{
-      role: "user",
-      content: payloadJson,
-    }],
-  }));
 }
 
 function stepOutputString(steps: RunStep[], stepType: RunStep["stepType"], key: string) {
@@ -236,6 +209,22 @@ function stepOutputString(steps: RunStep[], stepType: RunStep["stepType"], key: 
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function compactPublicLine(value: string, maxLength: number) {
+  const clean = value
+    .replace(/\[([^\]]+)\]\([^)]+\)/gu, "$1")
+    .replace(/https?:\/\/\S+/giu, "")
+    .replace(/\s+/gu, " ")
+    .trim();
+  if (clean.length <= maxLength) return clean;
+
+  const sentenceEnd = clean.search(/[.!?]\s/u);
+  if (sentenceEnd > 0 && sentenceEnd + 1 <= maxLength) {
+    return clean.slice(0, sentenceEnd + 1).trim();
+  }
+
+  return `${clean.slice(0, maxLength - 3).trim()}...`;
 }
 
 function marketQuestionFromTicket(ticket: TradeTicket, position: Position, symbol: string) {
