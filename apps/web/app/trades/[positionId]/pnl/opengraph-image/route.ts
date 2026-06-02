@@ -43,7 +43,7 @@ async function getCachedImage(positionId: string, request: Request) {
 async function renderImage(positionId: string, request: Request) {
   const renderUrl = new URL(
     `/trades/${encodeURIComponent(positionId)}/pnl/og-render`,
-    requestOrigin(request),
+    renderOrigin(request),
   );
   const browser = await getBrowser();
   const browserContext = await browser.newContext({
@@ -87,7 +87,11 @@ function getBrowser() {
   return browserPromise;
 }
 
-function requestOrigin(request: Request) {
+function renderOrigin(request: Request) {
+  if (process.env.NODE_ENV === "production") {
+    return `http://127.0.0.1:${process.env.PORT ?? "3000"}`;
+  }
+
   const requestUrl = new URL(request.url);
   const forwardedProto = request.headers.get("x-forwarded-proto");
   const protocol = forwardedProto ?? requestUrl.protocol.replace(/:$/u, "");
