@@ -57,6 +57,12 @@ export type CassieRuntimeConfig = {
   };
   database: {
     url?: string;
+    pool: {
+      max: number;
+      connectionTimeoutMs: number;
+      idleTimeoutMs: number;
+      maxLifetimeSeconds: number;
+    };
   };
   graphileWorker: GraphileWorkerEnv;
   http: HttpRuntimeEnv;
@@ -170,6 +176,7 @@ export function readCassieConfig(
     },
     database: {
       url: optionalEnv("DATABASE_URL", env),
+      pool: readDatabasePoolEnv(env),
     },
     graphileWorker: readGraphileWorkerEnv(env),
     http: readHttpRuntimeEnv(env),
@@ -190,6 +197,29 @@ export function readCassieConfig(
       noColor: optionalEnv("NO_COLOR", env) != null,
     },
   };
+}
+
+export function readDatabasePoolEnv(env: EnvSource = process.env) {
+  return z.object({
+    CASSIE_DATABASE_POOL_MAX: numberSchema("CASSIE_DATABASE_POOL_MAX", 10, { integer: true, min: 1 }),
+    CASSIE_DATABASE_CONNECTION_TIMEOUT_MS: numberSchema("CASSIE_DATABASE_CONNECTION_TIMEOUT_MS", 5_000, {
+      integer: true,
+      min: 1,
+    }),
+    CASSIE_DATABASE_IDLE_TIMEOUT_MS: numberSchema("CASSIE_DATABASE_IDLE_TIMEOUT_MS", 30_000, {
+      integer: true,
+      min: 1,
+    }),
+    CASSIE_DATABASE_MAX_LIFETIME_SECONDS: numberSchema("CASSIE_DATABASE_MAX_LIFETIME_SECONDS", 300, {
+      integer: true,
+      min: 1,
+    }),
+  }).transform((values) => ({
+    max: values.CASSIE_DATABASE_POOL_MAX,
+    connectionTimeoutMs: values.CASSIE_DATABASE_CONNECTION_TIMEOUT_MS,
+    idleTimeoutMs: values.CASSIE_DATABASE_IDLE_TIMEOUT_MS,
+    maxLifetimeSeconds: values.CASSIE_DATABASE_MAX_LIFETIME_SECONDS,
+  })).parse(env);
 }
 
 export const config = readCassieConfig();

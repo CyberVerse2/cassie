@@ -5,6 +5,7 @@ import {
   assertPrivySettlementEnv,
   readAiProviderEnv,
   readCassieConfig,
+  readDatabasePoolEnv,
   readGraphileWorkerEnv,
   assertHyperliquidExecutionEnv,
   normalizePrivateKey,
@@ -169,6 +170,20 @@ describe("Polymarket env", () => {
       .toThrow("CASSIE_STRUCTURED_MAX_RETRIES must be at least 1.");
   });
 
+  it("reads explicit Postgres pool policy", () => {
+    expect(readDatabasePoolEnv({
+      CASSIE_DATABASE_POOL_MAX: "12",
+      CASSIE_DATABASE_CONNECTION_TIMEOUT_MS: "3000",
+      CASSIE_DATABASE_IDLE_TIMEOUT_MS: "45000",
+      CASSIE_DATABASE_MAX_LIFETIME_SECONDS: "600",
+    })).toEqual({
+      max: 12,
+      connectionTimeoutMs: 3000,
+      idleTimeoutMs: 45000,
+      maxLifetimeSeconds: 600,
+    });
+  });
+
   it("reads grouped AI provider and Graphile worker config", () => {
     const env = {
       GEMINI_API_KEY: "gemini",
@@ -244,6 +259,12 @@ describe("Polymarket env", () => {
       },
       database: {
         url: "postgres://cassie",
+        pool: {
+          max: 10,
+          connectionTimeoutMs: 5000,
+          idleTimeoutMs: 30000,
+          maxLifetimeSeconds: 300,
+        },
       },
       structuredAi: {
         maxRetries: 4,
