@@ -3,7 +3,6 @@ import { z } from "zod";
 import { authenticatePrivyRequest, PrivyAdapter } from "../../../../../packages/adapters/privy";
 import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
 import { UserProfileSchema } from "../../../../../packages/core/schemas";
-import { withdrawableBalanceUsd } from "../../../../../packages/withdrawals";
 
 export const accountSyncSchema = z.object({
   walletAddress: z.string().min(1).nullable(),
@@ -36,13 +35,6 @@ export async function accountResponse(
   const balance = walletBalanceUsd == null
     ? null
     : await store.getWalletFundingBalance(settings.userId, walletBalanceUsd);
-  const withdrawableUsd = walletBalanceUsd == null
-    ? null
-    : await withdrawableBalanceUsd({
-      store,
-      userId: settings.userId,
-      walletBalanceUsd,
-    });
   return NextResponse.json({
     account: {
       userId: settings.userId,
@@ -53,7 +45,6 @@ export async function accountResponse(
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       telegram: settings.telegram ?? null,
       balance: balance ?? null,
-      withdrawableUsd,
     },
   });
 }

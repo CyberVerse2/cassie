@@ -7,7 +7,6 @@ import type {
   TradeExitPlan,
   TradeTicket,
   UserSettings,
-  Withdrawal,
 } from "../packages/core/schemas/index.ts";
 
 const settings: UserSettings = {
@@ -272,7 +271,7 @@ describe("InMemoryCassieStore", () => {
     });
   });
 
-  it("stores positions, reviews, and withdrawals as durable account state", async () => {
+  it("stores positions and reviews as durable account state", async () => {
     const store = new InMemoryCassieStore();
     const position: Position = {
       positionId: "position_1",
@@ -312,22 +311,8 @@ describe("InMemoryCassieStore", () => {
       summary: "Take-profit threshold is active.",
       failureReason: null,
     };
-    const withdrawal: Withdrawal = {
-      withdrawalId: "withdrawal_1",
-      userId: "user_1",
-      amountUsd: 10,
-      destinationAddress: "0x1111111111111111111111111111111111111111",
-      status: "queued",
-      transferId: null,
-      failureReason: null,
-      createdAt: "2026-06-01T00:00:00.000Z",
-      updatedAt: "2026-06-01T00:00:00.000Z",
-      completedAt: null,
-    };
-
     await store.addPosition(position);
     await store.addPositionReview(review);
-    await store.addWithdrawal(withdrawal);
 
     expect(await store.getPosition("position_1")).toEqual(position);
     expect(await store.getPositionByExecutionJob("job_1")).toEqual(position);
@@ -335,8 +320,6 @@ describe("InMemoryCassieStore", () => {
     expect(await store.listUserPositions("user_1")).toEqual([position]);
     expect(await store.getLatestPositionReview("position_1")).toEqual(review);
     expect(await store.listPositionReviews("position_1")).toEqual([review]);
-    expect(await store.getWithdrawal("withdrawal_1")).toEqual(withdrawal);
-    expect(await store.listUserWithdrawals("user_1")).toEqual([withdrawal]);
 
     const closed = {
       ...position,
@@ -344,20 +327,9 @@ describe("InMemoryCassieStore", () => {
       updatedAt: "2026-06-02T00:00:00.000Z",
       closedAt: "2026-06-02T00:00:00.000Z",
     };
-    const failedWithdrawal = {
-      ...withdrawal,
-      status: "failed" as const,
-      failureReason: "transfer failed",
-      updatedAt: "2026-06-02T00:00:00.000Z",
-    };
     await store.updatePosition(closed);
-    await store.updateWithdrawal(failedWithdrawal);
 
     expect(await store.listOpenPositions("user_1")).toEqual([]);
     expect(await store.getPosition("position_1")).toMatchObject({ status: "closed" });
-    expect(await store.getWithdrawal("withdrawal_1")).toMatchObject({
-      status: "failed",
-      failureReason: "transfer failed",
-    });
   });
 });

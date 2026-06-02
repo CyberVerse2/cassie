@@ -140,20 +140,11 @@ const dashboardQueryKeys = {
   activity: ["dashboard", "activity"] as const,
   positions: ["dashboard", "positions"] as const,
   positionMarks: (positionIds: string[]) => ["dashboard", "positionMarks", positionIds] as const,
-  withdrawals: ["dashboard", "withdrawals"] as const,
 };
 
 type PositionsPayload = {
   positions: CassiePosition[];
   latestReviews: Record<string, CassiePositionReview | null>;
-};
-
-type DashboardWithdrawal = {
-  withdrawalId: string;
-  amountUsd: number;
-  destinationAddress: string;
-  status: string;
-  failureReason: string | null;
 };
 
 export default function Dashboard() {
@@ -171,13 +162,11 @@ export default function Dashboard() {
       />
       <Center
         balanceUsd={account.account?.balance?.spendableUsd ?? 0}
-        withdrawableUsd={account.account?.withdrawableUsd ?? 0}
         fetchPositions={account.fetchPositions}
         fetchPositionMarks={account.fetchPositionMarks}
         closePosition={account.closePosition}
-        fetchWithdrawals={account.fetchWithdrawals}
-        createWithdrawal={account.createWithdrawal}
         fetchActivity={account.fetchActivity}
+        refreshAccount={account.refreshAccount}
       />
       <Voice />
     </main>
@@ -468,22 +457,18 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
 
 function Center({
   balanceUsd,
-  withdrawableUsd,
   fetchPositions,
   fetchPositionMarks,
   closePosition,
-  fetchWithdrawals,
-  createWithdrawal,
   fetchActivity,
+  refreshAccount,
 }: {
   balanceUsd: number;
-  withdrawableUsd: number;
   fetchPositions: () => Promise<PositionsPayload>;
   fetchPositionMarks: (positionIds: string[]) => Promise<CassiePosition[]>;
   closePosition: (positionId: string) => Promise<CassiePosition>;
-  fetchWithdrawals: () => Promise<DashboardWithdrawal[]>;
-  createWithdrawal: (input: { amountUsd: number; destinationAddress: string }) => Promise<unknown>;
   fetchActivity: () => Promise<CassieActivityItem[]>;
+  refreshAccount: () => Promise<unknown>;
 }) {
   const queryClient = useQueryClient();
   const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
@@ -491,9 +476,6 @@ function Center({
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
   const [closingId, setClosingId] = useState<string | null>(null);
-  const [withdrawAmount, setWithdrawAmount] = useState("");
-  const [withdrawAddress, setWithdrawAddress] = useState("");
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const positionsQuery = useQuery({
     queryKey: dashboardQueryKeys.positions,
     queryFn: fetchPositions,
@@ -510,10 +492,6 @@ function Center({
     refetchInterval: 30_000,
     staleTime: 5_000,
   });
-  const withdrawalsQuery = useQuery({
-    queryKey: dashboardQueryKeys.withdrawals,
-    queryFn: fetchWithdrawals,
-  });
   const activityQuery = useQuery({
     queryKey: dashboardQueryKeys.activity,
     queryFn: fetchActivity,
@@ -525,7 +503,6 @@ function Center({
     [positionMarksQuery.data, storedPositions]
   );
   const latestReviews = positionsQuery.data?.latestReviews ?? {};
-  const withdrawals = withdrawalsQuery.data ?? [];
   const activity = activityQuery.data ?? [];
   const activityError = errorMessage(activityQuery.error);
 
@@ -557,46 +534,20 @@ function Center({
           : current
       );
       void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.activity });
+      void refreshAccount();
     },
     onSettled: () => {
       setClosingId(null);
     },
   });
 
-  const withdrawalMutation = useMutation({
-    mutationFn: createWithdrawal,
-    onMutate: () => {
-      setWithdrawError(null);
-    },
-    onSuccess: async () => {
-      setWithdrawAmount("");
-      setWithdrawAddress("");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.withdrawals }),
-        queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.activity }),
-      ]);
-    },
-  });
-
   const positionLoadError = errorMessage(positionsQuery.error);
   const closeError = errorMessage(closeMutation.error);
   const effectivePositionError = positionLoadError ?? closeError;
-  const effectiveWithdrawError = withdrawError
-    ?? errorMessage(withdrawalsQuery.error)
-    ?? errorMessage(withdrawalMutation.error);
 
   async function requestClose(position: CassiePosition) {
     if (!window.confirm(`Close ${positionSymbol(position)} ${position.side}?`)) return;
     closeMutation.mutate(position.positionId);
-  }
-
-  async function submitWithdrawal() {
-    const amountUsd = Number(withdrawAmount);
-    if (!Number.isFinite(amountUsd) || amountUsd <= 0) {
-      setWithdrawError("Enter a positive withdrawal amount.");
-      return;
-    }
-    withdrawalMutation.mutate({ amountUsd, destinationAddress: withdrawAddress });
   }
 
   return (
@@ -895,44 +846,6 @@ function Center({
         </div>
         )}
 
-        <section className={s.withdrawPanel} id="send">
-          <header className={s.sectionHeader}>
-            <h2>Withdraw</h2>
-            <p>Available USDC: {formatUsd(withdrawableUsd)}</p>
-          </header>
-          <div className={s.withdrawForm}>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={withdrawAmount}
-              onChange={(event) => setWithdrawAmount(event.target.value.replace(/[^0-9.]/g, ""))}
-              placeholder="Amount"
-              aria-label="Withdrawal amount in USDC"
-            />
-            <input
-              type="text"
-              value={withdrawAddress}
-              onChange={(event) => setWithdrawAddress(event.target.value)}
-              placeholder="0x destination"
-              aria-label="Withdrawal destination address"
-            />
-            <button type="button" className={s.watchTradeBtn} disabled={withdrawalMutation.isPending} onClick={() => void submitWithdrawal()}>
-              {withdrawalMutation.isPending ? "Queueing" : "Withdraw"}
-            </button>
-          </div>
-          {effectiveWithdrawError ? <p className={s.formError} role="alert">{effectiveWithdrawError}</p> : null}
-          {withdrawals.length > 0 ? (
-            <div className={s.withdrawHistory}>
-              {withdrawals.slice(0, 4).map((withdrawal) => (
-                <div key={withdrawal.withdrawalId} className={s.withdrawRow}>
-                  <span>{formatUsd(withdrawal.amountUsd)}</span>
-                  <code>{shortAddress(withdrawal.destinationAddress)}</code>
-                  <strong>{withdrawal.status}</strong>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </section>
       </div>
       )}
     </section>
@@ -1062,17 +975,16 @@ function groupActivity(activity: CassieActivityItem[]): Array<{ date: string; it
   return [...groups].map(([date, items]) => ({ date, items }));
 }
 
-function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "watch" | "counter" | "withdrawal" {
+function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "watch" | "counter" {
   if (kind === "trade") return "trade";
   if (kind === "watch") return "watch";
-  if (kind === "counter") return "counter";
-  return "withdrawal";
+  return "counter";
 }
 
 function activityIcon(item: CassieActivityItem): string {
   const symbol = item.instrument?.replace(/-PERP$/u, "").split(/\s+/u)[0]?.toUpperCase();
   if (symbol && tokenImages[symbol]) return tokenImages[symbol];
-  if (item.instrument === "USDC" || item.kind === "withdrawal") return usdcIcon;
+  if (item.instrument === "USDC") return usdcIcon;
   return "/cassie-logo-transparent.png";
 }
 

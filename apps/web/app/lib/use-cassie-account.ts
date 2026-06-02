@@ -35,7 +35,6 @@ type CassieAccount = {
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
-  withdrawableUsd: number | null;
 };
 
 export type CassiePosition = {
@@ -84,19 +83,6 @@ export type CassiePositionReview = {
   exitSignal: "none" | "take_profit" | "stop_loss" | "max_hold" | "thesis_invalidated";
   summary: string;
   failureReason: string | null;
-};
-
-export type CassieWithdrawal = {
-  withdrawalId: string;
-  userId: string;
-  amountUsd: number;
-  destinationAddress: string;
-  status: "queued" | "running" | "succeeded" | "failed";
-  transferId: string | null;
-  failureReason: string | null;
-  createdAt: string;
-  updatedAt: string;
-  completedAt: string | null;
 };
 
 type TelegramConnectSession = {
@@ -387,27 +373,6 @@ export function useCassieAccount() {
     return payload.position;
   }, [authedFetch]);
 
-  const fetchWithdrawals = useCallback(async () => {
-    const response = await authedFetch("/api/withdrawals");
-    const payload = await response.json() as { withdrawals?: CassieWithdrawal[]; error?: string };
-    if (!response.ok || !payload.withdrawals) {
-      throw new Error(payload.error ?? "Withdrawals could not be loaded.");
-    }
-    return payload.withdrawals;
-  }, [authedFetch]);
-
-  const createWithdrawal = useCallback(async (input: { amountUsd: number; destinationAddress: string }) => {
-    const response = await authedFetch("/api/withdrawals", {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
-    const payload = await response.json() as { withdrawal?: CassieWithdrawal; error?: string };
-    if (!response.ok || !payload.withdrawal) {
-      throw new Error(payload.error ?? "Withdrawal could not be queued.");
-    }
-    return payload.withdrawal;
-  }, [authedFetch]);
-
   const fetchActivity = useCallback(async () => {
     const response = await authedFetch("/api/activity");
     const payload = await response.json() as { activity?: CassieActivityItem[]; error?: string };
@@ -447,8 +412,6 @@ export function useCassieAccount() {
     fetchPositions,
     fetchPositionMarks,
     closePosition,
-    fetchWithdrawals,
-    createWithdrawal,
     fetchActivity,
   };
 }

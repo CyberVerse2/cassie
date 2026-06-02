@@ -805,11 +805,6 @@
   border-color: color-mix(in oklab, var(--coral) 26%, var(--line-soft));
 }
 
-.activityCmd_withdrawal {
-  color: var(--mint);
-  border-color: color-mix(in oklab, var(--mint) 28%, var(--line-soft));
-}
-
 .activityLabel {
   display: flex;
   flex-direction: column;
@@ -2171,55 +2166,10 @@
   border-top: 1px solid var(--line);
 }
 
-.withdrawPanel {
-  display: grid;
-  gap: 12px;
-  padding: 18px 0 0;
-}
-
-.withdrawForm {
-  display: grid;
-  grid-template-columns: minmax(96px, 140px) minmax(180px, 1fr) auto;
-  gap: 10px;
-  align-items: center;
-}
-
-.withdrawForm input {
-  min-width: 0;
-  height: 38px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--panel);
-  color: var(--ink);
-  padding: 0 12px;
-  font: inherit;
-}
-
 .formError {
   margin: 0;
   color: var(--down);
   font-size: 12.5px;
-}
-
-.withdrawHistory {
-  display: grid;
-  gap: 8px;
-}
-
-.withdrawRow {
-  display: grid;
-  grid-template-columns: 100px 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  color: var(--ink-soft);
-  font-size: 12.5px;
-}
-
-.withdrawRow code {
-  color: var(--ink-mute);
 }
 
 /* ─── responsive ─────────────────────────────────────────────── */
@@ -2243,8 +2193,6 @@
   .aside { border-right: 0; border-bottom: 1px solid var(--line); }
   .summaryRow { grid-template-columns: 1fr 1fr; }
   .tr { grid-template-columns: 50px 1fr auto auto 44px; gap: var(--space-sm); }
-  .withdrawForm,
-  .withdrawRow { grid-template-columns: 1fr; }
   .tr > *:nth-child(3),
   .tr > *:nth-child(5) { display: none; }
 }

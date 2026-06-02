@@ -8,7 +8,6 @@ const snapshot: CassieStoreSnapshot = {
   executionJobs: [],
   positions: [],
   positionReviews: [],
-  withdrawals: [],
   walletSpendLedgerEntries: [],
   auditEvents: [],
   userSettings: [],

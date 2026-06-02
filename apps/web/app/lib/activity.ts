@@ -1,6 +1,6 @@
 export type CassieActivityItem = {
   id: string;
-  kind: "trade" | "watch" | "counter" | "withdrawal";
+  kind: "trade" | "watch" | "counter";
   at: string;
   title: string;
   subtitle: string;

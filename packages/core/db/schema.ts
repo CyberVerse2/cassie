@@ -11,7 +11,6 @@ import type {
   TradeTicket,
   UserSettings,
   WalletSpendLedgerEntry,
-  Withdrawal,
 } from "../schemas/index.ts";
 import type {
   ModelCallUsageRecord,
@@ -110,22 +109,6 @@ export const positionReviews = pgTable("position_reviews", {
   }).onDelete("cascade"),
   foreignKey({
     name: "position_reviews_user_fk",
-    columns: [table.userId],
-    foreignColumns: [userSettings.userId],
-  }).onDelete("cascade"),
-]);
-
-export const withdrawals = pgTable("withdrawals", {
-  withdrawalId: text("withdrawal_id").primaryKey(),
-  userId: text("user_id").notNull(),
-  status: text("status").$type<Withdrawal["status"]>().notNull(),
-  withdrawal: jsonb("withdrawal").$type<Withdrawal>().notNull(),
-  createdAt: text("created_at").notNull(),
-  updatedAt: text("updated_at").notNull(),
-}, (table) => [
-  index("withdrawals_user_status_created_idx").on(table.userId, table.status, table.createdAt),
-  foreignKey({
-    name: "withdrawals_user_fk",
     columns: [table.userId],
     foreignColumns: [userSettings.userId],
   }).onDelete("cascade"),

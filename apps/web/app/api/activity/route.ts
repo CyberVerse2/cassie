@@ -5,7 +5,6 @@ import type {
   Position,
   RunStep,
   TradeTicket,
-  Withdrawal,
 } from "../../../../../packages/core/schemas/index";
 import type { CassieActivityItem } from "../../lib/activity";
 import {
@@ -45,9 +44,6 @@ export async function GET(request: Request) {
           if (!ticket) return [];
           return [tradeActivity(position, ticket, jobById.get(position.executionJobId) ?? null, runById.get(ticket.runId ?? ""))];
         }),
-      ...snapshot.withdrawals
-        .filter((withdrawal) => withdrawal.userId === settings.userId)
-        .map(withdrawalActivity),
     ]
       .sort((left, right) => right.at.localeCompare(left.at))
       .slice(0, ACTIVITY_LIMIT);
@@ -102,25 +98,6 @@ function tradeActivity(
   };
 }
 
-function withdrawalActivity(withdrawal: Withdrawal): CassieActivityItem {
-  return {
-    id: withdrawal.withdrawalId,
-    kind: "withdrawal",
-    at: withdrawal.createdAt,
-    title: "Withdraw USDC",
-    subtitle: `To ${shortAddress(withdrawal.destinationAddress)}`,
-    status: withdrawal.status,
-    amountUsd: withdrawal.amountUsd,
-    instrument: "USDC",
-    venue: null,
-    side: null,
-    source: "cassie",
-    sourceUrl: null,
-    authorHandle: null,
-    error: withdrawal.failureReason,
-  };
-}
-
 function commandTitle(command: string): string {
   return command.replace(/^@?\w+\s+/i, "").trim() || command;
 }
@@ -130,11 +107,6 @@ function summarize(value: string): string {
   if (cleaned.length <= 140) return cleaned;
   const cutoff = cleaned.lastIndexOf(" ", 140);
   return `${cleaned.slice(0, cutoff > 90 ? cutoff : 140).trim()}...`;
-}
-
-function shortAddress(address: string): string {
-  if (address.length <= 12) return address;
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
 function buildIntentByRunId(steps: RunStep[]): Map<string, "watch" | "countertrade"> {

@@ -21,10 +21,6 @@ vi.mock("../packages/positions/review.ts", () => ({
   reviewOpenPositionsForUser: vi.fn(),
 }));
 
-vi.mock("../packages/withdrawals/index.ts", () => ({
-  executeWithdrawal: vi.fn(),
-}));
-
 const mockedReviewAllOpenPositions = vi.mocked(reviewAllOpenPositions);
 const mockedReviewOpenPositionsForUser = vi.mocked(reviewOpenPositionsForUser);
 

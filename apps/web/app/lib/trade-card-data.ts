@@ -268,7 +268,7 @@ function formatPrice(value: number | null, venue: string) {
   if (value == null) return "No mark";
   if (venue === "polymarket" || value <= 1) {
     return `${(value * 100).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
+      minimumFractionDigits: 0,
       maximumFractionDigits: 2,
     })}c`;
   }

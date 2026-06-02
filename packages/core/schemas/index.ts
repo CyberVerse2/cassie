@@ -505,7 +505,6 @@ export const ExecutionJobSchema = z.object({
 export const PositionStatusSchema = z.enum(["open", "closing", "closed", "close_failed"]);
 export const PositionReviewStatusSchema = z.enum(["succeeded", "failed"]);
 export const ExitSignalSchema = z.enum(["none", "take_profit", "stop_loss", "max_hold", "thesis_invalidated"]);
-export const WithdrawalStatusSchema = z.enum(["queued", "running", "succeeded", "failed"]);
 
 export const PositionSchema = z.object({
   positionId: z.string(),
@@ -547,23 +546,10 @@ export const PositionReviewSchema = z.object({
   failureReason: z.string().nullable(),
 });
 
-export const WithdrawalSchema = z.object({
-  withdrawalId: z.string(),
-  userId: z.string(),
-  amountUsd: z.number().positive(),
-  destinationAddress: z.string().min(1),
-  status: WithdrawalStatusSchema,
-  transferId: z.string().nullable(),
-  failureReason: z.string().nullable(),
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  completedAt: z.string().nullable(),
-});
-
 export const AuditEventSchema = z.object({
   eventId: z.string(),
   entityId: z.string(),
-  entityType: z.enum(["mention", "run", "trade_ticket", "execution_job", "position", "withdrawal"]),
+  entityType: z.enum(["mention", "run", "trade_ticket", "execution_job", "position"]),
   eventType: z.string(),
   message: z.string(),
   data: z.unknown().optional(),
@@ -668,10 +654,8 @@ export type ExecutionJob = z.infer<typeof ExecutionJobSchema>;
 export type PositionStatus = z.infer<typeof PositionStatusSchema>;
 export type PositionReviewStatus = z.infer<typeof PositionReviewStatusSchema>;
 export type ExitSignal = z.infer<typeof ExitSignalSchema>;
-export type WithdrawalStatus = z.infer<typeof WithdrawalStatusSchema>;
 export type Position = z.infer<typeof PositionSchema>;
 export type PositionReview = z.infer<typeof PositionReviewSchema>;
-export type Withdrawal = z.infer<typeof WithdrawalSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 export type ControlRunStatus = z.infer<typeof ControlRunStatusSchema>;
 export type SupervisorFinalResult = z.infer<typeof SupervisorFinalResultSchema>;

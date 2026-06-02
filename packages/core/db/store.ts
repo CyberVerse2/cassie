@@ -11,7 +11,6 @@ import type {
   SourcePost,
   TradeTicket,
   UserSettings,
-  Withdrawal,
 } from "../schemas/index.ts";
 
 export interface MentionRecord {
@@ -52,7 +51,6 @@ export interface CassieStoreSnapshot {
   executionJobs: ExecutionJob[];
   positions: Position[];
   positionReviews: PositionReview[];
-  withdrawals: Withdrawal[];
   walletSpendLedgerEntries: WalletSpendLedgerEntry[];
   auditEvents: AuditEvent[];
   userSettings: UserSettings[];
@@ -106,10 +104,6 @@ export interface CassieStore {
   getLatestPositionReview(positionId: string): Promise<PositionReview | undefined>;
   getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]>;
   listPositionReviews(positionId: string): Promise<PositionReview[]>;
-  addWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
-  updateWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal>;
-  getWithdrawal(withdrawalId: string): Promise<Withdrawal | undefined>;
-  listUserWithdrawals(userId: string): Promise<Withdrawal[]>;
   getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance>;
   reserveWalletSpend(input: {
     ticket: TradeTicket;
@@ -150,7 +144,6 @@ const emptySnapshot = (): CassieStoreSnapshot => ({
   executionJobs: [],
   positions: [],
   positionReviews: [],
-  withdrawals: [],
   walletSpendLedgerEntries: [],
   auditEvents: [],
   userSettings: [],
@@ -400,35 +393,6 @@ export class InMemoryCassieStore implements CassieStore {
     return this.snapshot.positionReviews
       .filter((review) => review.positionId === positionId)
       .sort((left, right) => left.reviewedAt.localeCompare(right.reviewedAt));
-  }
-
-  async addWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal> {
-    this.snapshot.withdrawals.push(withdrawal);
-    await this.audit({
-      entityId: withdrawal.withdrawalId,
-      entityType: "withdrawal",
-      eventType: "withdrawal.created",
-      message: "Withdrawal created.",
-      data: withdrawal,
-    });
-    return withdrawal;
-  }
-
-  async updateWithdrawal(withdrawal: Withdrawal): Promise<Withdrawal> {
-    this.snapshot.withdrawals = this.snapshot.withdrawals.map((candidate) =>
-      candidate.withdrawalId === withdrawal.withdrawalId ? withdrawal : candidate,
-    );
-    return withdrawal;
-  }
-
-  async getWithdrawal(withdrawalId: string): Promise<Withdrawal | undefined> {
-    return this.snapshot.withdrawals.find((withdrawal) => withdrawal.withdrawalId === withdrawalId);
-  }
-
-  async listUserWithdrawals(userId: string): Promise<Withdrawal[]> {
-    return this.snapshot.withdrawals
-      .filter((withdrawal) => withdrawal.userId === userId)
-      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
 
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {

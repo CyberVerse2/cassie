@@ -3,13 +3,10 @@ import { runCassieSupervisorForRun } from "../agent/agent.ts";
 import { enqueueTradeTicketsForRun, executeExecutionJob } from "./execution-job.ts";
 import { executeClosePosition } from "../positions/close.ts";
 import { reviewAllOpenPositions, reviewOpenPositionsForUser } from "../positions/review.ts";
-import { executeWithdrawal } from "../withdrawals/index.ts";
 import {
   CLOSE_POSITION_TASK,
   ClosePositionPayloadSchema,
-  EXECUTE_WITHDRAWAL_TASK,
   EXECUTE_TRADE_TICKET_TASK,
-  ExecuteWithdrawalPayloadSchema,
   ExecuteTradeTicketPayloadSchema,
   REVIEW_OPEN_POSITIONS_TASK,
   ReviewOpenPositionsPayloadSchema,
@@ -39,10 +36,6 @@ export function createExecutionTaskList(): TaskList {
     [CLOSE_POSITION_TASK]: async (payload) => {
       const parsed = ClosePositionPayloadSchema.parse(payload);
       await executeClosePosition({ positionId: parsed.positionId });
-    },
-    [EXECUTE_WITHDRAWAL_TASK]: async (payload) => {
-      const parsed = ExecuteWithdrawalPayloadSchema.parse(payload);
-      await executeWithdrawal({ withdrawalId: parsed.withdrawalId });
     },
   };
 }

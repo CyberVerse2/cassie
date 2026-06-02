@@ -1,6 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
-import type { Position, TradeExitPlan, TradeTicket } from "../packages/core/schemas/index.ts";
+import type { Position, TradeExitPlan, TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
 import type { PositionCloseClient } from "../packages/execution/index.ts";
 import { executeClosePosition, queueClosePosition } from "../packages/positions/close.ts";
 import type { CassieJobQueue } from "../packages/jobs/queue.ts";
@@ -27,6 +27,15 @@ const ticket: TradeTicket = {
   orderType: "marketable_limit",
   venueData: { symbol: "SOL" },
   exitPlan,
+};
+
+const settings: UserSettings = {
+  userId: "user_1",
+  privyUserId: "did:privy:user_1",
+  privyWalletId: "wallet_1",
+  walletAddress: "0x1111111111111111111111111111111111111111",
+  profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
+  defaultTradeSizeUsd: 50,
 };
 
 const position: Position = {
@@ -70,15 +79,12 @@ class FakeQueue implements CassieJobQueue {
   async enqueueClosePosition(input: { positionId: string }) {
     return { positionId: input.positionId, graphileJobId: "close_1" };
   }
-
-  async enqueueWithdrawal(input: { withdrawalId: string }) {
-    return { withdrawalId: input.withdrawalId, graphileJobId: null };
-  }
 }
 
 describe("close positions", () => {
   it("queues and closes open positions", async () => {
     const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addPosition(position);
     await queueClosePosition({ positionId: "position_1", store, jobQueue: new FakeQueue() });
@@ -93,17 +99,39 @@ describe("close positions", () => {
         };
       },
     };
-    const closed = await executeClosePosition({ positionId: "position_1", store, closeClient });
+    const walletGateway = {
+      refundUserUsdcFromTreasury: vi.fn().mockResolvedValue({
+        transferId: "refund_1",
+        referenceId: "position_close:position_1",
+        status: "succeeded",
+        sourceWalletId: "treasury_wallet",
+        destinationAddress: settings.walletAddress!,
+        amountUsd: 112,
+        asset: "usdc",
+        chain: "base",
+        createdAt: "2026-05-31T00:00:00.000Z",
+        raw: {},
+      }),
+    };
+    const closed = await executeClosePosition({ positionId: "position_1", store, closeClient, walletGateway });
 
     expect(closed).toMatchObject({
       status: "closed",
       closeExecutionJobId: "close_order_1",
       currentValueUsd: 0,
+      unrealizedPnlUsd: 12,
+      unrealizedPnlPct: 12,
+    });
+    expect(walletGateway.refundUserUsdcFromTreasury).toHaveBeenCalledWith({
+      userWalletAddress: settings.walletAddress,
+      amountUsd: 112,
+      referenceId: "position_close:position_1",
     });
   });
 
   it("surfaces close failures on the position", async () => {
     const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addPosition({ ...position, status: "closing" });
     const closeClient: PositionCloseClient = {
@@ -117,6 +145,39 @@ describe("close positions", () => {
     expect(failed).toMatchObject({
       status: "close_failed",
       failureReason: "venue rejected reduce-only order",
+    });
+  });
+
+  it("does not mark the position closed when the close refund fails", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addPosition({ ...position, status: "closing" });
+    const closeClient: PositionCloseClient = {
+      async close() {
+        return {
+          venueOrderId: "close_order_1",
+          filledSizeUsd: 112,
+          averagePrice: 112,
+        };
+      },
+    };
+
+    const failed = await executeClosePosition({
+      positionId: "position_1",
+      store,
+      closeClient,
+      walletGateway: {
+        async refundUserUsdcFromTreasury() {
+          throw new Error("treasury transfer failed");
+        },
+      },
+    });
+
+    expect(failed).toMatchObject({
+      status: "close_failed",
+      closedAt: null,
+      failureReason: "treasury transfer failed",
     });
   });
 });
