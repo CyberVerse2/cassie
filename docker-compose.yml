@@ -16,6 +16,8 @@ x-cassie-service: &cassie-service
     - CASSIE_POSTGRES_USER
     - CASSIE_POSTGRES_PASSWORD
     - CASSIE_POSTGRES_DATABASE
+  networks:
+    - dokploy-network
 
 x-cassie-runtime: &cassie-runtime
   <<: *cassie-service
@@ -52,3 +54,7 @@ services:
   worker:
     <<: *cassie-runtime
     command: ["npm", "run", "worker"]
+
+networks:
+  dokploy-network:
+    external: true
