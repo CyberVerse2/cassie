@@ -11,14 +11,11 @@ x-cassie-service: &cassie-service
   init: true
   restart: unless-stopped
   environment:
-    CASSIE_POSTGRES_HOST: ${CASSIE_POSTGRES_HOST:-postgres}
+    CASSIE_POSTGRES_HOST: ${CASSIE_POSTGRES_HOST:?Set CASSIE_POSTGRES_HOST}
     CASSIE_POSTGRES_PORT: ${CASSIE_POSTGRES_PORT:-5432}
     CASSIE_POSTGRES_USER: ${CASSIE_POSTGRES_USER:-postgres}
-    CASSIE_POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:-postgres}
-    CASSIE_POSTGRES_DATABASE: ${CASSIE_POSTGRES_DATABASE:-cassie}
-  depends_on:
-    postgres:
-      condition: service_healthy
+    CASSIE_POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:?Set CASSIE_POSTGRES_PASSWORD}
+    CASSIE_POSTGRES_DATABASE: ${CASSIE_POSTGRES_DATABASE:-postgres}
 
 x-cassie-runtime: &cassie-runtime
   <<: *cassie-service
@@ -27,21 +24,6 @@ x-cassie-runtime: &cassie-runtime
       condition: service_completed_successfully
 
 services:
-  postgres:
-    image: postgres:17-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${CASSIE_POSTGRES_DATABASE:-cassie}
-      POSTGRES_USER: ${CASSIE_POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:-postgres}
-    volumes:
-      - cassie-postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${CASSIE_POSTGRES_USER:-postgres} -d ${CASSIE_POSTGRES_DATABASE:-cassie}"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-
   migrate:
     <<: *cassie-service
     restart: "no"
@@ -51,11 +33,11 @@ services:
     <<: *cassie-runtime
     command: ["npm", "run", "web:start"]
     environment:
-      CASSIE_POSTGRES_HOST: ${CASSIE_POSTGRES_HOST:-postgres}
+      CASSIE_POSTGRES_HOST: ${CASSIE_POSTGRES_HOST:?Set CASSIE_POSTGRES_HOST}
       CASSIE_POSTGRES_PORT: ${CASSIE_POSTGRES_PORT:-5432}
       CASSIE_POSTGRES_USER: ${CASSIE_POSTGRES_USER:-postgres}
-      CASSIE_POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:-postgres}
-      CASSIE_POSTGRES_DATABASE: ${CASSIE_POSTGRES_DATABASE:-cassie}
+      CASSIE_POSTGRES_PASSWORD: ${CASSIE_POSTGRES_PASSWORD:?Set CASSIE_POSTGRES_PASSWORD}
+      CASSIE_POSTGRES_DATABASE: ${CASSIE_POSTGRES_DATABASE:-postgres}
       PORT: 3000
       HOSTNAME: 0.0.0.0
     expose:
@@ -70,6 +52,3 @@ services:
   worker:
     <<: *cassie-runtime
     command: ["npm", "run", "worker"]
-
-volumes:
-  cassie-postgres-data:
