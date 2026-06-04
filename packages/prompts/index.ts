@@ -9,6 +9,7 @@ import {
   OpportunityFrameSchema,
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
+  TradeExitPlanSchema,
   type ExpressionFitAssessment,
   type MarketCandidate,
   type MarketSelection,
@@ -47,20 +48,11 @@ export const PolymarketSearchResultSelectionSchema = z.object({
   selectedMarketSlugs: z.array(z.string().min(1)).max(25),
 });
 
-export const FastTicketExitPlanSchema = z.object({
-  takeProfitPct: z.number().positive(),
-  stopLossPct: z.number().positive(),
-  maxHoldDays: z.number().int().positive(),
-  reviewCadence: z.literal("daily"),
-  thesis: z.string().min(1),
-  invalidationSignals: z.array(z.string().min(1)),
-});
-
 export const FastTicketPlanSchema = z.object({
   sourceMode: SourceModeClassificationSchema,
   opportunityFrame: OpportunityFrameSchema,
   tradeExpression: TradeExpressionPlanSchema,
-  exitPlan: FastTicketExitPlanSchema,
+  exitPlan: TradeExitPlanSchema,
   publicSummary: z.string(),
 });
 
