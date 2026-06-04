@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   expressionFitPrompt,
   expressionFitPromptSpec,
+  FastTicketPlanSchema,
+  fastTicketPlanPromptSpec,
   marketSelectionPrompt,
   marketSelectionPromptSpec,
   opportunityFramePrompt,
@@ -113,6 +115,32 @@ const marketCandidate: MarketCandidate = {
 };
 
 describe("prompts", () => {
+  it("requires every fast ticket exit-plan field for OpenAI structured outputs", () => {
+    const missingTakeProfit = {
+      sourceMode: {
+        sourceMode: "normal",
+        userIntent: "trade",
+        headlineThesis: "Sui transfers could increase activity.",
+        affectedEntities: ["Sui"],
+        urgency: "none",
+        verificationNeed: "medium",
+        reason: "Normal market thesis.",
+      },
+      opportunityFrame,
+      tradeExpression,
+      exitPlan: {
+        stopLossPct: 5,
+        maxHoldDays: 7,
+        reviewCadence: "daily",
+        thesis: "Long SUI if activity increases.",
+        invalidationSignals: ["Usage fails to rise."],
+      },
+      publicSummary: "Search venues before ticket creation.",
+    };
+
+    expect(FastTicketPlanSchema.safeParse(missingTakeProfit).success).toBe(false);
+  });
+
   it("keeps semantic rules but removes AI SDK structured-output prose", () => {
     const prompts = [
       sourceModeClassificationPrompt({ sourcePost, userCommand: "@cassiedottrade trade this" }),
@@ -199,6 +227,7 @@ describe("prompts", () => {
 
   it("exposes stage prompts as AI SDK-ready specs", () => {
     const specs = [
+      fastTicketPlanPromptSpec({ sourcePost, userCommand: "@cassiedottrade trade this" }),
       sourceModeClassificationPromptSpec({ sourcePost, userCommand: "@cassiedottrade trade this" }),
       opportunityFramePromptSpec({ sourcePost, userCommand: "@cassiedottrade trade this" }),
       singleStepTradeExpressionPromptSpec({
@@ -232,6 +261,7 @@ describe("prompts", () => {
     ];
 
     expect(specs.map((spec) => spec.name)).toEqual([
+      "cassie_fast_ticket_plan",
       "cassie_source_mode_classification",
       "cassie_opportunity_frame",
       "cassie_trade_expressions",
@@ -248,6 +278,7 @@ describe("prompts", () => {
       "2026-05-31",
       "2026-05-31",
       "2026-05-31",
+      "2026-05-31",
     ]);
     expect(specs.every((spec) => spec.outputSchema)).toBe(true);
     expect(specs.every((spec) => spec.system.includes("tagged-tweet trading research agent"))).toBe(true);
@@ -255,7 +286,8 @@ describe("prompts", () => {
     expect(specs.every((spec) => spec.messages[0]?.role === "user")).toBe(true);
     expect(specs[0]?.system).toContain("Web search is available in this stage.");
     expect(specs[1]?.system).toContain("Web search is available in this stage.");
-    for (const spec of specs.slice(2)) {
+    expect(specs[2]?.system).toContain("Web search is available in this stage.");
+    for (const spec of specs.slice(3)) {
       expect(spec.system).not.toContain("Web search is available in this stage.");
     }
     expect(sourceModeClassificationPromptSpec({ sourcePost, userCommand: "@cassiedottrade urgent trade this" }).tools).toEqual({
