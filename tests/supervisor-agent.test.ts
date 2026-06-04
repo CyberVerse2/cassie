@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { buildSupervisorInstructions, runCassieSupervisorForRun } from "../packages/agent/agent.ts";
+import { buildSupervisorInstructions } from "../packages/agent/agent.ts";
 import { createCassieSupervisorTools } from "../packages/agent/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
@@ -194,13 +194,6 @@ class FakeAi implements StructuredAiClient {
     this.calls.push(input.name);
     input.onThinkingTrace?.(`Model reasoning summary for ${input.name}.`);
     const outputs: Record<string, unknown> = {
-      cassie_fast_ticket_plan: {
-        sourceMode: sourceModeClassification,
-        opportunityFrame,
-        tradeExpression,
-        exitPlan,
-        publicSummary: "Created a SOL trade ticket from the fast path.",
-      },
       cassie_source_mode_classification: sourceModeClassification,
       cassie_opportunity_frame: opportunityFrame,
       cassie_trade_expressions: tradeExpression,
@@ -297,66 +290,17 @@ async function seedMarketSelection(store: InMemoryCassieStore, runId: string, se
 }
 
 describe("AI SDK supervisor agent", () => {
-  it("creates a trade ticket through the fast path without supervisor tool-turn chatter", async () => {
-    const store = new InMemoryCassieStore();
-    const ai = new FakeAi();
-    await store.upsertUserSettings(settings);
-    const run = await store.createRun({
-      userId: "user_1",
-      userCommand: "@Cassie get me in fast",
-      sourcePost,
-    });
-
-    const result = await runCassieSupervisorForRun({
-      runId: run.runId,
-      store,
-      deps: {
-        ai,
-        importantAi: ai,
-        marketData: {
-          async findCandidates() {
-            return [marketSelection.selectedMarket!];
-          },
-        },
-      },
-    });
-
-    const state = await store.load();
-    expect(result).toMatchObject({
-      responseType: "trade_ticket",
-      ticketId: state.tradeTickets[0]?.ticketId,
-    });
-    expect(ai.calls).toEqual([
-      "cassie_fast_ticket_plan",
-      "cassie_expression_fit",
-    ]);
-    expect(state.tradeTickets).toHaveLength(1);
-    expect(state.controlRuns[0]?.status).toBe("succeeded");
-    expect(state.runSteps.map((step) => step.stepType)).toEqual([
-      "preflight",
-      "opportunity",
-      "intake",
-      "trade_expression",
-      "market_candidates",
-      "market_assessment",
-      "market_quote",
-      "market_selection",
-      "ticket",
-      "final",
-    ]);
-  });
-
-  it("instructs the supervisor to use a fast governed ticket path", () => {
+  it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
-    expect(instructions).toContain("preflight user policy -> one AI fast ticket plan");
+    expect(instructions).toContain("preflight user policy -> classify source mode -> resolve source if needed -> frame opportunity -> generate candidate trade expressions");
     expect(instructions).toContain("Role:");
     expect(instructions).toContain("Progressive workflow:");
     expect(instructions).toContain("Stage gates:");
     expect(instructions).toContain("When uncertain:");
     expect(instructions).not.toContain("Tool-output contract:");
     expect(instructions).not.toContain("Reason privately in this order:");
-    expect(instructions).toContain("Quote the selected validated candidate");
+    expect(instructions).toContain("quote validated candidates -> rank expressions");
     expect(instructions).toContain("Classify breaking_news from source content only");
     expect(instructions).toContain("Breaking news is a routing mode, not an execution decision");
     expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");

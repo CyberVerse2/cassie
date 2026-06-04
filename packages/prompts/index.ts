@@ -9,7 +9,6 @@ import {
   OpportunityFrameSchema,
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
-  TradeExitPlanSchema,
   type ExpressionFitAssessment,
   type MarketCandidate,
   type MarketSelection,
@@ -46,14 +45,6 @@ export const PolymarketDiscoveryQueryPlanSchema = z.object({
 
 export const PolymarketSearchResultSelectionSchema = z.object({
   selectedMarketSlugs: z.array(z.string().min(1)).max(25),
-});
-
-export const FastTicketPlanSchema = z.object({
-  sourceMode: SourceModeClassificationSchema,
-  opportunityFrame: OpportunityFrameSchema,
-  tradeExpression: TradeExpressionPlanSchema,
-  exitPlan: TradeExitPlanSchema,
-  publicSummary: z.string(),
 });
 
 export type CassiePromptSpec<T> = {
@@ -536,69 +527,6 @@ Before returning, verify internally:
 - expressionFamilies include the cleanest economic expression even when unsupported direct execution means it may become no-trade later.
 - No real venue listing, ticker, contract, odds, price, or liquidity is assumed.
 - verificationNeed and reason name the missing facts that could block expression generation.`,
-  });
-}
-
-export function fastTicketPlanPromptSpec(input: {
-  sourcePost: SourcePost;
-  userCommand: string;
-}): CassiePromptSpec<z.infer<typeof FastTicketPlanSchema>> {
-  return makePromptSpec({
-    name: "cassie_fast_ticket_plan",
-    tier: "expensive",
-    outputSchema: FastTicketPlanSchema,
-    payload: {
-      source: sourceForPrompt(input.sourcePost),
-      userCommand: input.userCommand,
-      current_datetime: new Date().toISOString(),
-      allowed_expression_rails: ALLOWED_EXPRESSION_RAILS,
-      configured_venue_capabilities: CONFIGURED_VENUE_CAPABILITIES,
-      unsupported_direct_execution_rails: UNSUPPORTED_DIRECT_EXECUTION_RAILS,
-    },
-    tools: {
-      webSearch: {
-        externalWebAccess: true,
-        searchContextSize: "low",
-      },
-    },
-    stage: `Tool name: fast_ticket_plan
-Prompt version: ${PROMPT_VERSION}
-
-Purpose:
-Produce Cassie's source classification, opportunity frame, abstract trade expressions, and ticket exit plan in one latency-sensitive structured call.
-
-Role:
-Fast-path trading planner. Preserve the same governed reasoning boundaries as the staged pipeline, but do the source-mode, opportunity, and expression stages together. Do not search venues, quote markets, rank real candidates, or create tickets.
-
-Task:
-Return:
-1. sourceMode: classify normal vs breaking_news from source content and preserve userIntent.
-2. opportunityFrame: separate literal claim, market implication, affected entities/assets, expression families, verification risk, and confidence.
-3. tradeExpression: generate candidateExpressions for configured-venue discovery without assuming a real market exists.
-4. exitPlan: choose concrete take-profit, stop-loss, max-hold, daily review cadence, thesis, and invalidation signals for the strongest likely expression.
-5. publicSummary: concise user-facing summary suitable for finalization if a ticket is created or if no configured venue candidate is found.
-
-Rules:
-- Optimize for time to trade ticket while preserving AI-backed semantic selection.
-- Do not replace semantic judgments with keyword scoring, hardcoded routing, or term-overlap heuristics.
-- Do not invent tickers, prediction markets, pre-IPO listings, prices, quotes, liquidity, probabilities, funding rates, or contract rules.
-- Use web search only to confirm time-sensitive source facts enough for opportunity framing; one independent corroborating secondary report is enough.
-- Generate candidateExpressions first. Venue search validates real markets later.
-- Set tradeExpression.decision to needs_market_check or route_to_market_router whenever any configured-venue candidateExpression deserves discovery.
-- Set tradeExpression.decision to no_trade only when no configured venue search is warranted.
-- Prediction-market expressions require a date-bounded yes/no event, explicit event catalyst, event outcome, or price-level contract whose rules could match the source.
-- Direct asset expressions are preferred for continuous price, magnitude, valuation, structural, or untimed theses when configured venues can search that rail.
-- Preserve userIntent. Watch, critic, and countertrade requests may still produce analysis, but should not imply ticket creation downstream.
-- Exit plans must be actionable and must not depend on invented prices or venue data. Use percentage thresholds and thesis invalidation signals.
-
-Before returning, verify internally:
-- sourceMode, opportunityFrame.userIntent, and tradeExpression are consistent.
-- Every non-no_trade candidateExpression has searchTerms, requiredMarketFeatures, and a clear thesis.
-- Unsupported direct-execution rails are not marked executable unless a configured venue route is plausible.
-- exitPlan.thesis matches the highest-purity expression and invalidationSignals are concrete.
-- publicSummary does not claim a ticket, quote, or market exists before venue search.
-
-${PREDICTION_MARKET_ROUTING_RULES}`,
   });
 }
 
