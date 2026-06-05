@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
-import type { Position, TradeExitPlan, TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
+import type { ControlRun, ExecutionJob, Position, TradeExitPlan, TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
 import { reviewOpenPositionsForUser } from "../packages/positions/review.ts";
 import type { PositionMarkProvider } from "../packages/positions/marks.ts";
+import type { CassieJobQueue } from "../packages/jobs/queue.ts";
 
 const exitPlan: TradeExitPlan = {
   takeProfitPct: 10,
@@ -62,6 +63,25 @@ const position: Position = {
   failureReason: null,
 };
 
+class FakeQueue implements CassieJobQueue {
+  enqueueClosePosition = vi.fn(async (input: { positionId: string }) => ({
+    positionId: input.positionId,
+    graphileJobId: "close_1",
+  }));
+
+  async enqueueExecution(job: ExecutionJob) {
+    return { executionJobId: job.jobId, graphileJobId: null };
+  }
+
+  async enqueueSupervisor(run: ControlRun) {
+    return { runId: run.runId, graphileJobId: null };
+  }
+
+  async enqueuePositionReview() {
+    return { graphileJobId: null };
+  }
+}
+
 describe("position reviews", () => {
   it("marks open positions, updates P/L, and records exit signals", async () => {
     const store = new InMemoryCassieStore();
@@ -77,11 +97,13 @@ describe("position reviews", () => {
         };
       },
     };
+    const jobQueue = new FakeQueue();
 
     const result = await reviewOpenPositionsForUser({
       userId: "user_1",
       store,
       markProvider,
+      jobQueue,
       notify: false,
     });
 
@@ -91,11 +113,51 @@ describe("position reviews", () => {
       currentValueUsd: 112,
       unrealizedPnlUsd: 12,
       unrealizedPnlPct: 12,
+      status: "closing",
     });
     expect(await store.getLatestPositionReview("position_1")).toMatchObject({
       status: "succeeded",
       exitSignal: "take_profit",
+      summary: "SOL long triggered take profit at +12.00% unrealized P/L. Close queued.",
     });
+    expect(jobQueue.enqueueClosePosition).toHaveBeenCalledWith({ positionId: "position_1" });
+  });
+
+  it("queues automatic close when stop loss is hit", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addPosition(position);
+    const jobQueue = new FakeQueue();
+    const markProvider: PositionMarkProvider = {
+      async markPosition() {
+        return {
+          markPrice: 94,
+          currentValueUsd: 94,
+          markedAt: "2026-05-31T00:00:00.000Z",
+        };
+      },
+    };
+
+    await reviewOpenPositionsForUser({
+      userId: "user_1",
+      store,
+      markProvider,
+      jobQueue,
+      notify: false,
+    });
+
+    expect(await store.getPosition("position_1")).toMatchObject({
+      status: "closing",
+      unrealizedPnlUsd: -6,
+      unrealizedPnlPct: -6,
+    });
+    expect(await store.getLatestPositionReview("position_1")).toMatchObject({
+      status: "succeeded",
+      exitSignal: "stop_loss",
+      summary: "SOL long triggered stop loss at -6.00% unrealized P/L. Close queued.",
+    });
+    expect(jobQueue.enqueueClosePosition).toHaveBeenCalledWith({ positionId: "position_1" });
   });
 
   it("records failed reviews without changing the last mark", async () => {

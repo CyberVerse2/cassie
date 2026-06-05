@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import type { ExitSignal, Position, PositionReview } from "../core/schemas/index.ts";
+import { GraphileExecutionJobQueue, type CassieJobQueue } from "../jobs/queue.ts";
 import { sendDailyPositionSummaries } from "../notifications/positions.ts";
+import { queueClosePosition } from "./close.ts";
 import { CompositePositionMarkProvider, type PositionMarkProvider } from "./marks.ts";
 
 export type PositionReviewResult = {
@@ -15,11 +17,13 @@ export type PositionReviewResult = {
 export async function reviewAllOpenPositions(input: {
   store?: CassieStore;
   markProvider?: PositionMarkProvider;
+  jobQueue?: CassieJobQueue;
   notify?: boolean;
 } = {}): Promise<PositionReviewResult> {
   return reviewOpenPositions({
     store: input.store,
     markProvider: input.markProvider,
+    jobQueue: input.jobQueue,
     notify: input.notify,
   });
 }
@@ -28,6 +32,7 @@ export async function reviewOpenPositionsForUser(input: {
   userId: string;
   store?: CassieStore;
   markProvider?: PositionMarkProvider;
+  jobQueue?: CassieJobQueue;
   notify?: boolean;
 }): Promise<PositionReviewResult> {
   return reviewOpenPositions(input);
@@ -37,15 +42,17 @@ async function reviewOpenPositions(input: {
   userId?: string;
   store?: CassieStore;
   markProvider?: PositionMarkProvider;
+  jobQueue?: CassieJobQueue;
   notify?: boolean;
 }): Promise<PositionReviewResult> {
   const store = input.store ?? new DrizzleCassieStore();
   const markProvider = input.markProvider ?? new CompositePositionMarkProvider();
+  const jobQueue = input.jobQueue ?? new GraphileExecutionJobQueue();
   const positions = await store.listOpenPositions(input.userId);
   const reviews: PositionReview[] = [];
 
   for (const position of positions) {
-    reviews.push(await reviewPosition({ store, markProvider, position }));
+    reviews.push(await reviewPosition({ store, markProvider, jobQueue, position }));
   }
 
   if (input.notify ?? true) {
@@ -71,6 +78,7 @@ async function reviewOpenPositions(input: {
 async function reviewPosition(input: {
   store: CassieStore;
   markProvider: PositionMarkProvider;
+  jobQueue: CassieJobQueue;
   position: Position;
 }): Promise<PositionReview> {
   const ticket = await input.store.getTradeTicket(input.position.ticketId);
@@ -97,10 +105,22 @@ async function reviewPosition(input: {
       summary: reviewSummary(updated, exitSignal),
       failureReason: null,
     };
-    return input.store.addPositionReview(review);
+    const saved = await input.store.addPositionReview(review);
+    if (shouldAutoClose(exitSignal)) {
+      await queueClosePosition({
+        positionId: updated.positionId,
+        store: input.store,
+        jobQueue: input.jobQueue,
+      });
+    }
+    return saved;
   } catch (error) {
     return recordFailedReview(input.store, input.position, error instanceof Error ? error.message : String(error));
   }
+}
+
+function shouldAutoClose(exitSignal: ExitSignal): boolean {
+  return exitSignal === "take_profit" || exitSignal === "stop_loss";
 }
 
 export function applyPositionMark(position: Position, markPrice: number, currentValueUsd: number, markedAt: string): Position {
@@ -133,7 +153,10 @@ function reviewSummary(position: Position, exitSignal: ExitSignal): string {
   if (exitSignal === "none") {
     return `${position.instrument} ${position.side} is marked at ${formatNullable(position.currentMarkPrice)} with ${formatPct(position.unrealizedPnlPct)} unrealized P/L. Hold.`;
   }
-  return `${position.instrument} ${position.side} triggered ${exitSignal.replace(/_/gu, " ")} at ${formatPct(position.unrealizedPnlPct)} unrealized P/L. Review close action in dashboard.`;
+  if (shouldAutoClose(exitSignal)) {
+    return `${position.instrument} ${position.side} triggered ${exitSignal.replace(/_/gu, " ")} at ${formatPct(position.unrealizedPnlPct)} unrealized P/L. Close queued.`;
+  }
+  return `${position.instrument} ${position.side} triggered ${exitSignal.replace(/_/gu, " ")} at ${formatPct(position.unrealizedPnlPct)} unrealized P/L.`;
 }
 
 function recordFailedReview(store: CassieStore, position: Position, failureReason: string): Promise<PositionReview> {

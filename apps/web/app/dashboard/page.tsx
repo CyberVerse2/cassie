@@ -407,7 +407,6 @@ function Center({
     [positionMarksQuery.data, storedOpenPositions]
   );
   const closedPositions = dashboardQuery.data?.closedPositions ?? [];
-  const latestReviews = dashboardQuery.data?.latestReviews ?? {};
   const activity = dashboardQuery.data?.activity ?? [];
   const dashboardError = errorMessage(dashboardQuery.error);
 
@@ -1390,11 +1389,4 @@ function formatUsd(value: number) {
 function formatSignedUsd(value: number) {
   const absolute = formatUsd(Math.abs(value));
   return value < 0 ? `-${absolute}` : absolute;
-}
-
-function formatNullablePrice(value: number | null) {
-  if (value == null) return "No mark";
-  return value <= 1
-    ? `${Math.round(value * 100)}¢`
-    : formatUsd(value);
 }

@@ -34,13 +34,13 @@ export async function queueClosePosition(input: {
     throw new Error(`Position ${input.positionId} cannot be closed from status ${position.status}.`);
   }
   const now = new Date().toISOString();
+  const queued = await jobQueue.enqueueClosePosition({ positionId: input.positionId });
   const updated = await store.updatePosition({
     ...position,
     status: "closing",
     updatedAt: now,
     failureReason: null,
   });
-  const queued = await jobQueue.enqueueClosePosition({ positionId: input.positionId });
   await store.audit({
     entityId: input.positionId,
     entityType: "position",
