@@ -231,6 +231,7 @@ export function buildSupervisorInstructions(): string {
     "- Do not search venues until generate_trade_expressions has produced candidateExpressions that need configured venue discovery.",
     "- Do not quote or rank a venue candidate until assess_expression_fit validates it or identifies exactly what information is still required.",
     "- If a required stage cannot produce evidence, finalize with the explicit missing evidence or venue failure; do not silently substitute a different rail.",
+    "- For exchange-listed Hyperliquid spot or perp candidates, live venue metadata plus a current quote/depth is sufficient venue and price evidence when the symbol and instrument directly map to the thesis asset and side. Treat unresolved contract-rule or valuation-anchor details as basis risk unless they create a specific contradiction.",
     "",
     "When uncertain:",
     "- Surface missing source evidence, venue failures, rule gaps, quote gaps, or fit uncertainty in the final result.",
