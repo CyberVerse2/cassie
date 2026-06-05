@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { REVIEW_OPEN_POSITIONS_TASK } from "../packages/jobs/queue.ts";
+import { POLL_X_COMMAND_MENTIONS_TASK, REVIEW_OPEN_POSITIONS_TASK } from "../packages/jobs/queue.ts";
 import { createExecutionTaskList } from "../packages/jobs/tasks.ts";
+import { pollXCommandMentions } from "../packages/app/x-mention-poller.ts";
 import { reviewAllOpenPositions, reviewOpenPositionsForUser } from "../packages/positions/review.ts";
 
 vi.mock("../packages/agent/agent.ts", () => ({
@@ -21,8 +22,13 @@ vi.mock("../packages/positions/review.ts", () => ({
   reviewOpenPositionsForUser: vi.fn(),
 }));
 
+vi.mock("../packages/app/x-mention-poller.ts", () => ({
+  pollXCommandMentions: vi.fn(),
+}));
+
 const mockedReviewAllOpenPositions = vi.mocked(reviewAllOpenPositions);
 const mockedReviewOpenPositionsForUser = vi.mocked(reviewOpenPositionsForUser);
+const mockedPollXCommandMentions = vi.mocked(pollXCommandMentions);
 
 describe("execution task list", () => {
   beforeEach(() => {
@@ -45,5 +51,13 @@ describe("execution task list", () => {
 
     expect(mockedReviewOpenPositionsForUser).toHaveBeenCalledWith({ userId: "user_1" });
     expect(mockedReviewAllOpenPositions).not.toHaveBeenCalled();
+  });
+
+  it("polls X command mentions", async () => {
+    const tasks = createExecutionTaskList();
+
+    await tasks[POLL_X_COMMAND_MENTIONS_TASK]?.({}, {} as never);
+
+    expect(mockedPollXCommandMentions).toHaveBeenCalledWith();
   });
 });

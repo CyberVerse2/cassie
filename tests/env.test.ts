@@ -216,6 +216,7 @@ describe("Polymarket env", () => {
       GRAPHILE_WORKER_CONCURRENCY: "3",
       GRAPHILE_WORKER_POLL_INTERVAL_MS: "2500",
       CASSIE_POSITION_REVIEW_INTERVAL_MINUTES: "10",
+      CASSIE_X_MENTION_POLL_INTERVAL_MINUTES: "2",
     };
 
     expect(readAiProviderEnv(env, {
@@ -239,6 +240,7 @@ describe("Polymarket env", () => {
       concurrency: 3,
       pollIntervalMs: 2500,
       positionReviewIntervalMinutes: 10,
+      xMentionPollIntervalMinutes: 2,
     });
   });
 

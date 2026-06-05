@@ -8,6 +8,7 @@ export const EXECUTE_TRADE_TICKET_TASK = "execute_trade_ticket";
 export const RUN_CASSIE_SUPERVISOR_TASK = "run_cassie_supervisor";
 export const REVIEW_OPEN_POSITIONS_TASK = "review_open_positions";
 export const CLOSE_POSITION_TASK = "close_position";
+export const POLL_X_COMMAND_MENTIONS_TASK = "poll_x_command_mentions";
 
 export const ExecuteTradeTicketPayloadSchema = z.object({
   jobId: z.string(),
@@ -24,6 +25,8 @@ export const ReviewOpenPositionsPayloadSchema = z.object({
 export const ClosePositionPayloadSchema = z.object({
   positionId: z.string(),
 });
+
+export const PollXCommandMentionsPayloadSchema = z.object({});
 
 export interface CassieJobQueue {
   enqueueExecution(job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }>;

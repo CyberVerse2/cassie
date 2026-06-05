@@ -14,6 +14,18 @@ export type XReplyClient = {
 
 type Fetcher = typeof fetch;
 
+export type XRecentMentionTweet = {
+  author_id?: string;
+  author_name?: string;
+  author_username?: string;
+  created_at?: string;
+  edit_history_tweet_ids?: string[];
+  id: string;
+  in_reply_to_user_id?: string;
+  referenced_tweets?: Array<{ id: string; type: string }>;
+  text: string;
+};
+
 export class XApiReplyClient implements XReplyClient {
   constructor(
     private readonly userAccessToken = runtimeConfig.x.userAccessToken,
@@ -156,6 +168,68 @@ export class XWebhookClient {
   }
 }
 
+export class XRecentMentionSearchClient {
+  constructor(
+    private readonly appBearerToken = runtimeConfig.x.bearerToken,
+    private readonly fetcher: Fetcher = fetch,
+  ) {}
+
+  async searchCommandMentions(input: {
+    handle?: string;
+    sinceId?: string;
+    maxResults?: number;
+  } = {}): Promise<XRecentMentionTweet[]> {
+    const handle = (input.handle ?? runtimeConfig.x.cassieHandle)?.replace(/^@/, "");
+    if (!handle) {
+      throw new Error("X mention polling requires CASSIE_X_HANDLE.");
+    }
+
+    const url = new URL("https://api.x.com/2/tweets/search/recent");
+    url.searchParams.set("query", `@${handle} (trade OR countertrade OR watch OR critic OR critique OR review OR analyze OR analyse) -is:retweet`);
+    url.searchParams.set("max_results", String(input.maxResults ?? 25));
+    url.searchParams.set("expansions", "author_id");
+    url.searchParams.set("tweet.fields", "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets");
+    url.searchParams.set("user.fields", "name,username");
+    if (input.sinceId) url.searchParams.set("since_id", input.sinceId);
+
+    const payload = await requestXApi({
+      url: url.toString(),
+      method: "GET",
+      tokenName: "X_BEARER_TOKEN",
+      token: this.appBearerToken,
+      fetcher: this.fetcher,
+    });
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return [];
+    const users = xUsersById(payload.includes);
+    return payload.data.map((tweet) => xRecentMentionTweet(tweet, users));
+  }
+
+  async lookupTweetsById(ids: string[]): Promise<Map<string, XRecentMentionTweet>> {
+    const uniqueIds = [...new Set(ids)].filter((id) => /^\d+$/.test(id));
+    if (uniqueIds.length === 0) return new Map();
+
+    const url = new URL("https://api.x.com/2/tweets");
+    url.searchParams.set("ids", uniqueIds.join(","));
+    url.searchParams.set("expansions", "author_id");
+    url.searchParams.set("tweet.fields", "author_id,created_at,conversation_id,in_reply_to_user_id,referenced_tweets");
+    url.searchParams.set("user.fields", "name,username");
+
+    const payload = await requestXApi({
+      url: url.toString(),
+      method: "GET",
+      tokenName: "X_BEARER_TOKEN",
+      token: this.appBearerToken,
+      fetcher: this.fetcher,
+    });
+    if (!isRecord(payload) || !Array.isArray(payload.data)) return new Map();
+    const users = xUsersById(payload.includes);
+    return new Map(payload.data.map((tweet) => {
+      const parsed = xRecentMentionTweet(tweet, users);
+      return [parsed.id, parsed];
+    }));
+  }
+}
+
 export async function notifyXTradeShare(input: {
   store: CassieStore;
   run: ControlRun | undefined;
@@ -225,6 +299,51 @@ function xWebhookConfig(payload: unknown): XWebhookConfig {
     throw new Error("X webhook response did not include id, url, created_at, and valid.");
   }
   return { id, url, created_at: createdAt, valid };
+}
+
+function xRecentMentionTweet(payload: unknown, usersById: Map<string, { name?: string; username?: string }>): XRecentMentionTweet {
+  if (!isRecord(payload)) throw new Error("X recent search response included an invalid tweet.");
+  const id = typeof payload.id === "string" ? payload.id : null;
+  const text = typeof payload.text === "string" ? payload.text : null;
+  if (!id || !text) {
+    throw new Error("X recent search tweet did not include id and text.");
+  }
+  const authorId = typeof payload.author_id === "string" ? payload.author_id : undefined;
+  const author = authorId ? usersById.get(authorId) : undefined;
+  return {
+    author_id: authorId,
+    author_name: author?.name,
+    author_username: author?.username,
+    created_at: typeof payload.created_at === "string" ? payload.created_at : undefined,
+    edit_history_tweet_ids: Array.isArray(payload.edit_history_tweet_ids)
+      ? payload.edit_history_tweet_ids.filter((value): value is string => typeof value === "string")
+      : undefined,
+    id,
+    in_reply_to_user_id: typeof payload.in_reply_to_user_id === "string" ? payload.in_reply_to_user_id : undefined,
+    referenced_tweets: Array.isArray(payload.referenced_tweets)
+      ? payload.referenced_tweets
+        .filter(isRecord)
+        .map((reference) => ({
+          id: typeof reference.id === "string" ? reference.id : "",
+          type: typeof reference.type === "string" ? reference.type : "",
+        }))
+        .filter((reference) => reference.id.length > 0 && reference.type.length > 0)
+      : undefined,
+    text,
+  };
+}
+
+function xUsersById(payload: unknown): Map<string, { name?: string; username?: string }> {
+  const users = new Map<string, { name?: string; username?: string }>();
+  if (!isRecord(payload) || !Array.isArray(payload.users)) return users;
+  for (const user of payload.users) {
+    if (!isRecord(user) || typeof user.id !== "string") continue;
+    users.set(user.id, {
+      name: typeof user.name === "string" ? user.name : undefined,
+      username: typeof user.username === "string" ? user.username : undefined,
+    });
+  }
+  return users;
 }
 
 type XOAuthTokenState = {

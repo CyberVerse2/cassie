@@ -36,6 +36,7 @@ export type GraphileWorkerEnv = {
   concurrency: number;
   pollIntervalMs: number;
   positionReviewIntervalMinutes: number;
+  xMentionPollIntervalMinutes: number;
 };
 
 export type HttpRuntimeEnv = {
@@ -288,12 +289,14 @@ export function readGraphileWorkerEnv(env: EnvSource = process.env): GraphileWor
     GRAPHILE_WORKER_CONCURRENCY: numberSchema("GRAPHILE_WORKER_CONCURRENCY", 1, { integer: true, min: 1 }),
     GRAPHILE_WORKER_POLL_INTERVAL_MS: numberSchema("GRAPHILE_WORKER_POLL_INTERVAL_MS", 2_000, { integer: true, min: 1 }),
     CASSIE_POSITION_REVIEW_INTERVAL_MINUTES: numberSchema("CASSIE_POSITION_REVIEW_INTERVAL_MINUTES", 1, { integer: true, min: 1, max: 59 }),
+    CASSIE_X_MENTION_POLL_INTERVAL_MINUTES: numberSchema("CASSIE_X_MENTION_POLL_INTERVAL_MINUTES", 1, { integer: true, min: 1, max: 59 }),
   }).transform((values) => ({
     executionMaxAttempts: values.GRAPHILE_EXECUTION_MAX_ATTEMPTS,
     supervisorMaxAttempts: values.GRAPHILE_SUPERVISOR_MAX_ATTEMPTS,
     concurrency: values.GRAPHILE_WORKER_CONCURRENCY,
     pollIntervalMs: values.GRAPHILE_WORKER_POLL_INTERVAL_MS,
     positionReviewIntervalMinutes: values.CASSIE_POSITION_REVIEW_INTERVAL_MINUTES,
+    xMentionPollIntervalMinutes: values.CASSIE_X_MENTION_POLL_INTERVAL_MINUTES,
   })).parse(env);
 }
 

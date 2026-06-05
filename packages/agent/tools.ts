@@ -159,7 +159,7 @@ export function createCassieSupervisorTools(input: {
         if (!input.deps.sourceResolver) {
           throw new Error("resolve_source requires a configured source resolver dependency.");
         }
-        return recordRunStep({
+        const output = await recordRunStep({
           store: input.store,
           runId: input.run.runId,
           stepType: "intake",
@@ -169,6 +169,16 @@ export function createCassieSupervisorTools(input: {
             onThinkingTrace: setThinkingTrace,
           }),
         });
+        const resolved = SourcePostSchema.safeParse(output);
+        if (resolved.success) {
+          await input.store.updateRun({
+            ...input.run,
+            sourcePost: resolved.data,
+            updatedAt: new Date().toISOString(),
+          });
+          input.run.sourcePost = resolved.data;
+        }
+        return output;
       }),
     }),
     generate_trade_expressions: tool({
@@ -190,17 +200,20 @@ export function createCassieSupervisorTools(input: {
             model: importantModel,
             stepInput: {
               userCommand: input.run.userCommand,
-              sourcePost: input.run.sourcePost,
+              sourcePost: await sourceForAnalysis(),
               opportunityFrame,
               marketCandidates,
             },
-            execute: ({ setThinkingTrace }) => generateTradeExpressions({
-              ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
-              sourcePost: input.run.sourcePost,
-              userCommand: input.run.userCommand,
-              opportunityFrame,
-              marketCandidates,
-            }),
+            execute: async ({ setThinkingTrace }) => {
+              const source = await sourceForAnalysis();
+              return generateTradeExpressions({
+                ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
+                sourcePost: source,
+                userCommand: input.run.userCommand,
+                opportunityFrame,
+                marketCandidates,
+              });
+            },
           });
         },
       ),

@@ -51,6 +51,16 @@ const XWebhookTweetSchema = z.object({
       full_text: z.string().optional(),
     }).passthrough().optional(),
   }).passthrough().optional(),
+  replied_to_status: z.object({
+    id: z.union([z.string(), z.number()]).optional(),
+    id_str: z.string().optional(),
+    text: z.string().optional(),
+    full_text: z.string().optional(),
+    created_at: z.string().nullable().optional(),
+    author_id: z.union([z.string(), z.number()]).nullable().optional(),
+    user: XWebhookUserSchema.optional(),
+    entities: XTweetEntitiesSchema.optional(),
+  }).passthrough().optional(),
   retweeted_status: z.unknown().optional(),
 }).passthrough();
 
@@ -336,6 +346,10 @@ function parseXWebhookDeliveryBody(rawBody: Buffer): {
 }
 
 function sourcePostForAnalysis(tweet: XWebhookTweet, mentionPost: SourcePost): SourcePost {
+  if (tweet.replied_to_status) {
+    return sourcePostFromXWebhookTweet(tweet.replied_to_status as XWebhookTweet);
+  }
+
   const parentPostId = stringValue(tweet.in_reply_to_status_id_str ?? tweet.in_reply_to_status_id);
   if (!parentPostId) return mentionPost;
 

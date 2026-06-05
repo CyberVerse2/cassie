@@ -88,11 +88,13 @@ export class GrokXSourceResolver implements SourceResolver {
         );
       }
 
+      const resolvedHandle = resolution.sourcePost.authorHandle ?? locator.handle;
+      const resolvedPostId = resolution.sourcePost.postId ?? locator.postId;
       const sourcePost = SourcePostSchema.parse({
         ...resolution.sourcePost,
-        postId: resolution.sourcePost.postId ?? locator.postId,
-        url: resolution.sourcePost.url ?? locator.canonicalUrl,
-        authorHandle: resolution.sourcePost.authorHandle ?? locator.handle,
+        postId: resolvedPostId,
+        url: xStatusUrl(resolvedHandle, resolvedPostId, resolution.sourcePost.url ?? locator.canonicalUrl),
+        authorHandle: resolvedHandle,
       });
       finishTrace?.({
         output: {
@@ -110,6 +112,10 @@ export class GrokXSourceResolver implements SourceResolver {
       throw error;
     }
   }
+}
+
+function xStatusUrl(handle: string | null, postId: string, fallback: string): string {
+  return handle ? `https://x.com/${handle}/status/${postId}` : fallback;
 }
 
 export async function generateGrokSourceResolution(
