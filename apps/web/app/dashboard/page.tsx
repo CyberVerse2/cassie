@@ -381,7 +381,7 @@ function Center({
   refreshAccount: () => Promise<unknown>;
 }) {
   const queryClient = useQueryClient();
-  const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("All");
+  const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("1D");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
@@ -661,7 +661,7 @@ function Center({
                 <span>{review?.summary ?? position.exitPlan.thesis}</span>
               </span>
               <span className={s.amountCell}>
-                <span className={s.amountValue}>{formatNullablePrice(position.currentMarkPrice)}</span>
+                <span className={s.amountValue}>{formatSignedUsd(position.unrealizedPnlUsd)}</span>
                 <span
                   className={`${s.valueDelta} ${position.unrealizedPnlUsd >= 0 ? s.amountUp : s.amountDown}`}
                 >
