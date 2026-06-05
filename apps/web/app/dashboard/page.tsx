@@ -156,6 +156,8 @@ export default function Dashboard() {
         updateDefaultTradeSize={account.updateDefaultTradeSize}
       />
       <Center
+        accountReady={account.ready}
+        authenticated={account.authenticated}
         fetchDashboard={account.fetchDashboard}
         fetchPositionMarks={account.fetchPositionMarks}
         closePosition={account.closePosition}
@@ -398,11 +400,15 @@ interface DataPoint {
 }
 
 function Center({
+  accountReady,
+  authenticated,
   fetchDashboard,
   fetchPositionMarks,
   closePosition,
   refreshAccount,
 }: {
+  accountReady: boolean;
+  authenticated: boolean;
   fetchDashboard: () => Promise<CassieDashboardPayload>;
   fetchPositionMarks: (positionIds: string[]) => Promise<CassiePosition[]>;
   closePosition: (positionId: string) => Promise<CassiePosition>;
@@ -414,11 +420,14 @@ function Center({
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
   const [closingId, setClosingId] = useState<string | null>(null);
+  const dashboardEnabled = accountReady && authenticated;
   const dashboardQuery = useQuery({
     queryKey: dashboardQueryKeys.dashboard,
     queryFn: fetchDashboard,
+    enabled: dashboardEnabled,
   });
-  const storedOpenPositions = dashboardQuery.data?.openPositions ?? [];
+  const dashboard = dashboardEnabled ? dashboardQuery.data : undefined;
+  const storedOpenPositions = dashboard?.openPositions ?? [];
   const liveMarkIds = useMemo(() => storedOpenPositions
     .filter((position) => position.status === "open" && position.venue === "hyperliquid")
     .map((position) => position.positionId)
@@ -434,13 +443,13 @@ function Center({
     mergePositions(storedOpenPositions, positionMarksQuery.data ?? []),
     [positionMarksQuery.data, storedOpenPositions]
   );
-  const closedPositions = dashboardQuery.data?.closedPositions ?? [];
-  const activity = dashboardQuery.data?.activity ?? [];
-  const dashboardError = errorMessage(dashboardQuery.error);
+  const closedPositions = dashboard?.closedPositions ?? [];
+  const activity = dashboard?.activity ?? [];
+  const dashboardError = dashboardEnabled ? errorMessage(dashboardQuery.error) : null;
 
   const portfolioBalance = useMemo(() =>
-    portfolioBalanceFromDashboard(dashboardQuery.data, openPositions),
-    [dashboardQuery.data, openPositions]
+    portfolioBalanceFromDashboard(dashboard, openPositions),
+    [dashboard, openPositions]
   );
   const rangeData = useMemo(() =>
     filterPortfolioHistory(portfolioBalance.history, selectedRange),
