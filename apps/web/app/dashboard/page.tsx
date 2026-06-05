@@ -369,84 +369,6 @@ interface DataPoint {
   change: number;
 }
 
-function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoint[] {
-  let length = 80;
-  let startVal = 1284.62;
-
-  if (range === "1D") {
-    length = 24;
-    startVal = 1261.90;
-  } else if (range === "1W") {
-    length = 7;
-    startVal = 1210.00;
-  } else if (range === "1M") {
-    length = 30;
-    startVal = 1050.00;
-  } else if (range === "1Y") {
-    length = 52;
-    startVal = 840.00;
-  } else {
-    length = 100;
-    startVal = 500.00;
-  }
-
-  const data: DataPoint[] = [];
-  const endVal = 1284.62;
-
-  for (let i = 0; i < length; i++) {
-    const t = i / (length - 1);
-    let wave = 0;
-    if (range === "1D") {
-      wave = Math.sin(t * 8) * 12 + Math.cos(t * 15) * 6;
-    } else if (range === "1W") {
-      wave = Math.sin(t * 5) * 18 + Math.cos(t * 10) * 8;
-    } else if (range === "1M") {
-      wave = Math.sin(t * 7) * 45 + Math.cos(t * 14) * 20 + Math.sin(t * 3) * 10;
-    } else if (range === "1Y") {
-      wave = Math.sin(t * 10) * 80 + Math.cos(t * 5) * 40 - Math.sin(t * 22) * 15;
-    } else {
-      wave = Math.sin(t * 8) * 120 + Math.cos(t * 4) * 60 + Math.sin(t * 18) * 30;
-    }
-
-    const dampening = 1 - Math.pow(t, 4);
-    const value = startVal + t * (endVal - startVal) + wave * dampening;
-    const change = ((value - startVal) / startVal) * 100;
-
-    let dateStr = "";
-    const now = new Date(2026, 4, 26);
-    if (range === "1D") {
-      const hour = 24 - (length - 1 - i);
-      dateStr = `${hour.toString().padStart(2, "0")}:00`;
-    } else if (range === "1W") {
-      const d = new Date(now);
-      d.setDate(now.getDate() - (length - 1 - i));
-      dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    } else if (range === "1M") {
-      const d = new Date(now);
-      d.setDate(now.getDate() - (length - 1 - i));
-      dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    } else if (range === "1Y") {
-      const d = new Date(now);
-      d.setDate(now.getDate() - (length - 1 - i) * 7);
-      dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    } else {
-      const d = new Date(now);
-      d.setDate(now.getDate() - (length - 1 - i) * 5);
-      dateStr = d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-    }
-
-    data.push({ date: dateStr, value, change });
-  }
-
-  data[data.length - 1] = {
-    date: range === "1D" ? "24:00" : new Date(2026, 4, 26).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
-    value: endVal,
-    change: ((endVal - startVal) / startVal) * 100,
-  };
-
-  return data;
-}
-
 function Center({
   fetchDashboard,
   fetchPositionMarks,
@@ -489,16 +411,22 @@ function Center({
   const activity = dashboardQuery.data?.activity ?? [];
   const dashboardError = errorMessage(dashboardQuery.error);
 
-  const rangeData = useMemo(() => generateDataForRange(selectedRange), [selectedRange]);
+  const portfolioBalance = useMemo(() =>
+    portfolioBalanceFromDashboard(dashboardQuery.data, openPositions),
+    [dashboardQuery.data, openPositions]
+  );
+  const rangeData = useMemo(() =>
+    filterPortfolioHistory(portfolioBalance.history, selectedRange),
+    [portfolioBalance.history, selectedRange]
+  );
   const currentValPoint = rangeData[rangeData.length - 1];
   const displayedPoint = hoveredData || currentValPoint;
-  const balanceUsd = dashboardQuery.data?.account.balance?.spendableUsd ?? 0;
-  const balanceLabel = `$${balanceUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
-  const displayedBalance = hoveredData ? displayedPoint.value : balanceUsd;
+  const portfolioLabel = `$${portfolioBalance.currentUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+  const displayedBalance = displayedPoint.value;
   const largestPositionMover = openPositions
     .slice()
     .sort((left, right) => Math.abs(right.unrealizedPnlUsd) - Math.abs(left.unrealizedPnlUsd))[0] ?? null;
-  const netInvested = openPositions.reduce((total, position) => total + position.filledSizeUsd, 0);
+  const netInvested = openPositions.reduce((total, position) => total + position.marginUsd, 0);
   const unrealized = openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
 
   const closeMutation = useMutation({
@@ -551,7 +479,7 @@ function Center({
           onClick={() => setActiveTab("wallet")}
         >
           Wallet
-          <span className="tab-count">{balanceLabel}</span>
+          <span className="tab-count">{portfolioLabel}</span>
         </button>
         <button
           type="button"
@@ -570,8 +498,8 @@ function Center({
       {activeTab === "wallet" && (
       <div className={s.content}>
         <header className={s.sectionHeader}>
-          <h2>Wallet balance</h2>
-          <p>Base USDC you deposit here funds Cassie trades across Polymarket and Hyperliquid.</p>
+          <h2>Portfolio balance</h2>
+          <p>Base USDC plus open position P/L across Polymarket and Hyperliquid.</p>
         </header>
 
         <div className={s.chartCard}>
@@ -619,7 +547,7 @@ function Center({
                       {largestPositionMover.side.toUpperCase()}
                     </span>
                     <span className="mover-sep" aria-hidden>·</span>
-                    {formatUsd(largestPositionMover.currentValueUsd)}
+                    {formatUsd(largestPositionMover.positionEquityUsd)}
                   </span>
                 </div>
               </div>
@@ -663,7 +591,7 @@ function Center({
               <span>Positions</span>
             </div>
             <div className={s.summaryCell}>
-              <span className="label">Net Invested</span>
+              <span className="label">Margin</span>
               <span className="value">{formatUsd(netInvested)}</span>
             </div>
             <div className={s.summaryCell}>
@@ -744,9 +672,9 @@ function Center({
                 </span>
               </span>
               <span className={s.valueCell}>
-                <span className={s.valuePrice}>{formatUsd(position.currentValueUsd)}</span>
+                <span className={s.valuePrice}>{formatUsd(position.positionEquityUsd)}</span>
                 <span className={`${s.amountSide} ${s[`amountSide_${sideTone(position.side)}`]}`}>
-                  {position.status}
+                  {position.leverage ? `${position.leverage}x exposure` : position.status}
                 </span>
               </span>
               <span className={s.tradeActions}>
@@ -1081,7 +1009,7 @@ function LineChart({ data, onHover }: LineChartProps) {
   const chartMin = min - valRange * 0.08;
   const chartMax = max + valRange * 0.08;
 
-  const xAt = (i: number) => pad.l + (i / (data.length - 1)) * innerW;
+  const xAt = (i: number) => data.length <= 1 ? pad.l + innerW : pad.l + (i / (data.length - 1)) * innerW;
   const yAt = (v: number) => pad.t + innerH - ((v - chartMin) / (chartMax - chartMin)) * innerH;
 
   const pathOf = (vals: number[]) => {
@@ -1144,7 +1072,7 @@ function LineChart({ data, onHover }: LineChartProps) {
         onTouchStart={handleTouchMove}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleMouseLeave}
-        aria-label="Base wallet balance history"
+        aria-label="Portfolio balance history"
       >
         <defs>
           <linearGradient id="walletFill" x1="0" y1="0" x2="0" y2="1">
@@ -1366,6 +1294,45 @@ function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
   return current.map((position) => updatesById.get(position.positionId) ?? position);
 }
 
+function portfolioBalanceFromDashboard(
+  dashboard: CassieDashboardPayload | undefined,
+  openPositions: CassiePosition[],
+) {
+  const walletBalanceUsd = dashboard?.portfolioBalance.walletBalanceUsd ?? 0;
+  const unrealizedPnlUsd = roundUsd(openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0));
+  const currentUsd = roundUsd(walletBalanceUsd + unrealizedPnlUsd);
+  const serverHistory = dashboard?.portfolioBalance.history ?? [];
+  const currentPoint = {
+    date: serverHistory[serverHistory.length - 1]?.label ?? "Now",
+    value: currentUsd,
+    change: percentChange(serverHistory[0]?.valueUsd ?? currentUsd, currentUsd),
+  };
+
+  return {
+    currentUsd,
+    history: serverHistory.length === 0
+      ? [currentPoint]
+      : [
+        ...serverHistory.slice(0, -1).map((point) => ({
+          date: point.label,
+          value: point.valueUsd,
+          change: percentChange(serverHistory[0]?.valueUsd ?? point.valueUsd, point.valueUsd),
+        })),
+        currentPoint,
+      ],
+  };
+}
+
+function filterPortfolioHistory(data: DataPoint[], range: "1D" | "1W" | "1M" | "1Y" | "All") {
+  if (range === "All") return data;
+  const maxPoints = range === "1D" ? 24 : range === "1W" ? 7 : range === "1M" ? 30 : 52;
+  return data.slice(-maxPoints);
+}
+
+function percentChange(start: number, current: number) {
+  return start > 0 ? roundPct(((current - start) / start) * 100) : 0;
+}
+
 function mergeDashboardPosition(current: CassieDashboardPayload, update: CassiePosition): CassieDashboardPayload {
   const openPositions = upsertDashboardPosition(current.openPositions, update)
     .filter(isDashboardOpenPosition);
@@ -1399,6 +1366,14 @@ function isDashboardOpenPosition(position: CassiePosition) {
 
 function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : null;
+}
+
+function roundUsd(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function roundPct(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 function venueTone(venue: string) {

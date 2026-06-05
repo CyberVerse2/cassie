@@ -84,13 +84,63 @@ describe("dashboard payload", () => {
       },
     });
     expect(dashboard.openPositions).toHaveLength(1);
+    expect(dashboard.portfolioBalance).toMatchObject({
+      currentUsd: 105,
+      walletBalanceUsd: 100,
+      unrealizedPnlUsd: 5,
+    });
+    expect(dashboard.portfolioBalance.history).toHaveLength(1);
+    expect(dashboard.portfolioBalance.history[0]).toMatchObject({
+      valueUsd: 105,
+      walletBalanceUsd: 100,
+      unrealizedPnlUsd: 5,
+    });
     expect(dashboard.openPositions[0]).toMatchObject({
       positionId: "position_open",
       symbol: "SOL",
+      marginUsd: 50,
+      leverage: null,
+      notionalValueUsd: null,
+      positionEquityUsd: 55,
     });
     expect(dashboard.closedPositions.map((entry) => entry.positionId)).toEqual(["position_closed"]);
     expect(dashboard.latestReviews.position_open?.summary).toBe("Take-profit threshold is active.");
     expect(dashboard.activity.map((entry) => entry.id)).toEqual(["position_open", "position_closed"]);
+  });
+
+  it("separates leveraged exposure from position equity", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket({
+      ...ticket,
+      venueData: { symbol: "SOL", leverage: 3, notionalSizeUsd: 12 },
+      sizeUsd: 4,
+    });
+    await store.addExecutionJob(job);
+    await store.addPosition({
+      ...position({ positionId: "position_levered", status: "open", closedAt: null }),
+      entrySizeUsd: 4,
+      filledSizeUsd: 12,
+      currentValueUsd: 13.2,
+      unrealizedPnlUsd: 1.2,
+      unrealizedPnlPct: 30,
+    });
+
+    const dashboard = await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 100,
+    });
+
+    expect(dashboard.openPositions[0]).toMatchObject({
+      marginUsd: 4,
+      leverage: 3,
+      notionalValueUsd: 13.2,
+      positionEquityUsd: 5.2,
+    });
+    expect(dashboard.portfolioBalance).toMatchObject({
+      currentUsd: 101.2,
+      walletBalanceUsd: 100,
+      unrealizedPnlUsd: 1.2,
+    });
   });
 });
 

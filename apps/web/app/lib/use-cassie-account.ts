@@ -44,6 +44,18 @@ export type CassieDashboardPayload = {
     defaultTradeSizeUsd: number;
     balance: WalletFundingBalance | null;
   };
+  portfolioBalance: {
+    currentUsd: number;
+    walletBalanceUsd: number;
+    unrealizedPnlUsd: number;
+    history: Array<{
+      at: string;
+      label: string;
+      valueUsd: number;
+      walletBalanceUsd: number;
+      unrealizedPnlUsd: number;
+    }>;
+  };
   openPositions: CassiePosition[];
   closedPositions: CassiePosition[];
   latestReviews: Record<string, CassiePositionReview | null>;
@@ -68,6 +80,10 @@ export type CassiePosition = {
   currentValueUsd: number;
   unrealizedPnlUsd: number;
   unrealizedPnlPct: number;
+  marginUsd: number;
+  leverage: number | null;
+  notionalValueUsd: number | null;
+  positionEquityUsd: number;
   exitPlan: {
     takeProfitPct: number;
     stopLossPct: number;

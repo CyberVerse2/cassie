@@ -22,6 +22,18 @@ export type DashboardAccountSummary = {
 
 export type DashboardPayload = {
   account: DashboardAccountSummary;
+  portfolioBalance: {
+    currentUsd: number;
+    walletBalanceUsd: number;
+    unrealizedPnlUsd: number;
+    history: Array<{
+      at: string;
+      label: string;
+      valueUsd: number;
+      walletBalanceUsd: number;
+      unrealizedPnlUsd: number;
+    }>;
+  };
   openPositions: UserFacingPosition[];
   closedPositions: UserFacingPosition[];
   latestReviews: Record<string, PositionReviewPayload | null>;
@@ -57,6 +69,11 @@ export async function buildDashboardPayload(
   );
   const latestReviewRows = await store.getLatestPositionReviews(positions.map((position) => position.positionId));
   const latestReviews = new Map(latestReviewRows.map((review) => [review.positionId, review]));
+  const openPositions = displayPositions.filter(isDashboardOpenPosition);
+  const walletBalance = balance?.walletBalanceUsd ?? 0;
+  const unrealizedPnlUsd = roundUsd(openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0));
+  const portfolioBalanceUsd = roundUsd(walletBalance + unrealizedPnlUsd);
+  const snapshotAt = new Date().toISOString();
 
   return {
     account: {
@@ -65,7 +82,19 @@ export async function buildDashboardPayload(
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       balance,
     },
-    openPositions: displayPositions.filter(isDashboardOpenPosition),
+    portfolioBalance: {
+      currentUsd: portfolioBalanceUsd,
+      walletBalanceUsd: walletBalance,
+      unrealizedPnlUsd,
+      history: [{
+        at: snapshotAt,
+        label: formatChartLabel(snapshotAt),
+        valueUsd: portfolioBalanceUsd,
+        walletBalanceUsd: walletBalance,
+        unrealizedPnlUsd,
+      }],
+    },
+    openPositions,
     closedPositions: displayPositions.filter((position) => position.status === "closed"),
     latestReviews: Object.fromEntries(positions.map((position) => [
       position.positionId,
@@ -73,6 +102,14 @@ export async function buildDashboardPayload(
     ])),
     activity: buildUserActivity(settings.userId, snapshot),
   };
+}
+
+function formatChartLabel(value: string) {
+  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function roundUsd(value: number) {
+  return Math.round(value * 100) / 100;
 }
 
 export function buildUserActivity(
