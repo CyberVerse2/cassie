@@ -19,6 +19,7 @@ import {
   formatTradeExecuted,
   notifyTradeLifecycle,
 } from "../notifications/positions.ts";
+import { notifyXTradeShare, type XReplyClient } from "../notifications/x.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "./queue.ts";
 import {
   createQueuedExecutionJob,
@@ -36,6 +37,7 @@ export async function executeExecutionJob(input: {
     PrivyWalletGateway,
     "getUsdcBalanceUsd" | "getTreasuryWalletAddress" | "transferUserUsdcToTreasury" | "refundUserUsdcFromTreasury"
   >;
+  xReplyClient?: XReplyClient;
 }): Promise<ExecutionJob> {
   const store = input.store ?? new DrizzleCassieStore();
   const jobToRun = await store.getExecutionJob(input.jobId);
@@ -124,6 +126,12 @@ export async function executeExecutionJob(input: {
       text: formatTradeExecuted({ ticket, job, position }),
       entityId: job.jobId,
       eventType: "telegram.trade_executed_failed",
+    });
+    await notifyXTradeShare({
+      store,
+      run: ticket.runId ? await store.getRun(ticket.runId) : undefined,
+      position,
+      replyClient: input.xReplyClient,
     });
     return job;
   } catch (error) {

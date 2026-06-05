@@ -10,6 +10,7 @@ import type { TradeExitPlan, TradeTicket, UserSettings } from "../packages/core/
 import { executeExecutionJob } from "../packages/jobs/execution-job.ts";
 import { createQueuedExecutionJob } from "../packages/jobs/state.ts";
 import { formatDecimal, formatSignificantDecimal } from "../packages/execution/helpers/format.ts";
+import type { XReplyClient } from "../packages/notifications/x.ts";
 
 const exitPlan: TradeExitPlan = {
   takeProfitPct: 10,
@@ -393,6 +394,52 @@ describe("treasury-prefunded execution", () => {
     });
   });
 
+  it("replies to the source tweet with the trade share link after a position opens", async () => {
+    const store = new InMemoryCassieStore();
+    const job = createQueuedExecutionJob(ticket.ticketId);
+    const executionClient: ExecutionClient = {
+      execute: vi.fn().mockResolvedValue({
+        venueOrderId: "venue_order_1",
+        filledBaseSize: 50,
+        filledSizeUsd: 25,
+        averagePrice: 0.5,
+      }),
+    };
+    const walletGateway = mockWalletGateway({ balanceUsd: 100 });
+    const xReplyClient = new FakeXReplyClient();
+
+    await store.upsertUserSettings(settings);
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@cassiedottrade trade this",
+      sourcePost: {
+        platform: "x",
+        postId: "tweet_1",
+        url: "https://x.com/source/status/tweet_1",
+        authorHandle: "source",
+        authorName: "Source",
+        text: "@cassiedottrade trade this",
+        createdAt: "2026-06-05T10:00:00.000Z",
+        quotedPostText: null,
+        linkedUrls: [],
+        mediaDescriptions: [],
+      },
+    });
+    await store.addTradeTicket({ ...ticket, runId: run.runId });
+    await store.addExecutionJob(job);
+
+    const result = await executeExecutionJob({ jobId: job.jobId, store, executionClient, walletGateway, xReplyClient });
+    const state = await store.load();
+    const position = state.positions[0];
+
+    expect(result.status).toBe("succeeded");
+    expect(position).toBeDefined();
+    expect(xReplyClient.replies).toEqual([{
+      inReplyToTweetId: "tweet_1",
+      text: `Trade is live.\nhttps://cassie.trade/trades/${position!.positionId}/pnl`,
+    }]);
+  });
+
   it("does not create a position when execution returns no fill", async () => {
     const store = new InMemoryCassieStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
@@ -611,4 +658,13 @@ function mockWalletGateway(input: { balanceUsd: number }) {
       raw: {},
     }),
   };
+}
+
+class FakeXReplyClient implements XReplyClient {
+  replies: Array<{ inReplyToTweetId: string; text: string }> = [];
+
+  async reply(input: { inReplyToTweetId: string; text: string }): Promise<{ tweetId: string }> {
+    this.replies.push(input);
+    return { tweetId: `reply_${this.replies.length}` };
+  }
 }
