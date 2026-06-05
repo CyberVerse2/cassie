@@ -4,6 +4,7 @@ import type {
   AuditEvent,
   ControlRun,
   ExecutionJob,
+  PortfolioBalanceSnapshot,
   Position,
   PositionReview,
   RunStep,
@@ -109,6 +110,20 @@ export const positionReviews = pgTable("position_reviews", {
   }).onDelete("cascade"),
   foreignKey({
     name: "position_reviews_user_fk",
+    columns: [table.userId],
+    foreignColumns: [userSettings.userId],
+  }).onDelete("cascade"),
+]);
+
+export const portfolioBalanceSnapshots = pgTable("portfolio_balance_snapshots", {
+  snapshotId: text("snapshot_id").primaryKey(),
+  userId: text("user_id").notNull(),
+  snapshot: jsonb("snapshot").$type<PortfolioBalanceSnapshot>().notNull(),
+  at: text("at").notNull(),
+}, (table) => [
+  index("portfolio_balance_snapshots_user_at_idx").on(table.userId, table.at),
+  foreignKey({
+    name: "portfolio_balance_snapshots_user_fk",
     columns: [table.userId],
     foreignColumns: [userSettings.userId],
   }).onDelete("cascade"),

@@ -4,6 +4,7 @@ import type {
   AuditEvent,
   ControlRun,
   ExecutionJob,
+  PortfolioBalanceSnapshot,
   Position,
   PositionReview,
   RunStep,
@@ -20,6 +21,7 @@ import {
   mentions,
   positionReviews,
   positions,
+  portfolioBalanceSnapshots,
   runtimeState,
   runSteps,
   tradeTickets,
@@ -49,6 +51,7 @@ export class DrizzleCassieStore implements CassieStore {
       jobRows,
       positionRows,
       reviewRows,
+      portfolioBalanceRows,
       auditRows,
       walletSpendLedgerRows,
       controlRunRows,
@@ -61,6 +64,7 @@ export class DrizzleCassieStore implements CassieStore {
       this.db.select().from(executionJobs),
       this.db.select().from(positions),
       this.db.select().from(positionReviews),
+      this.db.select().from(portfolioBalanceSnapshots),
       this.db.select().from(auditEvents),
       this.db.select().from(walletSpendLedgerEntries),
       this.db.select().from(controlRuns),
@@ -75,6 +79,7 @@ export class DrizzleCassieStore implements CassieStore {
       executionJobs: jobRows.map((row) => row.job),
       positions: positionRows.map((row) => row.position),
       positionReviews: reviewRows.map((row) => row.review),
+      portfolioBalanceSnapshots: portfolioBalanceRows.map((row) => row.snapshot),
       walletSpendLedgerEntries: walletSpendLedgerRows.map((row) => ({
         entryId: row.entryId,
         userId: row.userId,
@@ -605,6 +610,46 @@ export class DrizzleCassieStore implements CassieStore {
     return rows.map((row) => row.review);
   }
 
+  async recordPortfolioBalanceSnapshot(input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
+    at?: string;
+  }): Promise<PortfolioBalanceSnapshot> {
+    const latest = await this.db
+      .select()
+      .from(portfolioBalanceSnapshots)
+      .where(eq(portfolioBalanceSnapshots.userId, input.userId))
+      .orderBy(desc(portfolioBalanceSnapshots.at))
+      .limit(1)
+      .then((rows) => rows[0]?.snapshot);
+    if (latest && samePortfolioBalanceSnapshot(latest, input)) return latest;
+
+    const snapshot: PortfolioBalanceSnapshot = {
+      snapshotId: randomUUID(),
+      userId: input.userId,
+      at: monotonicSnapshotAt(input.at ?? new Date().toISOString(), latest?.at),
+      valueUsd: roundUsd(input.valueUsd),
+      walletBalanceUsd: roundUsd(input.walletBalanceUsd),
+      unrealizedPnlUsd: roundUsd(input.unrealizedPnlUsd),
+    };
+    await this.db.insert(portfolioBalanceSnapshots).values({
+      snapshotId: snapshot.snapshotId,
+      userId: snapshot.userId,
+      snapshot,
+      at: snapshot.at,
+    });
+    return snapshot;
+  }
+
+  async listPortfolioBalanceSnapshots(userId: string, limit: number): Promise<PortfolioBalanceSnapshot[]> {
+    const rows = await this.db
+      .select()
+      .from(portfolioBalanceSnapshots)
+      .where(eq(portfolioBalanceSnapshots.userId, userId))
+      .orderBy(desc(portfolioBalanceSnapshots.at))
+      .limit(limit);
+
+    return rows.map((row) => row.snapshot).sort((left, right) => left.at.localeCompare(right.at));
+  }
+
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
     return walletFundingBalance({
       userId,
@@ -938,6 +983,24 @@ function usdToCents(amountUsd: number): number {
 
 function centsToUsd(amountUsdCents: number): number {
   return amountUsdCents / 100;
+}
+
+function roundUsd(amountUsd: number): number {
+  return centsToUsd(usdToCents(amountUsd));
+}
+
+function samePortfolioBalanceSnapshot(
+  left: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
+  right: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
+): boolean {
+  return usdToCents(left.valueUsd) === usdToCents(right.valueUsd)
+    && usdToCents(left.walletBalanceUsd) === usdToCents(right.walletBalanceUsd)
+    && usdToCents(left.unrealizedPnlUsd) === usdToCents(right.unrealizedPnlUsd);
+}
+
+function monotonicSnapshotAt(at: string, previousAt: string | undefined): string {
+  if (!previousAt || at > previousAt) return at;
+  return new Date(Date.parse(previousAt) + 1).toISOString();
 }
 
 function normalizedFilledSizeCents(

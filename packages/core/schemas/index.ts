@@ -428,6 +428,15 @@ export const WalletFundingBalanceSchema = z.object({
   updatedAt: z.string(),
 });
 
+export const PortfolioBalanceSnapshotSchema = z.object({
+  snapshotId: z.string(),
+  userId: z.string(),
+  at: z.string(),
+  valueUsd: z.number().nonnegative(),
+  walletBalanceUsd: z.number().nonnegative(),
+  unrealizedPnlUsd: z.number(),
+});
+
 export const UserAccountSchema = z.object({
   userId: z.string(),
   privyUserId: z.string().nullable(),
@@ -652,6 +661,7 @@ export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type CassieActionState = z.infer<typeof CassieActionStateSchema>;
 export type AccountState = z.infer<typeof AccountStateSchema>;
 export type WalletFundingBalance = z.infer<typeof WalletFundingBalanceSchema>;
+export type PortfolioBalanceSnapshot = z.infer<typeof PortfolioBalanceSnapshotSchema>;
 export type WalletSpendLedgerEntry = z.infer<typeof WalletSpendLedgerEntrySchema>;
 export type ExecutionFundingSource = z.infer<typeof ExecutionFundingSourceSchema>;
 export type TradeExitPlan = z.infer<typeof TradeExitPlanSchema>;

@@ -13,6 +13,7 @@ import type { CassieActivityItem } from "../../lib/activity.ts";
 import { decoratePosition, type UserFacingPosition } from "../positions/_lib/position-response.ts";
 
 const ACTIVITY_LIMIT = 80;
+const PORTFOLIO_HISTORY_LIMIT = 500;
 
 export type DashboardAccountSummary = {
   userId: string;
@@ -77,6 +78,14 @@ export async function buildDashboardPayload(
   const unrealizedPnlUsd = roundUsd(openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0));
   const portfolioBalanceUsd = roundUsd(walletBalance + unrealizedPnlUsd);
   const snapshotAt = new Date().toISOString();
+  await store.recordPortfolioBalanceSnapshot({
+    userId: settings.userId,
+    at: snapshotAt,
+    valueUsd: portfolioBalanceUsd,
+    walletBalanceUsd: walletBalance,
+    unrealizedPnlUsd,
+  });
+  const portfolioHistory = await store.listPortfolioBalanceSnapshots(settings.userId, PORTFOLIO_HISTORY_LIMIT);
 
   return {
     account: {
@@ -89,13 +98,7 @@ export async function buildDashboardPayload(
       currentUsd: portfolioBalanceUsd,
       walletBalanceUsd: walletBalance,
       unrealizedPnlUsd,
-      history: [{
-        at: snapshotAt,
-        label: formatChartLabel(snapshotAt),
-        valueUsd: portfolioBalanceUsd,
-        walletBalanceUsd: walletBalance,
-        unrealizedPnlUsd,
-      }],
+      history: portfolioHistory.map(portfolioHistoryPoint),
     },
     openPositions,
     closedPositions: displayPositions.filter((position) => position.status === "closed"),
@@ -104,6 +107,21 @@ export async function buildDashboardPayload(
       latestReviews.get(position.positionId) ?? null,
     ])),
     activity: buildUserActivity(settings.userId, dashboardData),
+  };
+}
+
+function portfolioHistoryPoint(snapshot: {
+  at: string;
+  valueUsd: number;
+  walletBalanceUsd: number;
+  unrealizedPnlUsd: number;
+}) {
+  return {
+    at: snapshot.at,
+    label: formatChartLabel(snapshot.at),
+    valueUsd: snapshot.valueUsd,
+    walletBalanceUsd: snapshot.walletBalanceUsd,
+    unrealizedPnlUsd: snapshot.unrealizedPnlUsd,
   };
 }
 

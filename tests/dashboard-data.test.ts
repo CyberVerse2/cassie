@@ -167,6 +167,27 @@ describe("dashboard payload", () => {
     });
   });
 
+  it("persists portfolio history when wallet deposits change balance", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+    await store.addPosition(position({ positionId: "position_open", status: "open", closedAt: null }));
+
+    await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 100,
+    });
+    await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 150,
+    });
+    const dashboard = await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 150,
+    });
+
+    expect(dashboard.portfolioBalance.history.map((point) => point.valueUsd)).toEqual([105, 155]);
+    expect(dashboard.portfolioBalance.history.map((point) => point.walletBalanceUsd)).toEqual([100, 150]);
+  });
+
   it("does not show close refund transfer failures as close activity errors", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);

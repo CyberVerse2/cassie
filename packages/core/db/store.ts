@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type {
   AuditEvent,
   ControlRun,
+  PortfolioBalanceSnapshot,
   WalletFundingBalance,
   WalletSpendLedgerEntry,
   ExecutionJob,
@@ -51,6 +52,7 @@ export interface CassieStoreSnapshot {
   executionJobs: ExecutionJob[];
   positions: Position[];
   positionReviews: PositionReview[];
+  portfolioBalanceSnapshots: PortfolioBalanceSnapshot[];
   walletSpendLedgerEntries: WalletSpendLedgerEntry[];
   auditEvents: AuditEvent[];
   userSettings: UserSettings[];
@@ -119,6 +121,10 @@ export interface CassieStore {
   getLatestPositionReview(positionId: string): Promise<PositionReview | undefined>;
   getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]>;
   listPositionReviews(positionId: string): Promise<PositionReview[]>;
+  recordPortfolioBalanceSnapshot(input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
+    at?: string;
+  }): Promise<PortfolioBalanceSnapshot>;
+  listPortfolioBalanceSnapshots(userId: string, limit: number): Promise<PortfolioBalanceSnapshot[]>;
   getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance>;
   reserveWalletSpend(input: {
     ticket: TradeTicket;
@@ -159,6 +165,7 @@ const emptySnapshot = (): CassieStoreSnapshot => ({
   executionJobs: [],
   positions: [],
   positionReviews: [],
+  portfolioBalanceSnapshots: [],
   walletSpendLedgerEntries: [],
   auditEvents: [],
   userSettings: [],
@@ -443,6 +450,34 @@ export class InMemoryCassieStore implements CassieStore {
       .sort((left, right) => left.reviewedAt.localeCompare(right.reviewedAt));
   }
 
+  async recordPortfolioBalanceSnapshot(input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
+    at?: string;
+  }): Promise<PortfolioBalanceSnapshot> {
+    const latest = this.snapshot.portfolioBalanceSnapshots
+      .filter((snapshot) => snapshot.userId === input.userId)
+      .at(-1);
+    if (latest && samePortfolioBalanceSnapshot(latest, input)) return latest;
+
+    const snapshot: PortfolioBalanceSnapshot = {
+      snapshotId: randomUUID(),
+      userId: input.userId,
+      at: monotonicSnapshotAt(input.at ?? new Date().toISOString(), latest?.at),
+      valueUsd: roundUsd(input.valueUsd),
+      walletBalanceUsd: roundUsd(input.walletBalanceUsd),
+      unrealizedPnlUsd: roundUsd(input.unrealizedPnlUsd),
+    };
+    this.snapshot.portfolioBalanceSnapshots.push(snapshot);
+    return snapshot;
+  }
+
+  async listPortfolioBalanceSnapshots(userId: string, limit: number): Promise<PortfolioBalanceSnapshot[]> {
+    return this.snapshot.portfolioBalanceSnapshots
+      .filter((snapshot) => snapshot.userId === userId)
+      .sort((left, right) => right.at.localeCompare(left.at))
+      .slice(0, limit)
+      .sort((left, right) => left.at.localeCompare(right.at));
+  }
+
   async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
     return walletFundingBalance({
       userId,
@@ -674,6 +709,24 @@ function usdToCents(amountUsd: number): number {
 
 function centsToUsd(amountUsdCents: number): number {
   return amountUsdCents / 100;
+}
+
+function roundUsd(amountUsd: number): number {
+  return centsToUsd(usdToCents(amountUsd));
+}
+
+function samePortfolioBalanceSnapshot(
+  left: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
+  right: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
+): boolean {
+  return usdToCents(left.valueUsd) === usdToCents(right.valueUsd)
+    && usdToCents(left.walletBalanceUsd) === usdToCents(right.walletBalanceUsd)
+    && usdToCents(left.unrealizedPnlUsd) === usdToCents(right.unrealizedPnlUsd);
+}
+
+function monotonicSnapshotAt(at: string, previousAt: string | undefined): string {
+  if (!previousAt || at > previousAt) return at;
+  return new Date(Date.parse(previousAt) + 1).toISOString();
 }
 
 function normalizedFilledSizeCents(

@@ -8,6 +8,7 @@ const emptySnapshot = (): CassieStoreSnapshot => ({
   executionJobs: [],
   positions: [],
   positionReviews: [],
+  portfolioBalanceSnapshots: [],
   walletSpendLedgerEntries: [],
   auditEvents: [],
   userSettings: [],
