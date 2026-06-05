@@ -3,7 +3,10 @@ import { z } from "zod";
 import type { SourcePost } from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { config as runtimeConfig } from "../core/config.ts";
+import type { XReplyClient } from "../notifications/x.ts";
 import type { CassieProduct } from "./product.ts";
+
+const CASSIE_REGISTER_URL = "https://cassie.trade";
 
 const XUrlEntitySchema = z.object({
   expanded_url: z.string().optional(),
@@ -150,6 +153,7 @@ export async function processXWebhookPayload(input: {
   payload: unknown;
   userId?: string;
   cassieHandle?: string;
+  replyClient?: XReplyClient;
 }): Promise<ProcessXWebhookPayloadResult> {
   const cassieHandle = input.cassieHandle ?? runtimeConfig.x.cassieHandle;
   if (!cassieHandle) {
@@ -180,13 +184,14 @@ export async function processXWebhookPayload(input: {
 
   for (const tweet of tweets) {
     let postId: string | undefined;
+    let mentionPost: SourcePost | undefined;
     try {
       if (tweet.retweeted_status != null) {
         skipped += 1;
         continue;
       }
 
-      const mentionPost = sourcePostFromXWebhookTweet(tweet);
+      mentionPost = sourcePostFromXWebhookTweet(tweet);
       postId = requireSourcePostId(mentionPost);
       if (!mentionsCassie(mentionPost.text, cassieHandle)) {
         skipped += 1;
@@ -221,6 +226,20 @@ export async function processXWebhookPayload(input: {
       });
       runIds.push(result.runId);
     } catch (error) {
+      if (error instanceof UnregisteredXUserError && input.replyClient && postId) {
+        try {
+          await replyToUnregisteredXUser({
+            store: input.store,
+            postId,
+            replyClient: input.replyClient,
+          });
+        } catch (replyError) {
+          errors.push({
+            postId,
+            error: replyError instanceof Error ? replyError.message : String(replyError),
+          });
+        }
+      }
       failed += 1;
       errors.push({
         postId,
@@ -239,6 +258,12 @@ export async function processXWebhookPayload(input: {
   };
 }
 
+class UnregisteredXUserError extends Error {
+  constructor(author: string) {
+    super(`No Cassie account found for X user ${author}.`);
+  }
+}
+
 async function resolveXRunUserId(input: {
   store: CassieStore;
   tweet: XWebhookTweet;
@@ -251,7 +276,7 @@ async function resolveXRunUserId(input: {
   });
   if (!settings) {
     const author = input.mentionPost.authorHandle ?? authorXUserId ?? "unknown";
-    throw new Error(`No Cassie settings found for X user ${author}.`);
+    throw new UnregisteredXUserError(author);
   }
   if (authorXUserId && settings.x?.userId !== authorXUserId) {
     await input.store.upsertUserSettings({
@@ -263,6 +288,24 @@ async function resolveXRunUserId(input: {
     });
   }
   return settings.userId;
+}
+
+async function replyToUnregisteredXUser(input: {
+  store: CassieStore;
+  postId: string;
+  replyClient: XReplyClient;
+}): Promise<void> {
+  const stateKey = `x_reply:register:${input.postId}`;
+  if (await input.store.getRuntimeState<string>(stateKey)) return;
+
+  const reply = await input.replyClient.reply({
+    inReplyToTweetId: input.postId,
+    text: [
+      "You need to register an account before Cassie can trade for you.",
+      CASSIE_REGISTER_URL,
+    ].join("\n"),
+  });
+  await input.store.setRuntimeState(stateKey, reply.tweetId);
 }
 
 function parseXWebhookDeliveryBody(rawBody: Buffer): {

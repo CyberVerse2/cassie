@@ -2,6 +2,7 @@ import { createHmac } from "node:crypto";
 import { describe, expect, it, vi } from "vitest";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { CassieProduct } from "../packages/app/product.ts";
+import type { XReplyClient } from "../packages/notifications/x.ts";
 import {
   processXWebhookPayload,
   recordXWebhookDeliveryAttempt,
@@ -232,6 +233,56 @@ describe("X webhook", () => {
     });
   });
 
+  it("replies once with the registration link when an unregistered user tags Cassie", async () => {
+    const store = new InMemoryCassieStore();
+    const createMentionRun = vi.fn();
+    const replyClient = new FakeXReplyClient();
+    const product = { createMentionRun } as unknown as CassieProduct;
+    const payload = {
+      for_user_id: "2060718466630406149",
+      tweet_create_events: [{
+        id_str: "222",
+        author_id: "1574209048425242624",
+        full_text: "@cassiedottrade trade this",
+        user: {
+          id_str: "1574209048425242624",
+          screen_name: "trader",
+          name: "Trader",
+        },
+      }],
+    };
+
+    const first = await processXWebhookPayload({
+      product,
+      store,
+      cassieHandle: "cassiedottrade",
+      payload,
+      replyClient,
+    });
+    const retry = await processXWebhookPayload({
+      product,
+      store,
+      cassieHandle: "cassiedottrade",
+      payload,
+      replyClient,
+    });
+
+    expect(first).toMatchObject({
+      received: 1,
+      queued: 0,
+      skipped: 0,
+      failed: 1,
+      errors: [{ postId: "222", error: "No Cassie account found for X user trader." }],
+    });
+    expect(retry).toMatchObject({ received: 1, queued: 0, skipped: 0, failed: 1 });
+    expect(createMentionRun).not.toHaveBeenCalled();
+    expect(replyClient.replies).toEqual([{
+      inReplyToTweetId: "222",
+      text: "You need to register an account before Cassie can trade for you.\nhttps://cassie.trade",
+    }]);
+    await expect(store.getRuntimeState("x_reply:register:222")).resolves.toBe("reply_1");
+  });
+
   it("skips retweets and blocked-user mention payloads", async () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn();
@@ -307,3 +358,12 @@ describe("X webhook", () => {
     expect(createMentionRun).toHaveBeenCalledTimes(2);
   });
 });
+
+class FakeXReplyClient implements XReplyClient {
+  replies: Array<{ inReplyToTweetId: string; text: string }> = [];
+
+  async reply(input: { inReplyToTweetId: string; text: string }): Promise<{ tweetId: string }> {
+    this.replies.push(input);
+    return { tweetId: `reply_${this.replies.length}` };
+  }
+}
