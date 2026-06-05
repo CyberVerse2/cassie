@@ -16,6 +16,7 @@
     "og:trade": "tsx scripts/capture-og.ts",
     "worker": "tsx watch src/worker.ts",
     "cli": "tsx src/cli.ts",
+    "x:webhook:sync": "tsx scripts/sync-x-webhook.ts",
     "hyperliquid:approve-builder": "tsx scripts/approve-hyperliquid-builder-fee.ts",
     "smoke:v4-flash": "tsx scripts/test-v4-flash.ts",
     "smoke:polymarket-clob": "tsx scripts/test-polymarket-clob.ts",

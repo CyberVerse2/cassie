@@ -5,6 +5,7 @@ import {
   notifyXTradeShare,
   tradeShareUrl,
   XApiReplyClient,
+  XWebhookClient,
   type XReplyClient,
 } from "../packages/notifications/x.ts";
 
@@ -152,7 +153,120 @@ describe("X trade share notifications", () => {
       }),
     });
   });
+
+  it("syncs the X account activity webhook subscription", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href === "https://api.x.com/2/webhooks" && init?.method === "GET") {
+        return jsonResponse({ data: [], meta: { result_count: 0 } });
+      }
+      if (href === "https://api.x.com/2/webhooks" && init?.method === "POST") {
+        return jsonResponse({
+          id: "456",
+          url: "https://cassie.trade/api/x/webhook",
+          created_at: "2026-06-05T10:00:00.000Z",
+          valid: true,
+        });
+      }
+      if (href === "https://api.x.com/2/webhooks/456" && init?.method === "PUT") {
+        return jsonResponse({ data: { attempted: true } });
+      }
+      if (
+        href === "https://api.x.com/2/account_activity/webhooks/456/subscriptions/all"
+        && init?.method === "POST"
+      ) {
+        return jsonResponse({ data: { subscribed: true } });
+      }
+      return jsonResponse({ detail: "unexpected request" }, 500);
+    });
+    const client = new XWebhookClient("app-token", "user-token", fetcher as typeof fetch);
+
+    await expect(client.syncAccountActivityWebhook({
+      webhookUrl: "https://cassie.trade/api/x/webhook",
+    })).resolves.toEqual({
+      webhook: {
+        id: "456",
+        url: "https://cassie.trade/api/x/webhook",
+        created_at: "2026-06-05T10:00:00.000Z",
+        valid: true,
+      },
+      subscriptionCreated: true,
+      validationAttempted: true,
+    });
+
+    expect(fetcher).toHaveBeenCalledWith("https://api.x.com/2/webhooks", {
+      method: "GET",
+      headers: { Authorization: "Bearer app-token" },
+      body: undefined,
+    });
+    expect(fetcher).toHaveBeenCalledWith("https://api.x.com/2/webhooks", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer app-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ url: "https://cassie.trade/api/x/webhook" }),
+    });
+    expect(fetcher).toHaveBeenCalledWith("https://api.x.com/2/webhooks/456", {
+      method: "PUT",
+      headers: { Authorization: "Bearer app-token" },
+      body: undefined,
+    });
+    expect(fetcher).toHaveBeenCalledWith("https://api.x.com/2/account_activity/webhooks/456/subscriptions/all", {
+      method: "POST",
+      headers: {
+        Authorization: "Bearer user-token",
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({}),
+    });
+  });
+
+  it("treats an existing X account activity subscription as enabled", async () => {
+    const fetcher = vi.fn(async (url: string | URL | Request, init?: RequestInit) => {
+      const href = String(url);
+      if (href === "https://api.x.com/2/webhooks" && init?.method === "GET") {
+        return jsonResponse({
+          data: [{
+            id: "456",
+            url: "https://cassie.trade/api/x/webhook",
+            created_at: "2026-06-05T10:00:00.000Z",
+            valid: true,
+          }],
+        });
+      }
+      if (href === "https://api.x.com/2/webhooks/456" && init?.method === "PUT") {
+        return jsonResponse({ data: { attempted: true } });
+      }
+      if (
+        href === "https://api.x.com/2/account_activity/webhooks/456/subscriptions/all"
+        && init?.method === "POST"
+      ) {
+        return jsonResponse({
+          title: "Invalid Request",
+          detail: "One or more parameters to your request was invalid.",
+          errors: [{ message: "DuplicateSubscriptionFailed: Subscription already exists" }],
+        }, 400);
+      }
+      return jsonResponse({ detail: "unexpected request" }, 500);
+    });
+    const client = new XWebhookClient("app-token", "user-token", fetcher as typeof fetch);
+
+    await expect(client.syncAccountActivityWebhook({
+      webhookUrl: "https://cassie.trade/api/x/webhook",
+    })).resolves.toMatchObject({
+      subscriptionCreated: true,
+      validationAttempted: true,
+    });
+  });
 });
+
+function jsonResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
 
 class FakeXReplyClient implements XReplyClient {
   replies: Array<{ inReplyToTweetId: string; text: string }> = [];

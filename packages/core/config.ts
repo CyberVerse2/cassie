@@ -45,9 +45,15 @@ export type HttpRuntimeEnv = {
 };
 
 export type XWebhookEnv = {
+  accountActivityWebhookId?: string;
   bearerToken?: string;
   cassieHandle?: string;
   consumerSecret?: string;
+  oauth2ClientId?: string;
+  oauth2ClientSecret?: string;
+  userAccessToken?: string;
+  userRefreshToken?: string;
+  webhookUrl?: string;
   webhookUserId?: string;
 };
 
@@ -305,14 +311,26 @@ export function readHttpRuntimeEnv(env: EnvSource = process.env): HttpRuntimeEnv
 
 export function xWebhookEnv(env: EnvSource = process.env): XWebhookEnv {
   return z.object({
+    X_ACCOUNT_ACTIVITY_WEBHOOK_ID: configuredStringSchema,
     X_BEARER_TOKEN: configuredStringSchema,
     CASSIE_X_HANDLE: configuredStringSchema,
     X_CONSUMER_SECRET: configuredStringSchema,
+    X_OAUTH2_CLIENT_ID: configuredStringSchema,
+    X_OAUTH2_CLIENT_SECRET: configuredStringSchema,
+    X_USER_ACCESS_TOKEN: configuredStringSchema,
+    X_USER_REFRESH_TOKEN: configuredStringSchema,
+    X_WEBHOOK_URL: configuredStringSchema,
     X_WEBHOOK_USER_ID: configuredStringSchema,
   }).transform((values) => ({
+    accountActivityWebhookId: values.X_ACCOUNT_ACTIVITY_WEBHOOK_ID,
     bearerToken: values.X_BEARER_TOKEN,
     cassieHandle: values.CASSIE_X_HANDLE,
     consumerSecret: values.X_CONSUMER_SECRET,
+    oauth2ClientId: values.X_OAUTH2_CLIENT_ID,
+    oauth2ClientSecret: values.X_OAUTH2_CLIENT_SECRET,
+    userAccessToken: values.X_USER_ACCESS_TOKEN,
+    userRefreshToken: values.X_USER_REFRESH_TOKEN,
+    webhookUrl: values.X_WEBHOOK_URL,
     webhookUserId: values.X_WEBHOOK_USER_ID,
   })).parse(env);
 }
