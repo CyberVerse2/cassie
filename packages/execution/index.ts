@@ -257,16 +257,18 @@ async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symb
     ? await uniqueHyperliquidExecutionDexes(info)
     : [null];
   for (const dex of dexes) {
-    const [meta] = await info.metaAndAssetCtxs(dex ? { dex } : undefined);
+    const [meta, ctxs] = await info.metaAndAssetCtxs(dex ? { dex } : undefined);
     const index = meta.universe.findIndex((asset) => asset.name === symbol);
 
     if (index < 0) continue;
 
+    const ctx = ctxs[index];
     return {
       id: index,
       sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
       maxLeverage: meta.universe[index]?.maxLeverage,
       midKey: symbol,
+      midPx: ctx?.midPx ?? ctx?.markPx,
       isSpot: false,
       dex,
     };

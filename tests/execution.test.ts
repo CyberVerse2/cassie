@@ -232,14 +232,15 @@ describe("HyperliquidExecutionClient", () => {
                 { name: "vntl:SPACEX", szDecimals: 4, maxLeverage: 3 },
               ],
             },
-            [],
+            [
+              { coin: "vntl:OPENAI", markPx: "125.0" },
+              { coin: "vntl:SPACEX", markPx: "1935.9" },
+            ],
           ];
         }
         return [{ universe: [{ name: "BTC", szDecimals: 5 }] }, []];
       }),
-      allMids: vi.fn().mockResolvedValue({
-        "vntl:SPACEX": "1935.9",
-      }),
+      allMids: vi.fn().mockResolvedValue({}),
       spotMetaAndAssetCtxs: vi.fn(),
     };
     const exchange = {
