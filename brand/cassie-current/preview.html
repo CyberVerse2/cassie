@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cassie Current Brand Export</title>
+    <link rel="stylesheet" href="./colors.css">
+    <style>
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(ellipse at 50% 0%, color-mix(in oklab, var(--cassie-gilt) 8%, transparent), transparent 52%), var(--cassie-bg-deep);
+        color: var(--cassie-ink);
+        font-family: Manrope, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      main {
+        width: min(920px, calc(100vw - 48px));
+        display: grid;
+        gap: 32px;
+      }
+
+      .logos {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 24px;
+        align-items: stretch;
+      }
+
+      figure {
+        margin: 0;
+        flex: 1 1 260px;
+        display: grid;
+        gap: 14px;
+        place-items: center;
+        padding: 28px;
+        border: 1px solid var(--cassie-line-soft);
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--cassie-panel) 72%, transparent);
+      }
+
+      img {
+        width: 160px;
+        height: 160px;
+        object-fit: contain;
+      }
+
+      img.lockup {
+        width: min(100%, 320px);
+        height: auto;
+      }
+
+      figcaption {
+        color: var(--cassie-ink-soft);
+        font-size: 13px;
+      }
+
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 12px;
+      }
+
+      .swatch {
+        min-height: 78px;
+        display: grid;
+        align-content: end;
+        gap: 4px;
+        padding: 10px;
+        border: 1px solid color-mix(in oklab, var(--cassie-ink) 10%, transparent);
+        border-radius: 6px;
+        color: var(--cassie-ink);
+        box-shadow: inset 0 -42px 42px -34px rgb(0 0 0 / 0.72);
+      }
+
+      .swatch span {
+        font-size: 11px;
+        line-height: 1.1;
+        text-shadow: 0 1px 2px rgb(0 0 0 / 0.75);
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="logos" aria-label="Cassie logo exports">
+        <figure>
+          <img class="lockup" src="./cassie-logo-lockup.png" alt="Cassie logo lockup">
+          <figcaption>Primary lockup</figcaption>
+        </figure>
+        <figure>
+          <img src="./cassie-logo-gilt-mark.png" alt="Cassie gilt mark">
+          <figcaption>Transparent gilt mark</figcaption>
+        </figure>
+        <figure>
+          <img class="cassie-logo-app-treatment" src="./cassie-logo-transparent.png" alt="Cassie app-treated logo">
+          <figcaption>Source mark plus app CSS treatment</figcaption>
+        </figure>
+      </section>
+      <section class="swatches" aria-label="Cassie current colors">
+        <div class="swatch" style="background: var(--cassie-bg-deep)"><span>bgDeep</span><span>#010707</span></div>
+        <div class="swatch" style="background: var(--cassie-bg)"><span>bg</span><span>#021010</span></div>
+        <div class="swatch" style="background: var(--cassie-panel)"><span>panel</span><span>#081f1f</span></div>
+        <div class="swatch" style="background: var(--cassie-panel-warm)"><span>panelWarm</span><span>#281d0b</span></div>
+        <div class="swatch" style="background: var(--cassie-line)"><span>line</span><span>#263d3c</span></div>
+        <div class="swatch" style="background: var(--cassie-ink)"><span>ink</span><span>#f4eee1</span></div>
+        <div class="swatch" style="background: var(--cassie-gilt)"><span>gilt</span><span>#e5ac4c</span></div>
+        <div class="swatch" style="background: var(--cassie-gilt-glow)"><span>giltGlow</span><span>#efcc8c</span></div>
+        <div class="swatch" style="background: var(--cassie-moss)"><span>moss</span><span>#2c8271</span></div>
+        <div class="swatch" style="background: var(--cassie-coral)"><span>coral</span><span>#f2897c</span></div>
+      </section>
+    </main>
+  </body>
+</html>

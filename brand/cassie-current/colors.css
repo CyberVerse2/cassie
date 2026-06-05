@@ -1,0 +1,33 @@
+:root {
+  --cassie-bg-deep: oklch(0.12 0.018 195);
+  --cassie-bg: oklch(0.16 0.022 195);
+  --cassie-panel: oklch(0.22 0.028 195);
+  --cassie-panel-warm: oklch(0.24 0.034 80);
+  --cassie-line: oklch(0.34 0.028 195);
+  --cassie-line-soft: oklch(0.26 0.024 195);
+  --cassie-ink: oklch(0.95 0.018 85);
+  --cassie-ink-soft: oklch(0.82 0.022 85);
+  --cassie-ink-mute: oklch(0.62 0.018 85);
+  --cassie-ink-faint: oklch(0.45 0.014 85);
+  --cassie-gilt: oklch(0.78 0.13 78);
+  --cassie-gilt-deep: oklch(0.58 0.11 70);
+  --cassie-gilt-glow: oklch(0.86 0.09 82);
+  --cassie-moss: oklch(0.55 0.085 178);
+  --cassie-moss-deep: oklch(0.38 0.075 195);
+  --cassie-coral: oklch(0.74 0.13 28);
+  --cassie-coral-soft: oklch(0.82 0.07 30);
+}
+
+.cassie-logo-app-treatment {
+  filter:
+    invert(1) sepia(0.55) saturate(2.4) hue-rotate(-15deg) brightness(1.05)
+    drop-shadow(0 0 18px color-mix(in oklab, var(--cassie-gilt) 50%, transparent))
+    drop-shadow(0 0 56px color-mix(in oklab, var(--cassie-gilt) 22%, transparent));
+}
+
+.cassie-logo-app-treatment:hover {
+  filter:
+    invert(1) sepia(0.6) saturate(2.6) hue-rotate(-15deg) brightness(1.1)
+    drop-shadow(0 0 24px color-mix(in oklab, var(--cassie-gilt) 65%, transparent))
+    drop-shadow(0 0 70px color-mix(in oklab, var(--cassie-gilt) 30%, transparent));
+}

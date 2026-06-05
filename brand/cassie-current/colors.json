@@ -1,0 +1,23 @@
+{
+  "name": "Cassie Current App Palette",
+  "source": "apps/web/app/globals.css",
+  "tokens": {
+    "bgDeep": { "css": "--bg-deep", "oklch": "oklch(0.12 0.018 195)", "hex": "#010707", "rgb": "rgb(1 7 7)" },
+    "bg": { "css": "--bg", "oklch": "oklch(0.16 0.022 195)", "hex": "#021010", "rgb": "rgb(2 16 16)" },
+    "panel": { "css": "--panel", "oklch": "oklch(0.22 0.028 195)", "hex": "#081f1f", "rgb": "rgb(8 31 31)" },
+    "panelWarm": { "css": "--panel-warm", "oklch": "oklch(0.24 0.034 80)", "hex": "#281d0b", "rgb": "rgb(40 29 11)" },
+    "line": { "css": "--line", "oklch": "oklch(0.34 0.028 195)", "hex": "#263d3c", "rgb": "rgb(38 61 60)" },
+    "lineSoft": { "css": "--line-soft", "oklch": "oklch(0.26 0.024 195)", "hex": "#162828", "rgb": "rgb(22 40 40)" },
+    "ink": { "css": "--ink", "oklch": "oklch(0.95 0.018 85)", "hex": "#f4eee1", "rgb": "rgb(244 238 225)" },
+    "inkSoft": { "css": "--ink-soft", "oklch": "oklch(0.82 0.022 85)", "hex": "#cbc3b4", "rgb": "rgb(203 195 180)" },
+    "inkMute": { "css": "--ink-mute", "oklch": "oklch(0.62 0.018 85)", "hex": "#8b867a", "rgb": "rgb(139 134 122)" },
+    "inkFaint": { "css": "--ink-faint", "oklch": "oklch(0.45 0.014 85)", "hex": "#59554d", "rgb": "rgb(89 85 77)" },
+    "gilt": { "css": "--gilt", "oklch": "oklch(0.78 0.13 78)", "hex": "#e5ac4c", "rgb": "rgb(229 172 76)" },
+    "giltDeep": { "css": "--gilt-deep", "oklch": "oklch(0.58 0.11 70)", "hex": "#a36d24", "rgb": "rgb(163 109 36)" },
+    "giltGlow": { "css": "--gilt-glow", "oklch": "oklch(0.86 0.09 82)", "hex": "#efcc8c", "rgb": "rgb(239 204 140)" },
+    "moss": { "css": "--moss", "oklch": "oklch(0.55 0.085 178)", "hex": "#2c8271", "rgb": "rgb(44 130 113)" },
+    "mossDeep": { "css": "--moss-deep", "oklch": "oklch(0.38 0.075 195)", "hex": "#004e4f", "rgb": "rgb(0 78 79)" },
+    "coral": { "css": "--coral", "oklch": "oklch(0.74 0.13 28)", "hex": "#f2897c", "rgb": "rgb(242 137 124)" },
+    "coralSoft": { "css": "--coral-soft", "oklch": "oklch(0.82 0.07 30)", "hex": "#eeb4a9", "rgb": "rgb(238 180 169)" }
+  }
+}
