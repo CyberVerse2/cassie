@@ -172,13 +172,13 @@ describe("trade card data", () => {
       copy,
     });
 
-    expect(share.cardProps.headline).toBe("Google is behind in the AI race despite having vast data.");
+    expect(share.cardProps.headline).toBe("As long as BTC holds $65k, I think $75k trades next.");
     expect(share.cardProps.why).toBe("Short Alphabet/GOOGL on the market's bearish read-through that Google is la...");
     expect(share.cardProps.tradeResult?.entry).toBe("$71.58");
     expect(share.cardProps.tradeResult?.exit).toBe("$72.34");
   });
 
-  it("does not use source access failures as public card copy", () => {
+  it("ignores intermediate run steps when deriving public card copy", () => {
     const copy = deriveTradeCardCopy({
       run,
       steps: [{

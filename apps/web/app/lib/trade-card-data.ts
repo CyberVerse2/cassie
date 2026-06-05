@@ -186,39 +186,17 @@ export function deriveTradeCardCopy(input: {
 }): TradeCardCopy {
   return {
     headline: compactPublicLine(
-      stepOutputString(input.steps, "intake", "headlineThesis")
-      ?? stepOutputString(input.steps, "opportunity", "literalClaim")
-      ?? input.run?.sourcePost.text
+      input.run?.sourcePost.text
+      ?? input.ticket.exitPlan.thesis
       ?? input.ticket.thesis,
       92,
     ),
     why: compactPublicLine(
       input.ticket.exitPlan.thesis
-      ?? stepOutputString(input.steps, "trade_expression", "coreInterpretation")
-      ?? stepOutputString(input.steps, "opportunity", "marketImplication")
       ?? input.ticket.thesis,
       78,
     ),
   };
-}
-
-function stepOutputString(steps: RunStep[], stepType: RunStep["stepType"], key: string) {
-  for (const step of steps) {
-    if (step.stepType !== stepType || !isRecord(step.output)) continue;
-    const value = step.output[key];
-    if (typeof value === "string" && isPublicCardCopy(value)) return value.trim();
-  }
-  return null;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isPublicCardCopy(value: string) {
-  const clean = value.trim();
-  if (!clean) return false;
-  return !/^unable to access source content from the provided url\.?$/iu.test(clean);
 }
 
 function compactPublicLine(value: string, maxLength: number) {
