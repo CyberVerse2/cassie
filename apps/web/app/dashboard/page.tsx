@@ -247,7 +247,7 @@ function Aside({
         updateDefaultTradeSize={updateDefaultTradeSize}
       />
 
-      <nav className={s.nav} aria-label="Wallet actions">
+      <nav className={s.nav} aria-label="Portfolio actions">
         <span className={s.navSection}>Move</span>
         <a className={s.navLink} href="#send">
           <ActionIcon name="send" />
@@ -264,7 +264,7 @@ function Aside({
           <span>Telegram alerts</span>
         </a>
 
-        <span className={s.navSection}>Wallet</span>
+        <span className={s.navSection}>Portfolio</span>
         <a className={s.navLink} href="#export-wallet">
           <ActionIcon name="export" />
           <span>Export keys</span>
@@ -477,7 +477,7 @@ function Center({
           aria-selected={activeTab === "wallet"}
           onClick={() => setActiveTab("wallet")}
         >
-          Wallet
+          Portfolio
           <span className="tab-count">{portfolioLabel}</span>
         </button>
         <button
@@ -604,7 +604,7 @@ function Center({
           </div>
         </div>
 
-        <div className={s.walletSubtabs} role="tablist" aria-label="Wallet view">
+        <div className={s.walletSubtabs} role="tablist" aria-label="Portfolio view">
           <button
             type="button"
             role="tab"
