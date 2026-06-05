@@ -66,7 +66,9 @@ export async function sendDailyPositionSummaries(input: {
   store: CassieStore;
   userId?: string;
   gateway?: TelegramGateway;
+  now?: Date;
 }): Promise<{ sent: number; skipped: number; failed: number }> {
+  const summaryDate = utcDate(input.now ?? new Date());
   const positions = await input.store.listOpenPositions(input.userId);
   const byUser = new Map<string, Position[]>();
   for (const position of positions) {
@@ -82,6 +84,11 @@ export async function sendDailyPositionSummaries(input: {
       skipped += 1;
       continue;
     }
+    const stateKey = dailyPositionSummaryStateKey(userId);
+    if (await input.store.getRuntimeState<string>(stateKey) === summaryDate) {
+      skipped += 1;
+      continue;
+    }
     const decorated = await Promise.all(userPositions.map(async (position) => ({
       position,
       review: await input.store.getLatestPositionReview(position.positionId),
@@ -92,6 +99,7 @@ export async function sendDailyPositionSummaries(input: {
         text: formatDailyPositionSummary({ positions: decorated }),
         gateway: input.gateway,
       });
+      await input.store.setRuntimeState(stateKey, summaryDate);
       sent += 1;
     } catch (error) {
       failed += 1;
@@ -105,6 +113,14 @@ export async function sendDailyPositionSummaries(input: {
     }
   }
   return { sent, skipped, failed };
+}
+
+function dailyPositionSummaryStateKey(userId: string): string {
+  return `position-summary:last-sent:${userId}`;
+}
+
+function utcDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
 }
 
 export async function notifyTradeLifecycle(input: {

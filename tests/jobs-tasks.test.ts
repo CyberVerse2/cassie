@@ -29,21 +29,21 @@ describe("execution task list", () => {
     vi.clearAllMocks();
   });
 
-  it("marks all open positions without sending scheduled Telegram summaries", async () => {
+  it("reviews all open positions with daily summary notifications enabled", async () => {
     const tasks = createExecutionTaskList();
 
     await tasks[REVIEW_OPEN_POSITIONS_TASK]?.({}, {} as never);
 
-    expect(mockedReviewAllOpenPositions).toHaveBeenCalledWith({ notify: false });
+    expect(mockedReviewAllOpenPositions).toHaveBeenCalledWith();
     expect(mockedReviewOpenPositionsForUser).not.toHaveBeenCalled();
   });
 
-  it("marks one user's open positions without sending scheduled Telegram summaries", async () => {
+  it("reviews one user's open positions with daily summary notifications enabled", async () => {
     const tasks = createExecutionTaskList();
 
     await tasks[REVIEW_OPEN_POSITIONS_TASK]?.({ userId: "user_1" }, {} as never);
 
-    expect(mockedReviewOpenPositionsForUser).toHaveBeenCalledWith({ userId: "user_1", notify: false });
+    expect(mockedReviewOpenPositionsForUser).toHaveBeenCalledWith({ userId: "user_1" });
     expect(mockedReviewAllOpenPositions).not.toHaveBeenCalled();
   });
 });

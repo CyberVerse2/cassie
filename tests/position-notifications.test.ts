@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
-import type { ExecutionJob, Position, TradeExitPlan, TradeTicket } from "../packages/core/schemas/index.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
+import type { ExecutionJob, Position, TradeExitPlan, TradeTicket, UserSettings } from "../packages/core/schemas/index.ts";
+import type { TelegramGateway } from "../packages/notifications/telegram.ts";
 import {
   formatDailyPositionSummary,
   formatExecutionFailed,
   formatTicketCreated,
   formatTradeExecuted,
+  sendDailyPositionSummaries,
 } from "../packages/notifications/positions.ts";
 
 const exitPlan: TradeExitPlan = {
@@ -96,4 +99,89 @@ describe("position notification formatting", () => {
       }],
     })).toContain("signal=take_profit");
   });
+
+  it("sends each user's position summary once per UTC day", async () => {
+    const store = new InMemoryCassieStore();
+    const gateway = new FakeTelegramGateway();
+    await store.upsertUserSettings(userSettings);
+    await store.addPosition(position);
+
+    await expect(sendDailyPositionSummaries({
+      store,
+      gateway,
+      now: new Date("2026-06-05T10:00:00.000Z"),
+    })).resolves.toEqual({ sent: 1, skipped: 0, failed: 0 });
+    await expect(sendDailyPositionSummaries({
+      store,
+      gateway,
+      now: new Date("2026-06-05T23:59:00.000Z"),
+    })).resolves.toEqual({ sent: 0, skipped: 1, failed: 0 });
+    await expect(sendDailyPositionSummaries({
+      store,
+      gateway,
+      now: new Date("2026-06-06T00:00:00.000Z"),
+    })).resolves.toEqual({ sent: 1, skipped: 0, failed: 0 });
+
+    expect(gateway.messages).toHaveLength(2);
+  });
+
+  it("does not mark a daily summary sent when Telegram delivery fails", async () => {
+    const store = new InMemoryCassieStore();
+    const failingGateway = new FailingTelegramGateway();
+    const gateway = new FakeTelegramGateway();
+    await store.upsertUserSettings(userSettings);
+    await store.addPosition(position);
+
+    await expect(sendDailyPositionSummaries({
+      store,
+      gateway: failingGateway,
+      now: new Date("2026-06-05T10:00:00.000Z"),
+    })).resolves.toEqual({ sent: 0, skipped: 0, failed: 1 });
+    await expect(sendDailyPositionSummaries({
+      store,
+      gateway,
+      now: new Date("2026-06-05T10:01:00.000Z"),
+    })).resolves.toEqual({ sent: 1, skipped: 0, failed: 0 });
+
+    expect(gateway.messages).toHaveLength(1);
+  });
 });
+
+const userSettings: UserSettings = {
+  userId: "user_1",
+  privyUserId: null,
+  privyWalletId: null,
+  walletAddress: null,
+  profile: {
+    name: "User One",
+    handle: "user1",
+    avatarUrl: null,
+  },
+  defaultTradeSizeUsd: 10,
+  telegram: {
+    chatId: "chat_1",
+    username: "user1",
+    firstName: "User",
+    lastName: "One",
+    connectedAt: "2026-05-31T00:00:00.000Z",
+    lastMessageAt: "2026-05-31T00:00:00.000Z",
+  },
+};
+
+class FakeTelegramGateway implements TelegramGateway {
+  messages: Array<{ chatId: string; text: string; disableNotification?: boolean }> = [];
+
+  async sendMessage(input: {
+    chatId: string;
+    text: string;
+    disableNotification?: boolean;
+  }): Promise<void> {
+    this.messages.push(input);
+  }
+}
+
+class FailingTelegramGateway implements TelegramGateway {
+  async sendMessage(): Promise<void> {
+    throw new Error("telegram down");
+  }
+}
