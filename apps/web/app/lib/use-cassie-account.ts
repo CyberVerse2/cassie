@@ -32,6 +32,7 @@ type CassieAccount = {
   privyWalletId: string | null;
   walletAddress: string | null;
   profile: PersistedUserProfile;
+  x: XAccount | null;
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
@@ -128,6 +129,11 @@ type CassieUserProfile = {
 };
 
 type PersistedUserProfile = Omit<CassieUserProfile, "initial">;
+
+type XAccount = {
+  userId: string | null;
+  username: string | null;
+};
 
 type SyncInput = {
   defaultTradeSizeUsd?: number;
@@ -240,6 +246,7 @@ export function useCassieAccount() {
           handle: userProfile.handle,
           avatarUrl: userProfile.avatarUrl,
         },
+        x: xAccountFromUser(privy.user),
         defaultTradeSizeUsd: input.defaultTradeSizeUsd,
       }),
     });
@@ -473,6 +480,16 @@ function profileFromUser(user: User | null): CassieUserProfile | null {
     handle,
     avatarUrl: twitter.profilePictureUrl,
     initial,
+  };
+}
+
+function xAccountFromUser(user: User | null): XAccount | null {
+  const twitter = user?.twitter
+    ?? user?.linkedAccounts.find((account) => account.type === "twitter_oauth");
+  if (!twitter) return null;
+  return {
+    userId: typeof twitter.subject === "string" ? twitter.subject : null,
+    username: typeof twitter.username === "string" ? twitter.username.replace(/^@/, "") : null,
   };
 }
 

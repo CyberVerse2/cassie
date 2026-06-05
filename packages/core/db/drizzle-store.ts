@@ -220,11 +220,27 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.settings;
   }
 
+  async getUserSettingsByXIdentity(input: {
+    userId?: string | null;
+    username?: string | null;
+  }): Promise<UserSettings | undefined> {
+    const username = normalizeXUsername(input.username);
+    const rows = await this.db.select().from(userSettings);
+    return rows
+      .map((row) => row.settings)
+      .find((settings) =>
+        (input.userId && settings.x?.userId === input.userId)
+        || (username && normalizeXUsername(settings.x?.username) === username)
+        || (username && normalizeXUsername(settings.profile.handle) === username)
+      );
+  }
+
   async syncPrivyUser(input: {
     privyUserId: string;
     privyWalletId: string | null;
     walletAddress: string | null;
     profile: UserSettings["profile"];
+    x?: UserSettings["x"];
     defaultTradeSizeUsd?: number;
   }): Promise<UserSettings> {
     const existing = await this.getUserSettingsByPrivyUserId(input.privyUserId);
@@ -234,6 +250,7 @@ export class DrizzleCassieStore implements CassieStore {
       privyWalletId: input.privyWalletId,
       walletAddress: input.walletAddress,
       profile: input.profile,
+      x: input.x ?? existing?.x ?? null,
       defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
       telegram: existing?.telegram ?? null,
     };
@@ -882,6 +899,11 @@ export class DrizzleCassieStore implements CassieStore {
       return total;
     }, 0);
   }
+}
+
+function normalizeXUsername(value: string | null | undefined): string | null {
+  const normalized = value?.trim().replace(/^@/, "").toLowerCase();
+  return normalized ? normalized : null;
 }
 
 async function lockWalletSpendUser(db: { execute(query: ReturnType<typeof sql>): Promise<unknown> }, userId: string) {

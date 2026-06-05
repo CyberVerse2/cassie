@@ -186,6 +186,52 @@ describe("X webhook", () => {
     });
   });
 
+  it("queues webhook mentions under the connected user who tagged Cassie", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings({
+      userId: "did:privy:trader",
+      privyUserId: "did:privy:trader",
+      privyWalletId: "wallet_1",
+      walletAddress: "0xabc",
+      profile: { name: "Trader", handle: "@trader", avatarUrl: null },
+      x: { userId: "1574209048425242624", username: "trader" },
+      defaultTradeSizeUsd: 5,
+      telegram: null,
+    });
+    const createMentionRun = vi.fn(async () => ({ runId: "run_1", status: "queued" as const }));
+    const product = { createMentionRun } as unknown as CassieProduct;
+
+    const result = await processXWebhookPayload({
+      product,
+      store,
+      cassieHandle: "cassiedottrade",
+      payload: {
+        for_user_id: "2060718466630406149",
+        tweet_create_events: [{
+          id_str: "222",
+          author_id: "1574209048425242624",
+          full_text: "@source @cassiedottrade trade this",
+          in_reply_to_status_id_str: "111",
+          in_reply_to_screen_name: "source",
+          user: {
+            id_str: "1574209048425242624",
+            screen_name: "trader",
+            name: "Trader",
+          },
+        }],
+      },
+    });
+
+    expect(result).toMatchObject({ received: 1, queued: 1, skipped: 0, failed: 0 });
+    expect(createMentionRun).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "did:privy:trader",
+      userCommand: "@source @cassiedottrade trade this",
+    }));
+    await expect(store.getRuntimeState("x_webhook:did:privy:trader:222")).resolves.toMatchObject({
+      runId: "run_1",
+    });
+  });
+
   it("skips retweets and blocked-user mention payloads", async () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn();

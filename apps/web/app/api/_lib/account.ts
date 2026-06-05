@@ -8,6 +8,10 @@ export const accountSyncSchema = z.object({
   walletAddress: z.string().min(1).nullable(),
   privyWalletId: z.string().min(1).nullable(),
   profile: UserProfileSchema,
+  x: z.object({
+    userId: z.string().min(1).nullable(),
+    username: z.string().min(1).nullable(),
+  }).nullable().optional(),
   defaultTradeSizeUsd: z.number().positive().optional(),
 });
 
@@ -42,6 +46,7 @@ export async function accountResponse(
       privyWalletId: settings.privyWalletId,
       walletAddress: settings.walletAddress,
       profile: settings.profile,
+      x: settings.x ?? null,
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       telegram: settings.telegram ?? null,
       balance: balance ?? null,

@@ -53,6 +53,10 @@ export const UserSettingsSchema = z.object({
   privyWalletId: z.string().nullable().default(null),
   walletAddress: z.string().nullable().default(null),
   profile: UserProfileSchema,
+  x: z.object({
+    userId: z.string().min(1).nullable(),
+    username: z.string().min(1).nullable(),
+  }).nullable().optional(),
   defaultTradeSizeUsd: z.number().positive(),
   telegram: z.object({
     chatId: z.string().min(1),

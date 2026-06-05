@@ -151,11 +151,6 @@ export async function processXWebhookPayload(input: {
   userId?: string;
   cassieHandle?: string;
 }): Promise<ProcessXWebhookPayloadResult> {
-  const userId = input.userId ?? runtimeConfig.x.runUserId;
-  if (!userId) {
-    throw new Error("X webhook processing requires CASSIE_X_RUN_USER_ID.");
-  }
-
   const cassieHandle = input.cassieHandle ?? runtimeConfig.x.cassieHandle;
   if (!cassieHandle) {
     throw new Error("X webhook processing requires CASSIE_X_HANDLE.");
@@ -198,8 +193,13 @@ export async function processXWebhookPayload(input: {
         continue;
       }
       const sourcePost = sourcePostForAnalysis(tweet, mentionPost);
+      const runUserId = input.userId ?? await resolveXRunUserId({
+        store: input.store,
+        tweet,
+        mentionPost,
+      });
 
-      const stateKey = `x_webhook:${userId}:${postId}`;
+      const stateKey = `x_webhook:${runUserId}:${postId}`;
       const existing = await input.store.getRuntimeState(stateKey);
       if (existing != null) {
         skipped += 1;
@@ -207,7 +207,7 @@ export async function processXWebhookPayload(input: {
       }
 
       const result = await input.product.createMentionRun({
-        userId,
+        userId: runUserId,
         userCommand: mentionPost.text,
         sourcePost,
       });
@@ -237,6 +237,32 @@ export async function processXWebhookPayload(input: {
     runIds,
     errors,
   };
+}
+
+async function resolveXRunUserId(input: {
+  store: CassieStore;
+  tweet: XWebhookTweet;
+  mentionPost: SourcePost;
+}): Promise<string> {
+  const authorXUserId = stringValue(input.tweet.author_id ?? input.tweet.user?.id_str ?? input.tweet.user?.id);
+  const settings = await input.store.getUserSettingsByXIdentity({
+    userId: authorXUserId,
+    username: input.mentionPost.authorHandle,
+  });
+  if (!settings) {
+    const author = input.mentionPost.authorHandle ?? authorXUserId ?? "unknown";
+    throw new Error(`No Cassie settings found for X user ${author}.`);
+  }
+  if (authorXUserId && settings.x?.userId !== authorXUserId) {
+    await input.store.upsertUserSettings({
+      ...settings,
+      x: {
+        userId: authorXUserId,
+        username: settings.x?.username ?? input.mentionPost.authorHandle,
+      },
+    });
+  }
+  return settings.userId;
 }
 
 function parseXWebhookDeliveryBody(rawBody: Buffer): {
