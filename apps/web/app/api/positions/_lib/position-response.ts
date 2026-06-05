@@ -1,4 +1,4 @@
-import type { Position, TradeTicket } from "../../../../../../packages/core/schemas";
+import type { Position, TradeTicket } from "../../../../../../packages/core/schemas/index.ts";
 
 export type UserFacingPosition = Position & {
   symbol: string | null;

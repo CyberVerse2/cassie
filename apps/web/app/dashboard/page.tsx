@@ -6,7 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import tweetRun from "../../../../docs/test-run-tweets.json";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
-import { type CassiePosition, type CassiePositionReview, useCassieAccount } from "../lib/use-cassie-account";
+import { type CassieDashboardPayload, type CassiePosition, useCassieAccount } from "../lib/use-cassie-account";
 import { xHandleFromUrl } from "../lib/x-post";
 import s from "./dashboard.module.css";
 
@@ -137,14 +137,8 @@ const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
 const usdcIcon = "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
 
 const dashboardQueryKeys = {
-  activity: ["dashboard", "activity"] as const,
-  positions: ["dashboard", "positions"] as const,
+  dashboard: ["dashboard"] as const,
   positionMarks: (positionIds: string[]) => ["dashboard", "positionMarks", positionIds] as const,
-};
-
-type PositionsPayload = {
-  positions: CassiePosition[];
-  latestReviews: Record<string, CassiePositionReview | null>;
 };
 
 export default function Dashboard() {
@@ -161,11 +155,9 @@ export default function Dashboard() {
         updateDefaultTradeSize={account.updateDefaultTradeSize}
       />
       <Center
-        balanceUsd={account.account?.balance?.spendableUsd ?? 0}
-        fetchPositions={account.fetchPositions}
+        fetchDashboard={account.fetchDashboard}
         fetchPositionMarks={account.fetchPositionMarks}
         closePosition={account.closePosition}
-        fetchActivity={account.fetchActivity}
         refreshAccount={account.refreshAccount}
       />
       <Voice />
@@ -456,18 +448,14 @@ function generateDataForRange(range: "1D" | "1W" | "1M" | "1Y" | "All"): DataPoi
 }
 
 function Center({
-  balanceUsd,
-  fetchPositions,
+  fetchDashboard,
   fetchPositionMarks,
   closePosition,
-  fetchActivity,
   refreshAccount,
 }: {
-  balanceUsd: number;
-  fetchPositions: () => Promise<PositionsPayload>;
+  fetchDashboard: () => Promise<CassieDashboardPayload>;
   fetchPositionMarks: (positionIds: string[]) => Promise<CassiePosition[]>;
   closePosition: (positionId: string) => Promise<CassiePosition>;
-  fetchActivity: () => Promise<CassieActivityItem[]>;
   refreshAccount: () => Promise<unknown>;
 }) {
   const queryClient = useQueryClient();
@@ -476,15 +464,15 @@ function Center({
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
   const [closingId, setClosingId] = useState<string | null>(null);
-  const positionsQuery = useQuery({
-    queryKey: dashboardQueryKeys.positions,
-    queryFn: fetchPositions,
+  const dashboardQuery = useQuery({
+    queryKey: dashboardQueryKeys.dashboard,
+    queryFn: fetchDashboard,
   });
-  const storedPositions = positionsQuery.data?.positions ?? [];
-  const liveMarkIds = useMemo(() => storedPositions
+  const storedOpenPositions = dashboardQuery.data?.openPositions ?? [];
+  const liveMarkIds = useMemo(() => storedOpenPositions
     .filter((position) => position.status === "open" && position.venue === "hyperliquid")
     .map((position) => position.positionId)
-    .sort(), [storedPositions]);
+    .sort(), [storedOpenPositions]);
   const positionMarksQuery = useQuery({
     queryKey: dashboardQueryKeys.positionMarks(liveMarkIds),
     queryFn: () => fetchPositionMarks(liveMarkIds),
@@ -492,27 +480,21 @@ function Center({
     refetchInterval: 30_000,
     staleTime: 5_000,
   });
-  const activityQuery = useQuery({
-    queryKey: dashboardQueryKeys.activity,
-    queryFn: fetchActivity,
-    refetchInterval: 30_000,
-    staleTime: 10_000,
-  });
-  const positions = useMemo(() =>
-    mergePositions(storedPositions, positionMarksQuery.data ?? []),
-    [positionMarksQuery.data, storedPositions]
+  const openPositions = useMemo(() =>
+    mergePositions(storedOpenPositions, positionMarksQuery.data ?? []),
+    [positionMarksQuery.data, storedOpenPositions]
   );
-  const latestReviews = positionsQuery.data?.latestReviews ?? {};
-  const activity = activityQuery.data ?? [];
-  const activityError = errorMessage(activityQuery.error);
+  const closedPositions = dashboardQuery.data?.closedPositions ?? [];
+  const latestReviews = dashboardQuery.data?.latestReviews ?? {};
+  const activity = dashboardQuery.data?.activity ?? [];
+  const dashboardError = errorMessage(dashboardQuery.error);
 
   const rangeData = useMemo(() => generateDataForRange(selectedRange), [selectedRange]);
   const currentValPoint = rangeData[rangeData.length - 1];
   const displayedPoint = hoveredData || currentValPoint;
+  const balanceUsd = dashboardQuery.data?.account.balance?.spendableUsd ?? 0;
   const balanceLabel = `$${balanceUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   const displayedBalance = hoveredData ? displayedPoint.value : balanceUsd;
-  const openPositions = positions.filter((position) => position.status === "open" || position.status === "closing" || position.status === "close_failed");
-  const closedPositions = positions.filter((position) => position.status === "closed");
   const largestPositionMover = openPositions
     .slice()
     .sort((left, right) => Math.abs(right.unrealizedPnlUsd) - Math.abs(left.unrealizedPnlUsd))[0] ?? null;
@@ -525,15 +507,10 @@ function Center({
       setClosingId(positionId);
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData<PositionsPayload>(dashboardQueryKeys.positions, (current) =>
-        current
-          ? {
-            ...current,
-            positions: mergePositions(current.positions, [updated]),
-          }
-          : current
+      queryClient.setQueryData<CassieDashboardPayload>(dashboardQueryKeys.dashboard, (current) =>
+        current ? mergeDashboardPosition(current, updated) : current
       );
-      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.activity });
+      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.dashboard });
       void refreshAccount();
     },
     onSettled: () => {
@@ -541,9 +518,8 @@ function Center({
     },
   });
 
-  const positionLoadError = errorMessage(positionsQuery.error);
   const closeError = errorMessage(closeMutation.error);
-  const effectivePositionError = positionLoadError ?? closeError;
+  const effectivePositionError = dashboardError ?? closeError;
 
   async function requestClose(position: CassiePosition) {
     if (!window.confirm(`Close ${positionSymbol(position)} ${position.side}?`)) return;
@@ -589,7 +565,7 @@ function Center({
         </button>
       </div>
 
-      {activeTab === "activity" && <ActivityPanel activity={activity} error={activityError} />}
+      {activeTab === "activity" && <ActivityPanel activity={activity} error={dashboardError} />}
 
       {activeTab === "wallet" && (
       <div className={s.content}>
@@ -709,7 +685,7 @@ function Center({
             className={`${s.walletSubtab} ${walletView === "trades" ? s.walletSubtabActive : ""}`}
             onClick={() => setWalletView("trades")}
           >
-            Trade history
+            Open positions
             <span className={s.walletSubtabCount}>{openPositions.length}</span>
           </button>
           <button
@@ -1388,6 +1364,37 @@ function positionSymbol(position: CassiePosition) {
 function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
   const updatesById = new Map(updates.map((position) => [position.positionId, position]));
   return current.map((position) => updatesById.get(position.positionId) ?? position);
+}
+
+function mergeDashboardPosition(current: CassieDashboardPayload, update: CassiePosition): CassieDashboardPayload {
+  const openPositions = upsertDashboardPosition(current.openPositions, update)
+    .filter(isDashboardOpenPosition);
+  const closedPositions = upsertDashboardPosition(current.closedPositions, update)
+    .filter((position) => position.status === "closed");
+  const alreadyOpen = openPositions.some((position) => position.positionId === update.positionId);
+  const alreadyClosed = closedPositions.some((position) => position.positionId === update.positionId);
+
+  return {
+    ...current,
+    openPositions: isDashboardOpenPosition(update) && !alreadyOpen
+      ? [update, ...openPositions]
+      : openPositions,
+    closedPositions: update.status === "closed" && !alreadyClosed
+      ? [update, ...closedPositions]
+      : closedPositions,
+  };
+}
+
+function upsertDashboardPosition(positions: CassiePosition[], update: CassiePosition) {
+  return positions.map((position) =>
+    position.positionId === update.positionId ? update : position
+  );
+}
+
+function isDashboardOpenPosition(position: CassiePosition) {
+  return position.status === "open"
+    || position.status === "closing"
+    || position.status === "close_failed";
 }
 
 function errorMessage(error: unknown) {

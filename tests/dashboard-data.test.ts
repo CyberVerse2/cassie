@@ -1,0 +1,145 @@
+import { describe, expect, it } from "vitest";
+import { buildDashboardPayload } from "../apps/web/app/api/_lib/dashboard-data.ts";
+import { InMemoryCassieStore } from "../packages/core/db/store.ts";
+import type {
+  ExecutionJob,
+  Position,
+  PositionReview,
+  TradeExitPlan,
+  TradeTicket,
+  UserSettings,
+} from "../packages/core/schemas/index.ts";
+
+const settings: UserSettings = {
+  userId: "user_1",
+  privyUserId: "privy_1",
+  privyWalletId: "wallet_1",
+  walletAddress: "0x0000000000000000000000000000000000000000",
+  profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
+  defaultTradeSizeUsd: 50,
+};
+
+const exitPlan: TradeExitPlan = {
+  takeProfitPct: 10,
+  stopLossPct: 5,
+  maxHoldDays: 7,
+  reviewCadence: "daily",
+  thesis: "SOL may rally.",
+  invalidationSignals: ["SOL ETF thesis is invalidated."],
+};
+
+const ticket: TradeTicket = {
+  ticketId: "ticket_1",
+  runId: "run_1",
+  userId: "user_1",
+  thesis: "SOL may rally.",
+  venue: "hyperliquid",
+  instrument: "SOL-PERP",
+  side: "long",
+  sizeUsd: 50,
+  orderType: "marketable_limit",
+  venueData: { symbol: "SOL" },
+  exitPlan,
+};
+
+const job: ExecutionJob = {
+  jobId: "job_1",
+  ticketId: "ticket_1",
+  status: "succeeded",
+  createdAt: "2026-05-31T00:00:00.000Z",
+  updatedAt: "2026-05-31T00:00:00.000Z",
+  failureReason: null,
+  executionResult: null,
+};
+
+describe("dashboard payload", () => {
+  it("loads account summary, grouped positions, latest reviews, and activity together", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+
+    const openPosition = position({ positionId: "position_open", status: "open", closedAt: null });
+    const closedPosition = position({
+      positionId: "position_closed",
+      status: "closed",
+      openedAt: "2026-05-30T00:00:00.000Z",
+      closedAt: "2026-06-01T00:00:00.000Z",
+    });
+    await store.addPosition(openPosition);
+    await store.addPosition(closedPosition);
+    await store.addPositionReview(review(openPosition.positionId));
+
+    const dashboard = await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 100,
+    });
+
+    expect(dashboard.account).toMatchObject({
+      userId: "user_1",
+      walletAddress: settings.walletAddress,
+      defaultTradeSizeUsd: 50,
+      balance: {
+        walletBalanceUsd: 100,
+        spendableUsd: 100,
+      },
+    });
+    expect(dashboard.openPositions).toHaveLength(1);
+    expect(dashboard.openPositions[0]).toMatchObject({
+      positionId: "position_open",
+      symbol: "SOL",
+    });
+    expect(dashboard.closedPositions.map((entry) => entry.positionId)).toEqual(["position_closed"]);
+    expect(dashboard.latestReviews.position_open?.summary).toBe("Take-profit threshold is active.");
+    expect(dashboard.activity.map((entry) => entry.id)).toEqual(["position_open", "position_closed"]);
+  });
+});
+
+function position(input: {
+  positionId: string;
+  status: Position["status"];
+  openedAt?: string;
+  closedAt: string | null;
+}): Position {
+  return {
+    positionId: input.positionId,
+    userId: "user_1",
+    ticketId: "ticket_1",
+    executionJobId: "job_1",
+    venue: "hyperliquid",
+    instrument: "SOL-PERP",
+    side: "long",
+    status: input.status,
+    entrySizeUsd: 50,
+    filledBaseSize: 0.5,
+    filledSizeUsd: 50,
+    entryPrice: 100,
+    currentMarkPrice: 110,
+    currentValueUsd: 55,
+    unrealizedPnlUsd: 5,
+    unrealizedPnlPct: 10,
+    exitPlan,
+    openedAt: input.openedAt ?? "2026-05-31T00:00:00.000Z",
+    updatedAt: "2026-05-31T00:00:00.000Z",
+    lastMarkedAt: "2026-05-31T00:00:00.000Z",
+    closedAt: input.closedAt,
+    closeExecutionJobId: null,
+    failureReason: null,
+  };
+}
+
+function review(positionId: string): PositionReview {
+  return {
+    reviewId: "review_1",
+    positionId,
+    userId: "user_1",
+    reviewedAt: "2026-06-01T00:00:00.000Z",
+    status: "succeeded",
+    markPrice: 110,
+    currentValueUsd: 55,
+    unrealizedPnlUsd: 5,
+    unrealizedPnlPct: 10,
+    exitSignal: "take_profit",
+    summary: "Take-profit threshold is active.",
+    failureReason: null,
+  };
+}

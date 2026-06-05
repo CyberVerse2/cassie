@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
+import { PrivyAdapter } from "../../../../../packages/adapters/privy";
 import {
   apiError,
   authenticatedContext,
 } from "../_lib/account";
-import { buildUserActivity } from "../_lib/dashboard-data";
+import { buildDashboardPayload } from "../_lib/dashboard-data";
 
 export const runtime = "nodejs";
 
@@ -15,8 +16,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Cassie account was not found." }, { status: 404 });
     }
 
-    const snapshot = await store.load();
-    return NextResponse.json({ activity: buildUserActivity(settings.userId, snapshot) });
+    const dashboard = await buildDashboardPayload(settings, store, new PrivyAdapter());
+    return NextResponse.json({ dashboard });
   } catch (error) {
     return apiError(error);
   }

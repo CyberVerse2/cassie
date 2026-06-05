@@ -37,6 +37,19 @@ type CassieAccount = {
   balance: WalletFundingBalance | null;
 };
 
+export type CassieDashboardPayload = {
+  account: {
+    userId: string;
+    walletAddress: string | null;
+    defaultTradeSizeUsd: number;
+    balance: WalletFundingBalance | null;
+  };
+  openPositions: CassiePosition[];
+  closedPositions: CassiePosition[];
+  latestReviews: Record<string, CassiePositionReview | null>;
+  activity: CassieActivityItem[];
+};
+
 export type CassiePosition = {
   positionId: string;
   userId: string;
@@ -347,6 +360,18 @@ export function useCassieAccount() {
     };
   }, [authedFetch]);
 
+  const fetchDashboard = useCallback(async () => {
+    const response = await authedFetch("/api/dashboard");
+    const payload = await response.json() as {
+      dashboard?: CassieDashboardPayload;
+      error?: string;
+    };
+    if (!response.ok || !payload.dashboard) {
+      throw new Error(payload.error ?? "Dashboard could not be loaded.");
+    }
+    return payload.dashboard;
+  }, [authedFetch]);
+
   const fetchPositionMarks = useCallback(async (positionIds: string[]) => {
     if (positionIds.length === 0) return [];
     const response = await authedFetch("/api/positions/marks", {
@@ -410,6 +435,7 @@ export function useCassieAccount() {
     refreshAccount,
     syncAccount,
     updateDefaultTradeSize,
+    fetchDashboard,
     fetchPositions,
     fetchPositionMarks,
     closePosition,
