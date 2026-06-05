@@ -92,6 +92,7 @@ function polymarketSearchClientFor(markets: PolymarketSearchMarket[], book = {
 function hyperliquidInfoFetchMock(input: {
   dexes?: Array<null | { name: string }>;
   metas: Record<string, {
+    collateralToken?: number;
     universe: Array<{ name: string; maxLeverage?: number; onlyIsolated?: boolean; marginMode?: string }>;
     ctxs: Array<{ dayNtlVlm?: string; markPx?: string; midPx?: string; funding?: string }>;
   }>;
@@ -113,7 +114,7 @@ function hyperliquidInfoFetchMock(input: {
       const key = body.dex ?? "main";
       const meta = input.metas[key];
       if (!meta) throw new Error(`Unexpected Hyperliquid metadata request: ${JSON.stringify(body)}`);
-      return new Response(JSON.stringify([{ universe: meta.universe }, meta.ctxs]));
+      return new Response(JSON.stringify([{ universe: meta.universe, collateralToken: meta.collateralToken }, meta.ctxs]));
     }
 
     if (body.type === "spotMetaAndAssetCtxs") {
@@ -329,15 +330,27 @@ describe("market data connectors", () => {
 
   it("uses live Hyperliquid dex discovery for private-company signals", async () => {
     const fetchMock = hyperliquidInfoFetchMock({
-      dexes: [null, { name: "vntl" }],
+      dexes: [null, { name: "xyz" }, { name: "vntl" }],
       metas: {
         main: { universe: [], ctxs: [] },
+        xyz: {
+          collateralToken: 0,
+          universe: [{ name: "xyz:SPCX" }],
+          ctxs: [{ dayNtlVlm: "37039160", markPx: "165.28" }],
+        },
         vntl: {
+          collateralToken: 360,
           universe: [{ name: "vntl:SPACEX" }, { name: "vntl:OPENAI" }],
           ctxs: [{ dayNtlVlm: "7500000", markPx: "74.5" }, { dayNtlVlm: "25000000" }],
         },
       },
       books: {
+        "xyz:SPCX": {
+          levels: [
+            [{ px: "165.0", sz: "10" }],
+            [{ px: "165.2", sz: "10" }],
+          ],
+        },
         "vntl:SPACEX": {
           levels: [
             [{ px: "74.5", sz: "10" }],
@@ -406,7 +419,7 @@ describe("market data connectors", () => {
       venue: "hyperliquid",
       instrument: "pre_stock_perp",
       side: "short",
-      symbol: "vntl:SPACEX",
+      symbol: "xyz:SPCX",
     });
     fetchMock.mockRestore();
   });

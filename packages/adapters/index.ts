@@ -21,6 +21,7 @@ import {
 
 type HyperliquidMetaAndCtxs = [
   {
+    collateralToken?: number;
     universe: Array<{
       name: string;
       szDecimals?: number;
@@ -254,6 +255,8 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     const seen = new Set<string>();
 
     for (const { dex, data: [meta, ctxs] } of liveMetas) {
+      if (!isHyperliquidUsdcCollateralMeta(meta)) continue;
+
       for (const [index, asset] of meta.universe.entries()) {
         if (!hyperliquidAssetMatchesExactAnchors(asset.name, normalizedAnchors)) continue;
 
@@ -374,6 +377,7 @@ function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExp
   const anchors = tradeExpression
     ? [
       ...exactSymbolAnchorCandidates(tradeExpression.directAsset),
+      ...explicitHyperliquidInstructionSymbolAnchors(tradeExpression.marketRouterInstructions),
       ...(tradeExpression.candidateExpressions.flatMap((candidate) => [
         isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
           && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
@@ -400,15 +404,42 @@ function exactSymbolAnchorCandidates(value: string | null): string[] {
   if (!value) return [];
   return [
     value,
-    ...value.split(/[^a-z0-9:_/-]+/iu),
+    ...value.split(/[^a-z0-9:_-]+/iu),
   ];
+}
+
+function explicitHyperliquidInstructionSymbolAnchors(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(/[^a-zA-Z0-9:_$-]+/u)
+    .map((token) => token.trim())
+    .filter((token) => token.startsWith("$") || /^[A-Z0-9:_-]{2,}$/u.test(token));
 }
 
 function isExactSymbolAnchor(value: string): boolean {
   const normalized = value.trim().toLowerCase();
-  if (!normalized || normalized.includes("unknown") || normalized.includes("proxy")) return false;
+  if (
+    !normalized
+    || normalized.includes("unknown")
+    || normalized.includes("proxy")
+    || HYPERLIQUID_GENERIC_SYMBOL_ANCHORS.has(normalized)
+  ) return false;
   return /^[a-z0-9:_/-]+$/i.test(value.trim());
 }
+
+const HYPERLIQUID_GENERIC_SYMBOL_ANCHORS = new Set([
+  "perp",
+  "perps",
+  "pre",
+  "stock",
+  "stocks",
+  "spot",
+  "synthetic",
+  "market",
+  "markets",
+  "trade",
+  "trading",
+]);
 
 function uniqueHyperliquidDexes(perpDexs: HyperliquidPerpDexs): Array<string | null> {
   const dexes = [null, ...perpDexs.map((dex) => dex?.name ?? null).filter((name): name is string => Boolean(name))];
@@ -432,6 +463,10 @@ function hyperliquidAssetMatchesExactAnchors(assetName: string, normalizedAnchor
   ].map(normalizeHyperliquidSymbolAnchor);
 
   return symbolCandidates.some((symbol) => normalizedAnchors.has(symbol));
+}
+
+function isHyperliquidUsdcCollateralMeta(meta: HyperliquidMetaAndCtxs[0]): boolean {
+  return (meta.collateralToken ?? 0) === 0;
 }
 
 function hyperliquidSpotMarketMatchesExactAnchors(
