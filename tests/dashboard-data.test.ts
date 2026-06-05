@@ -166,6 +166,32 @@ describe("dashboard payload", () => {
       unrealizedPnlUsd: 1.2,
     });
   });
+
+  it("does not show close refund transfer failures as close activity errors", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+    await store.addPosition({
+      ...position({
+        positionId: "position_closed",
+        status: "closed",
+        openedAt: "2026-05-30T00:00:00.000Z",
+        closedAt: "2026-06-01T00:00:00.000Z",
+      }),
+      failureReason: "{\"error\":\"Insufficient balance: wallet has insufficient funds for this transfer\",\"code\":\"invalid_data\"}",
+    });
+
+    const dashboard = await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 100,
+    });
+
+    expect(dashboard.activity[0]).toMatchObject({
+      id: "position_closed:close",
+      kind: "trade_close",
+      error: null,
+    });
+  });
 });
 
 class NoFullSnapshotDashboardStore extends InMemoryCassieStore {

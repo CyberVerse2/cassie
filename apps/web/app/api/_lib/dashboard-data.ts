@@ -192,7 +192,7 @@ function closeActivity(
     source: run?.sourcePost.url ? "x" : "cassie",
     sourceUrl: run?.sourcePost.url ?? null,
     authorHandle: run?.sourcePost.authorHandle ?? null,
-    error: position.failureReason,
+    error: null,
   }];
 }
 
