@@ -255,8 +255,8 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
 async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
   const dexes = symbol.includes(":")
     ? await uniqueHyperliquidExecutionDexes(info)
-    : [null];
-  for (const dex of dexes) {
+    : [{ dex: null, dexIndex: 0 }];
+  for (const { dex, dexIndex } of dexes) {
     const [meta, ctxs] = await info.metaAndAssetCtxs(dex ? { dex } : undefined);
     const index = meta.universe.findIndex((asset) => asset.name === symbol);
 
@@ -264,7 +264,7 @@ async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symb
 
     const ctx = ctxs[index];
     return {
-      id: index,
+      id: dex ? 100_000 + dexIndex * 10_000 + index : index,
       sizeDecimals: meta.universe[index]?.szDecimals ?? 6,
       maxLeverage: meta.universe[index]?.maxLeverage,
       midKey: symbol,
@@ -277,10 +277,11 @@ async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symb
   throw new Error(`Hyperliquid asset ${symbol} was not found in live exchange metadata.`);
 }
 
-async function uniqueHyperliquidExecutionDexes(info: HyperliquidInfoClientLike): Promise<Array<string | null>> {
-  const dexes = [null, ...(await info.perpDexs()).map((dex) => dex?.name ?? null)];
+async function uniqueHyperliquidExecutionDexes(info: HyperliquidInfoClientLike): Promise<Array<{ dex: string | null; dexIndex: number }>> {
+  const liveDexes = (await info.perpDexs()).map((dex) => dex?.name ?? null);
+  const dexes = liveDexes[0] == null ? liveDexes : [null, ...liveDexes];
   const seen = new Set<string>();
-  return dexes.filter((dex) => {
+  return dexes.map((dex, dexIndex) => ({ dex, dexIndex })).filter(({ dex }) => {
     const key = dex ?? "";
     if (seen.has(key)) return false;
     seen.add(key);

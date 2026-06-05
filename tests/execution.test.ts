@@ -287,11 +287,11 @@ describe("HyperliquidExecutionClient", () => {
 
     expect(info.perpDexs).toHaveBeenCalled();
     expect(info.metaAndAssetCtxs).toHaveBeenCalledWith({ dex: "vntl" });
-    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 1, isCross: true, leverage: 3 });
+    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 110001, isCross: true, leverage: 3 });
     expect(exchange.order).toHaveBeenCalledWith({
       orders: [
         {
-          a: 1,
+          a: 110001,
           b: false,
           p: "1916.5",
           s: "0.0077",
