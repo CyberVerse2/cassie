@@ -337,8 +337,8 @@ describe("AI SDK supervisor agent", () => {
     await expect(executeTool(tools.preflight_user_policy, {})).resolves.toMatchObject({
       policy: {
         defaultTradeSizeUsd: 2,
-        minHyperliquidPerpMarginUsd: 4,
-        effectiveHyperliquidPerpMarginUsd: 4,
+        minHyperliquidPerpMarginUsd: 6,
+        effectiveHyperliquidPerpMarginUsd: 6,
       },
     });
   });

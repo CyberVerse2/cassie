@@ -8,7 +8,7 @@ import type {
   UserSettings,
 } from "../core/schemas/index.ts";
 
-export const MIN_HYPERLIQUID_PERP_MARGIN_USD = 4;
+export const MIN_HYPERLIQUID_PERP_MARGIN_USD = 6;
 
 export function createTradeTicket(input: {
   runId?: string | null;
