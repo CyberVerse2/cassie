@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
 import {
+  useExportWallet,
   usePrivy,
   useSigners,
   useWallets,
@@ -144,6 +145,7 @@ const cassieAccountQueryKey = ["cassie", "account"] as const;
 
 export function useCassieAccount() {
   const privy = usePrivy();
+  const { exportWallet } = useExportWallet();
   const { wallets, ready: walletsReady } = useWallets();
   const { addSigners } = useSigners();
   const queryClient = useQueryClient();
@@ -347,6 +349,16 @@ export function useCassieAccount() {
     await privy.logout();
   }, [privy, queryClient]);
 
+  const exportKeys = useCallback(async () => {
+    if (!privy.authenticated) {
+      throw new Error("Log in before exporting wallet keys.");
+    }
+    if (!embeddedWallet?.address) {
+      throw new Error("No Privy embedded wallet is available to export.");
+    }
+    await exportWallet({ address: embeddedWallet.address });
+  }, [embeddedWallet?.address, exportWallet, privy.authenticated]);
+
   const authedFetch = useCallback(async (url: string, init: RequestInit = {}) => {
     if (!privy.authenticated) {
       throw new Error("Log in before using account actions.");
@@ -453,6 +465,7 @@ export function useCassieAccount() {
     walletReadyForSpending: Boolean(embeddedWallet?.id && embeddedWallet.delegated),
     login: privy.login,
     logout,
+    exportKeys,
     prepareAccount,
     beginTelegramConnect,
     refreshAccount,

@@ -150,6 +150,7 @@ export default function Dashboard() {
         walletAddress={account.walletAddress}
         login={account.login}
         logout={account.logout}
+        exportKeys={account.exportKeys}
         authenticated={account.authenticated}
         userProfile={account.userProfile}
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
@@ -172,6 +173,7 @@ function Aside({
   walletAddress,
   login,
   logout,
+  exportKeys,
   authenticated,
   userProfile,
   defaultTradeSizeUsd,
@@ -180,6 +182,7 @@ function Aside({
   walletAddress: string | null;
   login: () => void;
   logout: () => Promise<void>;
+  exportKeys: () => Promise<void>;
   authenticated: boolean;
   userProfile: {
     name: string;
@@ -192,6 +195,8 @@ function Aside({
 }) {
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+  const [exportingKeys, setExportingKeys] = useState(false);
+  const [exportKeysError, setExportKeysError] = useState<string | null>(null);
   const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
 
   async function copyAddress() {
@@ -208,6 +213,19 @@ function Aside({
       await logout();
     } finally {
       setLoggingOut(false);
+    }
+  }
+
+  async function requestExportKeys() {
+    if (!authenticated || !walletAddress || exportingKeys) return;
+    setExportingKeys(true);
+    setExportKeysError(null);
+    try {
+      await exportKeys();
+    } catch (caught) {
+      setExportKeysError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setExportingKeys(false);
     }
   }
 
@@ -281,10 +299,21 @@ function Aside({
         </a>
 
         <span className={s.navSection}>Portfolio</span>
-        <a className={s.navLink} href="#export-wallet">
+        <button
+          className={`${s.navLink} ${s.navButton}`}
+          type="button"
+          onClick={() => void requestExportKeys()}
+          disabled={!authenticated || !walletAddress || exportingKeys}
+          aria-describedby={exportKeysError ? "export-keys-error" : undefined}
+        >
           <ActionIcon name="export" />
-          <span>Export keys</span>
-        </a>
+          <span>{exportingKeys ? "Opening export" : "Export keys"}</span>
+        </button>
+        {exportKeysError ? (
+          <span className={s.navError} id="export-keys-error" role="alert">
+            {exportKeysError}
+          </span>
+        ) : null}
       </nav>
 
       <div className={`${s.identity} ${s.identityDock}`}>
@@ -468,6 +497,8 @@ function Center({
     .sort((left, right) => Math.abs(right.unrealizedPnlUsd) - Math.abs(left.unrealizedPnlUsd))[0] ?? null;
   const netInvested = openPositions.reduce((total, position) => total + position.marginUsd, 0);
   const unrealized = openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
+  const realized = closedPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
+  const netPnl = realized + unrealized;
 
   const closeMutation = useMutation({
     mutationFn: closePosition,
@@ -639,8 +670,8 @@ function Center({
               <span className="value">{closedPositions.length}</span>
             </div>
             <div className={s.summaryCell}>
-              <span className="label">Unrealized</span>
-              <span className={`value ${unrealized >= 0 ? "up" : "down"}`}>{formatSignedUsd(unrealized)}</span>
+              <span className="label">Net P/L</span>
+              <span className={`value ${netPnl >= 0 ? "up" : "down"}`}>{formatSignedUsd(netPnl)}</span>
             </div>
           </div>
         </div>
