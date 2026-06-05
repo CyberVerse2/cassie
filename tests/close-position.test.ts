@@ -131,6 +131,82 @@ describe("close positions", () => {
     });
   });
 
+  it("refunds leveraged Hyperliquid equity instead of close notional", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket({
+      ...ticket,
+      sizeUsd: 5,
+      venueData: {
+        symbol: "BTC",
+        leverage: 3,
+        notionalSizeUsd: 15,
+      },
+    });
+    await store.addExecutionJob({
+      jobId: "job_1",
+      ticketId: "ticket_1",
+      status: "succeeded",
+      createdAt: "2026-05-30T00:00:00.000Z",
+      updatedAt: "2026-05-30T00:00:00.000Z",
+      failureReason: null,
+      executionResult: {
+        venueOrderId: "open_order_1",
+        filledBaseSize: 0.00023,
+        filledSizeUsd: 14.77,
+        collateralUsedUsd: 4.92,
+        averagePrice: 64211,
+      },
+    });
+    await store.addPosition({
+      ...position,
+      status: "closing",
+      entrySizeUsd: 5,
+      filledBaseSize: 0.00023,
+      filledSizeUsd: 14.77,
+      currentValueUsd: 14.38,
+      unrealizedPnlUsd: -0.39,
+      unrealizedPnlPct: -7.8,
+    });
+    const closeClient: PositionCloseClient = {
+      async close() {
+        return {
+          venueOrderId: "close_order_1",
+          filledBaseSize: 0.00023,
+          filledSizeUsd: 14.38,
+          averagePrice: 62539.5,
+        };
+      },
+    };
+    const walletGateway = {
+      refundUserUsdcFromTreasury: vi.fn().mockResolvedValue({
+        transferId: "refund_1",
+        referenceId: "position_close:position_1",
+        status: "succeeded",
+        sourceWalletId: "treasury_wallet",
+        destinationAddress: settings.walletAddress!,
+        amountUsd: 4.53,
+        asset: "usdc",
+        chain: "base",
+        createdAt: "2026-05-31T00:00:00.000Z",
+        raw: {},
+      }),
+    };
+
+    const closed = await executeClosePosition({ positionId: "position_1", store, closeClient, walletGateway });
+
+    expect(closed).toMatchObject({
+      status: "closed",
+      unrealizedPnlUsd: -0.39,
+      unrealizedPnlPct: -7.8,
+    });
+    expect(walletGateway.refundUserUsdcFromTreasury).toHaveBeenCalledWith({
+      userWalletAddress: settings.walletAddress,
+      amountUsd: 4.53,
+      referenceId: "position_close:position_1",
+    });
+  });
+
   it("surfaces close failures on the position", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);

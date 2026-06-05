@@ -75,6 +75,8 @@ export async function executeClosePosition(input: {
     }
     const result = await closeClient.close(position, ticket);
     assertFullCloseFill(position, result);
+    const openJob = await store.getExecutionJob(position.executionJobId);
+    const realizedPnlUsd = roundUsd(result.filledSizeUsd - position.filledSizeUsd);
     const walletGateway = input.walletGateway ?? new PrivyAdapter();
     let refundTransfer: WalletUsdcTransfer | null = null;
     let refundFailureReason: string | null = null;
@@ -83,13 +85,15 @@ export async function executeClosePosition(input: {
         walletGateway,
         userWalletAddress: settings.walletAddress,
         position,
+        ticket,
         result,
+        openResult: openJob?.executionResult ?? null,
+        realizedPnlUsd,
       });
     } catch (error) {
       refundFailureReason = error instanceof Error ? error.message : String(error);
     }
     const now = new Date().toISOString();
-    const realizedPnlUsd = roundUsd(result.filledSizeUsd - position.filledSizeUsd);
     const pnlBasisUsd = position.entrySizeUsd > 0 ? position.entrySizeUsd : position.filledSizeUsd;
     const realizedPnlPct = pnlBasisUsd > 0 ? roundPct((realizedPnlUsd / pnlBasisUsd) * 100) : 0;
     const closed = await store.updatePosition({
@@ -157,15 +161,39 @@ async function refundClosedPosition(input: {
   walletGateway: PositionRefundGateway;
   userWalletAddress: string;
   position: Position;
+  ticket: TradeTicket;
   result: PositionCloseResult;
+  openResult: ExecutionJob["executionResult"];
+  realizedPnlUsd: number;
 }): Promise<WalletUsdcTransfer | null> {
-  const amountUsd = roundUsd(input.result.filledSizeUsd);
+  const amountUsd = closeRefundAmountUsd(input);
   if (amountUsd <= 0) return null;
   return input.walletGateway.refundUserUsdcFromTreasury({
     userWalletAddress: input.userWalletAddress,
     amountUsd,
     referenceId: `position_close:${input.position.positionId}`,
   });
+}
+
+function closeRefundAmountUsd(input: {
+  position: Position;
+  ticket: TradeTicket;
+  result: PositionCloseResult;
+  openResult: ExecutionJob["executionResult"];
+  realizedPnlUsd: number;
+}): number {
+  if (isLeveragedHyperliquidPosition(input.position, input.ticket)) {
+    const collateralUsedUsd = input.openResult?.collateralUsedUsd ?? input.position.entrySizeUsd;
+    return roundUsd(Math.max(0, collateralUsedUsd + input.realizedPnlUsd));
+  }
+  return roundUsd(input.result.filledSizeUsd);
+}
+
+function isLeveragedHyperliquidPosition(position: Position, ticket: TradeTicket): boolean {
+  const leverage = ticket.venueData?.leverage;
+  if (position.venue !== "hyperliquid") return false;
+  if (leverage && leverage > 1) return true;
+  return position.entrySizeUsd > 0 && position.filledSizeUsd / position.entrySizeUsd > 1.01;
 }
 
 function roundUsd(value: number): number {
