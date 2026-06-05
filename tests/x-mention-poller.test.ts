@@ -71,6 +71,7 @@ describe("X mention poller", () => {
       author_id: "1574209048425242624",
       created_at: "2026-06-05T14:58:22.000Z",
       text: "@WatcherGuru @cassiedottrade trade this",
+      referenced_tweets: [{ type: "replied_to", id: "2062901896382152804" }],
     }] });
     const replyClient = new FakeXReplyClient();
 

@@ -22,6 +22,14 @@ export function formatTradeExecuted(input: { ticket: TradeTicket; job: Execution
   ].join("\n");
 }
 
+export function formatTradeClosed(input: { ticket: TradeTicket; position: Position }): string {
+  return [
+    `Position closed: ${input.ticket.instrument} ${input.ticket.side}`,
+    `Realized PnL: ${formatPct(input.position.unrealizedPnlPct)} ($${formatSignedUsd(input.position.unrealizedPnlUsd)})`,
+    `Exit price: ${formatNullable(input.position.currentMarkPrice)}`,
+  ].join("\n");
+}
+
 export function formatExecutionFailed(input: { ticket: TradeTicket; job: ExecutionJob }): string {
   return [
     `Execution failed: ${input.ticket.instrument} ${input.ticket.side}`,
@@ -155,6 +163,10 @@ function formatUsd(value: number): string {
 
 function formatPct(value: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+}
+
+function formatSignedUsd(value: number): string {
+  return `${value >= 0 ? "+" : "-"}${formatUsd(Math.abs(value))}`;
 }
 
 function formatNullable(value: number | null): string {

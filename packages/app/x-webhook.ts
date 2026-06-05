@@ -211,6 +211,10 @@ export async function processXWebhookPayload(input: {
         skipped += 1;
         continue;
       }
+      if (!hasReplySource(tweet)) {
+        skipped += 1;
+        continue;
+      }
       const sourcePost = sourcePostForAnalysis(tweet, mentionPost);
       const runUserId = input.userId ?? await resolveXRunUserId({
         store: input.store,
@@ -351,7 +355,7 @@ function sourcePostForAnalysis(tweet: XWebhookTweet, mentionPost: SourcePost): S
   }
 
   const parentPostId = stringValue(tweet.in_reply_to_status_id_str ?? tweet.in_reply_to_status_id);
-  if (!parentPostId) return mentionPost;
+  if (!parentPostId) throw new Error("Cassie X trade commands must be replies to a source post.");
 
   const parentUrl = xStatusUrl(tweet.in_reply_to_screen_name ?? null, parentPostId);
   return {
@@ -366,6 +370,10 @@ function sourcePostForAnalysis(tweet: XWebhookTweet, mentionPost: SourcePost): S
     linkedUrls: [],
     mediaDescriptions: [],
   };
+}
+
+function hasReplySource(tweet: XWebhookTweet): boolean {
+  return Boolean(tweet.replied_to_status || stringValue(tweet.in_reply_to_status_id_str ?? tweet.in_reply_to_status_id));
 }
 
 function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {

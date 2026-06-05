@@ -5,6 +5,7 @@ import type { PositionCloseClient } from "../packages/execution/index.ts";
 import { executeClosePosition, queueClosePosition } from "../packages/positions/close.ts";
 import type { CassieJobQueue } from "../packages/jobs/queue.ts";
 import type { ControlRun, ExecutionJob } from "../packages/core/schemas/index.ts";
+import type { TelegramGateway } from "../packages/notifications/telegram.ts";
 
 const exitPlan: TradeExitPlan = {
   takeProfitPct: 10,
@@ -83,9 +84,19 @@ class FakeQueue implements CassieJobQueue {
 }
 
 describe("close positions", () => {
-  it("queues and closes open positions", async () => {
+  it("queues, closes, and notifies for open positions", async () => {
     const store = new InMemoryCassieStore();
-    await store.upsertUserSettings(settings);
+    await store.upsertUserSettings({
+      ...settings,
+      telegram: {
+        chatId: "chat_1",
+        username: "cassie",
+        firstName: "Cassie",
+        lastName: null,
+        connectedAt: "2026-05-31T00:00:00.000Z",
+        lastMessageAt: "2026-05-31T00:00:00.000Z",
+      },
+    });
     await store.addTradeTicket(ticket);
     await store.addPosition(position);
     await queueClosePosition({ positionId: "position_1", store, jobQueue: new FakeQueue() });
@@ -115,7 +126,14 @@ describe("close positions", () => {
         raw: {},
       }),
     };
-    const closed = await executeClosePosition({ positionId: "position_1", store, closeClient, walletGateway });
+    const telegramGateway = new FakeTelegramGateway();
+    const closed = await executeClosePosition({
+      positionId: "position_1",
+      store,
+      closeClient,
+      walletGateway,
+      telegramGateway,
+    });
 
     expect(closed).toMatchObject({
       status: "closed",
@@ -129,6 +147,10 @@ describe("close positions", () => {
       amountUsd: 112,
       referenceId: "position_close:position_1",
     });
+    expect(telegramGateway.messages).toEqual([{
+      chatId: "chat_1",
+      text: "Position closed: SOL long\nRealized PnL: +12.00% ($+12.00)\nExit price: 112",
+    }]);
   });
 
   it("refunds leveraged Hyperliquid equity instead of close notional", async () => {
@@ -297,3 +319,15 @@ describe("close positions", () => {
     expect(walletGateway.refundUserUsdcFromTreasury).not.toHaveBeenCalled();
   });
 });
+
+class FakeTelegramGateway implements TelegramGateway {
+  messages: Array<{ chatId: string; text: string; disableNotification?: boolean }> = [];
+
+  async sendMessage(input: {
+    chatId: string;
+    text: string;
+    disableNotification?: boolean;
+  }): Promise<void> {
+    this.messages.push(input);
+  }
+}

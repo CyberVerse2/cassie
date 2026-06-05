@@ -6,6 +6,7 @@ import {
   formatDailyPositionSummary,
   formatExecutionFailed,
   formatTicketCreated,
+  formatTradeClosed,
   formatTradeExecuted,
   sendDailyPositionSummaries,
 } from "../packages/notifications/positions.ts";
@@ -78,6 +79,17 @@ describe("position notification formatting", () => {
   it("formats ticket, execution, failure, and daily position messages", () => {
     expect(formatTicketCreated(ticket)).toContain("Ticket created: SOL long");
     expect(formatTradeExecuted({ ticket, job, position })).toContain("Position opened");
+    expect(formatTradeClosed({
+      ticket,
+      position: {
+        ...position,
+        status: "closed",
+        currentValueUsd: 0,
+        unrealizedPnlUsd: 12,
+        unrealizedPnlPct: 12,
+        closedAt: "2026-05-31T01:00:00.000Z",
+      },
+    })).toContain("Position closed: SOL long");
     expect(formatExecutionFailed({ ticket, job: { ...job, failureReason: "venue down" } })).toContain("venue down");
     expect(formatDailyPositionSummary({
       positions: [{

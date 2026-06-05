@@ -74,7 +74,7 @@ describe("X webhook", () => {
       .resolves.toEqual(attempt);
   });
 
-  it("queues only Cassie mentions and dedupes retried webhook deliveries", async () => {
+  it("skips standalone command mentions", async () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn(async () => ({ runId: `run_${createMentionRun.mock.calls.length}`, status: "queued" as const }));
     const product = { createMentionRun } as unknown as CassieProduct;
@@ -119,25 +119,9 @@ describe("X webhook", () => {
       cassieHandle: "cassiedottrade",
     });
 
-    expect(first).toMatchObject({ received: 2, queued: 1, skipped: 1, failed: 0 });
+    expect(first).toMatchObject({ received: 2, queued: 0, skipped: 2, failed: 0 });
     expect(retry).toMatchObject({ received: 2, queued: 0, skipped: 2, failed: 0 });
-    expect(createMentionRun).toHaveBeenCalledTimes(1);
-    expect(createMentionRun).toHaveBeenCalledWith({
-      userId: "user_1",
-      userCommand: "hey @cassiedottrade trade this",
-      sourcePost: {
-        platform: "x",
-        postId: "tweet_1",
-        url: "https://x.com/source_user/status/tweet_1",
-        authorHandle: "source_user",
-        authorName: "Source User",
-        text: "hey @cassiedottrade trade this",
-        createdAt: "Sat May 30 16:00:00 +0000 2026",
-        quotedPostText: null,
-        linkedUrls: ["https://example.com/signal"],
-        mediaDescriptions: [],
-      },
-    });
+    expect(createMentionRun).not.toHaveBeenCalled();
   });
 
   it("uses the parent tweet as the analysis source when Cassie is tagged in a reply", async () => {
@@ -244,6 +228,8 @@ describe("X webhook", () => {
         id_str: "222",
         author_id: "1574209048425242624",
         full_text: "@cassiedottrade trade this",
+        in_reply_to_status_id_str: "111",
+        in_reply_to_screen_name: "source",
         user: {
           id_str: "1574209048425242624",
           screen_name: "trader",
@@ -353,6 +339,8 @@ describe("X webhook", () => {
       tweet_create_events: [{
         id_str: "tweet_1",
         text: "@cassiedottrade trade",
+        in_reply_to_status_id_str: "tweet_0",
+        in_reply_to_screen_name: "source_user",
         user: { screen_name: "source_user" },
       }],
     };

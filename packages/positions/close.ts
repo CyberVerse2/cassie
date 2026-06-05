@@ -4,6 +4,8 @@ import { type ExecutionJob, type Position, type TradeTicket } from "../core/sche
 import { PrivyAdapter, type PrivyWalletGateway, type WalletUsdcTransfer } from "../adapters/privy/index.ts";
 import { HyperliquidPositionCloseClient, PolymarketPositionCloseClient, type PositionCloseClient } from "../execution/index.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "../jobs/queue.ts";
+import { formatTradeClosed, notifyTradeLifecycle } from "../notifications/positions.ts";
+import type { TelegramGateway } from "../notifications/telegram.ts";
 
 export type PositionCloseResult = NonNullable<ExecutionJob["executionResult"]>;
 type PositionRefundGateway = Pick<PrivyWalletGateway, "refundUserUsdcFromTreasury">;
@@ -56,6 +58,7 @@ export async function executeClosePosition(input: {
   store?: CassieStore;
   closeClient?: PositionCloseClient;
   walletGateway?: PositionRefundGateway;
+  telegramGateway?: TelegramGateway;
 }): Promise<Position> {
   const store = input.store ?? new DrizzleCassieStore();
   const position = await store.getPosition(input.positionId);
@@ -123,6 +126,14 @@ export async function executeClosePosition(input: {
       eventType: "position.closed",
       message: "Position closed.",
       data: { result, refundTransfer, refundFailureReason },
+    });
+    await notifyTradeLifecycle({
+      store,
+      settings,
+      text: formatTradeClosed({ ticket, position: closed }),
+      entityId: position.positionId,
+      eventType: "telegram.position_closed_failed",
+      gateway: input.telegramGateway,
     });
     return closed;
   } catch (error) {
