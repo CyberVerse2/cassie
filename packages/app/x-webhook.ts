@@ -215,7 +215,7 @@ export async function processXWebhookPayload(input: {
         skipped += 1;
         continue;
       }
-      const sourcePost = sourcePostForAnalysis(tweet, mentionPost);
+      const sourcePost = sourcePostForAnalysis(tweet);
       const runUserId = input.userId ?? await resolveXRunUserId({
         store: input.store,
         tweet,
@@ -349,7 +349,7 @@ function parseXWebhookDeliveryBody(rawBody: Buffer): {
   }
 }
 
-function sourcePostForAnalysis(tweet: XWebhookTweet, mentionPost: SourcePost): SourcePost {
+function sourcePostForAnalysis(tweet: XWebhookTweet): SourcePost {
   if (tweet.replied_to_status) {
     return sourcePostFromXWebhookTweet(tweet.replied_to_status as XWebhookTweet);
   }

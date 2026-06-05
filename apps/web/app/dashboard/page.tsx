@@ -149,6 +149,7 @@ export default function Dashboard() {
       <Aside
         walletAddress={account.walletAddress}
         login={account.login}
+        logout={account.logout}
         authenticated={account.authenticated}
         userProfile={account.userProfile}
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
@@ -168,6 +169,7 @@ export default function Dashboard() {
 function Aside({
   walletAddress,
   login,
+  logout,
   authenticated,
   userProfile,
   defaultTradeSizeUsd,
@@ -175,6 +177,7 @@ function Aside({
 }: {
   walletAddress: string | null;
   login: () => void;
+  logout: () => Promise<void>;
   authenticated: boolean;
   userProfile: {
     name: string;
@@ -186,6 +189,7 @@ function Aside({
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
 }) {
   const [copied, setCopied] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
 
   async function copyAddress() {
@@ -193,6 +197,16 @@ function Aside({
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
     await window.navigator.clipboard.writeText(walletAddress);
+  }
+
+  async function requestLogout() {
+    if (!authenticated || loggingOut) return;
+    setLoggingOut(true);
+    try {
+      await logout();
+    } finally {
+      setLoggingOut(false);
+    }
   }
 
   return (
@@ -283,6 +297,19 @@ function Aside({
           <span className={s.identityName}>{userProfile?.name ?? "Cassie user"}</span>
           <span className={s.identityMeta}>{userProfile?.handle ?? "Sign in with X"}</span>
         </div>
+        {authenticated ? (
+          <button
+            type="button"
+            className={s.logoutBtn}
+            onClick={() => void requestLogout()}
+            disabled={loggingOut}
+            aria-label="Log out"
+            title="Log out"
+          >
+            <ActionIcon name="logout" />
+            <span>{loggingOut ? "Logging out" : "Log out"}</span>
+          </button>
+        ) : null}
       </div>
     </aside>
   );
@@ -1165,7 +1192,7 @@ interface VenueIconProps {
   className?: string;
 }
 
-type ActionIconName = "deposit" | "copy" | "check" | "send" | "swap" | "telegram" | "export";
+type ActionIconName = "deposit" | "copy" | "check" | "send" | "swap" | "telegram" | "export" | "logout";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
   const common = {
@@ -1230,6 +1257,16 @@ function ActionIcon({ name }: { name: ActionIconName }) {
       <svg {...common}>
         <path d="M20 4 4 11l6 2 2 6 8-15Z" />
         <path d="m10 13 4-4" />
+      </svg>
+    );
+  }
+
+  if (name === "logout") {
+    return (
+      <svg {...common}>
+        <path d="M10 17 5 12l5-5" />
+        <path d="M5 12h11" />
+        <path d="M14 4h5v16h-5" />
       </svg>
     );
   }
