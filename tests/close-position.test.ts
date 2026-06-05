@@ -150,7 +150,7 @@ describe("close positions", () => {
     });
   });
 
-  it("does not mark the position closed when the close refund fails", async () => {
+  it("keeps the position closed when the close refund fails after a full venue close", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
@@ -178,10 +178,18 @@ describe("close positions", () => {
     });
 
     expect(failed).toMatchObject({
-      status: "close_failed",
-      closedAt: null,
+      status: "closed",
+      closeExecutionJobId: "close_order_1",
+      currentValueUsd: 0,
+      unrealizedPnlUsd: 12,
+      unrealizedPnlPct: 12,
       failureReason: "treasury transfer failed",
     });
+    const events = (await store.load()).auditEvents
+      .filter((event) => event.entityId === "position_1")
+      .map((event) => event.eventType);
+    expect(events).toContain("position.close_refund_failed");
+    expect(events).toContain("position.closed");
   });
 
   it("does not mark the position closed or refund when the venue only partially closes", async () => {

@@ -76,12 +76,18 @@ export async function executeClosePosition(input: {
     const result = await closeClient.close(position, ticket);
     assertFullCloseFill(position, result);
     const walletGateway = input.walletGateway ?? new PrivyAdapter();
-    const refundTransfer = await refundClosedPosition({
-      walletGateway,
-      userWalletAddress: settings.walletAddress,
-      position,
-      result,
-    });
+    let refundTransfer: WalletUsdcTransfer | null = null;
+    let refundFailureReason: string | null = null;
+    try {
+      refundTransfer = await refundClosedPosition({
+        walletGateway,
+        userWalletAddress: settings.walletAddress,
+        position,
+        result,
+      });
+    } catch (error) {
+      refundFailureReason = error instanceof Error ? error.message : String(error);
+    }
     const now = new Date().toISOString();
     const realizedPnlUsd = roundUsd(result.filledSizeUsd - position.filledSizeUsd);
     const pnlBasisUsd = position.entrySizeUsd > 0 ? position.entrySizeUsd : position.filledSizeUsd;
@@ -96,14 +102,23 @@ export async function executeClosePosition(input: {
       updatedAt: now,
       closedAt: now,
       closeExecutionJobId: result.venueOrderId,
-      failureReason: null,
+      failureReason: refundFailureReason,
     });
+    if (refundFailureReason) {
+      await store.audit({
+        entityId: position.positionId,
+        entityType: "position",
+        eventType: "position.close_refund_failed",
+        message: "Position close refund failed.",
+        data: { failureReason: refundFailureReason, result },
+      });
+    }
     await store.audit({
       entityId: position.positionId,
       entityType: "position",
       eventType: "position.closed",
       message: "Position closed.",
-      data: { result, refundTransfer },
+      data: { result, refundTransfer, refundFailureReason },
     });
     return closed;
   } catch (error) {
