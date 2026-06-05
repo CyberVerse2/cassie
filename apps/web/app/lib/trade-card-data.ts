@@ -206,13 +206,19 @@ function stepOutputString(steps: RunStep[], stepType: RunStep["stepType"], key: 
   for (const step of steps) {
     if (step.stepType !== stepType || !isRecord(step.output)) continue;
     const value = step.output[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "string" && isPublicCardCopy(value)) return value.trim();
   }
   return null;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isPublicCardCopy(value: string) {
+  const clean = value.trim();
+  if (!clean) return false;
+  return !/^unable to access source content from the provided url\.?$/iu.test(clean);
 }
 
 function compactPublicLine(value: string, maxLength: number) {

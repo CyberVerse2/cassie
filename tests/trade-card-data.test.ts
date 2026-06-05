@@ -177,4 +177,19 @@ describe("trade card data", () => {
     expect(share.cardProps.tradeResult?.entry).toBe("$71.58");
     expect(share.cardProps.tradeResult?.exit).toBe("$72.34");
   });
+
+  it("does not use source access failures as public card copy", () => {
+    const copy = deriveTradeCardCopy({
+      run,
+      steps: [{
+        ...steps[0],
+        output: {
+          headlineThesis: "Unable to access source content from the provided URL",
+        },
+      }],
+      ticket,
+    });
+
+    expect(copy.headline).toBe("As long as BTC holds $65k, I think $75k trades next.");
+  });
 });
