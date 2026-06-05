@@ -795,6 +795,11 @@
   border-color: color-mix(in oklab, var(--gilt) 30%, var(--line-soft));
 }
 
+.activityCmd_close {
+  color: var(--coral);
+  border-color: color-mix(in oklab, var(--coral) 30%, var(--line-soft));
+}
+
 .activityCmd_watch {
   color: oklch(0.82 0.08 245);
   border-color: color-mix(in oklab, var(--series-b) 30%, var(--line-soft));

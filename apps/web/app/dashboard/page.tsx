@@ -850,6 +850,14 @@ function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
       </svg>
     );
   }
+  if (kind === "trade_close") {
+    return (
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 7 7 17" />
+        <path d="M7 7h10v10" />
+      </svg>
+    );
+  }
   if (kind === "watch") {
     return (
       <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -875,8 +883,9 @@ function groupActivity(activity: CassieActivityItem[]): Array<{ date: string; it
   return [...groups].map(([date, items]) => ({ date, items }));
 }
 
-function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "watch" | "counter" {
+function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "close" | "watch" | "counter" {
   if (kind === "trade") return "trade";
+  if (kind === "trade_close") return "close";
   if (kind === "watch") return "watch";
   return "counter";
 }

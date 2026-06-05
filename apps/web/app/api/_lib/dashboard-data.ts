@@ -136,7 +136,10 @@ export function buildUserActivity(
       .flatMap((position) => {
         const ticket = ticketById.get(position.ticketId);
         if (!ticket) return [];
-        return [tradeActivity(position, ticket, jobById.get(position.executionJobId) ?? null, runById.get(ticket.runId ?? ""))];
+        return [
+          tradeActivity(position, ticket, jobById.get(position.executionJobId) ?? null, runById.get(ticket.runId ?? "")),
+          ...closeActivity(position, ticket, runById.get(ticket.runId ?? "")),
+        ];
       }),
   ]
     .sort((left, right) => right.at.localeCompare(left.at))
@@ -167,6 +170,30 @@ function runActivity(run: ControlRun, intent: "watch" | "countertrade" | undefin
     authorHandle: run.sourcePost.authorHandle,
     error: run.error,
   };
+}
+
+function closeActivity(
+  position: Position,
+  ticket: TradeTicket,
+  run: ControlRun | undefined,
+): CassieActivityItem[] {
+  if (position.status !== "closed" || !position.closedAt) return [];
+  return [{
+    id: `${position.positionId}:close`,
+    kind: "trade_close",
+    at: position.closedAt,
+    title: `${ticket.instrument} CLOSE`,
+    subtitle: `${formatSignedUsd(position.unrealizedPnlUsd)} realized P/L · ${summarize(ticket.exitPlan.thesis ?? ticket.thesis)}`,
+    status: position.status,
+    amountUsd: null,
+    instrument: ticket.instrument,
+    venue: ticket.venue,
+    side: null,
+    source: run?.sourcePost.url ? "x" : "cassie",
+    sourceUrl: run?.sourcePost.url ?? null,
+    authorHandle: run?.sourcePost.authorHandle ?? null,
+    error: position.failureReason,
+  }];
 }
 
 function tradeActivity(
@@ -202,6 +229,11 @@ function summarize(value: string): string {
   if (cleaned.length <= 140) return cleaned;
   const cutoff = cleaned.lastIndexOf(" ", 140);
   return `${cleaned.slice(0, cutoff > 90 ? cutoff : 140).trim()}...`;
+}
+
+function formatSignedUsd(value: number) {
+  const prefix = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${prefix}$${Math.abs(value).toFixed(2)}`;
 }
 
 function buildIntentByRunId(steps: RunStep[]): Map<string, "watch" | "countertrade"> {

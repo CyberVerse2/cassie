@@ -119,7 +119,17 @@ describe("dashboard payload", () => {
     });
     expect(dashboard.closedPositions.map((entry) => entry.positionId)).toEqual(["position_closed"]);
     expect(dashboard.latestReviews.position_open?.summary).toBe("Take-profit threshold is active.");
-    expect(dashboard.activity.map((entry) => entry.id)).toEqual(["position_open", "position_closed"]);
+    expect(dashboard.activity.map((entry) => entry.id)).toEqual([
+      "position_closed:close",
+      "position_open",
+      "position_closed",
+    ]);
+    expect(dashboard.activity[0]).toMatchObject({
+      kind: "trade_close",
+      at: "2026-06-01T00:00:00.000Z",
+      title: "SOL-PERP CLOSE",
+      subtitle: expect.stringContaining("+$5.00 realized P/L"),
+    });
   });
 
   it("separates leveraged exposure from position equity", async () => {
