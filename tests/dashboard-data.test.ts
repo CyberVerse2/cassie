@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDashboardPayload } from "../apps/web/app/api/_lib/dashboard-data.ts";
-import { InMemoryCassieStore } from "../packages/core/db/store.ts";
+import { InMemoryCassieStore, type CassieStoreSnapshot } from "../packages/core/db/store.ts";
 import type {
   ExecutionJob,
   Position,
@@ -53,6 +53,20 @@ const job: ExecutionJob = {
 };
 
 describe("dashboard payload", () => {
+  it("uses scoped dashboard reads instead of loading the full store snapshot", async () => {
+    const store = new NoFullSnapshotDashboardStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+    await store.addPosition(position({ positionId: "position_open", status: "open", closedAt: null }));
+
+    const dashboard = await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 100,
+    });
+
+    expect(dashboard.openPositions.map((entry) => entry.positionId)).toEqual(["position_open"]);
+  });
+
   it("loads account summary, grouped positions, latest reviews, and activity together", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
@@ -143,6 +157,12 @@ describe("dashboard payload", () => {
     });
   });
 });
+
+class NoFullSnapshotDashboardStore extends InMemoryCassieStore {
+  override async load(): Promise<CassieStoreSnapshot> {
+    throw new Error("Dashboard payload must not load the full store snapshot.");
+  }
+}
 
 function position(input: {
   positionId: string;

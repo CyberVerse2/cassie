@@ -8,6 +8,7 @@ import type {
   WalletFundingBalance,
 } from "../../../../../packages/core/schemas/index.ts";
 import type { CassieStore } from "../../../../../packages/core/db/store.ts";
+import type { UserDashboardData } from "../../../../../packages/core/db/store.ts";
 import type { CassieActivityItem } from "../../lib/activity.ts";
 import { decoratePosition, type UserFacingPosition } from "../positions/_lib/position-response.ts";
 
@@ -51,18 +52,20 @@ export async function buildDashboardPayload(
   store: CassieStore,
   walletGateway: WalletBalanceGateway,
 ): Promise<DashboardPayload> {
-  const walletBalanceUsd = settings.privyWalletId
-    ? await walletGateway.getUsdcBalanceUsd(settings.privyWalletId)
-    : null;
+  const walletBalancePromise = settings.privyWalletId
+    ? walletGateway.getUsdcBalanceUsd(settings.privyWalletId)
+    : Promise.resolve(null);
+  const [walletBalanceUsd, dashboardData] = await Promise.all([
+    walletBalancePromise,
+    store.loadUserDashboardData(settings.userId, { activityLimit: ACTIVITY_LIMIT }),
+  ]);
   const balance = walletBalanceUsd == null
     ? null
     : await store.getWalletFundingBalance(settings.userId, walletBalanceUsd);
 
-  const snapshot = await store.load();
-  const positions = snapshot.positions
-    .filter((position) => position.userId === settings.userId)
+  const positions = dashboardData.positions
     .sort((left, right) => right.openedAt.localeCompare(left.openedAt));
-  const tickets = snapshot.tradeTickets.filter((ticket) => ticket.userId === settings.userId);
+  const tickets = dashboardData.tradeTickets;
   const ticketById = new Map(tickets.map((ticket) => [ticket.ticketId, ticket]));
   const displayPositions = positions.map((position) =>
     decoratePosition(position, ticketById.get(position.ticketId))
@@ -100,7 +103,7 @@ export async function buildDashboardPayload(
       position.positionId,
       latestReviews.get(position.positionId) ?? null,
     ])),
-    activity: buildUserActivity(settings.userId, snapshot),
+    activity: buildUserActivity(settings.userId, dashboardData),
   };
 }
 
@@ -114,7 +117,7 @@ function roundUsd(value: number) {
 
 export function buildUserActivity(
   userId: string,
-  snapshot: Awaited<ReturnType<CassieStore["load"]>>,
+  snapshot: UserDashboardData,
 ): CassieActivityItem[] {
   const runs = snapshot.controlRuns.filter((run) => run.userId === userId);
   const runById = new Map(runs.map((run) => [run.runId, run]));

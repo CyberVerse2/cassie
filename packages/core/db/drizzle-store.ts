@@ -34,6 +34,8 @@ import type {
   MentionRecord,
   NewModelCallUsage,
   NewRunStep,
+  UserDashboardData,
+  UserDashboardDataOptions,
 } from "./store.ts";
 
 export class DrizzleCassieStore implements CassieStore {
@@ -111,6 +113,66 @@ export class DrizzleCassieStore implements CassieStore {
         latencyMs: row.latencyMs ?? null,
         thinkingTrace: row.thinkingTrace ?? null,
         error: row.error ?? null,
+      })),
+    };
+  }
+
+  async loadUserDashboardData(userId: string, options: UserDashboardDataOptions): Promise<UserDashboardData> {
+    const [
+      positionRows,
+      ticketRows,
+      controlRunRows,
+    ] = await Promise.all([
+      this.db
+        .select()
+        .from(positions)
+        .where(eq(positions.userId, userId))
+        .orderBy(desc(positions.openedAt)),
+      this.db
+        .select()
+        .from(tradeTickets)
+        .where(eq(tradeTickets.userId, userId)),
+      this.db
+        .select()
+        .from(controlRuns)
+        .where(eq(controlRuns.userId, userId))
+        .orderBy(desc(controlRuns.createdAt))
+        .limit(options.activityLimit),
+    ]);
+    const userPositions = positionRows.map((row) => row.position);
+    const executionJobIds = [...new Set(userPositions.map((position) => position.executionJobId))];
+    const runIds = controlRunRows.map((row) => row.runId);
+    const [
+      jobRows,
+      stepRows,
+    ] = await Promise.all([
+      executionJobIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+          .select()
+          .from(executionJobs)
+          .where(inArray(executionJobs.jobId, executionJobIds)),
+      runIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+          .select()
+          .from(runSteps)
+          .where(inArray(runSteps.runId, runIds)),
+    ]);
+
+    return {
+      tradeTickets: ticketRows.map((row) => row.ticket),
+      executionJobs: jobRows.map((row) => row.job),
+      positions: userPositions,
+      controlRuns: controlRunRows.map((row) => ({
+        ...row,
+        result: row.result ?? null,
+      })),
+      runSteps: stepRows.map((row) => ({
+        ...row,
+        input: row.input ?? null,
+        output: row.output ?? null,
+        thinkingTrace: row.thinkingTrace ?? null,
       })),
     };
   }

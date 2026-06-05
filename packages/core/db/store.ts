@@ -59,12 +59,22 @@ export interface CassieStoreSnapshot {
   modelCallUsage: ModelCallUsageRecord[];
 }
 
+export type UserDashboardData = Pick<
+  CassieStoreSnapshot,
+  "tradeTickets" | "executionJobs" | "positions" | "controlRuns" | "runSteps"
+>;
+
+export type UserDashboardDataOptions = {
+  activityLimit: number;
+};
+
 export type NewRunStep = Omit<RunStep, "stepId" | "startedAt" | "completedAt"> & {
   completedAt?: string | null;
 };
 
 export interface CassieStore {
   load(): Promise<CassieStoreSnapshot>;
+  loadUserDashboardData(userId: string, options: UserDashboardDataOptions): Promise<UserDashboardData>;
   upsertUserSettings(settings: UserSettings): Promise<void>;
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
   getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined>;
@@ -158,6 +168,25 @@ export class InMemoryCassieStore implements CassieStore {
 
   async load(): Promise<CassieStoreSnapshot> {
     return structuredClone(this.snapshot);
+  }
+
+  async loadUserDashboardData(userId: string, options: UserDashboardDataOptions): Promise<UserDashboardData> {
+    const positions = this.snapshot.positions.filter((position) => position.userId === userId);
+    const ticketIds = new Set(positions.map((position) => position.ticketId));
+    const tickets = this.snapshot.tradeTickets.filter((ticket) => ticket.userId === userId || ticketIds.has(ticket.ticketId));
+    const executionJobIds = new Set(positions.map((position) => position.executionJobId));
+    const controlRuns = this.snapshot.controlRuns
+      .filter((run) => run.userId === userId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, options.activityLimit);
+    const runIds = new Set(controlRuns.map((run) => run.runId));
+    return {
+      tradeTickets: tickets,
+      executionJobs: this.snapshot.executionJobs.filter((job) => executionJobIds.has(job.jobId)),
+      positions,
+      controlRuns,
+      runSteps: this.snapshot.runSteps.filter((step) => runIds.has(step.runId)),
+    };
   }
 
   async upsertUserSettings(settings: UserSettings): Promise<void> {
