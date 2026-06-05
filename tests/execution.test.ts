@@ -219,6 +219,95 @@ describe("HyperliquidExecutionClient", () => {
       averagePrice: 4508.5,
     });
   });
+
+  it("resolves deployer perp markets across the full Hyperliquid universe", async () => {
+    const info = {
+      perpDexs: vi.fn().mockResolvedValue([null, { name: "vntl" }]),
+      metaAndAssetCtxs: vi.fn(async (input?: { dex?: string }) => {
+        if (input?.dex === "vntl") {
+          return [
+            {
+              universe: [
+                { name: "vntl:OPENAI", szDecimals: 4, maxLeverage: 3 },
+                { name: "vntl:SPACEX", szDecimals: 4, maxLeverage: 3 },
+              ],
+            },
+            [],
+          ];
+        }
+        return [{ universe: [{ name: "BTC", szDecimals: 5 }] }, []];
+      }),
+      allMids: vi.fn().mockResolvedValue({
+        "vntl:SPACEX": "1935.9",
+      }),
+      spotMetaAndAssetCtxs: vi.fn(),
+    };
+    const exchange = {
+      updateLeverage: vi.fn().mockResolvedValue({ status: "ok" }),
+      order: vi.fn().mockResolvedValue({
+        status: "ok",
+        response: {
+          type: "order",
+          data: {
+            statuses: [
+              {
+                filled: {
+                  totalSz: "0.0077",
+                  avgPx: "1934.0",
+                  oid: 24680,
+                },
+              },
+            ],
+          },
+        },
+      }),
+    };
+    const client = new HyperliquidExecutionClient({
+      privateKey: `0x${"1".repeat(64)}`,
+      slippageBps: 100,
+      priceDecimals: 5,
+      perpLeverage: 3,
+      clientFactory: () => ({ info: info as never, exchange: exchange as never }),
+    });
+
+    const result = await client.execute({
+      ticketId: "ticket_hl_vntl_1",
+      runId: "run_1",
+      userId: "user_1",
+      thesis: "Short SpaceX valuation.",
+      venue: "hyperliquid",
+      instrument: "pre_stock_perp",
+      side: "short",
+      sizeUsd: 5,
+      orderType: "marketable_limit",
+      venueData: { symbol: "vntl:SPACEX" },
+      exitPlan,
+    });
+
+    expect(info.perpDexs).toHaveBeenCalled();
+    expect(info.metaAndAssetCtxs).toHaveBeenCalledWith({ dex: "vntl" });
+    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 1, isCross: true, leverage: 3 });
+    expect(exchange.order).toHaveBeenCalledWith({
+      orders: [
+        {
+          a: 1,
+          b: false,
+          p: "1916.5",
+          s: "0.0077",
+          r: false,
+          t: { limit: { tif: "Ioc" } },
+        },
+      ],
+      grouping: "na",
+    });
+    expect(result).toMatchObject({
+      venueOrderId: "24680",
+      filledBaseSize: 0.0077,
+      filledSizeUsd: 14.8918,
+      collateralUsedUsd: 4.963933333333333,
+      averagePrice: 1934,
+    });
+  });
 });
 
 describe("PolymarketExecutionClient", () => {
