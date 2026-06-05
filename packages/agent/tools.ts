@@ -748,7 +748,7 @@ function preflightUserPolicy(userSettings: UserSettings) {
     policy: {
       defaultTradeSizeUsd: userSettings.defaultTradeSizeUsd,
       minHyperliquidPerpMarginUsd: MIN_HYPERLIQUID_PERP_MARGIN_USD,
-      effectiveHyperliquidPerpMarginUsd: Math.max(userSettings.defaultTradeSizeUsd, MIN_HYPERLIQUID_PERP_MARGIN_USD),
+      effectiveHyperliquidPerpMarginUsd: userSettings.defaultTradeSizeUsd,
       hasWalletAddress: Boolean(userSettings.walletAddress),
     },
   });

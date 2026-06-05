@@ -276,6 +276,7 @@ function StepFund({
 }
 
 const presets = [25, 50, 100, 250];
+const minDefaultTradeSizeUsd = 6;
 
 function StepDefaults({
   onNext,
@@ -296,8 +297,8 @@ function StepDefaults({
 
   async function save() {
     const next = Number(value);
-    if (!Number.isFinite(next) || next <= 0) {
-      setError("Enter a positive default trade size.");
+    if (!Number.isFinite(next) || next < minDefaultTradeSizeUsd) {
+      setError(`Enter at least $${minDefaultTradeSizeUsd}.`);
       return;
     }
 

@@ -310,7 +310,7 @@ describe("AI SDK supervisor agent", () => {
     expect(instructions).not.toContain("Never execute");
   });
 
-  it("preflights the effective Hyperliquid perp margin floor", async () => {
+  it("preflights the configured Hyperliquid perp margin and minimum", async () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
@@ -338,7 +338,7 @@ describe("AI SDK supervisor agent", () => {
       policy: {
         defaultTradeSizeUsd: 2,
         minHyperliquidPerpMarginUsd: 6,
-        effectiveHyperliquidPerpMarginUsd: 6,
+        effectiveHyperliquidPerpMarginUsd: 2,
       },
     });
   });

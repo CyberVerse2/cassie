@@ -23,9 +23,12 @@ export function createTradeTicket(input: {
     throw new Error("Cannot create a trade ticket without a selected market.");
   }
   const isHyperliquidPerp = market.venue === "hyperliquid" && (market.side === "long" || market.side === "short");
-  const sizeUsd = isHyperliquidPerp
-    ? Math.max(input.userSettings.defaultTradeSizeUsd, MIN_HYPERLIQUID_PERP_MARGIN_USD)
-    : input.userSettings.defaultTradeSizeUsd;
+  if (isHyperliquidPerp && input.userSettings.defaultTradeSizeUsd < MIN_HYPERLIQUID_PERP_MARGIN_USD) {
+    throw new Error(
+      `Your default trade size is below Hyperliquid's $${MIN_HYPERLIQUID_PERP_MARGIN_USD} minimum. Open your dashboard and set it to at least $${MIN_HYPERLIQUID_PERP_MARGIN_USD}.`,
+    );
+  }
+  const sizeUsd = input.userSettings.defaultTradeSizeUsd;
   const leverage = isHyperliquidPerp ? DEFAULT_HYPERLIQUID_PERP_LEVERAGE : undefined;
 
   return {

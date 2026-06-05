@@ -4,6 +4,9 @@ import { authenticatePrivyRequest, PrivyAdapter } from "../../../../../packages/
 import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
 import { UserProfileSchema } from "../../../../../packages/core/schemas";
 
+export const MIN_DEFAULT_TRADE_SIZE_USD = 6;
+export const MIN_DEFAULT_TRADE_SIZE_MESSAGE = `Default trade size must be at least $${MIN_DEFAULT_TRADE_SIZE_USD}.`;
+
 export const accountSyncSchema = z.object({
   walletAddress: z.string().min(1).nullable(),
   privyWalletId: z.string().min(1).nullable(),
@@ -12,7 +15,7 @@ export const accountSyncSchema = z.object({
     userId: z.string().min(1).nullable(),
     username: z.string().min(1).nullable(),
   }).nullable().optional(),
-  defaultTradeSizeUsd: z.number().positive().optional(),
+  defaultTradeSizeUsd: z.number().min(MIN_DEFAULT_TRADE_SIZE_USD, MIN_DEFAULT_TRADE_SIZE_MESSAGE).optional(),
 });
 
 export async function authenticatedContext(request: Request) {

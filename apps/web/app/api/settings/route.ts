@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  MIN_DEFAULT_TRADE_SIZE_USD,
+  MIN_DEFAULT_TRADE_SIZE_MESSAGE,
   accountResponse,
   apiError,
   authenticatedContext,
@@ -8,7 +10,7 @@ import {
 export const runtime = "nodejs";
 
 const settingsSchema = z.object({
-  defaultTradeSizeUsd: z.number().positive(),
+  defaultTradeSizeUsd: z.number().min(MIN_DEFAULT_TRADE_SIZE_USD, MIN_DEFAULT_TRADE_SIZE_MESSAGE),
 });
 
 export async function POST(request: Request) {

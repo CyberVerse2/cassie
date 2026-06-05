@@ -297,6 +297,7 @@ function Defaults({
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
 }) {
+  const minDefaultTradeSizeUsd = 6;
   const [trade, setTrade] = useState(formatTradeSize(defaultTradeSizeUsd));
   const [savedTrade, setSavedTrade] = useState(defaultTradeSizeUsd);
   const [error, setError] = useState<string | null>(null);
@@ -310,8 +311,8 @@ function Defaults({
   async function saveTrade() {
     if (!authenticated || saving) return;
     const next = Number(trade);
-    if (!Number.isFinite(next) || next <= 0) {
-      setError("Enter a positive default trade size.");
+    if (!Number.isFinite(next) || next < minDefaultTradeSizeUsd) {
+      setError(`Enter at least $${minDefaultTradeSizeUsd}.`);
       return;
     }
     if (next === savedTrade) return;

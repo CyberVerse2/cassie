@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_HYPERLIQUID_PERP_LEVERAGE } from "../packages/core/config.ts";
 import { createTradeTicket, MIN_HYPERLIQUID_PERP_MARGIN_USD } from "../packages/tickets/index.ts";
 import type { MarketSelection, Thesis, TradeExitPlan, UserSettings } from "../packages/core/schemas/index.ts";
 
@@ -69,19 +68,13 @@ const hyperliquidSelection: MarketSelection = {
 };
 
 describe("createTradeTicket", () => {
-  it("floors Hyperliquid perp margin to the universal 3x minimum order size", () => {
-    const ticket = createTradeTicket({
+  it("rejects Hyperliquid perp tickets below the user-visible minimum", () => {
+    expect(() => createTradeTicket({
       runId: "run_1",
       userSettings,
       thesis,
       marketSelection: hyperliquidSelection,
       exitPlan,
-    });
-
-    expect(ticket.sizeUsd).toBe(MIN_HYPERLIQUID_PERP_MARGIN_USD);
-    expect(ticket.venueData).toMatchObject({
-      leverage: DEFAULT_HYPERLIQUID_PERP_LEVERAGE,
-      notionalSizeUsd: MIN_HYPERLIQUID_PERP_MARGIN_USD * DEFAULT_HYPERLIQUID_PERP_LEVERAGE,
-    });
+    })).toThrow(`below Hyperliquid's $${MIN_HYPERLIQUID_PERP_MARGIN_USD} minimum`);
   });
 });
