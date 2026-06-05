@@ -551,7 +551,7 @@ function Center({
                 <div className={s.moverAssetInfo}>
                   <span className={`${s.tokenCell} ${s.moverTokenCell}`}>
                     <span className="tk">
-                      <img className={`${s.assetIconImage} ${s.moverTokenImage}`} src={tokenImages[positionSymbol(largestPositionMover)] ?? usdcIcon} alt="" />
+                      <img className={`${s.assetIconImage} ${s.moverTokenImage}`} src={positionTokenIcon(largestPositionMover)} alt="" />
                     </span>
                     <span className={`tk-venue ${venueTone(largestPositionMover.venue)}`}>
                       <VenueIcon venue={venueTone(largestPositionMover.venue)} size={7} />
@@ -674,7 +674,7 @@ function Center({
             <div className={s.tr} role="row" key={position.positionId}>
               <span className={s.tokenCell}>
                 <span className="tk">
-                  <img className={s.tokenImage} src={tokenImages[positionSymbol(position)] ?? usdcIcon} alt="" />
+                  <img className={s.tokenImage} src={positionTokenIcon(position)} alt="" />
                 </span>
                 <span className={`tk-venue ${venueTone(position.venue)}`} title={position.venue}>
                   <VenueIcon venue={venueTone(position.venue)} size={11} />
@@ -920,6 +920,7 @@ function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "close" | 
 
 function activityIcon(item: CassieActivityItem): string {
   const symbol = item.instrument?.replace(/-PERP$/u, "").split(/\s+/u)[0]?.toUpperCase();
+  if (symbol && item.venue === "hyperliquid") return hyperliquidTokenIcon(symbol);
   if (symbol && tokenImages[symbol]) return tokenImages[symbol];
   if (item.instrument === "USDC") return usdcIcon;
   return "/cassie-logo-transparent.png";
@@ -1330,6 +1331,16 @@ function positionSymbol(position: CassiePosition) {
   return (position.symbol?.trim() || position.instrument)
     .replace(/-PERP$/u, "")
     .replace(/^spot$/u, position.venue.toUpperCase());
+}
+
+function positionTokenIcon(position: CassiePosition) {
+  const symbol = positionSymbol(position);
+  if (position.venue === "hyperliquid") return hyperliquidTokenIcon(symbol);
+  return tokenImages[symbol] ?? usdcIcon;
+}
+
+function hyperliquidTokenIcon(symbol: string) {
+  return `https://app.hyperliquid.xyz/coins/${encodeURIComponent(symbol)}.svg`;
 }
 
 function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
