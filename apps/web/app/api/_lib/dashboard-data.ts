@@ -12,7 +12,7 @@ import type { UserDashboardData } from "../../../../../packages/core/db/store.ts
 import type { CassieActivityItem } from "../../lib/activity.ts";
 import { decoratePosition, type UserFacingPosition } from "../positions/_lib/position-response.ts";
 
-const ACTIVITY_LIMIT = 80;
+export const DASHBOARD_ACTIVITY_LIMIT = 80;
 const PORTFOLIO_HISTORY_LIMIT = 500;
 
 export type DashboardAccountSummary = {
@@ -58,7 +58,7 @@ export async function buildDashboardPayload(
     : Promise.resolve(null);
   const [walletBalanceUsd, dashboardData] = await Promise.all([
     walletBalancePromise,
-    store.loadUserDashboardData(settings.userId, { activityLimit: ACTIVITY_LIMIT }),
+    store.loadUserDashboardData(settings.userId, { activityLimit: DASHBOARD_ACTIVITY_LIMIT }),
   ]);
   const balance = walletBalanceUsd == null
     ? null
@@ -66,12 +66,13 @@ export async function buildDashboardPayload(
 
   const positions = dashboardData.positions
     .sort((left, right) => right.openedAt.localeCompare(left.openedAt));
+  const latestReviewsPromise = store.getLatestPositionReviews(positions.map((position) => position.positionId));
   const tickets = dashboardData.tradeTickets;
   const ticketById = new Map(tickets.map((ticket) => [ticket.ticketId, ticket]));
   const displayPositions = positions.map((position) =>
     decoratePosition(position, ticketById.get(position.ticketId))
   );
-  const latestReviewRows = await store.getLatestPositionReviews(positions.map((position) => position.positionId));
+  const latestReviewRows = await latestReviewsPromise;
   const latestReviews = new Map(latestReviewRows.map((review) => [review.positionId, review]));
   const openPositions = displayPositions.filter(isDashboardOpenPosition);
   const walletBalance = balance?.walletBalanceUsd ?? 0;
@@ -161,7 +162,7 @@ export function buildUserActivity(
       }),
   ]
     .sort((left, right) => right.at.localeCompare(left.at))
-    .slice(0, ACTIVITY_LIMIT);
+    .slice(0, DASHBOARD_ACTIVITY_LIMIT);
 }
 
 function isDashboardOpenPosition(position: UserFacingPosition) {

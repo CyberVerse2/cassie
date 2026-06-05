@@ -7,6 +7,7 @@ import type { TradeShareData } from "../../lib/trade-card-data";
 type Position = TradeShareData["position"];
 
 export function TradeShareClient({ initialShare, frameWidth }: { initialShare: TradeShareData; frameWidth?: number }) {
+  const liveMarksEnabled = initialShare.position.status === "open" && initialShare.position.venue === "hyperliquid";
   const markQuery = useQuery({
     queryKey: ["tradeShare", initialShare.position.positionId, "mark"],
     queryFn: async () => {
@@ -17,7 +18,8 @@ export function TradeShareClient({ initialShare, frameWidth }: { initialShare: T
       }
       return payload.position;
     },
-    refetchInterval: initialShare.position.status === "open" ? 30_000 : false,
+    enabled: liveMarksEnabled,
+    refetchInterval: liveMarksEnabled ? 30_000 : false,
     staleTime: 5_000,
   });
   const share = markQuery.data ? applyLivePosition(initialShare, markQuery.data) : initialShare;
