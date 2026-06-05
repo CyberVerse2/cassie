@@ -643,9 +643,7 @@ function Center({
           {openPositions.length === 0 && !effectivePositionError ? (
             <div className={s.emptyState}>No open positions.</div>
           ) : null}
-          {openPositions.map((position) => {
-            const review = latestReviews[position.positionId];
-            return (
+          {openPositions.map((position) => (
             <div className={s.tr} role="row" key={position.positionId}>
               <span className={s.tokenCell}>
                 <span className="tk">
@@ -658,7 +656,7 @@ function Center({
               </span>
               <span className={s.tradeCopy}>
                 <strong>{positionSymbol(position)} {position.side.toUpperCase()}</strong>
-                <span>{review?.summary ?? position.exitPlan.thesis}</span>
+                <span>{position.exitPlan.thesis}</span>
               </span>
               <span className={s.amountCell}>
                 <span className={s.amountValue}>{formatSignedUsd(position.unrealizedPnlUsd)}</span>
@@ -691,8 +689,7 @@ function Center({
                 </button>
               </span>
             </div>
-            );
-          })}
+          ))}
         </div>
         )}
 
