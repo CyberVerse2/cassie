@@ -229,7 +229,7 @@ describe("HyperliquidExecutionClient", () => {
             {
               universe: [
                 { name: "vntl:OPENAI", szDecimals: 4, maxLeverage: 3 },
-                { name: "vntl:SPACEX", szDecimals: 4, maxLeverage: 3 },
+                { name: "vntl:SPACEX", szDecimals: 4, maxLeverage: 3, onlyIsolated: true },
               ],
             },
             [
@@ -287,7 +287,7 @@ describe("HyperliquidExecutionClient", () => {
 
     expect(info.perpDexs).toHaveBeenCalled();
     expect(info.metaAndAssetCtxs).toHaveBeenCalledWith({ dex: "vntl" });
-    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 110001, isCross: true, leverage: 3 });
+    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 110001, isCross: false, leverage: 3 });
     expect(exchange.order).toHaveBeenCalledWith({
       orders: [
         {

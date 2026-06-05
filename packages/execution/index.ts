@@ -101,6 +101,7 @@ type ResolvedHyperliquidAsset = {
   midPx?: string;
   isSpot: boolean;
   dex?: string | null;
+  onlyIsolated?: boolean;
 };
 type HyperliquidExecutionClients = {
   info: HyperliquidInfoClientLike;
@@ -143,7 +144,7 @@ export class HyperliquidExecutionClient implements ExecutionClient {
       if (asset.maxLeverage != null && leverage > asset.maxLeverage) {
         throw new Error(`Hyperliquid ${symbol} max leverage is ${asset.maxLeverage}x; configured leverage is ${leverage}x.`);
       }
-      await exchange.updateLeverage({ asset: asset.id, isCross: true, leverage });
+      await exchange.updateLeverage({ asset: asset.id, isCross: !asset.onlyIsolated, leverage });
     }
     const requestedSizeUsd = ticket.sizeUsd * leverage;
     const size = requestedSizeUsd / mid;
@@ -271,6 +272,7 @@ async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symb
       midPx: ctx?.midPx ?? ctx?.markPx,
       isSpot: false,
       dex,
+      onlyIsolated: meta.universe[index]?.onlyIsolated,
     };
   }
 
