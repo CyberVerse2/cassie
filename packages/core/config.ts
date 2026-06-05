@@ -479,6 +479,7 @@ export function assertTelegramConnectEnv(config: TelegramEnv): RequiredTelegramC
 
 export type HyperliquidExecutionEnvOptions = {
   privateKey?: string;
+  mainPrivateKey?: string;
   slippageBps?: number;
   priceDecimals?: number;
   perpLeverage?: number;
@@ -486,6 +487,7 @@ export type HyperliquidExecutionEnvOptions = {
 
 export type HyperliquidExecutionEnv = {
   privateKey?: `0x${string}`;
+  mainPrivateKey?: `0x${string}`;
   slippageBps: number;
   priceDecimals: number;
   perpLeverage: number;
@@ -501,14 +503,17 @@ export function readHyperliquidExecutionEnv(
 ): HyperliquidExecutionEnv {
   const schema = z.object({
     HYPERLIQUID_PRIVATE_KEY: configuredStringSchema,
+    HYPERLIQUID_MAIN_PRIVATE_KEY: configuredStringSchema,
     HYPERLIQUID_EXECUTION_SLIPPAGE_BPS: numberSchema("HYPERLIQUID_EXECUTION_SLIPPAGE_BPS", 100, { min: 0 }),
     HYPERLIQUID_PRICE_DECIMALS: numberSchema("HYPERLIQUID_PRICE_DECIMALS", 5, { integer: true, min: 0 }),
     HYPERLIQUID_PERP_LEVERAGE: numberSchema("HYPERLIQUID_PERP_LEVERAGE", DEFAULT_HYPERLIQUID_PERP_LEVERAGE, { integer: true, min: 1 }),
   }).transform((values) => {
     const privateKey = firstConfigured(options.privateKey, values.HYPERLIQUID_PRIVATE_KEY);
+    const mainPrivateKey = firstConfigured(options.mainPrivateKey, values.HYPERLIQUID_MAIN_PRIVATE_KEY);
 
     return {
       privateKey: privateKey ? normalizePrivateKey(privateKey, "HYPERLIQUID_PRIVATE_KEY") : undefined,
+      mainPrivateKey: mainPrivateKey ? normalizePrivateKey(mainPrivateKey, "HYPERLIQUID_MAIN_PRIVATE_KEY") : undefined,
       slippageBps: options.slippageBps ?? values.HYPERLIQUID_EXECUTION_SLIPPAGE_BPS,
       priceDecimals: options.priceDecimals ?? values.HYPERLIQUID_PRICE_DECIMALS,
       perpLeverage: options.perpLeverage ?? values.HYPERLIQUID_PERP_LEVERAGE,

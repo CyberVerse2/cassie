@@ -228,8 +228,8 @@ describe("HyperliquidExecutionClient", () => {
           return [
             {
               universe: [
-                { name: "vntl:OPENAI", szDecimals: 4, maxLeverage: 3 },
-                { name: "vntl:SPACEX", szDecimals: 4, maxLeverage: 3, onlyIsolated: true },
+                { name: "vntl:OPENAI", szDecimals: 3, maxLeverage: 3 },
+                { name: "vntl:SPACEX", szDecimals: 3, maxLeverage: 3, onlyIsolated: true },
               ],
             },
             [
@@ -253,7 +253,7 @@ describe("HyperliquidExecutionClient", () => {
             statuses: [
               {
                 filled: {
-                  totalSz: "0.0077",
+                  totalSz: "0.009",
                   avgPx: "1934.0",
                   oid: 24680,
                 },
@@ -263,12 +263,21 @@ describe("HyperliquidExecutionClient", () => {
         },
       }),
     };
+    const mainExchange = {
+      updateLeverage: vi.fn().mockResolvedValue({ status: "ok" }),
+      order: exchange.order,
+    };
     const client = new HyperliquidExecutionClient({
       privateKey: `0x${"1".repeat(64)}`,
       slippageBps: 100,
       priceDecimals: 5,
       perpLeverage: 3,
-      clientFactory: () => ({ info: info as never, exchange: exchange as never }),
+      mainPrivateKey: `0x${"2".repeat(64)}`,
+      clientFactory: () => ({
+        info: info as never,
+        exchange: exchange as never,
+        mainExchange: mainExchange as never,
+      }),
     });
 
     const result = await client.execute({
@@ -279,7 +288,7 @@ describe("HyperliquidExecutionClient", () => {
       venue: "hyperliquid",
       instrument: "pre_stock_perp",
       side: "short",
-      sizeUsd: 5,
+      sizeUsd: 6,
       orderType: "marketable_limit",
       venueData: { symbol: "vntl:SPACEX" },
       exitPlan,
@@ -296,14 +305,15 @@ describe("HyperliquidExecutionClient", () => {
 
     expect(info.perpDexs).toHaveBeenCalled();
     expect(info.metaAndAssetCtxs).toHaveBeenCalledWith({ dex: "vntl" });
-    expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 110001, isCross: false, leverage: 3 });
+    expect(exchange.updateLeverage).not.toHaveBeenCalled();
+    expect(mainExchange.updateLeverage).toHaveBeenCalledWith({ asset: 110001, isCross: false, leverage: 3 });
     expect(exchange.order).toHaveBeenCalledWith({
       orders: [
         {
           a: 110001,
           b: false,
           p: "1916.5",
-          s: "0.0077",
+          s: "0.009",
           r: false,
           t: { limit: { tif: "Ioc" } },
         },
@@ -312,9 +322,9 @@ describe("HyperliquidExecutionClient", () => {
     });
     expect(result).toMatchObject({
       venueOrderId: "24680",
-      filledBaseSize: 0.0077,
-      filledSizeUsd: 14.8918,
-      collateralUsedUsd: 4.963933333333333,
+      filledBaseSize: 0.009,
+      filledSizeUsd: 17.406,
+      collateralUsedUsd: 5.802,
       averagePrice: 1934,
     });
   });

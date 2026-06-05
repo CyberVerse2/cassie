@@ -88,12 +88,14 @@ describe("Polymarket env", () => {
   it("reads and validates Hyperliquid execution config centrally", () => {
     const config = readHyperliquidExecutionEnv({
       HYPERLIQUID_PRIVATE_KEY: "2".repeat(64),
+      HYPERLIQUID_MAIN_PRIVATE_KEY: "3".repeat(64),
       HYPERLIQUID_EXECUTION_SLIPPAGE_BPS: "150",
       HYPERLIQUID_PRICE_DECIMALS: "4",
     });
 
     expect(config).toEqual({
       privateKey: `0x${"2".repeat(64)}`,
+      mainPrivateKey: `0x${"3".repeat(64)}`,
       slippageBps: 150,
       priceDecimals: 4,
       perpLeverage: 3,

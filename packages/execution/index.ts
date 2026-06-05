@@ -106,10 +106,12 @@ type ResolvedHyperliquidAsset = {
 type HyperliquidExecutionClients = {
   info: HyperliquidInfoClientLike;
   exchange: HyperliquidExchangeClientLike & Pick<ExchangeClient, "updateLeverage">;
+  mainExchange?: HyperliquidExchangeClientLike & Pick<ExchangeClient, "updateLeverage">;
 };
 type HyperliquidExecutionClientFactory = (
   config: RequiredHyperliquidExecutionEnv,
 ) => HyperliquidExecutionClients | Promise<HyperliquidExecutionClients>;
+const HYPERLIQUID_STRICT_ISOLATED_MIN_MARGIN_USD = 5;
 export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions & {
   clientFactory?: HyperliquidExecutionClientFactory;
 };
@@ -125,9 +127,11 @@ export class HyperliquidExecutionClient implements ExecutionClient {
 
   async execute(ticket: TradeTicket, _context: ExecutionContext = {}): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     const config = assertHyperliquidExecutionEnv(this.config);
-    const { info, exchange } = await this.clientFactory(config);
+    const clients = await this.clientFactory(config);
+    const { info } = clients;
     const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
     const asset = await this.resolveAsset(info, ticket, symbol);
+    const executionExchange = hyperliquidOrderExchangeForAsset(clients, asset, symbol);
     const mids = await info.allMids();
     const mid = Number(mids[asset.midKey] ?? asset.midPx);
 
@@ -143,7 +147,7 @@ export class HyperliquidExecutionClient implements ExecutionClient {
       if (asset.maxLeverage != null && leverage > asset.maxLeverage) {
         throw new Error(`Hyperliquid ${symbol} max leverage is ${asset.maxLeverage}x; configured leverage is ${leverage}x.`);
       }
-      await exchange.updateLeverage({ asset: asset.id, isCross: !asset.onlyIsolated, leverage });
+      await executionExchange.updateLeverage({ asset: asset.id, isCross: !asset.onlyIsolated, leverage });
     }
     const requestedSizeUsd = ticket.sizeUsd * leverage;
     const size = requestedSizeUsd / mid;
@@ -151,7 +155,16 @@ export class HyperliquidExecutionClient implements ExecutionClient {
     if (Number(requestedSize) <= 0) {
       throw new Error(`Hyperliquid order size rounds to zero for ${symbol}; increase ticket size.`);
     }
-    const response = await exchange.order({
+    if (asset.dex && asset.onlyIsolated) {
+      assertHyperliquidStrictIsolatedMargin({
+        symbol,
+        requestedSize,
+        mid,
+        leverage,
+        sizeDecimals: asset.sizeDecimals,
+      });
+    }
+    const response = await executionExchange.order({
       orders: [
         {
           a: asset.id,
@@ -208,11 +221,13 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
 
   async close(position: Position, ticket: TradeTicket): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     const config = assertHyperliquidExecutionEnv(this.config);
-    const { info, exchange } = await this.clientFactory(config);
+    const clients = await this.clientFactory(config);
+    const { info } = clients;
     const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
     const asset = isHyperliquidSpotTicket(ticket)
       ? await resolveHyperliquidSpotAsset(info, symbol)
       : await resolveHyperliquidPerpAsset(info, symbol);
+    const executionExchange = hyperliquidOrderExchangeForAsset(clients, asset, symbol);
     const mids = await info.allMids();
     const mid = Number(mids[asset.midKey] ?? asset.midPx);
     if (!Number.isFinite(mid) || mid <= 0) {
@@ -229,7 +244,7 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
     if (Number(requestedSize) <= 0) {
       throw new Error(`Hyperliquid close size rounds to zero for ${symbol}.`);
     }
-    const response = await exchange.order({
+    const response = await executionExchange.order({
       orders: [{
         a: asset.id,
         b: isClosingBuy,
@@ -250,6 +265,49 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
       raw: response,
     };
   }
+}
+
+function hyperliquidOrderExchangeForAsset(
+  clients: HyperliquidExecutionClients,
+  asset: ResolvedHyperliquidAsset,
+  symbol: string,
+): HyperliquidExecutionClients["exchange"] {
+  if (asset.dex && asset.onlyIsolated) {
+    if (!clients.mainExchange) {
+      throw new MissingConnectorConfigError(
+        `Hyperliquid strict isolated builder perp execution for ${symbol}`,
+        "HYPERLIQUID_MAIN_PRIVATE_KEY",
+      );
+    }
+    return clients.mainExchange;
+  }
+
+  return clients.exchange;
+}
+
+function assertHyperliquidStrictIsolatedMargin(input: {
+  symbol: string;
+  requestedSize: string;
+  mid: number;
+  leverage: number;
+  sizeDecimals: number;
+}): void {
+  const roundedCollateralUsd = Number(input.requestedSize) * input.mid / input.leverage;
+  if (roundedCollateralUsd >= HYPERLIQUID_STRICT_ISOLATED_MIN_MARGIN_USD) return;
+
+  const minimumSize = ceilDecimal(
+    HYPERLIQUID_STRICT_ISOLATED_MIN_MARGIN_USD * input.leverage / input.mid,
+    input.sizeDecimals,
+  );
+  const minimumMarginUsd = Number(minimumSize) * input.mid / input.leverage;
+  throw new Error(
+    `Hyperliquid ${input.symbol} strict isolated margin rounds below $${HYPERLIQUID_STRICT_ISOLATED_MIN_MARGIN_USD}; minimum executable margin is $${formatDecimal(minimumMarginUsd, 2)} at ${input.leverage}x.`,
+  );
+}
+
+function ceilDecimal(value: number, decimals: number): string {
+  const factor = 10 ** decimals;
+  return formatDecimal(Math.ceil(value * factor) / factor, decimals);
 }
 
 async function resolveHyperliquidPerpAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
@@ -324,10 +382,12 @@ async function resolveHyperliquidSpotAsset(info: HyperliquidInfoClientLike, symb
 
 function createHyperliquidExecutionClients(config: RequiredHyperliquidExecutionEnv): HyperliquidExecutionClients {
   const wallet = new EthersWallet(config.privateKey);
+  const fundingWallet = config.mainPrivateKey ? new EthersWallet(config.mainPrivateKey) : null;
   const transport = new HttpTransport();
   return {
     info: new InfoClient({ transport }),
     exchange: new ExchangeClient({ transport, wallet }),
+    mainExchange: fundingWallet ? new ExchangeClient({ transport, wallet: fundingWallet }) : undefined,
   };
 }
 
