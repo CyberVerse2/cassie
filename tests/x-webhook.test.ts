@@ -105,6 +105,53 @@ describe("X webhook", () => {
     });
   });
 
+  it("uses the parent tweet as the analysis source when Cassie is tagged in a reply", async () => {
+    const store = new InMemoryCassieStore();
+    const createMentionRun = vi.fn(async () => ({ runId: "run_1", status: "queued" as const }));
+    const product = { createMentionRun } as unknown as CassieProduct;
+
+    const result = await processXWebhookPayload({
+      product,
+      store,
+      userId: "user_1",
+      cassieHandle: "cassiedottrade",
+      payload: {
+        tweet_create_events: [{
+          id_str: "222",
+          full_text: "@cassiedottrade trade this",
+          in_reply_to_status_id_str: "111",
+          in_reply_to_screen_name: "source_user",
+          user: {
+            screen_name: "trader",
+            name: "Trader",
+          },
+        }],
+      },
+    });
+
+    expect(result).toMatchObject({ received: 1, queued: 1, skipped: 0, failed: 0 });
+    expect(createMentionRun).toHaveBeenCalledWith({
+      userId: "user_1",
+      userCommand: "@cassiedottrade trade this",
+      sourcePost: {
+        platform: "x",
+        postId: "111",
+        url: "https://x.com/source_user/status/111",
+        authorHandle: "source_user",
+        authorName: null,
+        text: "https://x.com/source_user/status/111",
+        createdAt: null,
+        quotedPostText: null,
+        linkedUrls: [],
+        mediaDescriptions: [],
+      },
+    });
+    await expect(store.getRuntimeState("x_reply_target:run_1")).resolves.toEqual({
+      postId: "222",
+      url: "https://x.com/trader/status/222",
+    });
+  });
+
   it("skips retweets and blocked-user mention payloads", async () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn();

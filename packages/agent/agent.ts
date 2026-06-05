@@ -263,6 +263,7 @@ function buildSupervisorPrompt(run: ControlRun): string {
     "Source post:",
     JSON.stringify({
       text: run.sourcePost.text,
+      url: run.sourcePost.url,
       author: run.sourcePost.authorHandle,
     }, null, 2),
   ].join("\n");

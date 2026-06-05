@@ -55,9 +55,11 @@ export async function notifyXTradeShare(input: {
   position: Position | null;
   replyClient?: XReplyClient;
 }): Promise<"sent" | "skipped" | "failed"> {
-  if (!input.position || !input.run || input.run.sourcePost.platform !== "x" || !input.run.sourcePost.postId) {
+  if (!input.position || !input.run || input.run.sourcePost.platform !== "x") {
     return "skipped";
   }
+  const replyTarget = await xReplyTarget(input.store, input.run);
+  if (!replyTarget) return "skipped";
 
   const stateKey = `x_reply:trade-share:${input.position.positionId}`;
   if (await input.store.getRuntimeState<string>(stateKey)) {
@@ -67,7 +69,7 @@ export async function notifyXTradeShare(input: {
   try {
     const replyClient = input.replyClient ?? new XApiReplyClient();
     const reply = await replyClient.reply({
-      inReplyToTweetId: input.run.sourcePost.postId,
+      inReplyToTweetId: replyTarget,
       text: tradeShareReplyText(input.position),
     });
     await input.store.setRuntimeState(stateKey, reply.tweetId);
@@ -82,6 +84,12 @@ export async function notifyXTradeShare(input: {
     });
     return "failed";
   }
+}
+
+async function xReplyTarget(store: CassieStore, run: ControlRun): Promise<string | null> {
+  const persisted = await store.getRuntimeState<{ postId?: unknown }>(`x_reply_target:${run.runId}`);
+  if (typeof persisted?.postId === "string" && persisted.postId.length > 0) return persisted.postId;
+  return run.sourcePost.postId;
 }
 
 export function tradeShareUrl(position: Position): string {

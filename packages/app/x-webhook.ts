@@ -28,6 +28,9 @@ const XWebhookUserSchema = z.object({
 const XWebhookTweetSchema = z.object({
   id: z.union([z.string(), z.number()]).optional(),
   id_str: z.string().optional(),
+  in_reply_to_status_id: z.union([z.string(), z.number()]).nullable().optional(),
+  in_reply_to_status_id_str: z.string().nullable().optional(),
+  in_reply_to_screen_name: z.string().nullable().optional(),
   text: z.string().optional(),
   full_text: z.string().optional(),
   created_at: z.string().nullable().optional(),
@@ -149,12 +152,13 @@ export async function processXWebhookPayload(input: {
         continue;
       }
 
-      const sourcePost = sourcePostFromXWebhookTweet(tweet);
-      postId = requireSourcePostId(sourcePost);
-      if (!mentionsCassie(sourcePost.text, cassieHandle)) {
+      const mentionPost = sourcePostFromXWebhookTweet(tweet);
+      postId = requireSourcePostId(mentionPost);
+      if (!mentionsCassie(mentionPost.text, cassieHandle)) {
         skipped += 1;
         continue;
       }
+      const sourcePost = sourcePostForAnalysis(tweet, mentionPost);
 
       const stateKey = `x_webhook:${userId}:${postId}`;
       const existing = await input.store.getRuntimeState(stateKey);
@@ -165,8 +169,12 @@ export async function processXWebhookPayload(input: {
 
       const result = await input.product.createMentionRun({
         userId,
-        userCommand: sourcePost.text,
+        userCommand: mentionPost.text,
         sourcePost,
+      });
+      await input.store.setRuntimeState(`x_reply_target:${result.runId}`, {
+        postId,
+        url: mentionPost.url,
       });
       await input.store.setRuntimeState(stateKey, {
         runId: result.runId,
@@ -192,6 +200,25 @@ export async function processXWebhookPayload(input: {
   };
 }
 
+function sourcePostForAnalysis(tweet: XWebhookTweet, mentionPost: SourcePost): SourcePost {
+  const parentPostId = stringValue(tweet.in_reply_to_status_id_str ?? tweet.in_reply_to_status_id);
+  if (!parentPostId) return mentionPost;
+
+  const parentUrl = xStatusUrl(tweet.in_reply_to_screen_name ?? null, parentPostId);
+  return {
+    platform: "x",
+    postId: parentPostId,
+    url: parentUrl,
+    authorHandle: tweet.in_reply_to_screen_name ?? null,
+    authorName: null,
+    text: parentUrl,
+    createdAt: null,
+    quotedPostText: null,
+    linkedUrls: [],
+    mediaDescriptions: [],
+  };
+}
+
 function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {
   const postId = stringValue(tweet.id_str ?? tweet.id);
   if (!postId) {
@@ -210,7 +237,7 @@ function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {
   return {
     platform: "x",
     postId,
-    url: authorHandle ? `https://x.com/${authorHandle}/status/${postId}` : `https://x.com/i/status/${postId}`,
+    url: xStatusUrl(authorHandle, postId),
     authorHandle,
     authorName,
     text,
@@ -223,6 +250,10 @@ function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {
       .filter((url): url is string => Boolean(url))),
     mediaDescriptions: [],
   };
+}
+
+function xStatusUrl(handle: string | null, postId: string): string {
+  return handle ? `https://x.com/${handle}/status/${postId}` : `https://x.com/i/status/${postId}`;
 }
 
 function stringValue(value: string | number | null | undefined): string | null {

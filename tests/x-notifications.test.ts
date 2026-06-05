@@ -94,6 +94,22 @@ describe("X trade share notifications", () => {
     }]);
   });
 
+  it("prefers the persisted webhook mention as the reply target", async () => {
+    const store = new InMemoryCassieStore();
+    const replyClient = new FakeXReplyClient();
+    await store.setRuntimeState(`x_reply_target:${run.runId}`, {
+      postId: "mention_1",
+      url: "https://x.com/trader/status/mention_1",
+    });
+
+    await expect(notifyXTradeShare({ store, run, position, replyClient })).resolves.toBe("sent");
+
+    expect(replyClient.replies).toEqual([{
+      inReplyToTweetId: "mention_1",
+      text: `Trade is live.\n${tradeShareUrl(position)}`,
+    }]);
+  });
+
   it("audits failed X replies without marking them sent", async () => {
     const store = new InMemoryCassieStore();
     const failingReplyClient = new FailingXReplyClient();
