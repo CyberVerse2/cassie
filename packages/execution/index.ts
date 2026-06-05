@@ -92,7 +92,7 @@ export class VenueExecutionClient implements ExecutionClient {
 }
 
 type HyperliquidInfoClientLike = Pick<InfoClient, "allMids" | "metaAndAssetCtxs" | "perpDexs" | "spotMetaAndAssetCtxs">;
-type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order" | "agentSetAbstraction">;
+type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order">;
 type ResolvedHyperliquidAsset = {
   id: number;
   sizeDecimals: number;
@@ -117,7 +117,6 @@ export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions &
 export class HyperliquidExecutionClient implements ExecutionClient {
   private readonly config: HyperliquidExecutionEnv;
   private readonly clientFactory: HyperliquidExecutionClientFactory;
-  private agentUnifiedAbstraction?: Promise<void>;
 
   constructor(options: HyperliquidExecutionClientOptions = {}) {
     this.config = readHyperliquidExecutionEnv(undefined, options);
@@ -134,10 +133,6 @@ export class HyperliquidExecutionClient implements ExecutionClient {
 
     if (!Number.isFinite(mid) || mid <= 0) {
       throw new Error(`No Hyperliquid mid price for ${symbol}.`);
-    }
-
-    if (asset.dex) {
-      await this.ensureAgentUnifiedAbstraction(exchange);
     }
 
     const isBuy = ticket.side === "long" || ticket.side === "buy";
@@ -200,22 +195,11 @@ export class HyperliquidExecutionClient implements ExecutionClient {
   private async resolveSpotAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
     return resolveHyperliquidSpotAsset(info, symbol);
   }
-
-  private async ensureAgentUnifiedAbstraction(exchange: HyperliquidExchangeClientLike): Promise<void> {
-    this.agentUnifiedAbstraction ??= exchange.agentSetAbstraction({ abstraction: "u" })
-      .then(() => undefined)
-      .catch((error) => {
-        this.agentUnifiedAbstraction = undefined;
-        throw error;
-      });
-    await this.agentUnifiedAbstraction;
-  }
 }
 
 export class HyperliquidPositionCloseClient implements PositionCloseClient {
   private readonly config: HyperliquidExecutionEnv;
   private readonly clientFactory: HyperliquidExecutionClientFactory;
-  private agentUnifiedAbstraction?: Promise<void>;
 
   constructor(options: HyperliquidExecutionClientOptions = {}) {
     this.config = readHyperliquidExecutionEnv(undefined, options);
@@ -233,9 +217,6 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
     const mid = Number(mids[asset.midKey] ?? asset.midPx);
     if (!Number.isFinite(mid) || mid <= 0) {
       throw new Error(`No Hyperliquid mid price for ${symbol}.`);
-    }
-    if (asset.dex) {
-      await this.ensureAgentUnifiedAbstraction(exchange);
     }
     const isClosingBuy = position.side === "short" || position.side === "sell";
     const slippage = config.slippageBps / 10_000;
@@ -268,16 +249,6 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
       }),
       raw: response,
     };
-  }
-
-  private async ensureAgentUnifiedAbstraction(exchange: HyperliquidExchangeClientLike): Promise<void> {
-    this.agentUnifiedAbstraction ??= exchange.agentSetAbstraction({ abstraction: "u" })
-      .then(() => undefined)
-      .catch((error) => {
-        this.agentUnifiedAbstraction = undefined;
-        throw error;
-      });
-    await this.agentUnifiedAbstraction;
   }
 }
 
