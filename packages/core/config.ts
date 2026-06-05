@@ -51,10 +51,11 @@ export type XWebhookEnv = {
   consumerSecret?: string;
   oauth2ClientId?: string;
   oauth2ClientSecret?: string;
+  runUserId?: string;
   userAccessToken?: string;
   userRefreshToken?: string;
+  webhookAccountId?: string;
   webhookUrl?: string;
-  webhookUserId?: string;
 };
 
 export type CassieRuntimeConfig = {
@@ -317,10 +318,11 @@ export function xWebhookEnv(env: EnvSource = process.env): XWebhookEnv {
     X_CONSUMER_SECRET: configuredStringSchema,
     X_OAUTH2_CLIENT_ID: configuredStringSchema,
     X_OAUTH2_CLIENT_SECRET: configuredStringSchema,
+    CASSIE_X_RUN_USER_ID: configuredStringSchema,
     X_USER_ACCESS_TOKEN: configuredStringSchema,
     X_USER_REFRESH_TOKEN: configuredStringSchema,
+    X_WEBHOOK_ACCOUNT_ID: configuredStringSchema,
     X_WEBHOOK_URL: configuredStringSchema,
-    X_WEBHOOK_USER_ID: configuredStringSchema,
   }).transform((values) => ({
     accountActivityWebhookId: values.X_ACCOUNT_ACTIVITY_WEBHOOK_ID,
     bearerToken: values.X_BEARER_TOKEN,
@@ -328,10 +330,11 @@ export function xWebhookEnv(env: EnvSource = process.env): XWebhookEnv {
     consumerSecret: values.X_CONSUMER_SECRET,
     oauth2ClientId: values.X_OAUTH2_CLIENT_ID,
     oauth2ClientSecret: values.X_OAUTH2_CLIENT_SECRET,
+    runUserId: values.CASSIE_X_RUN_USER_ID,
     userAccessToken: values.X_USER_ACCESS_TOKEN,
     userRefreshToken: values.X_USER_REFRESH_TOKEN,
+    webhookAccountId: values.X_WEBHOOK_ACCOUNT_ID,
     webhookUrl: values.X_WEBHOOK_URL,
-    webhookUserId: values.X_WEBHOOK_USER_ID,
   })).parse(env);
 }
 

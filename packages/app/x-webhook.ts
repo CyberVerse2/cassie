@@ -151,9 +151,9 @@ export async function processXWebhookPayload(input: {
   userId?: string;
   cassieHandle?: string;
 }): Promise<ProcessXWebhookPayloadResult> {
-  const userId = input.userId ?? runtimeConfig.x.webhookUserId;
+  const userId = input.userId ?? runtimeConfig.x.runUserId;
   if (!userId) {
-    throw new Error("X webhook processing requires X_WEBHOOK_USER_ID.");
+    throw new Error("X webhook processing requires CASSIE_X_RUN_USER_ID.");
   }
 
   const cassieHandle = input.cassieHandle ?? runtimeConfig.x.cassieHandle;
@@ -162,6 +162,10 @@ export async function processXWebhookPayload(input: {
   }
 
   const payload = XAccountActivityPayloadSchema.parse(input.payload);
+  const webhookAccountId = runtimeConfig.x.webhookAccountId;
+  if (webhookAccountId && stringValue(payload.for_user_id) !== webhookAccountId) {
+    throw new Error("X webhook payload for_user_id did not match X_WEBHOOK_ACCOUNT_ID.");
+  }
   const tweets = payload.tweet_create_events ?? [];
   if (isTruthyXFlag(payload.user_has_blocked) || isTruthyXFlag(payload.is_blocked_by)) {
     return {
