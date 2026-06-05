@@ -283,6 +283,36 @@ describe("X webhook", () => {
     await expect(store.getRuntimeState("x_reply:register:222")).resolves.toBe("reply_1");
   });
 
+  it("does not reply when an unregistered user mentions Cassie without a command", async () => {
+    const store = new InMemoryCassieStore();
+    const createMentionRun = vi.fn();
+    const replyClient = new FakeXReplyClient();
+    const product = { createMentionRun } as unknown as CassieProduct;
+
+    const result = await processXWebhookPayload({
+      product,
+      store,
+      cassieHandle: "cassiedottrade",
+      replyClient,
+      payload: {
+        tweet_create_events: [{
+          id_str: "222",
+          author_id: "1574209048425242624",
+          full_text: "having @cassiedottrade on the timeline feels great",
+          user: {
+            id_str: "1574209048425242624",
+            screen_name: "trader",
+            name: "Trader",
+          },
+        }],
+      },
+    });
+
+    expect(result).toMatchObject({ received: 1, queued: 0, skipped: 1, failed: 0 });
+    expect(createMentionRun).not.toHaveBeenCalled();
+    expect(replyClient.replies).toEqual([]);
+  });
+
   it("skips retweets and blocked-user mention payloads", async () => {
     const store = new InMemoryCassieStore();
     const createMentionRun = vi.fn();

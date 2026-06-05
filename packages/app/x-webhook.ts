@@ -197,6 +197,10 @@ export async function processXWebhookPayload(input: {
         skipped += 1;
         continue;
       }
+      if (!hasCassieCommand(mentionPost.text)) {
+        skipped += 1;
+        continue;
+      }
       const sourcePost = sourcePostForAnalysis(tweet, mentionPost);
       const runUserId = input.userId ?? await resolveXRunUserId({
         store: input.store,
@@ -395,6 +399,10 @@ function stringValue(value: string | number | null | undefined): string | null {
 function mentionsCassie(text: string, cassieHandle: string): boolean {
   const handle = cassieHandle.replace(/^@/, "");
   return new RegExp(`(^|[^A-Za-z0-9_])@${escapeRegExp(handle)}\\b`, "i").test(text);
+}
+
+function hasCassieCommand(text: string): boolean {
+  return /\b(trade|countertrade|watch|critic|critique|review|analy[sz]e)\b/i.test(text);
 }
 
 function escapeRegExp(value: string): string {
