@@ -92,7 +92,7 @@ export class VenueExecutionClient implements ExecutionClient {
 }
 
 type HyperliquidInfoClientLike = Pick<InfoClient, "allMids" | "metaAndAssetCtxs" | "perpDexs" | "spotMetaAndAssetCtxs">;
-type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order" | "sendAsset">;
+type HyperliquidExchangeClientLike = Pick<ExchangeClient, "order" | "agentSetAbstraction">;
 type ResolvedHyperliquidAsset = {
   id: number;
   sizeDecimals: number;
@@ -110,8 +110,6 @@ type HyperliquidExecutionClients = {
 type HyperliquidExecutionClientFactory = (
   config: RequiredHyperliquidExecutionEnv,
 ) => HyperliquidExecutionClients | Promise<HyperliquidExecutionClients>;
-const HYPERLIQUID_USDC_TOKEN = "USDC:0xeb62eee3685fc4c43992febcd9e75443";
-
 export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions & {
   clientFactory?: HyperliquidExecutionClientFactory;
 };
@@ -119,13 +117,14 @@ export type HyperliquidExecutionClientOptions = HyperliquidExecutionEnvOptions &
 export class HyperliquidExecutionClient implements ExecutionClient {
   private readonly config: HyperliquidExecutionEnv;
   private readonly clientFactory: HyperliquidExecutionClientFactory;
+  private agentUnifiedAbstraction?: Promise<void>;
 
   constructor(options: HyperliquidExecutionClientOptions = {}) {
     this.config = readHyperliquidExecutionEnv(undefined, options);
     this.clientFactory = options.clientFactory ?? createHyperliquidExecutionClients;
   }
 
-  async execute(ticket: TradeTicket, context: ExecutionContext = {}): Promise<NonNullable<ExecutionJob["executionResult"]>> {
+  async execute(ticket: TradeTicket, _context: ExecutionContext = {}): Promise<NonNullable<ExecutionJob["executionResult"]>> {
     const config = assertHyperliquidExecutionEnv(this.config);
     const { info, exchange } = await this.clientFactory(config);
     const symbol = ticket.venueData?.symbol ?? ticket.instrument.replace("-PERP", "");
@@ -137,81 +136,50 @@ export class HyperliquidExecutionClient implements ExecutionClient {
       throw new Error(`No Hyperliquid mid price for ${symbol}.`);
     }
 
-    let dexCollateralMoved = false;
-    try {
-      if (asset.dex) {
-        const destination = context.funding?.treasuryWalletAddress;
-        if (!destination) {
-          throw new Error(`Hyperliquid deployer perp ${symbol} requires treasury funding context.`);
-        }
-        await exchange.sendAsset({
-          destination,
-          sourceDex: "",
-          destinationDex: asset.dex,
-          token: HYPERLIQUID_USDC_TOKEN,
-          amount: formatDecimal(ticket.sizeUsd, 6),
-        });
-        dexCollateralMoved = true;
-      }
-
-      const isBuy = ticket.side === "long" || ticket.side === "buy";
-      const slippage = config.slippageBps / 10_000;
-      const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
-      const leverage = asset.isSpot ? 1 : config.perpLeverage;
-      if (!asset.isSpot) {
-        if (asset.maxLeverage != null && leverage > asset.maxLeverage) {
-          throw new Error(`Hyperliquid ${symbol} max leverage is ${asset.maxLeverage}x; configured leverage is ${leverage}x.`);
-        }
-        await exchange.updateLeverage({ asset: asset.id, isCross: !asset.onlyIsolated, leverage });
-      }
-      const requestedSizeUsd = ticket.sizeUsd * leverage;
-      const size = requestedSizeUsd / mid;
-      const requestedSize = formatDecimal(size, asset.sizeDecimals);
-      if (Number(requestedSize) <= 0) {
-        throw new Error(`Hyperliquid order size rounds to zero for ${symbol}; increase ticket size.`);
-      }
-      const response = await exchange.order({
-        orders: [
-          {
-            a: asset.id,
-            b: isBuy,
-            p: formatHyperliquidPrice(price, asset.sizeDecimals, asset.isSpot ? 8 : 6, config.priceDecimals),
-            s: requestedSize,
-            r: false,
-            t: { limit: { tif: "Ioc" } },
-          },
-        ],
-        grouping: "na",
-      });
-      const executionResult = parseHyperliquidOrderExecution(response, {
-        requestedSize,
-        requestedSizeUsd,
-        collateralUsd: ticket.sizeUsd,
-        leverage,
-      });
-
-      return {
-        ...executionResult,
-        raw: response,
-      };
-    } catch (error) {
-      if (dexCollateralMoved && asset.dex && context.funding?.treasuryWalletAddress) {
-        try {
-          await exchange.sendAsset({
-            destination: context.funding.treasuryWalletAddress,
-            sourceDex: asset.dex,
-            destinationDex: "",
-            token: HYPERLIQUID_USDC_TOKEN,
-            amount: formatDecimal(ticket.sizeUsd, 6),
-          });
-        } catch (returnError) {
-          const original = error instanceof Error ? error.message : String(error);
-          const returnMessage = returnError instanceof Error ? returnError.message : String(returnError);
-          throw new Error(`${original}; Hyperliquid ${asset.dex} collateral return failed: ${returnMessage}`);
-        }
-      }
-      throw error;
+    if (asset.dex) {
+      await this.ensureAgentUnifiedAbstraction(exchange);
     }
+
+    const isBuy = ticket.side === "long" || ticket.side === "buy";
+    const slippage = config.slippageBps / 10_000;
+    const price = isBuy ? mid * (1 + slippage) : mid * (1 - slippage);
+    const leverage = asset.isSpot ? 1 : config.perpLeverage;
+    if (!asset.isSpot) {
+      if (asset.maxLeverage != null && leverage > asset.maxLeverage) {
+        throw new Error(`Hyperliquid ${symbol} max leverage is ${asset.maxLeverage}x; configured leverage is ${leverage}x.`);
+      }
+      await exchange.updateLeverage({ asset: asset.id, isCross: !asset.onlyIsolated, leverage });
+    }
+    const requestedSizeUsd = ticket.sizeUsd * leverage;
+    const size = requestedSizeUsd / mid;
+    const requestedSize = formatDecimal(size, asset.sizeDecimals);
+    if (Number(requestedSize) <= 0) {
+      throw new Error(`Hyperliquid order size rounds to zero for ${symbol}; increase ticket size.`);
+    }
+    const response = await exchange.order({
+      orders: [
+        {
+          a: asset.id,
+          b: isBuy,
+          p: formatHyperliquidPrice(price, asset.sizeDecimals, asset.isSpot ? 8 : 6, config.priceDecimals),
+          s: requestedSize,
+          r: false,
+          t: { limit: { tif: "Ioc" } },
+        },
+      ],
+      grouping: "na",
+    });
+    const executionResult = parseHyperliquidOrderExecution(response, {
+      requestedSize,
+      requestedSizeUsd,
+      collateralUsd: ticket.sizeUsd,
+      leverage,
+    });
+
+    return {
+      ...executionResult,
+      raw: response,
+    };
   }
 
   private async resolveAsset(
@@ -232,11 +200,22 @@ export class HyperliquidExecutionClient implements ExecutionClient {
   private async resolveSpotAsset(info: HyperliquidInfoClientLike, symbol: string): Promise<ResolvedHyperliquidAsset> {
     return resolveHyperliquidSpotAsset(info, symbol);
   }
+
+  private async ensureAgentUnifiedAbstraction(exchange: HyperliquidExchangeClientLike): Promise<void> {
+    this.agentUnifiedAbstraction ??= exchange.agentSetAbstraction({ abstraction: "u" })
+      .then(() => undefined)
+      .catch((error) => {
+        this.agentUnifiedAbstraction = undefined;
+        throw error;
+      });
+    await this.agentUnifiedAbstraction;
+  }
 }
 
 export class HyperliquidPositionCloseClient implements PositionCloseClient {
   private readonly config: HyperliquidExecutionEnv;
   private readonly clientFactory: HyperliquidExecutionClientFactory;
+  private agentUnifiedAbstraction?: Promise<void>;
 
   constructor(options: HyperliquidExecutionClientOptions = {}) {
     this.config = readHyperliquidExecutionEnv(undefined, options);
@@ -254,6 +233,9 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
     const mid = Number(mids[asset.midKey] ?? asset.midPx);
     if (!Number.isFinite(mid) || mid <= 0) {
       throw new Error(`No Hyperliquid mid price for ${symbol}.`);
+    }
+    if (asset.dex) {
+      await this.ensureAgentUnifiedAbstraction(exchange);
     }
     const isClosingBuy = position.side === "short" || position.side === "sell";
     const slippage = config.slippageBps / 10_000;
@@ -286,6 +268,16 @@ export class HyperliquidPositionCloseClient implements PositionCloseClient {
       }),
       raw: response,
     };
+  }
+
+  private async ensureAgentUnifiedAbstraction(exchange: HyperliquidExchangeClientLike): Promise<void> {
+    this.agentUnifiedAbstraction ??= exchange.agentSetAbstraction({ abstraction: "u" })
+      .then(() => undefined)
+      .catch((error) => {
+        this.agentUnifiedAbstraction = undefined;
+        throw error;
+      });
+    await this.agentUnifiedAbstraction;
   }
 }
 

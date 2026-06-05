@@ -244,7 +244,7 @@ describe("HyperliquidExecutionClient", () => {
       spotMetaAndAssetCtxs: vi.fn(),
     };
     const exchange = {
-      sendAsset: vi.fn().mockResolvedValue({ status: "ok" }),
+      agentSetAbstraction: vi.fn().mockResolvedValue({ status: "ok" }),
       updateLeverage: vi.fn().mockResolvedValue({ status: "ok" }),
       order: vi.fn().mockResolvedValue({
         status: "ok",
@@ -297,13 +297,7 @@ describe("HyperliquidExecutionClient", () => {
 
     expect(info.perpDexs).toHaveBeenCalled();
     expect(info.metaAndAssetCtxs).toHaveBeenCalledWith({ dex: "vntl" });
-    expect(exchange.sendAsset).toHaveBeenCalledWith({
-      destination: "0x1111111111111111111111111111111111111111",
-      sourceDex: "",
-      destinationDex: "vntl",
-      token: "USDC:0xeb62eee3685fc4c43992febcd9e75443",
-      amount: "5",
-    });
+    expect(exchange.agentSetAbstraction).toHaveBeenCalledWith({ abstraction: "u" });
     expect(exchange.updateLeverage).toHaveBeenCalledWith({ asset: 110001, isCross: false, leverage: 3 });
     expect(exchange.order).toHaveBeenCalledWith({
       orders: [
