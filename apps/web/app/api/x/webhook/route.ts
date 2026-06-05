@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { CassieProduct } from "../../../../../../packages/app/product";
 import {
   processXWebhookPayload,
+  recordXWebhookDeliveryAttempt,
   verifyXWebhookSignature,
   xWebhookResponseToken,
 } from "../../../../../../packages/app/x-webhook";
@@ -32,10 +33,18 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const rawBody = Buffer.from(await request.arrayBuffer());
+    const store = new DrizzleCassieStore();
+    const deliveryAttempt = await recordXWebhookDeliveryAttempt({
+      store,
+      rawBody,
+      headers: request.headers,
+    });
     console.log(JSON.stringify({
       event: "x.webhook.received",
+      attemptId: deliveryAttempt.attemptId,
       bytes: rawBody.byteLength,
       signaturePresent: Boolean(request.headers.get("x-twitter-webhooks-signature")),
+      tweetIds: deliveryAttempt.tweetIds,
     }));
     verifyXWebhookSignature({
       rawBody,
@@ -43,7 +52,6 @@ export async function POST(request: Request) {
       consumerSecret: config.x.consumerSecret,
     });
 
-    const store = new DrizzleCassieStore();
     const product = new CassieProduct(store);
     const result = await processXWebhookPayload({
       product,

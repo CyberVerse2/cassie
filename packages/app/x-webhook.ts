@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
 import type { SourcePost } from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
@@ -69,6 +69,19 @@ export type ProcessXWebhookPayloadResult = {
   errors: Array<{ postId?: string; error: string }>;
 };
 
+export type XWebhookDeliveryAttempt = {
+  attemptId: string;
+  bodySha256: string;
+  bytes: number;
+  contentType: string | null;
+  forUserId: string | null;
+  parsed: boolean;
+  receivedAt: string;
+  signaturePresent: boolean;
+  tweetIds: string[];
+  userAgent: string | null;
+};
+
 export function xWebhookResponseToken(input: {
   crcToken: string;
   consumerSecret?: string;
@@ -107,6 +120,28 @@ function hmacSha256Base64(message: string | Buffer, secret: string): string {
   return createHmac("sha256", secret)
     .update(message)
     .digest("base64");
+}
+
+export async function recordXWebhookDeliveryAttempt(input: {
+  store: CassieStore;
+  rawBody: Buffer;
+  headers: Headers;
+}): Promise<XWebhookDeliveryAttempt> {
+  const parsed = parseXWebhookDeliveryBody(input.rawBody);
+  const attempt: XWebhookDeliveryAttempt = {
+    attemptId: randomUUID(),
+    bodySha256: createHash("sha256").update(input.rawBody).digest("hex"),
+    bytes: input.rawBody.byteLength,
+    contentType: input.headers.get("content-type"),
+    forUserId: parsed.forUserId,
+    parsed: parsed.parsed,
+    receivedAt: new Date().toISOString(),
+    signaturePresent: Boolean(input.headers.get("x-twitter-webhooks-signature")),
+    tweetIds: parsed.tweetIds,
+    userAgent: input.headers.get("user-agent"),
+  };
+  await input.store.setRuntimeState(`x_webhook_delivery:${attempt.receivedAt}:${attempt.attemptId}`, attempt);
+  return attempt;
 }
 
 export async function processXWebhookPayload(input: {
@@ -200,6 +235,29 @@ export async function processXWebhookPayload(input: {
   };
 }
 
+function parseXWebhookDeliveryBody(rawBody: Buffer): {
+  forUserId: string | null;
+  parsed: boolean;
+  tweetIds: string[];
+} {
+  try {
+    const payload = JSON.parse(rawBody.toString("utf8")) as unknown;
+    if (!isRecord(payload)) return { forUserId: null, parsed: false, tweetIds: [] };
+    const forUserId = stringValue(payload.for_user_id as string | number | null | undefined);
+    const tweetIds = Array.isArray(payload.tweet_create_events)
+      ? payload.tweet_create_events
+        .map((tweet) => {
+          if (!isRecord(tweet)) return null;
+          return stringValue((tweet.id_str ?? tweet.id) as string | number | null | undefined);
+        })
+        .filter((id): id is string => Boolean(id))
+      : [];
+    return { forUserId, parsed: true, tweetIds };
+  } catch {
+    return { forUserId: null, parsed: false, tweetIds: [] };
+  }
+}
+
 function sourcePostForAnalysis(tweet: XWebhookTweet, mentionPost: SourcePost): SourcePost {
   const parentPostId = stringValue(tweet.in_reply_to_status_id_str ?? tweet.in_reply_to_status_id);
   if (!parentPostId) return mentionPost;
@@ -283,4 +341,8 @@ function requireSourcePostId(sourcePost: SourcePost): string {
 
 function isTruthyXFlag(value: string | boolean | undefined): boolean {
   return value === true || value === "true";
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -4,6 +4,7 @@ import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { CassieProduct } from "../packages/app/product.ts";
 import {
   processXWebhookPayload,
+  recordXWebhookDeliveryAttempt,
   verifyXWebhookSignature,
   xWebhookResponseToken,
 } from "../packages/app/x-webhook.ts";
@@ -37,6 +38,39 @@ describe("X webhook", () => {
       signature,
       consumerSecret: "wrong",
     })).toThrow("X webhook signature did not match.");
+  });
+
+  it("records raw webhook delivery attempts before processing", async () => {
+    const store = new InMemoryCassieStore();
+    const rawBody = Buffer.from(JSON.stringify({
+      for_user_id: "2060718466630406149",
+      tweet_create_events: [
+        { id_str: "tweet_1", full_text: "@cassiedottrade trade" },
+        { id: 123, text: "hello" },
+      ],
+    }));
+
+    const attempt = await recordXWebhookDeliveryAttempt({
+      store,
+      rawBody,
+      headers: new Headers({
+        "content-type": "application/json",
+        "user-agent": "Twitterbot/1.0",
+        "x-twitter-webhooks-signature": "sha256=test",
+      }),
+    });
+
+    expect(attempt).toMatchObject({
+      bytes: rawBody.byteLength,
+      contentType: "application/json",
+      forUserId: "2060718466630406149",
+      parsed: true,
+      signaturePresent: true,
+      tweetIds: ["tweet_1", "123"],
+      userAgent: "Twitterbot/1.0",
+    });
+    await expect(store.getRuntimeState(`x_webhook_delivery:${attempt.receivedAt}:${attempt.attemptId}`))
+      .resolves.toEqual(attempt);
   });
 
   it("queues only Cassie mentions and dedupes retried webhook deliveries", async () => {
