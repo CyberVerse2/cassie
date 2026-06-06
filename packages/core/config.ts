@@ -10,7 +10,7 @@ export type NumberEnvOptions = {
   max?: number;
 };
 
-export const DEFAULT_HYPERLIQUID_PERP_LEVERAGE = 3;
+export const DEFAULT_HYPERLIQUID_PERP_LEVERAGE = 5;
 
 export type AiProviderEnvDefaults = {
   cheapModel: string;

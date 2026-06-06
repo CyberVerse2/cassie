@@ -77,4 +77,20 @@ describe("createTradeTicket", () => {
       exitPlan,
     })).toThrow(`below Hyperliquid's $${MIN_HYPERLIQUID_PERP_MARGIN_USD} minimum`);
   });
+
+  it("defaults Hyperliquid perp tickets to 5x notional exposure", () => {
+    const ticket = createTradeTicket({
+      runId: "run_1",
+      userSettings: { ...userSettings, defaultTradeSizeUsd: 10 },
+      thesis,
+      marketSelection: hyperliquidSelection,
+      exitPlan,
+    });
+
+    expect(ticket.sizeUsd).toBe(10);
+    expect(ticket.venueData).toMatchObject({
+      leverage: 5,
+      notionalSizeUsd: 50,
+    });
+  });
 });
