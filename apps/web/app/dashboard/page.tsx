@@ -473,10 +473,6 @@ function Center({
     [positionMarksQuery.data, storedOpenPositions]
   );
   const closedPositions = dashboard?.closedPositions ?? [];
-  const tradePositions = useMemo(() =>
-    [...openPositions, ...closedPositions],
-    [closedPositions, openPositions],
-  );
   const activity = dashboard?.activity ?? [];
   const dashboardError = dashboardEnabled ? errorMessage(dashboardQuery.error) : null;
 
@@ -684,8 +680,8 @@ function Center({
             className={`${s.walletSubtab} ${walletView === "trades" ? s.walletSubtabActive : ""}`}
             onClick={() => setWalletView("trades")}
           >
-            Trades
-            <span className={s.walletSubtabCount}>{tradePositions.length}</span>
+            Open positions
+            <span className={s.walletSubtabCount}>{openPositions.length}</span>
           </button>
           <button
             type="button"
@@ -711,10 +707,10 @@ function Center({
           {effectivePositionError ? (
             <div className={s.emptyState} role="alert">{effectivePositionError}</div>
           ) : null}
-          {tradePositions.length === 0 && !effectivePositionError ? (
-            <div className={s.emptyState}>No trades yet.</div>
+          {openPositions.length === 0 && !effectivePositionError ? (
+            <div className={s.emptyState}>No open positions.</div>
           ) : null}
-          {tradePositions.map((position) => (
+          {openPositions.map((position) => (
             <div className={s.tr} role="row" key={position.positionId}>
               <span className={s.tokenCell}>
                 <span className="tk">
@@ -754,13 +750,9 @@ function Center({
                   className={s.tradeActionBtn}
                   type="button"
                   onClick={() => void requestClose(position)}
-                  disabled={!canRequestClose(position) || closingId === position.positionId}
+                  disabled={position.status === "closing" || closingId === position.positionId}
                 >
-                  {position.status === "closing" || closingId === position.positionId
-                    ? "Closing"
-                    : position.status === "closed"
-                      ? "Closed"
-                      : "Close"}
+                  {position.status === "closing" || closingId === position.positionId ? "Closing" : "Close"}
                 </button>
               </span>
             </div>
@@ -1464,10 +1456,6 @@ function isDashboardOpenPosition(position: CassiePosition) {
   return position.status === "open"
     || position.status === "closing"
     || position.status === "close_failed";
-}
-
-function canRequestClose(position: CassiePosition) {
-  return position.status === "open" || position.status === "close_failed";
 }
 
 function errorMessage(error: unknown) {
