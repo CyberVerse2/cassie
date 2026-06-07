@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Cassie Docs Lockup</title>
+    <style>
+      :root {
+        --gilt: oklch(0.78 0.13 78);
+        --gilt-glow: oklch(0.86 0.09 82);
+        --ink: oklch(0.95 0.018 85);
+        --stack-display: "EB Garamond", Georgia, "Times New Roman", serif;
+      }
+
+      html,
+      body {
+        margin: 0;
+        width: max-content;
+        height: max-content;
+        background: transparent;
+      }
+
+      .lockup {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        padding: 4px 6px;
+        background: transparent;
+      }
+
+      .mark {
+        width: 44px;
+        height: 44px;
+        object-fit: contain;
+      }
+
+      .wordmark {
+        color: var(--ink);
+        font-family: var(--stack-display);
+        font-size: 40px;
+        font-style: italic;
+        font-weight: 500;
+        letter-spacing: -0.035em;
+        line-height: 0.92;
+        text-rendering: geometricPrecision;
+        -webkit-font-smoothing: antialiased;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="lockup" aria-label="Cassie">
+      <img class="mark" src="./cassie-logo-transparent.png" alt="">
+      <span class="wordmark">Cassie</span>
+    </div>
+  </body>
+</html>
