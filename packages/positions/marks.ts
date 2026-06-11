@@ -36,13 +36,13 @@ export class CompositePositionMarkProvider implements PositionMarkProvider {
 }
 
 export class HyperliquidPositionMarkProvider implements PositionMarkProvider {
-  private allMidsPromise: Promise<HyperliquidAllMids> | null = null;
+  private allMidsPromises = new Map<string, Promise<HyperliquidAllMids>>();
 
   constructor(private readonly endpoint = "https://api.hyperliquid.xyz/info") {}
 
   async markPosition(input: { position: Position; ticket: TradeTicket }): Promise<PositionMark> {
     const symbol = hyperliquidSymbol(input.ticket, input.position);
-    const mids = await this.allMids();
+    const mids = await this.allMids(hyperliquidDex(symbol));
     const markPrice = Number(mids[symbol]);
     if (!Number.isFinite(markPrice) || markPrice <= 0) {
       throw new Error(`No Hyperliquid mark price for ${symbol}.`);
@@ -50,16 +50,21 @@ export class HyperliquidPositionMarkProvider implements PositionMarkProvider {
     return markFromPrice(input.position, markPrice);
   }
 
-  private allMids(): Promise<HyperliquidAllMids> {
-    this.allMidsPromise ??= this.fetchAllMids();
-    return this.allMidsPromise;
+  private allMids(dex: string | null): Promise<HyperliquidAllMids> {
+    const key = dex ?? "";
+    const existing = this.allMidsPromises.get(key);
+    if (existing) return existing;
+
+    const promise = this.fetchAllMids(dex);
+    this.allMidsPromises.set(key, promise);
+    return promise;
   }
 
-  private async fetchAllMids(): Promise<HyperliquidAllMids> {
+  private async fetchAllMids(dex: string | null): Promise<HyperliquidAllMids> {
     const response = await fetch(this.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ type: "allMids" }),
+      body: JSON.stringify(dex ? { type: "allMids", dex } : { type: "allMids" }),
     });
     return readJsonResponse<HyperliquidAllMids>("Hyperliquid position mark", response);
   }
@@ -106,6 +111,12 @@ export function markFromPrice(position: Position, markPrice: number, markedAt = 
 function hyperliquidSymbol(ticket: TradeTicket, position: Position): string {
   const raw = ticket.venueData?.symbol ?? ticket.instrument ?? position.instrument;
   return raw.replace(/-PERP$/u, "");
+}
+
+function hyperliquidDex(symbol: string): string | null {
+  const separatorIndex = symbol.indexOf(":");
+  if (separatorIndex <= 0) return null;
+  return symbol.slice(0, separatorIndex);
 }
 
 function roundUsd(value: number): number {

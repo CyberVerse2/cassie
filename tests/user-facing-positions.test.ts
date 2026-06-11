@@ -119,4 +119,39 @@ describe("user-facing positions", () => {
     });
     vi.unstubAllGlobals();
   });
+
+  it("marks deployer-specific Hyperliquid perps with their dex mids", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ "xyz:SPCX": "171.155" }),
+      text: async () => JSON.stringify({ "xyz:SPCX": "171.155" }),
+    });
+    const provider = new HyperliquidPositionMarkProvider("https://hyperliquid.test/info");
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(provider.markPosition({
+      position: {
+        ...hyperliquidPosition,
+        instrument: "pre_stock_perp",
+        entryPrice: 171.34,
+        filledBaseSize: 0.17,
+        filledSizeUsd: 29.1278,
+      },
+      ticket: {
+        ...hyperliquidTicket,
+        instrument: "pre_stock_perp",
+        venueData: { symbol: "xyz:SPCX" },
+      },
+    })).resolves.toMatchObject({
+      markPrice: 171.155,
+      currentValueUsd: 29.1,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("https://hyperliquid.test/info", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: "allMids", dex: "xyz" }),
+    });
+    vi.unstubAllGlobals();
+  });
 });
