@@ -1,7 +1,8 @@
 /* --- Trade result / PnL share card ---------------------------
    Clean dark card. One sans family, a heavy result-colored figure
-   as the hero, and a Cassie judgment figure. Fixed 1690x944 design,
-   every measure in cqw so it scales in proportion at any width. */
+   as the hero, and a single gilt direction emblem. Fixed 1690x944
+   design, every measure in cqw so it scales in proportion at any
+   width. */
 
 .frame {
   --tc-bg: oklch(0.13 0.008 88);
@@ -261,21 +262,19 @@
   color: var(--tc-ink-mute);
 }
 
-/* -- Cassie judgment figure ----------------------------------- */
-.judgment {
+/* -- direction emblem: full-bleed, contours reach the left edge */
+.emblem {
   position: absolute;
   z-index: 1;
-  top: -4cqw;
-  right: -13cqw;
-  width: 90cqw;
+  top: 50%;
+  left: 72%;
+  transform: translate(-50%, -50%);
+  width: 128cqw;
   height: auto;
-  opacity: 0.84;
-  mix-blend-mode: screen;
-  filter: saturate(1.05) contrast(1.08);
+  overflow: visible;
   pointer-events: none;
-  user-select: none;
 }
 
-.frame[data-positive="false"] .judgment {
-  filter: hue-rotate(178deg) saturate(1.08) contrast(1.08);
+.frame[data-positive="false"] .emblem {
+  transform: translate(-50%, -50%) scaleY(-1);
 }
