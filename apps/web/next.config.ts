@@ -8,6 +8,11 @@ const workspaceDir = path.resolve(appDir, "../..");
 
 dotenv.config({ path: path.join(workspaceDir, ".env") });
 
+function configured(value: string | undefined) {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingIncludes: {
@@ -18,9 +23,10 @@ const nextConfig: NextConfig = {
     ],
   },
   env: {
-    NEXT_PUBLIC_PRIVY_APP_ID: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
-    NEXT_PUBLIC_PRIVY_SIGNER_ID: process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID ?? process.env.PRIVY_AUTHORIZATION_KEY_ID,
-    NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS: process.env.NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS,
+    NEXT_PUBLIC_PRIVY_APP_ID: configured(process.env.NEXT_PUBLIC_PRIVY_APP_ID),
+    NEXT_PUBLIC_PRIVY_SIGNER_ID: configured(process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID)
+      ?? configured(process.env.PRIVY_AUTHORIZATION_KEY_ID),
+    NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS: configured(process.env.NEXT_PUBLIC_PRIVY_SIGNER_POLICY_IDS),
   },
   turbopack: {
     root: workspaceDir,

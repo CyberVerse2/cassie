@@ -6,6 +6,7 @@ import { useState } from "react";
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
   const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const signerId = process.env.NEXT_PUBLIC_PRIVY_SIGNER_ID;
   const [queryClient] = useState(() => new QueryClient({
     defaultOptions: {
       queries: {
@@ -18,6 +19,9 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
 
   if (!appId) {
     throw new Error("NEXT_PUBLIC_PRIVY_APP_ID is required to run Cassie.");
+  }
+  if (!signerId) {
+    throw new Error("NEXT_PUBLIC_PRIVY_SIGNER_ID or PRIVY_AUTHORIZATION_KEY_ID is required to run Cassie.");
   }
 
   return (
