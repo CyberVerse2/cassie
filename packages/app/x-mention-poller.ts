@@ -27,7 +27,7 @@ export async function pollXCommandMentions(input: {
   const searchClient = input.searchClient ?? new XRecentMentionSearchClient();
   const replyClient = input.replyClient ?? new XApiReplyClient(undefined, fetch, store);
   const sinceId = await xMentionPollSinceId(store);
-  const tweets = await searchClient.searchCommandMentions({ sinceId });
+  const { tweets, reseeded } = await searchMentionsForPoll(searchClient, store, sinceId);
   const sortedTweets = [...tweets].sort((left, right) => BigInt(left.id) < BigInt(right.id) ? -1 : 1);
   const parentTweets = await lookupParentTweets(searchClient, sortedTweets);
   const result: PollXCommandMentionsResult = {
@@ -38,7 +38,7 @@ export async function pollXCommandMentions(input: {
     errors: [],
   };
 
-  if (!sinceId && !input.processInitialBackfill) {
+  if ((!sinceId || reseeded) && !input.processInitialBackfill) {
     await storeXMentionPollSinceId(store, sortedTweets.at(-1)?.id);
     result.skipped = tweets.length;
     return result;
@@ -73,6 +73,24 @@ export async function pollXCommandMentions(input: {
   return result;
 }
 
+async function searchMentionsForPoll(
+  searchClient: XRecentMentionSearchClient,
+  store: CassieStore,
+  sinceId: string | undefined,
+): Promise<{ tweets: XRecentMentionTweet[]; reseeded: boolean }> {
+  try {
+    return {
+      tweets: await searchClient.searchCommandMentions({ sinceId }),
+      reseeded: false,
+    };
+  } catch (error) {
+    if (!sinceId || !isStaleSinceIdError(error)) throw error;
+    const tweets = await searchClient.searchCommandMentions();
+    await clearXMentionPollSinceId(store);
+    return { tweets, reseeded: true };
+  }
+}
+
 async function lookupParentTweets(
   searchClient: XRecentMentionSearchClient,
   tweets: XRecentMentionTweet[],
@@ -94,6 +112,17 @@ async function xMentionPollSinceId(store: CassieStore): Promise<string | undefin
 async function storeXMentionPollSinceId(store: CassieStore, sinceId: string | undefined): Promise<void> {
   if (!sinceId) return;
   await store.setRuntimeState(X_MENTION_POLL_SINCE_KEY, { sinceId });
+}
+
+async function clearXMentionPollSinceId(store: CassieStore): Promise<void> {
+  await store.setRuntimeState(X_MENTION_POLL_SINCE_KEY, {
+    resetAt: new Date().toISOString(),
+  });
+}
+
+function isStaleSinceIdError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.includes("'since_id' must be a tweet id created after");
 }
 
 function xAccountActivityPayloadFromRecentTweet(tweet: XRecentMentionTweet, parentTweet?: XRecentMentionTweet) {

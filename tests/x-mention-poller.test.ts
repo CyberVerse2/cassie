@@ -128,15 +128,59 @@ describe("X mention poller", () => {
       sinceId: "2062911914720571795",
     });
   });
+
+  it("reseeds since_id without processing backlog when X rejects an aged-out cursor", async () => {
+    const store = new InMemoryCassieStore();
+    await store.setRuntimeState("x_mention_poll:since_id", {
+      sinceId: "2065792437612683388",
+    });
+    const createMentionRun = vi.fn();
+    const replyClient = new FakeXReplyClient();
+    const product = { createMentionRun } as unknown as CassieProduct;
+    const searchClient = new FakeSearchClient({
+      staleSinceId: "2065792437612683388",
+      tweets: [{
+        id: "2069097036665323521",
+        author_id: "1574209048425242624",
+        author_username: "trader",
+        text: "@WatcherGuru @cassiedottrade trade this",
+      }],
+    });
+
+    const result = await pollXCommandMentions({
+      store,
+      product,
+      searchClient: searchClient as unknown as XRecentMentionSearchClient,
+      replyClient,
+    });
+
+    expect(result).toMatchObject({ found: 1, processed: 0, skipped: 1, runIds: [], errors: [] });
+    expect(searchClient.searches).toEqual([
+      { sinceId: "2065792437612683388" },
+      {},
+    ]);
+    expect(createMentionRun).not.toHaveBeenCalled();
+    expect(replyClient.replies).toEqual([]);
+    await expect(store.getRuntimeState("x_mention_poll:since_id")).resolves.toEqual({
+      sinceId: "2069097036665323521",
+    });
+  });
 });
 
 class FakeSearchClient {
+  readonly searches: Array<{ sinceId?: string }> = [];
+
   constructor(private readonly input: {
     tweets: XRecentMentionTweet[];
     lookupTweets?: XRecentMentionTweet[];
+    staleSinceId?: string;
   }) {}
 
-  async searchCommandMentions(): Promise<XRecentMentionTweet[]> {
+  async searchCommandMentions(input: { sinceId?: string } = {}): Promise<XRecentMentionTweet[]> {
+    this.searches.push(input);
+    if (input.sinceId && input.sinceId === this.input.staleSinceId) {
+      throw new Error("X API request failed with HTTP 400: Invalid Request One or more parameters to your request was invalid. [{\"parameters\":{\"since_id\":[\"2065792437612683388\"]},\"message\":\"'since_id' must be a tweet id created after 2026-06-22T16:35Z. Please use a 'since_id' that is larger than 2069097036665323520\"}]");
+    }
     return this.input.tweets;
   }
 
