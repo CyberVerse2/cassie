@@ -108,7 +108,7 @@ Usage:
   cassie <command> [options]
 
 Setup:
-  settings:set              Create or update the configured CLI user's trading settings.
+  settings:set              Update the configured CLI user's existing trading settings.
   env                       Show required runtime dependencies, with secrets masked.
 
 App flow:
@@ -153,11 +153,22 @@ async function env() {
 }
 
 async function settingsSet(args: ParsedArgs) {
+  const store = new DrizzleCassieStore();
+  const cassie = new CassieProduct(store);
+  const userId = userIdFromArgs(args);
+  const existingSettings = await store.getUserSettings(userId);
+  if (!existingSettings) {
+    throw new CliError(
+      `No existing Cassie settings found for user ${userId}. The CLI will not create user settings; create the user through the app/auth flow first.`,
+    );
+  }
+
   const { settings, generatedWallet } = buildCliUserSettings(args.flags, {
-    defaultUserId: defaultCliUserId(),
+    defaultUserId: userId,
+    existingSettings,
   });
 
-  await product().upsertSettings(settings);
+  await cassie.upsertSettings(settings);
   return { saved: true, settings, generatedWallet };
 }
 

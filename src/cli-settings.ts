@@ -11,24 +11,40 @@ export type GeneratedCliWallet = {
 
 export function buildCliUserSettings(
   flags: CliSettingsFlags,
-  options: { defaultUserId: string },
+  options: { defaultUserId: string; existingSettings?: UserSettings | null },
 ): {
   settings: UserSettings;
   generatedWallet: GeneratedCliWallet | null;
 } {
+  const existingSettings = options.existingSettings ?? null;
+  const userId = flag(flags, "user", options.defaultUserId);
   const providedWallet = nullableFlag(flags, "wallet");
-  const generatedWallet = providedWallet ? null : generateCliWallet();
-  const walletAddress = providedWallet ?? generatedWallet?.address;
+  const shouldGenerateWallet =
+    !providedWallet && !existingSettings?.walletAddress;
+  const generatedWallet = shouldGenerateWallet ? generateCliWallet() : null;
+  const walletAddress =
+    providedWallet ??
+    existingSettings?.walletAddress ??
+    generatedWallet?.address;
   if (!walletAddress) {
     throw new Error("CLI wallet generation failed.");
   }
   const settings: UserSettings = {
-    userId: flag(flags, "user", options.defaultUserId),
-    privyUserId: null,
-    privyWalletId: null,
+    ...existingSettings,
+    userId,
+    privyUserId: existingSettings?.privyUserId ?? null,
+    privyWalletId: existingSettings?.privyWalletId ?? null,
     walletAddress,
-    profile: { name: "Cassie CLI", handle: "@cassie-cli", avatarUrl: null },
-    defaultTradeSizeUsd: numberFlag(flags, "size", 50),
+    profile: existingSettings?.profile ?? {
+      name: "Cassie CLI",
+      handle: "@cassie-cli",
+      avatarUrl: null,
+    },
+    defaultTradeSizeUsd: numberFlag(
+      flags,
+      "size",
+      existingSettings?.defaultTradeSizeUsd ?? 50,
+    ),
   };
 
   return { settings, generatedWallet };
@@ -43,7 +59,11 @@ function generateCliWallet(): GeneratedCliWallet {
   };
 }
 
-function flag(flags: CliSettingsFlags, name: string, defaultValue: string): string {
+function flag(
+  flags: CliSettingsFlags,
+  name: string,
+  defaultValue: string,
+): string {
   const value = flags[name];
   return typeof value === "string" ? value : defaultValue;
 }
@@ -53,7 +73,11 @@ function nullableFlag(flags: CliSettingsFlags, name: string): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function numberFlag(flags: CliSettingsFlags, name: string, defaultValue: number): number {
+function numberFlag(
+  flags: CliSettingsFlags,
+  name: string,
+  defaultValue: number,
+): number {
   const value = flags[name];
   if (typeof value !== "string") {
     return defaultValue;
