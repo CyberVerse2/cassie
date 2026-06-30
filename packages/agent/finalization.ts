@@ -20,6 +20,7 @@ import {
 import { prepareFinalInput } from "./public-summary.ts";
 import { recordRunStep } from "./steps.ts";
 import { isInsufficientEvidence } from "./thesis.ts";
+import { enforceFitScoreInvariant } from "./fit-assessment.ts";
 
 export const FinalizeRunInputSchema = z.object({
   responseType: z.enum(["analysis", "trade_ticket"]),
@@ -44,14 +45,35 @@ export async function finalizeRunFromPersistedSteps(input: {
   run: ControlRun;
 }) {
   const steps = await input.store.getRunSteps(input.run.runId);
-  const tradeExpression = readPersistedStepOutput<TradeExpressionPlan>(steps, "trade_expression", TradeExpressionPlanSchema);
-  const marketCandidates = readPersistedStepOutput<MarketCandidate[]>(steps, "market_candidates", MarketCandidateSchema.array());
-  const expressionFits = readPersistedStepOutputs<ExpressionFitAssessment>(steps, "market_assessment", ExpressionFitAssessmentSchema);
+  const tradeExpression = readPersistedStepOutput<TradeExpressionPlan>(
+    steps,
+    "trade_expression",
+    TradeExpressionPlanSchema,
+  );
+  const marketCandidates = readPersistedStepOutput<MarketCandidate[]>(
+    steps,
+    "market_candidates",
+    MarketCandidateSchema.array(),
+  );
+  const expressionFits = readPersistedStepOutputs<ExpressionFitAssessment>(
+    steps,
+    "market_assessment",
+    ExpressionFitAssessmentSchema,
+  ).map(enforceFitScoreInvariant);
   const expressionFit = bestPersistedFitAssessment(expressionFits);
   const quote = latestPersistedStepOutput(steps, "market_quote");
-  const marketSelection = readPersistedStepOutput<MarketSelection>(steps, "market_selection", MarketSelectionSchema)
-    ?? noTradeSelectionFromCompletedMarketCheck(marketCandidates, expressionFit);
-  const tradeTicket = readPersistedStepOutput<TradeTicket>(steps, "ticket", TradeTicketSchema);
+  const marketSelection =
+    readPersistedStepOutput<MarketSelection>(
+      steps,
+      "market_selection",
+      MarketSelectionSchema,
+    ) ??
+    noTradeSelectionFromCompletedMarketCheck(marketCandidates, expressionFit);
+  const tradeTicket = readPersistedStepOutput<TradeTicket>(
+    steps,
+    "ticket",
+    TradeTicketSchema,
+  );
 
   validatePersistedStageProgress({
     tradeExpression,
@@ -103,12 +125,17 @@ function validatePersistedStageProgress(input: {
     return;
   }
 
-  if (input.tradeExpression.decision !== "needs_market_check" && input.tradeExpression.decision !== "route_to_market_router") {
+  if (
+    input.tradeExpression.decision !== "needs_market_check" &&
+    input.tradeExpression.decision !== "route_to_market_router"
+  ) {
     return;
   }
 
   if (!input.marketCandidates) {
-    throw new SupervisorPrerequisiteError("Market-check finalization requires a completed venue search.");
+    throw new SupervisorPrerequisiteError(
+      "Market-check finalization requires a completed venue search.",
+    );
   }
 
   if (input.marketCandidates.length === 0) {
@@ -116,7 +143,9 @@ function validatePersistedStageProgress(input: {
   }
 
   if (!input.expressionFit) {
-    throw new SupervisorPrerequisiteError("Market-check finalization requires expression-fit assessment.");
+    throw new SupervisorPrerequisiteError(
+      "Market-check finalization requires expression-fit assessment.",
+    );
   }
 
   if (input.expressionFit.fitStatus !== "validated") {
@@ -124,19 +153,28 @@ function validatePersistedStageProgress(input: {
   }
 
   if (!input.quote) {
-    throw new SupervisorPrerequisiteError("Validated expression finalization requires a quote.");
+    throw new SupervisorPrerequisiteError(
+      "Validated expression finalization requires a quote.",
+    );
   }
 
   if (!input.marketSelection) {
-    throw new SupervisorPrerequisiteError("Quoted expression finalization requires expression ranking.");
+    throw new SupervisorPrerequisiteError(
+      "Quoted expression finalization requires expression ranking.",
+    );
   }
 
-  if (!input.marketSelection.selectedMarket || input.marketSelection.noTradeReason) {
+  if (
+    !input.marketSelection.selectedMarket ||
+    input.marketSelection.noTradeReason
+  ) {
     return;
   }
 
   if (!input.tradeTicket) {
-    throw new SupervisorPrerequisiteError("Selected expression finalization requires trade ticket creation.");
+    throw new SupervisorPrerequisiteError(
+      "Selected expression finalization requires trade ticket creation.",
+    );
   }
 }
 
@@ -149,10 +187,12 @@ function noTradeSelectionFromCompletedMarketCheck(
       decision: "no_selection",
       selectedMarket: null,
       selectedCandidateId: null,
-      rejectionReason: "No configured venue candidates matched the trade expression.",
+      rejectionReason:
+        "No configured venue candidates matched the trade expression.",
       rankedCandidates: [],
       rejectedCandidates: [],
-      noTradeReason: "No configured venue candidates matched the trade expression.",
+      noTradeReason:
+        "No configured venue candidates matched the trade expression.",
     };
   }
 
@@ -179,25 +219,31 @@ function noTradeSelectionFromCompletedMarketCheck(
 
 export function assertUsableMarketSelection(selection?: MarketSelection): void {
   if (!selection || !selection.selectedMarket || selection.noTradeReason) {
-    throw new SupervisorPrerequisiteError("Trade ticket creation requires a usable market selection.");
+    throw new SupervisorPrerequisiteError(
+      "Trade ticket creation requires a usable market selection.",
+    );
   }
 }
 
-export function validateFinalizationPrerequisites(input: PreparedFinalizeRunInput) {
+export function validateFinalizationPrerequisites(
+  input: PreparedFinalizeRunInput,
+) {
   if (input.responseType === "trade_ticket") {
     if (!input.tradeTicket) {
-      throw new SupervisorPrerequisiteError("Trade-ticket finalization requires a trade ticket.");
+      throw new SupervisorPrerequisiteError(
+        "Trade-ticket finalization requires a trade ticket.",
+      );
     }
     return;
   }
 
   const hasMeaningfulAnalysisBasis = Boolean(
-    input.tradeExpression ||
-      input.marketSelection ||
-      input.tradeTicket,
+    input.tradeExpression || input.marketSelection || input.tradeTicket,
   );
   if (!hasMeaningfulAnalysisBasis) {
-    throw new SupervisorPrerequisiteError("finalize_run analysis response requires analysis.");
+    throw new SupervisorPrerequisiteError(
+      "finalize_run analysis response requires analysis.",
+    );
   }
 }
 
@@ -242,23 +288,42 @@ function readPersistedStepOutputs<T>(
   schema: z.ZodType<T>,
 ): T[] {
   return steps
-    .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
+    .filter(
+      (step) =>
+        step.stepType === stepType &&
+        step.status === "succeeded" &&
+        step.output != null,
+    )
     .map((step) => schema.parse(step.output));
 }
 
-function latestPersistedStepOutput(steps: RunStep[], stepType: RunStepType): unknown {
+function latestPersistedStepOutput(
+  steps: RunStep[],
+  stepType: RunStepType,
+): unknown {
   return steps
-    .filter((step) => step.stepType === stepType && step.status === "succeeded" && step.output != null)
+    .filter(
+      (step) =>
+        step.stepType === stepType &&
+        step.status === "succeeded" &&
+        step.output != null,
+    )
     .at(-1)?.output;
 }
 
-function bestPersistedFitAssessment(fitAssessments: ExpressionFitAssessment[]): ExpressionFitAssessment | undefined {
-  const validated = fitAssessments.filter((assessment) => assessment.fitStatus === "validated");
+function bestPersistedFitAssessment(
+  fitAssessments: ExpressionFitAssessment[],
+): ExpressionFitAssessment | undefined {
+  const validated = fitAssessments.filter(
+    (assessment) => assessment.fitStatus === "validated",
+  );
   const pool = validated.length > 0 ? validated : fitAssessments;
   return [...pool].sort((left, right) => right.fitScore - left.fitScore)[0];
 }
 
-function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState {
+function resolveActionState(
+  input: PreparedFinalizeRunInput,
+): CassieActionState {
   if (input.responseType === "trade_ticket") return "create_ticket";
 
   const selectedSide = input.marketSelection?.selectedMarket?.side;
@@ -271,8 +336,10 @@ function resolveActionState(input: PreparedFinalizeRunInput): CassieActionState 
 
   const tradeExpression = input.tradeExpression;
   if (isInsufficientEvidence(tradeExpression)) return "insufficient_evidence";
-  if (tradeExpression?.decision === "route_to_market_router") return "route_to_market";
-  if (tradeExpression?.decision === "needs_market_check") return "needs_market_check";
+  if (tradeExpression?.decision === "route_to_market_router")
+    return "route_to_market";
+  if (tradeExpression?.decision === "needs_market_check")
+    return "needs_market_check";
   if (tradeExpression?.decision === "no_trade") return "no_trade";
 
   return "insufficient_evidence";

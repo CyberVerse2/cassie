@@ -53,6 +53,7 @@ import {
   finalizeResult,
   validateFinalizationPrerequisites,
 } from "./finalization.ts";
+import { enforceFitScoreInvariant } from "./fit-assessment.ts";
 
 export { frameOpportunity, generateTradeExpressions } from "./reasoning.ts";
 export {
@@ -639,7 +640,11 @@ async function latestPersistedFitAssessments(
         step.stepType === "market_assessment" && step.status === "succeeded",
     )
     .sort((left, right) => left.startedAt.localeCompare(right.startedAt))
-    .map((step) => ExpressionFitAssessmentSchema.parse(step.output));
+    .map((step) =>
+      enforceFitScoreInvariant(
+        ExpressionFitAssessmentSchema.parse(step.output),
+      ),
+    );
 }
 
 async function latestPersistedMarketSelection(
@@ -726,7 +731,7 @@ function parseSuppliedFitAssessments(
   value: unknown,
 ): ExpressionFitAssessment[] {
   const parsed = ExpressionFitAssessmentSchema.array().safeParse(value);
-  if (parsed.success) return parsed.data;
+  if (parsed.success) return parsed.data.map(enforceFitScoreInvariant);
   throw new Error(
     "rank_expressions requires expression-fit assessments from assess_expression_fit.",
   );

@@ -22,6 +22,7 @@ import {
   expressionFitPromptSpec,
   structuredPromptInput,
 } from "../prompts/index.ts";
+import { enforceFitScoreInvariant } from "./fit-assessment.ts";
 
 export type TradeExpressionIntent = {
   thesis: Thesis;
@@ -257,17 +258,19 @@ export async function assessExpressionFit(input: {
   side?: "yes" | "no";
 }): Promise<ExpressionFitAssessment> {
   const candidate = MarketCandidateSchema.parse(input.candidate);
-  return ExpressionFitAssessmentSchema.parse(
-    await input.ai.generateObject({
-      ...structuredPromptInput(
-        expressionFitPromptSpec({
-          opportunityFrame: input.opportunityFrame,
-          tradeExpression: input.tradeExpression,
-          candidate,
-          side: input.side,
-        }),
-      ),
-    }),
+  return enforceFitScoreInvariant(
+    ExpressionFitAssessmentSchema.parse(
+      await input.ai.generateObject({
+        ...structuredPromptInput(
+          expressionFitPromptSpec({
+            opportunityFrame: input.opportunityFrame,
+            tradeExpression: input.tradeExpression,
+            candidate,
+            side: input.side,
+          }),
+        ),
+      }),
+    ),
   );
 }
 

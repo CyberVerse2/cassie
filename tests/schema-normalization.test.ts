@@ -7,6 +7,7 @@ import {
   TradeTicketSchema,
   TradeExpressionPlanSchema,
 } from "../packages/core/schemas/index.ts";
+import { enforceFitScoreInvariant } from "../packages/agent/fit-assessment.ts";
 
 describe("schema normalization", () => {
   it("describes ambiguous structured-output fields for provider schema guidance", () => {
@@ -46,18 +47,22 @@ describe("schema normalization", () => {
       }),
     ).toMatchObject({ fitStatus: "validated" });
     expect(() =>
-      ExpressionFitAssessmentSchema.parse({
-        ...baseFitAssessment,
-        fitStatus: "validated",
-        fitScore: 0.69,
-      }),
+      enforceFitScoreInvariant(
+        ExpressionFitAssessmentSchema.parse({
+          ...baseFitAssessment,
+          fitStatus: "validated",
+          fitScore: 0.69,
+        }),
+      ),
     ).toThrow();
     expect(() =>
-      ExpressionFitAssessmentSchema.parse({
-        ...baseFitAssessment,
-        fitStatus: "rejected",
-        fitScore: 0.82,
-      }),
+      enforceFitScoreInvariant(
+        ExpressionFitAssessmentSchema.parse({
+          ...baseFitAssessment,
+          fitStatus: "rejected",
+          fitScore: 0.82,
+        }),
+      ),
     ).toThrow();
   });
 

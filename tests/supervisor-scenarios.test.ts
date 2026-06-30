@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "../packages/agent/tools.ts";
+import {
+  createCassieSupervisorTools,
+  finalizeRunFromPersistedSteps,
+} from "../packages/agent/tools.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type {
   MarketCandidate,
@@ -83,28 +86,38 @@ const marketSelection: MarketSelection = {
 };
 
 const opportunityFrame: OpportunityFrame = {
-  literalClaim: "Solana ETF approval is basically inevitable now. Market is asleep.",
-  opportunity: "SOL exposure may be underpriced if ETF approval odds are higher than reflected in market prices.",
-  marketImplication: "Bullish SOL if the approval signal is credible and not priced.",
+  literalClaim:
+    "Solana ETF approval is basically inevitable now. Market is asleep.",
+  opportunity:
+    "SOL exposure may be underpriced if ETF approval odds are higher than reflected in market prices.",
+  marketImplication:
+    "Bullish SOL if the approval signal is credible and not priced.",
   userIntent: "trade",
   affectedEntities: ["Solana", "SOL"],
   affectedAssets: ["SOL"],
-  expressionFamilies: ["long SOL perp", "Solana ETF prediction market", "no trade if venue fit is weak"],
+  expressionFamilies: [
+    "long SOL perp",
+    "Solana ETF prediction market",
+    "no trade if venue fit is weak",
+  ],
   signalVerificationRisk: "medium",
   shouldVerifyTruthBeforeTrading: true,
-  reason: "The post is a social ETF approval claim, so Cassie should route the expression while preserving evidence risk.",
+  reason:
+    "The post is a social ETF approval claim, so Cassie should route the expression while preserving evidence risk.",
   confidence: 0.72,
 };
 
 const tradeExpression: TradeExpressionPlan = {
   signal: "SOL ETF rumor",
-  coreInterpretation: "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
+  coreInterpretation:
+    "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
   directAsset: "SOL",
   directAssetTradable: true,
   evidenceConfidence: 0.6,
   marketDiscoveryConfidence: 0.9,
   tradeExpressionConfidence: 0.72,
-  highestPurityExpression: "Long SOL perp while the ETF approval catalyst remains unresolved.",
+  highestPurityExpression:
+    "Long SOL perp while the ETF approval catalyst remains unresolved.",
   publicMarketReadThrough: "strong",
   candidateExpressions: [],
   discardedExpressions: [],
@@ -112,7 +125,13 @@ const tradeExpression: TradeExpressionPlan = {
   decision: "route_to_market_router",
   reason: "The asset is liquid and directly maps to the catalyst.",
   insufficiency: null,
-  marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Prefer direct SOL perps over indirect read-throughs.", queries: [] },
+  marketDiscovery: {
+    status: "needed",
+    venues: ["hyperliquid"],
+    missing: ["market_discovery"],
+    instructions: "Prefer direct SOL perps over indirect read-throughs.",
+    queries: [],
+  },
 };
 
 class ScenarioAi implements StructuredAiClient {
@@ -127,7 +146,10 @@ class ScenarioAi implements StructuredAiClient {
   }
 }
 
-async function createScenario(command: string, settings: UserSettings = baseSettings) {
+async function createScenario(
+  command: string,
+  settings: UserSettings = baseSettings,
+) {
   const store = new InMemoryCassieStore();
   await store.upsertUserSettings(settings);
   const run = await store.createRun({
@@ -152,23 +174,35 @@ async function createScenario(command: string, settings: UserSettings = baseSett
   return { store, run, tools };
 }
 
-async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<T> {
-  const execute = (toolDefinition as { execute: (input: unknown, options?: unknown) => Promise<T> }).execute;
+async function executeTool<T>(
+  toolDefinition: unknown,
+  input: unknown,
+): Promise<T> {
+  const execute = (
+    toolDefinition as {
+      execute: (input: unknown, options?: unknown) => Promise<T>;
+    }
+  ).execute;
   return execute(input, {});
 }
 
 describe("supervisor scenario coverage", () => {
   it("creates a ticket from the single-loop step stream", async () => {
     const { store, tools } = await createScenario("@Cassie get me in");
-    const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
-      tradeExpression,
-      marketSelection,
-      exitPlan,
-    });
+    const ticket = await executeTool<{ ticketId: string }>(
+      tools.create_trade_ticket,
+      {
+        tradeExpression,
+        marketSelection,
+        exitPlan,
+      },
+    );
 
     const state = await store.load();
     expect(state.tradeTickets[0]?.ticketId).toBe(ticket.ticketId);
-    expect(state.tradeTickets[0]?.sizeUsd).toBe(baseSettings.defaultTradeSizeUsd);
+    expect(state.tradeTickets[0]?.sizeUsd).toBe(
+      baseSettings.defaultTradeSizeUsd,
+    );
     expect(state.runSteps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["ticket"]),
     );
@@ -197,27 +231,43 @@ describe("supervisor scenario coverage", () => {
       decision: "no_selection",
       selectedMarket: null,
       selectedCandidateId: null,
-      rejectionReason: "No configured venue candidate matched the trade expression.",
+      rejectionReason:
+        "No configured venue candidate matched the trade expression.",
       rankedCandidates: [],
       rejectedCandidates: [],
-      noTradeReason: "No configured venue candidate matched the trade expression.",
+      noTradeReason:
+        "No configured venue candidate matched the trade expression.",
     };
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
       publicSummary: "Model wanted to route.",
-      tradeExpression,
+      tradeExpression: {
+        ...tradeExpression,
+        insufficiency: {
+          score: 0.32,
+          requiredThreshold: 0.65,
+          failedDimensions: ["market_discovery", "price_or_odds"],
+          summary: "Venue and quote had not been checked at expression time.",
+          evidenceNeededToClear: ["Venue search", "Live quote"],
+        },
+      },
       marketSelection: noTradeMarketSelection,
     });
 
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "no_trade",
-        publicSummary: expect.stringContaining("Market check came back no-trade"),
+        publicSummary: expect.stringContaining(
+          "Market check came back no-trade",
+        ),
       },
     });
     const completed = await store.getRun(run.runId);
     expect(String(completed?.result)).not.toContain("route_to_market_router");
+    expect(String(completed?.result)).not.toContain(
+      "Evidence is still below Cassie's bar",
+    );
   });
 
   it("maps unresolved expressions to insufficient evidence", async () => {
@@ -234,9 +284,12 @@ describe("supervisor scenario coverage", () => {
         requiredThreshold: 0.65,
         failedDimensions: ["market_discovery", "price_or_odds"],
         summary: "No venue-confirmed market or current price was available.",
-        evidenceNeededToClear: ["Confirmed Hyperliquid or Polymarket market", "Live price or odds"],
+        evidenceNeededToClear: [
+          "Confirmed Hyperliquid or Polymarket market",
+          "Live price or odds",
+        ],
       },
-        };
+    };
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
@@ -247,12 +300,16 @@ describe("supervisor scenario coverage", () => {
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
         actionState: "insufficient_evidence",
-        publicSummary: expect.stringContaining("Evidence is still below Cassie's bar"),
+        publicSummary: expect.stringContaining(
+          "Evidence is still below Cassie's bar",
+        ),
       },
     });
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       result: {
-        publicSummary: expect.stringContaining("market discovery, price or odds"),
+        publicSummary: expect.stringContaining(
+          "market discovery, price or odds",
+        ),
       },
     });
   });
@@ -284,8 +341,9 @@ describe("supervisor scenario coverage", () => {
       completedAt: new Date().toISOString(),
     });
 
-    await expect(finalizeRunFromPersistedSteps({ store, run }))
-      .rejects.toThrow("Market-check finalization requires a completed venue search.");
+    await expect(finalizeRunFromPersistedSteps({ store, run })).rejects.toThrow(
+      "Market-check finalization requires a completed venue search.",
+    );
 
     await expect(store.getRun(run.runId)).resolves.toMatchObject({
       status: "queued",
@@ -303,7 +361,8 @@ describe("supervisor scenario coverage", () => {
       output: {
         ...tradeExpression,
         decision: "needs_market_check",
-        reason: "Venue confirmation is required before this can be treated as tradable.",
+        reason:
+          "Venue confirmation is required before this can be treated as tradable.",
       },
       error: null,
       model: "deepseek-v4-pro",
@@ -349,7 +408,8 @@ describe("supervisor scenario coverage", () => {
       output: {
         ...tradeExpression,
         decision: "needs_market_check",
-        reason: "Venue confirmation is required before this can be treated as tradable.",
+        reason:
+          "Venue confirmation is required before this can be treated as tradable.",
       },
       error: null,
       model: "deepseek-v4-pro",
@@ -370,8 +430,9 @@ describe("supervisor scenario coverage", () => {
       completedAt: new Date().toISOString(),
     });
 
-    await expect(finalizeRunFromPersistedSteps({ store, run }))
-      .rejects.toThrow("Market-check finalization requires expression-fit assessment.");
+    await expect(finalizeRunFromPersistedSteps({ store, run })).rejects.toThrow(
+      "Market-check finalization requires expression-fit assessment.",
+    );
   });
 
   it("does not let a later rejected assessment override an earlier validated best fit", async () => {
@@ -394,7 +455,8 @@ describe("supervisor scenario coverage", () => {
       output: {
         ...tradeExpression,
         decision: "needs_market_check",
-        reason: "Venue confirmation is required before this can be treated as tradable.",
+        reason:
+          "Venue confirmation is required before this can be treated as tradable.",
       },
       error: null,
       model: "deepseek-v4-pro",
@@ -430,7 +492,8 @@ describe("supervisor scenario coverage", () => {
         directness: "direct",
         fitScore: 0.96,
         semanticFitSummary: "Direct SOL perp cleanly expresses the thesis.",
-        ruleOrContractFitSummary: "SOL perpetual supports the intended long exposure.",
+        ruleOrContractFitSummary:
+          "SOL perpetual supports the intended long exposure.",
         basisRisks: [],
         mismatchReasons: [],
         requiredFollowUp: [],
@@ -471,7 +534,8 @@ describe("supervisor scenario coverage", () => {
       completedAt: new Date().toISOString(),
     });
 
-    await expect(finalizeRunFromPersistedSteps({ store, run }))
-      .rejects.toThrow("Validated expression finalization requires a quote.");
+    await expect(finalizeRunFromPersistedSteps({ store, run })).rejects.toThrow(
+      "Validated expression finalization requires a quote.",
+    );
   });
 });

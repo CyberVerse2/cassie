@@ -319,24 +319,15 @@ const ExpressionFitAssessmentBaseSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
-export const ExpressionFitAssessmentSchema = z.discriminatedUnion("fitStatus", [
+export const ExpressionFitAssessmentSchema =
   ExpressionFitAssessmentBaseSchema.extend({
     fitStatus: z
-      .literal("validated")
+      .enum(["validated", "rejected"])
       .describe(
-        "Use validated when the real venue candidate matches the intended expression.",
+        "Use validated when the real venue candidate matches the intended expression; use rejected when it does not.",
       ),
-    fitScore: z.number().min(0.7).max(1),
-  }),
-  ExpressionFitAssessmentBaseSchema.extend({
-    fitStatus: z
-      .literal("rejected")
-      .describe(
-        "Use rejected when the real venue candidate does not match the intended expression.",
-      ),
-    fitScore: z.number().min(0).max(0.699999),
-  }),
-]);
+    fitScore: z.number().min(0).max(1),
+  });
 
 const EvidenceGapDimensionSchema = z.enum([
   "source_reliability",

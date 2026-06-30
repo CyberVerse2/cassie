@@ -10,7 +10,9 @@ type PublicSummaryFinalizeInput = {
   marketSelection?: MarketSelection;
 };
 
-export function prepareFinalInput<T extends PublicSummaryFinalizeInput>(input: T): T {
+export function prepareFinalInput<T extends PublicSummaryFinalizeInput>(
+  input: T,
+): T {
   const publicSummary = finalPublicSummary(input, input);
 
   return {
@@ -28,7 +30,11 @@ function finalPublicSummary(
 ): string {
   if (input.responseType === "analysis") {
     const basis = outputs.tradeExpression?.reason ?? input.publicSummary;
-    return withDecisionContext(basis, outputs.tradeExpression, outputs.marketSelection);
+    return withDecisionContext(
+      basis,
+      outputs.tradeExpression,
+      outputs.marketSelection,
+    );
   }
 
   return input.publicSummary;
@@ -42,13 +48,21 @@ function withDecisionContext(
   if (!tradeExpression) return summary;
 
   if (marketSelection?.noTradeReason) {
-    return joinSentences(summary, `Market check came back no-trade: ${marketSelection.noTradeReason}`, insufficiencySentence(tradeExpression));
+    return joinSentences(
+      summary,
+      `Market check came back no-trade: ${marketSelection.noTradeReason}`,
+    );
   }
 
   const selected = marketSelection?.selectedMarket
     ? `Cleanest expression: ${marketSideLabel(marketSelection.selectedMarket.side)} ${marketSelection.selectedMarket.symbol} on ${marketSelection.selectedMarket.venue}.`
     : "";
-  return joinSentences(summary, decisionSentence(tradeExpression), selected, insufficiencySentence(tradeExpression));
+  return joinSentences(
+    summary,
+    decisionSentence(tradeExpression),
+    selected,
+    marketSelection ? "" : insufficiencySentence(tradeExpression),
+  );
 }
 
 function decisionSentence(tradeExpression: TradeExpressionPlan): string {
@@ -62,10 +76,16 @@ function decisionSentence(tradeExpression: TradeExpressionPlan): string {
 }
 
 function insufficiencySentence(tradeExpression: TradeExpressionPlan): string {
-  if (!tradeExpression.insufficiency || tradeExpression.insufficiency.score >= tradeExpression.insufficiency.requiredThreshold) {
+  if (
+    !tradeExpression.insufficiency ||
+    tradeExpression.insufficiency.score >=
+      tradeExpression.insufficiency.requiredThreshold
+  ) {
     return "";
   }
-  const dimensions = tradeExpression.insufficiency.failedDimensions.map(formatDimension).join(", ");
+  const dimensions = tradeExpression.insufficiency.failedDimensions
+    .map(formatDimension)
+    .join(", ");
   return `Evidence is still below Cassie's bar because of ${dimensions}; needed: ${tradeExpression.insufficiency.evidenceNeededToClear.join("; ")}.`;
 }
 
@@ -88,6 +108,10 @@ function joinSentences(...parts: string[]): string {
   return parts
     .map((part) => part.trim())
     .filter(Boolean)
-    .map((part) => part.endsWith(".") || part.endsWith("!") || part.endsWith("?") ? part : `${part}.`)
+    .map((part) =>
+      part.endsWith(".") || part.endsWith("!") || part.endsWith("?")
+        ? part
+        : `${part}.`,
+    )
     .join(" ");
 }
