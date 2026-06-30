@@ -106,40 +106,13 @@ const tradeExpression: TradeExpressionPlan = {
   tradeExpressionConfidence: 0.72,
   highestPurityExpression: "Long SOL perp while the ETF approval catalyst remains unresolved.",
   publicMarketReadThrough: "strong",
-  candidates: [
-    {
-      instrument: "SOL perp",
-      venue: "hyperliquid",
-      symbol: "SOL",
-      instrumentType: "perp",
-      venueQuery: "SOL perp",
-      expression: "long",
-      thesis: "SOL may rally if ETF approval odds are underpriced.",
-      venueChecks: ["Hyperliquid SOL perp"],
-      currentMarketPriceOrOdds: null,
-      fairValueOrExpectedValue: null,
-      causalDirectness: 0.9,
-      liquidity: 0.9,
-      surprise: 0.5,
-      timing: 0.7,
-      crowdingRisk: 0.4,
-      downsideAsymmetry: 0.6,
-      evidenceQuality: 0.6,
-      expectedEdge: 0.72,
-      tradableNow: true,
-      rejectionReason: null,
-      invalidation: ["Primary sources refute near-term approval."],
-      evidenceNeeded: ["Primary ETF approval timing evidence."],
-    },
-  ],
-  rankedCandidates: [],
   candidateExpressions: [],
   discardedExpressions: [],
   noTradeCase: null,
   decision: "route_to_market_router",
   reason: "The asset is liquid and directly maps to the catalyst.",
   insufficiency: null,
-  marketRouterInstructions: "Prefer direct SOL perps over indirect read-throughs.",
+  marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Prefer direct SOL perps over indirect read-throughs.", queries: [] },
 };
 
 class ScenarioAi implements StructuredAiClient {
@@ -263,8 +236,7 @@ describe("supervisor scenario coverage", () => {
         summary: "No venue-confirmed market or current price was available.",
         evidenceNeededToClear: ["Confirmed Hyperliquid or Polymarket market", "Live price or odds"],
       },
-      marketRouterInstructions: null,
-    };
+        };
 
     await executeTool(tools.finalize_run, {
       responseType: "analysis",
@@ -304,7 +276,6 @@ describe("supervisor scenario coverage", () => {
           evidenceNeededToClear: ["Venue market confirmation"],
         },
         reason: "Wait for the catalyst to resolve before routing.",
-        marketRouterInstructions: null,
       },
       error: null,
       model: "deepseek-v4-pro",

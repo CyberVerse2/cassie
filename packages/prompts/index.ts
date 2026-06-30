@@ -14,7 +14,6 @@ import {
   type MarketCandidate,
   type MarketSelection,
   type OpportunityFrame,
-  type OpportunityTradePlan,
   type SourcePost,
   type SourceModeClassification,
   type Thesis,
@@ -236,12 +235,10 @@ function rankFocusedTradeExpression(value: unknown) {
   if (!tradeExpression) return value ?? null;
 
   return {
-    coreInterpretation: tradeExpression.coreInterpretation,
     directAsset: tradeExpression.directAsset,
-    tradeExpressionConfidence: tradeExpression.tradeExpressionConfidence,
     highestPurityExpression: tradeExpression.highestPurityExpression,
     decision: tradeExpression.decision,
-    marketRouterInstructions: tradeExpression.marketRouterInstructions,
+    marketDiscovery: tradeExpression.marketDiscovery,
     abstractExpressions: (tradeExpression.candidateExpressions ?? []).map(
       (candidate) => ({
         expressionId: candidate.expressionId,
@@ -250,8 +247,6 @@ function rankFocusedTradeExpression(value: unknown) {
         intendedSide: candidate.intendedSide,
         primaryEntityOrEvent: candidate.primaryEntityOrEvent,
         thesis: candidate.thesis,
-        whyThisExpressesTheOpportunity:
-          candidate.whyThisExpressesTheOpportunity,
         directness: candidate.directness,
         priority: candidate.priority,
         confidence: candidate.confidence,
@@ -266,12 +261,10 @@ function rankFocusedTradeExpression(value: unknown) {
 
 function assessmentTradeExpression(value: TradeExpressionPlan) {
   return {
-    coreInterpretation: value.coreInterpretation,
     directAsset: value.directAsset,
-    tradeExpressionConfidence: value.tradeExpressionConfidence,
     highestPurityExpression: value.highestPurityExpression,
     decision: value.decision,
-    marketRouterInstructions: value.marketRouterInstructions,
+    marketDiscovery: value.marketDiscovery,
     candidateExpressions: value.candidateExpressions.map((candidate) => ({
       expressionId: candidate.expressionId,
       expressionRail: candidate.expressionRail,
@@ -279,7 +272,6 @@ function assessmentTradeExpression(value: TradeExpressionPlan) {
       intendedSide: candidate.intendedSide,
       primaryEntityOrEvent: candidate.primaryEntityOrEvent,
       thesis: candidate.thesis,
-      whyThisExpressesTheOpportunity: candidate.whyThisExpressesTheOpportunity,
       directness: candidate.directness,
       priority: candidate.priority,
       confidence: candidate.confidence,
@@ -550,7 +542,7 @@ export function opportunityTradePlanPromptSpec(input: {
   sourcePost: SourcePost;
   userCommand: string;
   marketCandidates?: MarketCandidate[];
-}): CassiePromptSpec<OpportunityTradePlan> {
+}): CassiePromptSpec<z.infer<typeof OpportunityTradePlanSchema>> {
   return makePromptSpec({
     name: "cassie_opportunity_trade_plan",
     tier: "expensive",
@@ -584,7 +576,8 @@ Rules:
 - Do not assume a real market exists.
 - Do not invent tickers, prediction markets, pre-IPO listings, prices, quotes, liquidity, probabilities, or contract rules.
 - opportunityFrame.literalClaim must stay faithful to the source; opportunityFrame.marketImplication must be the economic read-through.
-- Generate candidateExpressions first. Venue search validates real markets later.
+- Generate abstract candidateExpressions for venue discovery. Venue search validates real markets later.
+- Use tradeExpression.marketDiscovery for shared venue-search state; keep candidateExpressions focused on expression-specific requirements.
 - Generate prediction_market candidateExpressions only when the thesis is a date-bounded yes/no event, explicit event catalyst, event outcome, or price-level contract whose resolution criteria could match the source.
 - If the source implies both a binary catalyst and continuous price impact, generate the prediction_market expression as additive to the direct asset-class expression, not a substitute.
 - For prediction_market expressions, intendedSide must be the side that would resolve true if the source claim is true. Represent uncertainty with confidence, insufficiency, noTradeCase, or shouldVerifyTruthBeforeTrading.
@@ -602,7 +595,8 @@ When uncertain:
 
 Before returning, verify internally:
 - opportunityFrame and tradeExpression describe the same thesis and user intent.
-- candidateExpressions is the primary output for venue routing.
+- candidateExpressions identify the abstract expressions that venue discovery should search.
+- marketDiscovery describes shared venue-search state; candidateExpressions describe expression-specific requirements.
 - Every non-no_trade candidateExpression has searchTerms, requiredMarketFeatures, and a clear thesis.
 - prediction_market candidates include the event, intended side, deadline or resolution window, and requiredRuleOrContractFeatures.
 - decision is no_trade only when no candidateExpression deserves configured venue discovery.
@@ -626,7 +620,7 @@ export function singleStepTradeExpressionPromptSpec(input: {
   userCommand: string;
   opportunityFrame?: OpportunityFrame;
   marketCandidates?: MarketCandidate[];
-}): CassiePromptSpec<TradeExpressionPlan> {
+}): CassiePromptSpec<z.infer<typeof TradeExpressionPlanSchema>> {
   return makePromptSpec({
     name: "cassie_trade_expressions",
     tier: "expensive",
@@ -652,7 +646,8 @@ Abstract trade-expression generator. Produce candidateExpressions for configured
 Rules:
 - Do not assume a real market exists.
 - Do not invent tickers, prediction markets, pre-IPO listings, prices, quotes, liquidity, probabilities, or contract rules.
-- Generate candidateExpressions first. Venue search validates real markets later.
+- Generate abstract candidateExpressions for venue discovery. Venue search validates real markets later.
+- Use tradeExpression.marketDiscovery for shared venue-search state; keep candidateExpressions focused on expression-specific requirements.
 - Generate prediction_market candidateExpressions only when the thesis is a date-bounded yes/no event, explicit event catalyst, event outcome, or price-level contract whose resolution criteria could match the source.
 - If the source implies both a binary catalyst and a continuous price impact, generate the prediction_market expression as additive to the direct asset-class expression, not as a substitute for it.
 - For prediction_market expressions, intendedSide must be the side that would resolve true if the source claim is true. Do not flip to No because the source is uncertain, second-hand, exaggerated, stale, crowded, expensive, or verification-risky; represent that uncertainty with confidence, insufficiency, noTradeCase, or shouldVerifyTruthBeforeTrading.
@@ -683,7 +678,8 @@ Examples:
 
 Before returning, verify internally:
 - candidateExpressions is the primary output for venue routing.
-- directAsset, directAssetTradable, highestPurityExpression, decision, noTradeCase, insufficiency, and marketRouterInstructions are consistent.
+- directAsset, directAssetTradable, highestPurityExpression, decision, noTradeCase, insufficiency, and marketDiscovery are consistent.
+- marketDiscovery describes shared venue-search state; candidateExpressions describe expression-specific requirements.
 - Every non-no_trade candidateExpression has searchTerms, requiredMarketFeatures, and a clear thesis.
 - prediction_market candidates include the event, intended side, deadline or resolution window, and requiredRuleOrContractFeatures.
 - Unsupported direct-execution rails are not marked tradableNow or directAssetTradable unless a configured venue route is explicitly plausible.

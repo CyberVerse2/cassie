@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import type { StructuredAiClient } from "../packages/ai/client.ts";
-import { assessPolymarketMarket, findPolymarketMarkets, quotePolymarketMarket, selectMarket } from "../packages/adapters/selection.ts";
-import type { MarketCandidate, Thesis, TradeExpressionPlan } from "../packages/core/schemas/index.ts";
+import {
+  assessPolymarketMarket,
+  findPolymarketMarkets,
+  quotePolymarketMarket,
+  selectMarket,
+} from "../packages/adapters/selection.ts";
+import type {
+  MarketCandidate,
+  Thesis,
+  TradeExpressionPlan,
+} from "../packages/core/schemas/index.ts";
 
 const thesis: Thesis = {
   claim: "SpaceX IPO may be actionable.",
@@ -16,7 +25,8 @@ const thesis: Thesis = {
 
 const tradeExpression: TradeExpressionPlan = {
   signal: "SpaceX IPO",
-  coreInterpretation: "Direct SpaceX is not available through configured venues.",
+  coreInterpretation:
+    "Direct SpaceX is not available through configured venues.",
   directAsset: "SpaceX",
   directAssetTradable: false,
   evidenceConfidence: 0.7,
@@ -24,15 +34,12 @@ const tradeExpression: TradeExpressionPlan = {
   tradeExpressionConfidence: 0.4,
   highestPurityExpression: "SpaceX private equity",
   publicMarketReadThrough: "weak",
-  candidates: [],
-  rankedCandidates: [],
   candidateExpressions: [],
   discardedExpressions: [],
   noTradeCase: null,
   decision: "needs_market_check",
   reason: "No configured venue candidate exists.",
   insufficiency: null,
-  marketRouterInstructions: null,
 };
 
 describe("market selection", () => {
@@ -56,10 +63,11 @@ describe("market selection", () => {
       decision: "no_selection",
       selectedMarket: null,
       selectedCandidateId: null,
-      rejectionReason: "No configured market-data candidate matched the trade expression.",
-      rankedCandidates: [],
+      rejectionReason:
+        "No configured market-data candidate matched the trade expression.",
       rejectedCandidates: [],
-      noTradeReason: "No configured market-data candidate matched the trade expression.",
+      noTradeReason:
+        "No configured market-data candidate matched the trade expression.",
     });
   });
 
@@ -93,35 +101,38 @@ describe("market selection", () => {
     };
 
     const calls: string[] = [];
-    await expect(selectMarket({
-      ai: {
-        async generateObject(input) {
-          calls.push(input.prompt);
-          return {
-            decision: "select_market",
-            selectedMarket: polymarketCandidate,
-            selectedCandidateId: "polymarket|spacex-ipo-in-2026|buy_yes",
-            rejectionReason: null,
-            rankedCandidates: [],
-            rejectedCandidates: [],
-            noTradeReason: null,
-          };
+    await expect(
+      selectMarket({
+        ai: {
+          async generateObject(input) {
+            calls.push(input.prompt);
+            return {
+              decision: "select_market",
+              selectedMarket: polymarketCandidate,
+              selectedCandidateId: "polymarket|spacex-ipo-in-2026|buy_yes",
+              rejectionReason: null,
+              rankedCandidates: [],
+              rejectedCandidates: [],
+              noTradeReason: null,
+            };
+          },
+        } as StructuredAiClient,
+        marketData: {
+          async findCandidates() {
+            return [];
+          },
         },
-      } as StructuredAiClient,
-      marketData: {
-        async findCandidates() {
-          return [];
-        },
-      },
-      thesis,
-      tradeExpression,
-      candidates: [polymarketCandidate],
-    })).resolves.toMatchObject({
+        thesis,
+        tradeExpression,
+      }),
+    ).resolves.toMatchObject({
       selectedMarket: polymarketCandidate,
       noTradeReason: null,
     });
     expect(calls[0]).toContain("Rank real venue candidates");
-    expect(calls[0]).toContain("Use selectedMarket only for a real validated candidate");
+    expect(calls[0]).toContain(
+      "Use selectedMarket only for a real validated candidate",
+    );
   });
 
   it("finds Polymarket markets through the configured finder dependency", async () => {
@@ -184,7 +195,8 @@ describe("market selection", () => {
           expect(input.side).toBe("no");
           return {
             fit: "strong",
-            fitReason: "The contract resolves the exact approval event by the thesis horizon.",
+            fitReason:
+              "The contract resolves the exact approval event by the thesis horizon.",
             warnings: [],
             trade: {
               venue: "polymarket",

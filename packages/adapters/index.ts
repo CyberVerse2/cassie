@@ -451,8 +451,11 @@ function hyperliquidExactSymbolTokens(
     ? [
         ...exactSymbolAnchorCandidates(tradeExpression.directAsset),
         ...explicitHyperliquidInstructionSymbolAnchors(
-          tradeExpression.marketRouterInstructions,
+          tradeExpression.marketDiscovery?.instructions ?? null,
         ),
+        ...(tradeExpression.marketDiscovery?.queries.flatMap(
+          (query) => query.terms,
+        ) ?? []),
         ...(tradeExpression.candidateExpressions.flatMap((candidate) => [
           isConfiguredDirectVenueExpressionRail(candidate.expressionRail) &&
           isDirectEnoughForConfiguredVenueSearch(candidate.directness)

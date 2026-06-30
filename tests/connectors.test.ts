@@ -340,8 +340,6 @@ describe("market data connectors", () => {
         highestPurityExpression:
           "Buy Yes on an exact Strategy BTC-sale event market.",
         publicMarketReadThrough: "moderate",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "strategy_sale_event",
@@ -391,7 +389,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Needs venue discovery.",
         insufficiency: null,
-        marketRouterInstructions: "Search exact event first, then BTC short.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Search exact event first, then BTC short.", queries: [] },
       },
     });
 
@@ -459,8 +457,6 @@ describe("market data connectors", () => {
         highestPurityExpression:
           "Hyperliquid SpaceX pre-stock perp if available.",
         publicMarketReadThrough: "weak",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "spacex_preipo",
@@ -491,8 +487,7 @@ describe("market data connectors", () => {
         decision: "route_to_market_router",
         reason: "Direct pre-stock venue data determines actionability.",
         insufficiency: null,
-        marketRouterInstructions:
-          "Check SPCX/SpaceX pre-stock perps before rejecting tradability.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Check SPCX/SpaceX pre-stock perps before rejecting tradability.", queries: [] },
       },
     });
 
@@ -557,8 +552,6 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.5,
         highestPurityExpression: "Short Anthropic pre-stock perp if available.",
         publicMarketReadThrough: "weak",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "anthropic_preipo",
@@ -589,8 +582,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Needs direct venue availability.",
         insufficiency: null,
-        marketRouterInstructions:
-          "Check Hyperliquid HIP-3 pre-stock markets for Anthropic or Claude.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Check Hyperliquid HIP-3 pre-stock markets for Anthropic or Claude.", queries: [] },
       },
     });
 
@@ -648,41 +640,13 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.7,
         highestPurityExpression: "Long ZEC with BTC as the benchmark.",
         publicMarketReadThrough: "none",
-        candidates: [
-          {
-            instrument: "ZEC/BTC Pair",
-            expression: "pair",
-            thesis: "ZEC should rerate relative to BTC.",
-            causalDirectness: 0.9,
-            liquidity: 0.5,
-            surprise: 0.5,
-            timing: 0.5,
-            crowdingRisk: 0.5,
-            downsideAsymmetry: 0.5,
-            evidenceQuality: 0.5,
-            expectedEdge: 0.2,
-            tradableNow: true,
-            rejectionReason: null,
-            invalidation: [],
-            evidenceNeeded: [],
-            currentMarketPriceOrOdds: null,
-            fairValueOrExpectedValue: null,
-            instrumentType: "perp",
-            symbol: "ZEC/BTC",
-            venue: "hyperliquid",
-            venueChecks: ["ZEC perp on Hyperliquid"],
-            venueQuery: "ZEC perp",
-          },
-        ],
-        rankedCandidates: [],
         candidateExpressions: [],
         discardedExpressions: [],
         noTradeCase: null,
         decision: "needs_market_check",
         reason: "Needs venue liquidity check.",
         insufficiency: null,
-        marketRouterInstructions:
-          "Check Hyperliquid for direct ZEC perps or spot markets.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Check Hyperliquid for direct ZEC perps or spot markets.", queries: [] },
       },
     });
 
@@ -732,8 +696,6 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.54,
         highestPurityExpression: "Long NVDA if a configured venue lists it.",
         publicMarketReadThrough: "strong",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "nvda_public_equity",
@@ -763,8 +725,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Venue discovery determines actionability.",
         insufficiency: null,
-        marketRouterInstructions:
-          "Search Hyperliquid for direct NVDA exposure.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Search Hyperliquid for direct NVDA exposure.", queries: [] },
       },
     });
 
@@ -821,8 +782,6 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.77,
         highestPurityExpression: "long NVDA",
         publicMarketReadThrough: "strong",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "nvda_public_equity_long",
@@ -851,8 +810,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Venue discovery determines actionability.",
         insufficiency: null,
-        marketRouterInstructions:
-          "Search Hyperliquid live metadata for NVDA synthetic listings.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Search Hyperliquid live metadata for NVDA synthetic listings.", queries: [] },
       },
     });
 
@@ -937,8 +895,6 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.72,
         highestPurityExpression: "Buy tokenized gold spot if liquid.",
         publicMarketReadThrough: "none",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "expr_gold_spot",
@@ -967,7 +923,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Needs venue check.",
         insufficiency: null,
-        marketRouterInstructions: "Search Hyperliquid spot for XAUT or PAXG.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Search Hyperliquid spot for XAUT or PAXG.", queries: [] },
       },
     });
 
@@ -1030,33 +986,6 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.74,
         highestPurityExpression: "Long ZEC against BTC if supported.",
         publicMarketReadThrough: "moderate",
-        candidates: [
-          {
-            instrument: "BTC hedge",
-            expression: "short",
-            thesis: "BTC is the hedge leg.",
-            causalDirectness: 0.4,
-            liquidity: 0.9,
-            surprise: 0.2,
-            timing: 0.6,
-            crowdingRisk: 0.4,
-            downsideAsymmetry: 0.4,
-            evidenceQuality: 0.4,
-            expectedEdge: 0.1,
-            tradableNow: false,
-            rejectionReason: "Hedge leg only.",
-            invalidation: [],
-            evidenceNeeded: [],
-            currentMarketPriceOrOdds: null,
-            fairValueOrExpectedValue: null,
-            instrumentType: "perp",
-            symbol: "BTC",
-            venue: "hyperliquid",
-            venueChecks: ["BTC perp"],
-            venueQuery: "BTC perp",
-          },
-        ],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "zec_direct",
@@ -1085,7 +1014,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Needs live ZEC venue confirmation.",
         insufficiency: null,
-        marketRouterInstructions: "Search direct ZEC only.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Search direct ZEC only.", queries: [] },
       },
     });
 
@@ -1214,8 +1143,6 @@ describe("market data connectors", () => {
         highestPurityExpression:
           "Buy yes on MicroStrategy selling any Bitcoin by Dec 31, 2026.",
         publicMarketReadThrough: "strong",
-        candidates: [],
-        rankedCandidates: [],
         candidateExpressions: [
           {
             expressionId: "strategy_sells_btc_yes",
@@ -1244,7 +1171,7 @@ describe("market data connectors", () => {
         decision: "needs_market_check",
         reason: "Search exact event.",
         insufficiency: null,
-        marketRouterInstructions: "Prefer exact event.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Prefer exact event.", queries: [] },
       },
     });
 
@@ -1419,40 +1346,13 @@ describe("market data connectors", () => {
         tradeExpressionConfidence: 0.7,
         highestPurityExpression: "Long ZEC relative to BTC.",
         publicMarketReadThrough: "none",
-        candidates: [
-          {
-            instrument: "ZEC/BTC Pair",
-            expression: "pair",
-            thesis: "ZEC should rerate relative to BTC.",
-            causalDirectness: 0.9,
-            liquidity: 0.5,
-            surprise: 0.5,
-            timing: 0.5,
-            crowdingRisk: 0.5,
-            downsideAsymmetry: 0.5,
-            evidenceQuality: 0.5,
-            expectedEdge: 0.2,
-            tradableNow: true,
-            rejectionReason: null,
-            invalidation: [],
-            evidenceNeeded: [],
-            currentMarketPriceOrOdds: null,
-            fairValueOrExpectedValue: null,
-            instrumentType: "prediction_market",
-            symbol: "ZEC/BTC",
-            venue: "polymarket",
-            venueChecks: ["Zcash price markets"],
-            venueQuery: "Zcash prediction market",
-          },
-        ],
-        rankedCandidates: [],
         candidateExpressions: [],
         discardedExpressions: [],
         noTradeCase: null,
         decision: "needs_market_check",
         reason: "Needs prediction market check.",
         insufficiency: null,
-        marketRouterInstructions: "Find direct asset price prediction markets.",
+        marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Find direct asset price prediction markets.", queries: [] },
       },
     });
 

@@ -275,23 +275,24 @@ export const CandidateTradeExpressionSchema = z.object({
   abstractMarket: z.string(),
   intendedSide: z.enum(["long", "short", "yes", "no", "avoid"]),
   primaryEntityOrEvent: z.string().nullable(),
-  relatedEntities: z.array(z.string()),
+  relatedEntities: z.array(z.string()).default([]),
   thesis: z.string(),
-  whyThisExpressesTheOpportunity: z.string(),
+  whyThisExpressesTheOpportunity: z.string().optional().default(""),
   directness: z
     .enum(["direct", "strong_proxy", "weak_proxy", "none"])
     .describe(
       "How directly the expression gives causal exposure to the framed opportunity, not merely thematic similarity.",
     ),
-  whatMustBeTrue: z.array(z.string()),
+  whatMustBeTrue: z.array(z.string()).default([]),
   searchTerms: z.array(z.string()),
   requiredMarketFeatures: z.array(z.string()),
   requiredRuleOrContractFeatures: z
     .array(z.string())
+    .default([])
     .describe(
       "Required market rules, listing details, resolution criteria, instrument specs, or contract terms that must be verified before selection.",
     ),
-  keyRisks: z.array(z.string()),
+  keyRisks: z.array(z.string()).default([]),
   expectedTimeHorizon: z.enum([
     "minutes",
     "hours",
@@ -403,28 +404,41 @@ export const RankedTradeExpressionCandidateSchema = z.object({
   invalidation: z.array(z.string()),
 });
 
+const EvidenceGapDimensionSchema = z.enum([
+  "source_reliability",
+  "primary_source_access",
+  "entity_resolution",
+  "market_discovery",
+  "venue_confirmation",
+  "price_or_odds",
+  "liquidity",
+  "causal_directness",
+  "timing",
+  "valuation_work",
+  "risk_invalidation",
+]);
+
 export const EvidenceInsufficiencySchema = z.object({
   score: z.number().min(0).max(1),
   requiredThreshold: z.number().min(0).max(1),
-  failedDimensions: z
-    .array(
-      z.enum([
-        "source_reliability",
-        "primary_source_access",
-        "entity_resolution",
-        "market_discovery",
-        "venue_confirmation",
-        "price_or_odds",
-        "liquidity",
-        "causal_directness",
-        "timing",
-        "valuation_work",
-        "risk_invalidation",
-      ]),
-    )
-    .min(1),
+  failedDimensions: z.array(EvidenceGapDimensionSchema).min(1),
   summary: z.string(),
   evidenceNeededToClear: z.array(z.string()).min(1),
+});
+
+export const MarketDiscoveryPlanSchema = z.object({
+  status: z.enum(["not_needed", "needed", "completed", "blocked"]),
+  venues: z.array(z.enum(["hyperliquid", "polymarket"])).default([]),
+  missing: z.array(EvidenceGapDimensionSchema).default([]),
+  instructions: z.string().nullable().default(null),
+  queries: z
+    .array(
+      z.object({
+        expressionId: z.string(),
+        terms: z.array(z.string()).default([]),
+      }),
+    )
+    .default([]),
 });
 
 export const TradeExpressionPlanSchema = z.object({
@@ -437,8 +451,6 @@ export const TradeExpressionPlanSchema = z.object({
   tradeExpressionConfidence: z.number().min(0).max(1).nullable(),
   highestPurityExpression: z.string(),
   publicMarketReadThrough: z.enum(["none", "weak", "moderate", "strong"]),
-  candidates: z.array(TradeExpressionCandidateSchema),
-  rankedCandidates: z.array(RankedTradeExpressionCandidateSchema),
   candidateExpressions: z.array(CandidateTradeExpressionSchema),
   discardedExpressions: z.array(DiscardedTradeExpressionSchema),
   noTradeCase: NoTradeCaseSchema.nullable(),
@@ -449,7 +461,7 @@ export const TradeExpressionPlanSchema = z.object({
   ]),
   reason: z.string(),
   insufficiency: EvidenceInsufficiencySchema.nullable(),
-  marketRouterInstructions: z.string().nullable(),
+  marketDiscovery: MarketDiscoveryPlanSchema.optional(),
 });
 
 export const OpportunityTradePlanSchema = z.object({

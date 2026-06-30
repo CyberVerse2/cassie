@@ -12,15 +12,13 @@ const tradeExpression: TradeExpressionPlan = {
   tradeExpressionConfidence: 0.5,
   highestPurityExpression: "Find a named-project or event market before considering generic proxies.",
   publicMarketReadThrough: "moderate",
-  candidates: [],
-  rankedCandidates: [],
   candidateExpressions: [],
   discardedExpressions: [],
   noTradeCase: null,
   decision: "needs_market_check",
   reason: "Needs venue confirmation.",
   insufficiency: null,
-  marketRouterInstructions: "Search named project anchors first.",
+  marketDiscovery: { status: "needed", venues: ["hyperliquid"], missing: ["market_discovery"], instructions: "Search named project anchors first.", queries: [] },
 };
 
 const nonTradableExpression: TradeExpressionPlan = {

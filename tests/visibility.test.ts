@@ -21,40 +21,34 @@ const tradeExpression: TradeExpressionPlan = {
   tradeExpressionConfidence: 0.4,
   highestPurityExpression: "Private exposure to Exa.",
   publicMarketReadThrough: "weak",
-  candidates: [
+  candidateExpressions: [
     {
-      instrument: "Exa private equity",
-      venue: null,
-      symbol: null,
-      instrumentType: null,
-      venueQuery: null,
-      expression: "market_check",
-      thesis: "Highest purity exposure is private.",
-      venueChecks: [],
-      currentMarketPriceOrOdds: null,
-      fairValueOrExpectedValue: null,
-      causalDirectness: 0.95,
-      liquidity: 0.1,
-      surprise: 0.7,
-      timing: 0.4,
-      crowdingRisk: 0.3,
-      downsideAsymmetry: 0.5,
-      evidenceQuality: 0.8,
-      expectedEdge: 0.66,
-      tradableNow: false,
-      rejectionReason: "Requires private access.",
-      invalidation: ["Round is inaccurate."],
-      evidenceNeeded: ["Revenue and valuation work."],
+      expressionId: "exa_private_long",
+      expressionRail: "pre_ipo",
+      expressionType: "directional",
+      abstractMarket: "Exa private equity",
+      intendedSide: "long",
+      primaryEntityOrEvent: "Exa",
+      relatedEntities: [],
+      thesis: "Private-market validation may support Exa valuation.",
+      whyThisExpressesTheOpportunity:
+        "Direct private exposure maps to the thesis.",
+      directness: "direct",
+      whatMustBeTrue: ["A configured venue lists Exa private exposure."],
+      searchTerms: ["Exa private equity"],
+      requiredMarketFeatures: ["Direct Exa exposure"],
+      requiredRuleOrContractFeatures: [],
+      keyRisks: ["No configured venue listing."],
+      expectedTimeHorizon: "months",
+      priority: "medium",
+      confidence: 0.4,
     },
   ],
-  rankedCandidates: [],
-  candidateExpressions: [],
   discardedExpressions: [],
   noTradeCase: null,
   decision: "needs_market_check",
   reason: "No clean public expression.",
   insufficiency: null,
-  marketRouterInstructions: null,
 };
 
 const trace: TraceEvent[] = [
@@ -67,7 +61,8 @@ const trace: TraceEvent[] = [
     completedAt: "2026-05-21T00:00:04Z",
     durationMs: 1000,
     model: "deepseek-v4-pro",
-    thinkingTrace: "Requesting a structured AI judgment and validating it against the expected schema.",
+    thinkingTrace:
+      "Requesting a structured AI judgment and validating it against the expected schema.",
     input: null,
     output: tradeExpression,
     usage,
@@ -92,12 +87,15 @@ describe("visibility report", () => {
     expect(report.decisionLedger.responseType).toBe("analysis");
     expect(report.decisionLedger.actionState).toBe("needs_market_check");
     expect(report.decisionLedger.tradeDecision).toBe("needs_market_check");
-    expect(report.tradeExpression?.candidates[0]).toMatchObject({
-      instrument: "Exa private equity",
-      expectedEdge: 0.66,
-      tradableNow: false,
+    expect(report.tradeExpression?.candidateExpressions[0]).toMatchObject({
+      abstractMarket: "Exa private equity",
+      intendedSide: "long",
+      expressionRail: "pre_ipo",
+      confidence: 0.4,
     });
-    expect(report.toolCalls.map((call) => call.name)).toEqual(["cassie_trade_expression"]);
+    expect(report.toolCalls.map((call) => call.name)).toEqual([
+      "cassie_trade_expression",
+    ]);
     expect(report.tokenUsage.totalTokens).toBe(150);
   });
 });

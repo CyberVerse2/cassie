@@ -126,9 +126,17 @@ function normalizeTradeExpressionDecision(
     reason:
       tradeExpression.reason ||
       "Venue discovery is required before finalizing no-trade.",
-    marketRouterInstructions:
-      tradeExpression.marketRouterInstructions ??
-      "Search configured venues for the non-no-trade candidate expressions before finalizing no-trade.",
+    marketDiscovery: tradeExpression.marketDiscovery ?? {
+      status: "needed" as const,
+      venues: [],
+      missing: ["market_discovery" as const],
+      instructions:
+        "Search configured venues for the non-no-trade candidate expressions before finalizing no-trade.",
+      queries: tradeExpression.candidateExpressions.map((candidate) => ({
+        expressionId: candidate.expressionId,
+        terms: candidate.searchTerms,
+      })),
+    },
   };
 }
 

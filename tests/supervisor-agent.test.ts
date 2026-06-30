@@ -107,7 +107,8 @@ const expressionFitAssessment = {
   directness: "direct",
   fitScore: 0.86,
   semanticFitSummary: "SOL perp is direct exposure to a Solana ETF catalyst.",
-  ruleOrContractFitSummary: "The perpetual references SOL and supports the intended long side.",
+  ruleOrContractFitSummary:
+    "The perpetual references SOL and supports the intended long side.",
   basisRisks: ["Perp funding and broad crypto beta can dominate the catalyst."],
   mismatchReasons: [],
   requiredFollowUp: [],
@@ -115,16 +116,24 @@ const expressionFitAssessment = {
 };
 
 const opportunityFrame: OpportunityFrame = {
-  literalClaim: "Solana ETF approval is basically inevitable now. Market is asleep.",
-  opportunity: "The post implies SOL exposure may be underpriced if ETF approval odds are materially higher than the market believes.",
-  marketImplication: "Bullish SOL and Solana-linked risk if the claim is believed.",
+  literalClaim:
+    "Solana ETF approval is basically inevitable now. Market is asleep.",
+  opportunity:
+    "The post implies SOL exposure may be underpriced if ETF approval odds are materially higher than the market believes.",
+  marketImplication:
+    "Bullish SOL and Solana-linked risk if the claim is believed.",
   userIntent: "trade",
   affectedEntities: ["Solana", "SOL"],
   affectedAssets: ["SOL"],
-  expressionFamilies: ["long SOL perp", "buy YES on Solana ETF prediction market", "no trade if no matching market is found"],
+  expressionFamilies: [
+    "long SOL perp",
+    "buy YES on Solana ETF prediction market",
+    "no trade if no matching market is found",
+  ],
   signalVerificationRisk: "medium",
   shouldVerifyTruthBeforeTrading: true,
-  reason: "ETF approval claims can move SOL, but the post is social and unverified.",
+  reason:
+    "ETF approval claims can move SOL, but the post is social and unverified.",
   confidence: 0.72,
 };
 
@@ -140,48 +149,29 @@ const sourceModeClassification = {
 
 const tradeExpression: TradeExpressionPlan = {
   signal: "SOL ETF rumor",
-  coreInterpretation: "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
+  coreInterpretation:
+    "The clean expression is direct SOL exposure if the catalyst is still underpriced.",
   directAsset: "SOL",
   directAssetTradable: true,
   evidenceConfidence: 0.6,
   marketDiscoveryConfidence: 0.9,
   tradeExpressionConfidence: 0.72,
-  highestPurityExpression: "Long SOL perp while the ETF approval catalyst remains unresolved.",
+  highestPurityExpression:
+    "Long SOL perp while the ETF approval catalyst remains unresolved.",
   publicMarketReadThrough: "strong",
-  candidates: [
-    {
-      instrument: "SOL perp",
-      venue: "hyperliquid",
-      symbol: "SOL",
-      instrumentType: "perp",
-      venueQuery: "SOL perp",
-      expression: "long",
-      thesis: "SOL may rally if ETF approval odds are underpriced.",
-      venueChecks: ["Hyperliquid SOL perp"],
-      currentMarketPriceOrOdds: null,
-      fairValueOrExpectedValue: null,
-      causalDirectness: 0.9,
-      liquidity: 0.9,
-      surprise: 0.5,
-      timing: 0.7,
-      crowdingRisk: 0.4,
-      downsideAsymmetry: 0.6,
-      evidenceQuality: 0.6,
-      expectedEdge: 0.72,
-      tradableNow: true,
-      rejectionReason: null,
-      invalidation: ["Primary sources refute near-term approval."],
-      evidenceNeeded: ["Primary ETF approval timing evidence."],
-    },
-  ],
-  rankedCandidates: [],
   candidateExpressions: [],
   discardedExpressions: [],
   noTradeCase: null,
   decision: "route_to_market_router",
   reason: "The asset is liquid and directly maps to the catalyst.",
   insufficiency: null,
-  marketRouterInstructions: "Prefer direct SOL perps over indirect read-throughs.",
+  marketDiscovery: {
+    status: "needed",
+    venues: ["hyperliquid"],
+    missing: ["market_discovery"],
+    instructions: "Prefer direct SOL perps over indirect read-throughs.",
+    queries: [],
+  },
 };
 
 class FakeAi implements StructuredAiClient {
@@ -204,12 +194,23 @@ class FakeAi implements StructuredAiClient {
   }
 }
 
-async function executeTool<T>(toolDefinition: unknown, input: unknown): Promise<T> {
-  const execute = (toolDefinition as { execute: (input: unknown, options?: unknown) => Promise<T> }).execute;
+async function executeTool<T>(
+  toolDefinition: unknown,
+  input: unknown,
+): Promise<T> {
+  const execute = (
+    toolDefinition as {
+      execute: (input: unknown, options?: unknown) => Promise<T>;
+    }
+  ).execute;
   return execute(input, {});
 }
 
-async function seedMarketCandidates(store: InMemoryCassieStore, runId: string, candidates: MarketCandidate[]) {
+async function seedMarketCandidates(
+  store: InMemoryCassieStore,
+  runId: string,
+  candidates: MarketCandidate[],
+) {
   await store.addRunStep({
     runId,
     stepType: "market_candidates",
@@ -225,7 +226,11 @@ async function seedMarketCandidates(store: InMemoryCassieStore, runId: string, c
   });
 }
 
-async function seedTradeExpression(store: InMemoryCassieStore, runId: string, expression: TradeExpressionPlan) {
+async function seedTradeExpression(
+  store: InMemoryCassieStore,
+  runId: string,
+  expression: TradeExpressionPlan,
+) {
   await store.addRunStep({
     runId,
     stepType: "trade_expression",
@@ -257,7 +262,11 @@ async function seedOpportunityFrame(store: InMemoryCassieStore, runId: string) {
   });
 }
 
-async function seedFitAssessment(store: InMemoryCassieStore, runId: string, fitAssessment: typeof expressionFitAssessment) {
+async function seedFitAssessment(
+  store: InMemoryCassieStore,
+  runId: string,
+  fitAssessment: typeof expressionFitAssessment,
+) {
   await store.addRunStep({
     runId,
     stepType: "market_assessment",
@@ -273,7 +282,11 @@ async function seedFitAssessment(store: InMemoryCassieStore, runId: string, fitA
   });
 }
 
-async function seedMarketSelection(store: InMemoryCassieStore, runId: string, selection: MarketSelection) {
+async function seedMarketSelection(
+  store: InMemoryCassieStore,
+  runId: string,
+  selection: MarketSelection,
+) {
   await store.addRunStep({
     runId,
     stepType: "market_selection",
@@ -293,20 +306,34 @@ describe("AI SDK supervisor agent", () => {
   it("instructs the supervisor to use a flexible governed loop", () => {
     const instructions = buildSupervisorInstructions();
 
-    expect(instructions).toContain("preflight user policy -> classify source mode -> resolve source if needed -> frame opportunity -> generate candidate trade expressions");
+    expect(instructions).toContain(
+      "preflight user policy -> classify source mode -> resolve source if needed -> frame opportunity -> generate candidate trade expressions",
+    );
     expect(instructions).toContain("Role:");
     expect(instructions).toContain("Progressive workflow:");
     expect(instructions).toContain("Stage gates:");
     expect(instructions).toContain("When uncertain:");
     expect(instructions).not.toContain("Tool-output contract:");
     expect(instructions).not.toContain("Reason privately in this order:");
-    expect(instructions).toContain("quote validated candidates -> rank expressions");
-    expect(instructions).toContain("Classify breaking_news from source content only");
-    expect(instructions).toContain("Breaking news is a routing mode, not an execution decision");
-    expect(instructions).toContain("Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity");
+    expect(instructions).toContain(
+      "quote validated candidates -> rank expressions",
+    );
+    expect(instructions).toContain(
+      "Classify breaking_news from source content only",
+    );
+    expect(instructions).toContain(
+      "Breaking news is a routing mode, not an execution decision",
+    );
+    expect(instructions).toContain(
+      "Do not route directly to Polymarket, crypto, or pre-IPO before framing the opportunity",
+    );
     expect(instructions).toContain("Before finalizing, verify internally");
-    expect(instructions).toContain("create_trade_ticket creates the ticket with the user's configured default trade size and an explicit exitPlan chosen by the agent");
-    expect(instructions).toContain("The execution worker handles order submission after ticket creation");
+    expect(instructions).toContain(
+      "create_trade_ticket creates the ticket with the user's configured default trade size and an explicit exitPlan chosen by the agent",
+    );
+    expect(instructions).toContain(
+      "The execution worker handles order submission after ticket creation",
+    );
     expect(instructions).not.toContain("Never execute");
   });
 
@@ -334,7 +361,9 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.preflight_user_policy, {})).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.preflight_user_policy, {}),
+    ).resolves.toMatchObject({
       policy: {
         defaultTradeSizeUsd: 2,
         minHyperliquidPerpMarginUsd: 6,
@@ -366,11 +395,14 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    const ticket = await executeTool<{ ticketId: string }>(tools.create_trade_ticket, {
-      tradeExpression,
-      marketSelection,
-      exitPlan,
-    });
+    const ticket = await executeTool<{ ticketId: string }>(
+      tools.create_trade_ticket,
+      {
+        tradeExpression,
+        marketSelection,
+        exitPlan,
+      },
+    );
     await executeTool(tools.finalize_run, {
       responseType: "trade_ticket",
       publicSummary: "Created a trade ticket for review.",
@@ -403,7 +435,8 @@ describe("AI SDK supervisor agent", () => {
         ...marketSelection.selectedMarket!,
         symbol: "BTC",
         side: "short",
-        reason: "BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.",
+        reason:
+          "BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.",
       },
       selectedCandidateId: "hyperliquid:BTC:short",
     };
@@ -420,12 +453,15 @@ describe("AI SDK supervisor agent", () => {
           primaryEntityOrEvent: "Strategy Bitcoin sale",
           relatedEntities: ["Strategy"],
           thesis: "Buy No on an exact Strategy-sells-BTC event market.",
-          whyThisExpressesTheOpportunity: "The event market would directly resolve the literal claim.",
+          whyThisExpressesTheOpportunity:
+            "The event market would directly resolve the literal claim.",
           directness: "direct",
           whatMustBeTrue: ["An exact event market exists"],
           searchTerms: ["Strategy sells Bitcoin"],
           requiredMarketFeatures: ["Exact event market"],
-          requiredRuleOrContractFeatures: ["Rules must resolve on Strategy selling BTC"],
+          requiredRuleOrContractFeatures: [
+            "Rules must resolve on Strategy selling BTC",
+          ],
           keyRisks: ["No exact market exists"],
           expectedTimeHorizon: "days",
           priority: "high",
@@ -455,7 +491,9 @@ describe("AI SDK supervisor agent", () => {
     });
 
     const state = await store.load();
-    expect(state.tradeTickets[0]?.thesis).toBe("BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.");
+    expect(state.tradeTickets[0]?.thesis).toBe(
+      "BTC short on Hyperliquid is the validated proxy for bearish Strategy sale pressure.",
+    );
   });
 
   it("creates trade tickets from persisted market selection when supervisor omits it", async () => {
@@ -489,9 +527,11 @@ describe("AI SDK supervisor agent", () => {
     expect(ticketInputSchema.safeParse({}).success).toBe(false);
     expect(ticketInputSchema.safeParse({ exitPlan }).success).toBe(true);
 
-    await expect(executeTool(tools.create_trade_ticket, {
-      exitPlan,
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.create_trade_ticket, {
+        exitPlan,
+      }),
+    ).resolves.toMatchObject({
       instrument: "perp",
       side: "long",
     });
@@ -505,7 +545,8 @@ describe("AI SDK supervisor agent", () => {
     const store = new InMemoryCassieStore();
     const run = await store.createRun({
       userId: "user_1",
-      userCommand: "@Cassie analyze this https://x.com/example/status/2057246023974875269",
+      userCommand:
+        "@Cassie analyze this https://x.com/example/status/2057246023974875269",
       sourcePost,
     });
     const tools = createCassieSupervisorTools({
@@ -521,8 +562,12 @@ describe("AI SDK supervisor agent", () => {
         },
         sourceResolver: {
           async resolveSource(input) {
-            expect(input.url).toBe("https://x.com/example/status/2057246023974875269");
-            input.onThinkingTrace?.("Grok returned a source-resolution reasoning summary.");
+            expect(input.url).toBe(
+              "https://x.com/example/status/2057246023974875269",
+            );
+            input.onThinkingTrace?.(
+              "Grok returned a source-resolution reasoning summary.",
+            );
             return resolvedSourcePost;
           },
         },
@@ -539,13 +584,17 @@ describe("AI SDK supervisor agent", () => {
     expect(steps.map((step) => step.stepType)).toEqual(
       expect.arrayContaining(["intake", "opportunity"]),
     );
-    expect(steps.find((step) => step.stepType === "opportunity")?.input).toMatchObject({
+    expect(
+      steps.find((step) => step.stepType === "opportunity")?.input,
+    ).toMatchObject({
       sourcePost: resolvedSourcePost,
     });
-    expect(steps.find((step) => step.stepType === "intake")?.thinkingTrace)
-      .toBe("Grok returned a source-resolution reasoning summary.");
-    expect(steps.find((step) => step.stepType === "opportunity")?.thinkingTrace)
-      .toBe("Model reasoning summary for cassie_opportunity_frame.");
+    expect(
+      steps.find((step) => step.stepType === "intake")?.thinkingTrace,
+    ).toBe("Grok returned a source-resolution reasoning summary.");
+    expect(
+      steps.find((step) => step.stepType === "opportunity")?.thinkingTrace,
+    ).toBe("Model reasoning summary for cassie_opportunity_frame.");
   });
 
   it("rejects trade ticket creation without a usable market selection", async () => {
@@ -570,10 +619,14 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.create_trade_ticket, {
-      tradeExpression,
-      exitPlan,
-    })).rejects.toThrow("Trade ticket creation requires a usable market selection.");
+    await expect(
+      executeTool(tools.create_trade_ticket, {
+        tradeExpression,
+        exitPlan,
+      }),
+    ).rejects.toThrow(
+      "Trade ticket creation requires a usable market selection.",
+    );
   });
 
   it("allows early grounded analysis finalization without market or risk state", async () => {
@@ -598,11 +651,13 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.finalize_run, {
-      responseType: "analysis",
-      publicSummary: "No clean trade yet; evidence remains capped.",
-      tradeExpression,
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.finalize_run, {
+        responseType: "analysis",
+        publicSummary: "No clean trade yet; evidence remains capped.",
+        tradeExpression,
+      }),
+    ).resolves.toMatchObject({
       responseType: "analysis",
       publicSummary: expect.stringContaining("asset is liquid"),
     });
@@ -630,11 +685,13 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.finalize_run, {
-      responseType: "trade_ticket",
-      publicSummary: "Created a ticket.",
-      tradeTicket: { ticketId: "missing_ticket" },
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.finalize_run, {
+        responseType: "trade_ticket",
+        publicSummary: "Created a ticket.",
+        tradeTicket: { ticketId: "missing_ticket" },
+      }),
+    ).resolves.toMatchObject({
       responseType: "trade_ticket",
       ticketId: "missing_ticket",
     });
@@ -653,7 +710,10 @@ describe("AI SDK supervisor agent", () => {
       symbol: "ETH",
       reason: "Second candidate for cache-key coverage.",
     };
-    await seedMarketCandidates(store, run.runId, [firstCandidate, secondCandidate]);
+    await seedMarketCandidates(store, run.runId, [
+      firstCandidate,
+      secondCandidate,
+    ]);
 
     const tools = createCassieSupervisorTools({
       store,
@@ -689,7 +749,9 @@ describe("AI SDK supervisor agent", () => {
     expect(first.symbol).toBe("SOL");
     expect(second.symbol).toBe("ETH");
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.filter((step) => step.stepType === "market_quote")).toHaveLength(2);
+    expect(
+      steps.filter((step) => step.stepType === "market_quote"),
+    ).toHaveLength(2);
   });
 
   it("quotes persisted Polymarket fit assessments with equivalent candidate id shapes", async () => {
@@ -724,7 +786,8 @@ describe("AI SDK supervisor agent", () => {
     };
     const persistedFit = {
       ...expressionFitAssessment,
-      candidateId: "polymarket|microstrategy-sells-any-bitcoin-by-december-31-2026|buy_yes",
+      candidateId:
+        "polymarket|microstrategy-sells-any-bitcoin-by-december-31-2026|buy_yes",
       expressionId: "ce3",
       venue: "polymarket",
       fitStatus: "validated" as const,
@@ -733,7 +796,8 @@ describe("AI SDK supervisor agent", () => {
     };
     const suppliedFit = {
       ...persistedFit,
-      candidateId: "polymarket:microstrategy-sells-any-bitcoin-by-december-31-2026:buy_yes",
+      candidateId:
+        "polymarket:microstrategy-sells-any-bitcoin-by-december-31-2026:buy_yes",
     };
 
     await seedMarketCandidates(store, run.runId, [candidate]);
@@ -777,11 +841,13 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.quote_expression, {
-      candidate,
-      fitAssessment: suppliedFit,
-      side: "yes",
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.quote_expression, {
+        candidate,
+        fitAssessment: suppliedFit,
+        side: "yes",
+      }),
+    ).resolves.toMatchObject({
       conditionId: candidate.conditionId,
       outcomeTokenId: candidate.outcomeTokenId,
       outcome: "yes",
@@ -798,7 +864,9 @@ describe("AI SDK supervisor agent", () => {
     });
     await seedOpportunityFrame(store, run.runId);
     await seedTradeExpression(store, run.runId, tradeExpression);
-    await seedMarketCandidates(store, run.runId, [marketSelection.selectedMarket!]);
+    await seedMarketCandidates(store, run.runId, [
+      marketSelection.selectedMarket!,
+    ]);
 
     const tools = createCassieSupervisorTools({
       store,
@@ -821,19 +889,25 @@ describe("AI SDK supervisor agent", () => {
       warnings: ["model-written candidate"],
     };
 
-    await expect(executeTool(tools.assess_expression_fit, {
-      candidate: rewrittenCandidate,
-      side: "no",
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.assess_expression_fit, {
+        candidate: rewrittenCandidate,
+        side: "no",
+      }),
+    ).resolves.toMatchObject({
       fitStatus: "validated",
       semanticFitSummary: expect.stringContaining("direct exposure"),
     });
     expect(ai.calls).toContain("cassie_expression_fit");
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "market_assessment")?.input).toMatchObject({
+    expect(
+      steps.find((step) => step.stepType === "market_assessment")?.input,
+    ).toMatchObject({
       candidate: marketSelection.selectedMarket,
     });
-    expect(steps.find((step) => step.stepType === "market_assessment")?.input).not.toHaveProperty("side");
+    expect(
+      steps.find((step) => step.stepType === "market_assessment")?.input,
+    ).not.toHaveProperty("side");
   });
 
   it("hydrates ranking inputs from persisted venue search and quote outputs", async () => {
@@ -878,26 +952,33 @@ describe("AI SDK supervisor agent", () => {
     const rankInputSchema = tools.rank_expressions.inputSchema as {
       safeParse: (value: unknown) => { success: boolean };
     };
-    expect(rankInputSchema.safeParse({
-      fitAssessments: [expressionFitAssessment],
-    }).success).toBe(true);
-    expect(rankInputSchema.safeParse({
-      candidates: tradeExpression.candidates,
-      fitAssessments: [expressionFitAssessment],
-      quotes: [persistedCandidate],
-    }).success).toBe(true);
+    expect(
+      rankInputSchema.safeParse({
+        fitAssessments: [expressionFitAssessment],
+      }).success,
+    ).toBe(true);
+    expect(
+      rankInputSchema.safeParse({
+        candidates: [persistedCandidate],
+        fitAssessments: [expressionFitAssessment],
+        quotes: [persistedCandidate],
+      }).success,
+    ).toBe(true);
 
-    await expect(executeTool(tools.rank_expressions, {
-      candidates: tradeExpression.candidates,
-      fitAssessments: [expressionFitAssessment],
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.rank_expressions, {
+        candidates: [persistedCandidate],
+        fitAssessments: [expressionFitAssessment],
+      }),
+    ).resolves.toMatchObject({
       selectedMarket: persistedCandidate,
       noTradeReason: null,
     });
 
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
-      candidates: [persistedCandidate],
+    expect(
+      steps.find((step) => step.stepType === "market_selection")?.input,
+    ).toMatchObject({
       quotes: [persistedCandidate],
     });
     expect(ai.calls).not.toContain("cassie_market_selection");
@@ -941,7 +1022,8 @@ describe("AI SDK supervisor agent", () => {
     };
     const polymarketFit = {
       ...expressionFitAssessment,
-      candidateId: "polymarket:microstrategy-sells-any-bitcoin-by-december-31-2026:buy_yes",
+      candidateId:
+        "polymarket:microstrategy-sells-any-bitcoin-by-december-31-2026:buy_yes",
       expressionId: "cand1",
       expressionRail: "prediction_market" as const,
       venue: "polymarket",
@@ -970,7 +1052,10 @@ describe("AI SDK supervisor agent", () => {
     } as StructuredAiClient;
 
     await seedTradeExpression(store, run.runId, tradeExpression);
-    await seedMarketCandidates(store, run.runId, [hyperliquidCandidate, polymarketCandidate]);
+    await seedMarketCandidates(store, run.runId, [
+      hyperliquidCandidate,
+      polymarketCandidate,
+    ]);
     await seedFitAssessment(store, run.runId, polymarketFit);
     await store.addRunStep({
       runId: run.runId,
@@ -1012,7 +1097,9 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.rank_expressions, {})).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.rank_expressions, {}),
+    ).resolves.toMatchObject({
       selectedMarket: polymarketCandidate,
       noTradeReason: null,
     });
@@ -1094,7 +1181,9 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.rank_expressions, {})).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.rank_expressions, {}),
+    ).resolves.toMatchObject({
       selectedMarket: btcCandidate,
       noTradeReason: null,
     });
@@ -1175,7 +1264,9 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.rank_expressions, {})).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.rank_expressions, {}),
+    ).resolves.toMatchObject({
       selectedMarket: btcCandidate,
       noTradeReason: null,
     });
@@ -1203,7 +1294,10 @@ describe("AI SDK supervisor agent", () => {
       reason: "UBTC spot was found in live Hyperliquid metadata.",
     };
     await seedTradeExpression(store, run.runId, tradeExpression);
-    await seedMarketCandidates(store, run.runId, [perpCandidate, spotCandidate]);
+    await seedMarketCandidates(store, run.runId, [
+      perpCandidate,
+      spotCandidate,
+    ]);
     await seedFitAssessment(store, run.runId, {
       ...expressionFitAssessment,
       candidateId: "hyperliquid:BTC:long",
@@ -1246,16 +1340,17 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.rank_expressions, {
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.rank_expressions, {}),
+    ).resolves.toMatchObject({
       selectedMarket: spotCandidate,
       noTradeReason: null,
     });
 
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
-      candidates: [spotCandidate],
-    });
+    expect(
+      steps.find((step) => step.stepType === "market_selection")?.input,
+    ).toMatchObject({});
   });
 
   it("rejects corrupt persisted venue search output instead of using supplied ranking inputs", async () => {
@@ -1295,11 +1390,12 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.rank_expressions, {
-      candidates: [persistedCandidate],
-      fitAssessments: [expressionFitAssessment],
-      quotes: [persistedCandidate],
-    })).rejects.toThrow();
+    await expect(
+      executeTool(tools.rank_expressions, {
+        fitAssessments: [expressionFitAssessment],
+        quotes: [persistedCandidate],
+      }),
+    ).rejects.toThrow();
   });
 
   it("ranks a validated direct candidate before every adjacent candidate has fit coverage", async () => {
@@ -1316,7 +1412,10 @@ describe("AI SDK supervisor agent", () => {
       reason: "Second discovered candidate.",
     };
     await seedTradeExpression(store, run.runId, tradeExpression);
-    await seedMarketCandidates(store, run.runId, [firstCandidate, secondCandidate]);
+    await seedMarketCandidates(store, run.runId, [
+      firstCandidate,
+      secondCandidate,
+    ]);
     await seedFitAssessment(store, run.runId, expressionFitAssessment);
     await store.addRunStep({
       runId: run.runId,
@@ -1346,17 +1445,18 @@ describe("AI SDK supervisor agent", () => {
       },
     });
 
-    await expect(executeTool(tools.rank_expressions, {
-    })).resolves.toMatchObject({
+    await expect(
+      executeTool(tools.rank_expressions, {}),
+    ).resolves.toMatchObject({
       selectedMarket: firstCandidate,
       noTradeReason: null,
     });
 
     const steps = await store.getRunSteps(run.runId);
-    expect(steps.find((step) => step.stepType === "market_selection")?.input).toMatchObject({
-      candidates: [firstCandidate],
+    expect(
+      steps.find((step) => step.stepType === "market_selection")?.input,
+    ).toMatchObject({
       quotes: [firstCandidate],
     });
   });
-
 });

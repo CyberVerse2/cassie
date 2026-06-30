@@ -19,31 +19,45 @@ export function buildVisibilityReport(input: VisibilityInput) {
       tradeDecision: stringField(tradeExpression, "decision"),
       tradeReason: stringField(tradeExpression, "reason"),
       marketRouted: Boolean(hasField(run, "marketSelection")),
-      ticketCreated: Boolean(hasField(run, "tradeTicket") || hasField(run, "ticketId")),
+      ticketCreated: Boolean(
+        hasField(run, "tradeTicket") || hasField(run, "ticketId"),
+      ),
     },
     tradeExpression: tradeExpression
       ? {
           signal: stringField(tradeExpression, "signal"),
-          coreInterpretation: stringField(tradeExpression, "coreInterpretation"),
+          coreInterpretation: stringField(
+            tradeExpression,
+            "coreInterpretation",
+          ),
           directAsset: nullableStringField(tradeExpression, "directAsset"),
-          directAssetTradable: booleanField(tradeExpression, "directAssetTradable"),
-          highestPurityExpression: stringField(tradeExpression, "highestPurityExpression"),
-          publicMarketReadThrough: stringField(tradeExpression, "publicMarketReadThrough"),
+          directAssetTradable: booleanField(
+            tradeExpression,
+            "directAssetTradable",
+          ),
+          highestPurityExpression: stringField(
+            tradeExpression,
+            "highestPurityExpression",
+          ),
+          publicMarketReadThrough: stringField(
+            tradeExpression,
+            "publicMarketReadThrough",
+          ),
           decision: stringField(tradeExpression, "decision"),
           reason: stringField(tradeExpression, "reason"),
-          candidates: arrayField(tradeExpression, "candidates").map((candidate) => ({
-            instrument: stringField(candidate, "instrument"),
-            expression: stringField(candidate, "expression"),
-            causalDirectness: numberField(candidate, "causalDirectness"),
-            liquidity: numberField(candidate, "liquidity"),
-            surprise: numberField(candidate, "surprise"),
-            timing: numberField(candidate, "timing"),
-            crowdingRisk: numberField(candidate, "crowdingRisk"),
-            downsideAsymmetry: numberField(candidate, "downsideAsymmetry"),
-            evidenceQuality: numberField(candidate, "evidenceQuality"),
-            expectedEdge: numberField(candidate, "expectedEdge"),
-            tradableNow: booleanField(candidate, "tradableNow"),
-            rejectionReason: nullableStringField(candidate, "rejectionReason"),
+          candidateExpressions: arrayField(
+            tradeExpression,
+            "candidateExpressions",
+          ).map((candidate) => ({
+            expressionId: stringField(candidate, "expressionId"),
+            expressionRail: stringField(candidate, "expressionRail"),
+            expressionType: stringField(candidate, "expressionType"),
+            abstractMarket: stringField(candidate, "abstractMarket"),
+            intendedSide: stringField(candidate, "intendedSide"),
+            thesis: stringField(candidate, "thesis"),
+            directness: stringField(candidate, "directness"),
+            priority: stringField(candidate, "priority"),
+            confidence: numberField(candidate, "confidence"),
           })),
         }
       : null,
@@ -62,7 +76,9 @@ export function buildVisibilityReport(input: VisibilityInput) {
   };
 }
 
-export function formatVisibilityReport(report: ReturnType<typeof buildVisibilityReport>): string {
+export function formatVisibilityReport(
+  report: ReturnType<typeof buildVisibilityReport>,
+): string {
   const lines = [
     "Decision ledger",
     `  response: ${report.decisionLedger.responseType ?? "unknown"}`,
@@ -76,7 +92,10 @@ export function formatVisibilityReport(report: ReturnType<typeof buildVisibility
     "",
     "Tool calls",
     ...report.toolCalls.map((call) => {
-      const tokenText = call.tokens?.totalTokens != null ? ` tokens=${call.tokens.totalTokens}` : "";
+      const tokenText =
+        call.tokens?.totalTokens != null
+          ? ` tokens=${call.tokens.totalTokens}`
+          : "";
       return `  [${call.stepId}] ${call.status} ${call.name}${call.model ? ` (${call.model})` : ""} ${call.durationMs ?? 0}ms${tokenText} - ${call.visibleReasoning}`;
     }),
     "",
@@ -96,16 +115,29 @@ function extractRun(value: unknown): RecordValue | null {
   return objectOrNull(record.run) ?? record;
 }
 
-function findTradeExpression(run: RecordValue | null, trace: TraceEvent[]): RecordValue | null {
-  return objectField(run, "tradeExpression") ?? findTraceOutput(trace, "cassie_trade_expression");
+function findTradeExpression(
+  run: RecordValue | null,
+  trace: TraceEvent[],
+): RecordValue | null {
+  return (
+    objectField(run, "tradeExpression") ??
+    findTraceOutput(trace, "cassie_trade_expression")
+  );
 }
 
-function findTraceOutput(trace: TraceEvent[], name: string): RecordValue | null {
-  const event = trace.find((candidate) => candidate.name === name && candidate.output);
+function findTraceOutput(
+  trace: TraceEvent[],
+  name: string,
+): RecordValue | null {
+  const event = trace.find(
+    (candidate) => candidate.name === name && candidate.output,
+  );
   return objectOrNull(event?.output);
 }
 
-function formatTradeExpression(expression: ReturnType<typeof buildVisibilityReport>["tradeExpression"]) {
+function formatTradeExpression(
+  expression: ReturnType<typeof buildVisibilityReport>["tradeExpression"],
+) {
   if (!expression) {
     return ["  none"];
   }
@@ -115,8 +147,9 @@ function formatTradeExpression(expression: ReturnType<typeof buildVisibilityRepo
     `  direct asset: ${expression.directAsset ?? "none"} tradable=${expression.directAssetTradable}`,
     `  read-through: ${expression.publicMarketReadThrough ?? "unknown"}`,
     `  highest purity: ${expression.highestPurityExpression ?? ""}`,
-    ...expression.candidates.map((candidate) =>
-      `  - ${candidate.instrument ?? "unknown"} ${candidate.expression ?? "unknown"} edge=${candidate.expectedEdge ?? "?"} direct=${candidate.causalDirectness ?? "?"} liquid=${candidate.liquidity ?? "?"} tradable=${candidate.tradableNow}${candidate.rejectionReason ? ` reject=${candidate.rejectionReason}` : ""}`,
+    ...expression.candidateExpressions.map(
+      (candidate) =>
+        `  - ${candidate.abstractMarket ?? "unknown"} ${candidate.intendedSide ?? "unknown"} rail=${candidate.expressionRail ?? "unknown"} direct=${candidate.directness ?? "unknown"} confidence=${candidate.confidence ?? "?"}`,
     ),
   ];
 }
@@ -125,7 +158,10 @@ function hasField(record: RecordValue | null, field: string): boolean {
   return Boolean(record && record[field] != null);
 }
 
-function objectField(record: RecordValue | null, field: string): RecordValue | null {
+function objectField(
+  record: RecordValue | null,
+  field: string,
+): RecordValue | null {
   return objectOrNull(record?.[field]);
 }
 
@@ -156,6 +192,6 @@ function booleanField(record: unknown, field: string): boolean | null {
 
 function objectOrNull(value: unknown): RecordValue | null {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-    ? value as RecordValue
+    ? (value as RecordValue)
     : null;
 }
