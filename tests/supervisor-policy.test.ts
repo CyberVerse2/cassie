@@ -1,21 +1,56 @@
 import { describe, expect, it } from "vitest";
-import { createCassieStopConditions, prepareCassieSupervisorStep, selectActiveTools } from "../packages/agent/policy.ts";
+import {
+  createCassieStopConditions,
+  prepareCassieSupervisorStep,
+  selectActiveTools,
+} from "../packages/agent/policy.ts";
 import { SupervisorPrerequisiteError } from "../packages/agent/tools.ts";
 
 function step(toolName: string, output?: unknown) {
   return {
-    toolCalls: [{ type: "tool-call" as const, toolCallId: `${toolName}_call`, toolName, input: {} }],
-    toolResults: output === undefined
-      ? []
-      : [{ type: "tool-result" as const, toolCallId: `${toolName}_call`, toolName, input: {}, output }],
+    toolCalls: [
+      {
+        type: "tool-call" as const,
+        toolCallId: `${toolName}_call`,
+        toolName,
+        input: {},
+      },
+    ],
+    toolResults:
+      output === undefined
+        ? []
+        : [
+            {
+              type: "tool-result" as const,
+              toolCallId: `${toolName}_call`,
+              toolName,
+              input: {},
+              output,
+            },
+          ],
   };
 }
 
 function errorStep(toolName: string, error: Error) {
   return {
-    toolCalls: [{ type: "tool-call" as const, toolCallId: `${toolName}_call`, toolName, input: {} }],
+    toolCalls: [
+      {
+        type: "tool-call" as const,
+        toolCallId: `${toolName}_call`,
+        toolName,
+        input: {},
+      },
+    ],
     toolResults: [],
-    content: [{ type: "tool-error" as const, toolCallId: `${toolName}_call`, toolName, input: {}, error }],
+    content: [
+      {
+        type: "tool-error" as const,
+        toolCallId: `${toolName}_call`,
+        toolName,
+        input: {},
+        error,
+      },
+    ],
   };
 }
 
@@ -26,121 +61,203 @@ describe("supervisor step policy", () => {
       decision: "needs_market_check",
       highestPurityExpression: "Long SOL perps.",
     });
-    const candidates = step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]);
+    const candidates = step("search_venues", [
+      { venue: "hyperliquid", symbol: "SOL" },
+    ]);
     const selection = step("rank_expressions", {
       selectedMarket: { venue: "hyperliquid", symbol: "SOL" },
       noTradeReason: null,
     });
-    const preflight = step("preflight_user_policy", { status: "ok", warnings: [] });
-    const sourceMode = step("classify_source_mode", { sourceMode: "normal", userIntent: "trade" });
+    const preflight = step("preflight_user_policy", {
+      status: "ok",
+      warnings: [],
+    });
+    const sourceMode = step("classify_source_mode", {
+      sourceMode: "normal",
+      userIntent: "trade",
+    });
 
     expect(selectActiveTools([])).toEqual(["preflight_user_policy"]);
     expect(selectActiveTools([preflight])).toEqual(["classify_source_mode"]);
-    expect(selectActiveTools([preflight, sourceMode])).toEqual(["resolve_source", "frame_opportunity"]);
-    const source = step("resolve_source", { text: "OpenAI revenue growth is accelerating." });
-    expect(selectActiveTools([preflight, sourceMode, source])).toEqual(["frame_opportunity"]);
-    expect(selectActiveTools([preflight, sourceMode, source, opportunity])).toEqual(["generate_trade_expressions"]);
-    expect(selectActiveTools([opportunity, expression])).toEqual(["search_venues"]);
-    expect(selectActiveTools([opportunity, expression, candidates])).toEqual(["assess_expression_fit"]);
-    const fit = step("assess_expression_fit", { fitStatus: "validated", candidateId: "hyperliquid:SOL:long" });
-    expect(selectActiveTools([opportunity, expression, candidates, fit])).toEqual(["quote_expression"]);
-    const quote = step("quote_expression", { venue: "hyperliquid", symbol: "SOL", markPrice: 100 });
-    expect(selectActiveTools([opportunity, expression, candidates, fit, quote])).toEqual(["rank_expressions"]);
-    expect(selectActiveTools([opportunity, expression, candidates, selection])).toEqual(["create_trade_ticket"]);
+    expect(selectActiveTools([preflight, sourceMode])).toEqual([
+      "resolve_source",
+      "frame_opportunity",
+    ]);
+    const source = step("resolve_source", {
+      text: "OpenAI revenue growth is accelerating.",
+    });
+    expect(selectActiveTools([preflight, sourceMode, source])).toEqual([
+      "frame_opportunity",
+    ]);
+    expect(
+      selectActiveTools([preflight, sourceMode, source, opportunity]),
+    ).toEqual(["generate_trade_expressions"]);
+    expect(selectActiveTools([opportunity, expression])).toEqual([
+      "search_venues",
+    ]);
+    expect(selectActiveTools([opportunity, expression, candidates])).toEqual([
+      "assess_expression_fit",
+    ]);
+    const fit = step("assess_expression_fit", {
+      fitStatus: "validated",
+      candidateId: "hyperliquid:SOL:long",
+    });
+    expect(
+      selectActiveTools([opportunity, expression, candidates, fit]),
+    ).toEqual(["quote_expression"]);
+    const quote = step("quote_expression", {
+      venue: "hyperliquid",
+      symbol: "SOL",
+      markPrice: 100,
+    });
+    expect(
+      selectActiveTools([opportunity, expression, candidates, fit, quote]),
+    ).toEqual(["rank_expressions"]);
+    expect(
+      selectActiveTools([opportunity, expression, candidates, selection]),
+    ).toEqual(["create_trade_ticket"]);
   });
 
   it("finalizes when searches or ranking do not find a trade", () => {
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", { decision: "no_trade" }),
-    ])).toEqual(["finalize_run"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", { decision: "no_trade" }),
+      ]),
+    ).toEqual(["finalize_run"]);
 
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", { decision: "needs_market_check" }),
-      step("search_venues", []),
-    ])).toEqual(["finalize_run"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", { decision: "needs_market_check" }),
+        step("search_venues", []),
+      ]),
+    ).toEqual(["finalize_run"]);
 
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", { decision: "route_to_market_router" }),
-      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
-      step("rank_expressions", { decision: "no_selection", selectedMarket: null, noTradeReason: null }),
-    ])).toEqual(["finalize_run"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", {
+          decision: "route_to_market_router",
+        }),
+        step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+        step("rank_expressions", {
+          decision: "no_selection",
+          selectedMarket: null,
+          noTradeReason: null,
+        }),
+      ]),
+    ).toEqual(["finalize_run"]);
 
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", { decision: "route_to_market_router" }),
-      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
-      step("rank_expressions", { selectedMarket: null, noTradeReason: "No clean market." }),
-    ])).toEqual(["finalize_run"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", {
+          decision: "route_to_market_router",
+        }),
+        step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+        step("rank_expressions", {
+          selectedMarket: null,
+          noTradeReason: "No clean market.",
+        }),
+      ]),
+    ).toEqual(["finalize_run"]);
   });
 
   it("searches venues when a no-trade expression still contains searchable candidates", () => {
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", {
-        decision: "no_trade",
-        candidateExpressions: [{
-          expressionRail: "pre_ipo",
-          intendedSide: "long",
-          searchTerms: ["turbopuffer pre-IPO"],
-          requiredMarketFeatures: ["Configured private-company listing"],
-        }],
-      }),
-    ])).toEqual(["search_venues"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", {
+          decision: "no_trade",
+          candidateExpressions: [
+            {
+              expressionRail: "pre_ipo",
+              intendedSide: "long",
+              searchTerms: ["turbopuffer pre-IPO"],
+              requiredMarketFeatures: ["Configured private-company listing"],
+            },
+          ],
+        }),
+      ]),
+    ).toEqual(["search_venues"]);
   });
 
   it("finalizes no-trade when the remaining expression rail has no configured execution venue", () => {
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", {
-        decision: "no_trade",
-        candidateExpressions: [{
-          expressionRail: "options_volatility",
-          intendedSide: "long",
-          searchTerms: ["VIX call"],
-          requiredMarketFeatures: ["listed option"],
-        }],
-      }),
-    ])).toEqual(["finalize_run"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", {
+          decision: "no_trade",
+          candidateExpressions: [
+            {
+              expressionRail: "options_volatility",
+              intendedSide: "long",
+              searchTerms: ["VIX call"],
+              requiredMarketFeatures: ["listed option"],
+            },
+          ],
+        }),
+      ]),
+    ).toEqual(["finalize_run"]);
   });
 
   it("exposes finalization after ticket creation", () => {
-    expect(selectActiveTools([
-      step("frame_opportunity", {}),
-      step("generate_trade_expressions", { decision: "route_to_market_router" }),
-      step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
-      step("rank_expressions", { selectedMarket: { venue: "hyperliquid", symbol: "SOL" }, noTradeReason: null }),
-      step("create_trade_ticket", { ticketId: "ticket_1" }),
-    ])).toEqual(["finalize_run"]);
+    expect(
+      selectActiveTools([
+        step("frame_opportunity", {}),
+        step("generate_trade_expressions", {
+          decision: "route_to_market_router",
+        }),
+        step("search_venues", [{ venue: "hyperliquid", symbol: "SOL" }]),
+        step("rank_expressions", {
+          selectedMarket: { venue: "hyperliquid", symbol: "SOL" },
+          noTradeReason: null,
+        }),
+        step("create_trade_ticket", { ticketId: "ticket_1" }),
+      ]),
+    ).toEqual(["finalize_run"]);
   });
 
   it("exposes no tools after finalization", () => {
-    expect(selectActiveTools([
-      step("generate_trade_expressions", {}),
-      step("finalize_run", {}),
-    ])).toEqual([]);
+    expect(
+      selectActiveTools([
+        step("generate_trade_expressions", {}),
+        step("finalize_run", {}),
+      ]),
+    ).toEqual([]);
   });
 
   it("still aborts the loop on hard tool errors", () => {
-    expect(() => prepareCassieSupervisorStep({
-      steps: [
-        errorStep("generate_trade_expressions", new Error("rate limited")),
-      ],
-    } as never)).toThrow("Supervisor tool generate_trade_expressions failed: rate limited");
+    expect(() =>
+      prepareCassieSupervisorStep({
+        steps: [
+          errorStep("generate_trade_expressions", new Error("rate limited")),
+        ],
+      } as never),
+    ).toThrow(
+      "Supervisor tool generate_trade_expressions failed: rate limited",
+    );
   });
 
   it("lets the model recover from prerequisite data errors", () => {
     const prepared = prepareCassieSupervisorStep({
       steps: [
-        errorStep("create_trade_ticket", new SupervisorPrerequisiteError("Trade ticket creation requires a usable market selection.")),
+        errorStep(
+          "create_trade_ticket",
+          new SupervisorPrerequisiteError(
+            "Trade ticket creation requires a usable market selection.",
+          ),
+        ),
       ],
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
     expect(prepared.activeTools).toEqual(["preflight_user_policy"]);
-    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "preflight_user_policy" });
+    expect(prepared.toolChoice).toEqual({
+      type: "tool",
+      toolName: "preflight_user_policy",
+    });
   });
 
   it("requires tool calls while staged work remains active", () => {
@@ -152,14 +269,18 @@ describe("supervisor step policy", () => {
       messages: [],
     } as never) as { activeTools: string[]; toolChoice: unknown };
 
-    expect(prepared.activeTools).toEqual([
-      "search_venues",
-    ]);
-    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "search_venues" });
+    expect(prepared.activeTools).toEqual(["search_venues"]);
+    expect(prepared.toolChoice).toEqual({
+      type: "tool",
+      toolName: "search_venues",
+    });
   });
 
   it("branches breaking news into parallel frame and expression generation", () => {
-    const preflight = step("preflight_user_policy", { status: "ok", warnings: [] });
+    const preflight = step("preflight_user_policy", {
+      status: "ok",
+      warnings: [],
+    });
     const sourceMode = step("classify_source_mode", {
       sourceMode: "breaking_news",
       userIntent: "trade",
@@ -178,11 +299,34 @@ describe("supervisor step policy", () => {
 
   it("does not create tickets for breaking-news watch, countertrade, or critic intents", () => {
     for (const userIntent of ["watch", "countertrade", "critic"]) {
-      expect(selectActiveTools([
+      expect(
+        selectActiveTools([
+          step("preflight_user_policy", { status: "ok", warnings: [] }),
+          step("classify_source_mode", {
+            sourceMode: "breaking_news",
+            userIntent,
+            headlineThesis: "Exchange hacked.",
+            affectedEntities: ["BTC"],
+            urgency: "minutes",
+            verificationNeed: "high",
+            reason: "Fresh security headline.",
+          }),
+          step("rank_expressions", {
+            selectedMarket: { venue: "hyperliquid", symbol: "BTC" },
+            noTradeReason: null,
+          }),
+        ]),
+      ).toEqual(["finalize_run"]);
+    }
+  });
+
+  it("creates tickets for breaking-news trade intent after market selection", () => {
+    expect(
+      selectActiveTools([
         step("preflight_user_policy", { status: "ok", warnings: [] }),
         step("classify_source_mode", {
           sourceMode: "breaking_news",
-          userIntent,
+          userIntent: "trade",
           headlineThesis: "Exchange hacked.",
           affectedEntities: ["BTC"],
           urgency: "minutes",
@@ -193,35 +337,24 @@ describe("supervisor step policy", () => {
           selectedMarket: { venue: "hyperliquid", symbol: "BTC" },
           noTradeReason: null,
         }),
-      ])).toEqual(["finalize_run"]);
-    }
-  });
-
-  it("creates tickets for breaking-news trade intent after market selection", () => {
-    expect(selectActiveTools([
-      step("preflight_user_policy", { status: "ok", warnings: [] }),
-      step("classify_source_mode", {
-        sourceMode: "breaking_news",
-        userIntent: "trade",
-        headlineThesis: "Exchange hacked.",
-        affectedEntities: ["BTC"],
-        urgency: "minutes",
-        verificationNeed: "high",
-        reason: "Fresh security headline.",
-      }),
-      step("rank_expressions", {
-        selectedMarket: { venue: "hyperliquid", symbol: "BTC" },
-        noTradeReason: null,
-      }),
-    ])).toEqual(["create_trade_ticket"]);
+      ]),
+    ).toEqual(["create_trade_ticket"]);
   });
 
   it("quotes a validated direct candidate before assessing unrelated candidates", () => {
     const opportunity = step("frame_opportunity", {});
-    const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
+    const expression = step("generate_trade_expressions", {
+      decision: "needs_market_check",
+    });
     const candidates = step("search_venues", [
       { venue: "hyperliquid", symbol: "BTC", side: "short" },
-      { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+      {
+        venue: "polymarket",
+        symbol: "btc-price-market",
+        side: "buy_no",
+        conditionId: "condition_1",
+        outcomeTokenId: "token_no",
+      },
     ]);
     const firstFit = step("assess_expression_fit", {
       candidateId: "hyperliquid:BTC:short",
@@ -230,24 +363,36 @@ describe("supervisor step policy", () => {
       directness: "direct",
     });
 
-    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["quote_expression"]);
+    expect(
+      selectActiveTools([opportunity, expression, candidates, firstFit]),
+    ).toEqual(["quote_expression"]);
   });
 
   it("keeps assessing venue candidates when no direct candidate has validated", () => {
     const opportunity = step("frame_opportunity", {});
-    const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
+    const expression = step("generate_trade_expressions", {
+      decision: "needs_market_check",
+    });
     const candidates = step("search_venues", [
       { venue: "hyperliquid", symbol: "BTC", side: "short" },
-      { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+      {
+        venue: "polymarket",
+        symbol: "btc-price-market",
+        side: "buy_no",
+        conditionId: "condition_1",
+        outcomeTokenId: "token_no",
+      },
     ]);
     const firstFit = step("assess_expression_fit", {
       candidateId: "hyperliquid:BTC:short",
-      fitStatus: "needs_more_info",
+      fitStatus: "rejected",
       venue: "hyperliquid",
       directness: "strong_proxy",
     });
 
-    expect(selectActiveTools([opportunity, expression, candidates, firstFit])).toEqual(["assess_expression_fit"]);
+    expect(
+      selectActiveTools([opportunity, expression, candidates, firstFit]),
+    ).toEqual(["assess_expression_fit"]);
   });
 
   it("injects venue discovery progress for the next candidate", () => {
@@ -257,7 +402,13 @@ describe("supervisor step policy", () => {
         step("generate_trade_expressions", { decision: "needs_market_check" }),
         step("search_venues", [
           { venue: "hyperliquid", symbol: "BTC", side: "short" },
-          { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+          {
+            venue: "polymarket",
+            symbol: "btc-price-market",
+            side: "buy_no",
+            conditionId: "condition_1",
+            outcomeTokenId: "token_no",
+          },
         ]),
         step("assess_expression_fit", {
           candidateId: "hyperliquid:BTC:short",
@@ -278,10 +429,18 @@ describe("supervisor step policy", () => {
 
   it("ranks after quoting the best validated venue candidate", () => {
     const opportunity = step("frame_opportunity", {});
-    const expression = step("generate_trade_expressions", { decision: "needs_market_check" });
+    const expression = step("generate_trade_expressions", {
+      decision: "needs_market_check",
+    });
     const candidates = step("search_venues", [
       { venue: "hyperliquid", symbol: "BTC", side: "short" },
-      { venue: "polymarket", symbol: "btc-price-market", side: "buy_no", conditionId: "condition_1", outcomeTokenId: "token_no" },
+      {
+        venue: "polymarket",
+        symbol: "btc-price-market",
+        side: "buy_no",
+        conditionId: "condition_1",
+        outcomeTokenId: "token_no",
+      },
     ]);
     const firstFit = step("assess_expression_fit", {
       candidateId: "hyperliquid:BTC:short",
@@ -295,9 +454,22 @@ describe("supervisor step policy", () => {
       venue: "polymarket",
       fitScore: 0.7,
     });
-    const firstQuote = step("quote_expression", { venue: "hyperliquid", symbol: "BTC", side: "short" });
+    const firstQuote = step("quote_expression", {
+      venue: "hyperliquid",
+      symbol: "BTC",
+      side: "short",
+    });
 
-    expect(selectActiveTools([opportunity, expression, candidates, firstFit, secondFit, firstQuote])).toEqual(["rank_expressions"]);
+    expect(
+      selectActiveTools([
+        opportunity,
+        expression,
+        candidates,
+        firstFit,
+        secondFit,
+        firstQuote,
+      ]),
+    ).toEqual(["rank_expressions"]);
   });
 
   it("forces the exact next tool and injects authoritative persisted state", () => {
@@ -312,14 +484,16 @@ describe("supervisor step policy", () => {
           directAsset: "SOL",
           highestPurityExpression: "Long SOL perp.",
         }),
-        step("search_venues", [{
-          venue: "hyperliquid",
-          symbol: "SOL",
-          side: "long",
-          markPrice: 100,
-          liquidityScore: 1,
-          reason: "SOL perp was found in live Hyperliquid metadata.",
-        }]),
+        step("search_venues", [
+          {
+            venue: "hyperliquid",
+            symbol: "SOL",
+            side: "long",
+            markPrice: 100,
+            liquidityScore: 1,
+            reason: "SOL perp was found in live Hyperliquid metadata.",
+          },
+        ]),
         step("assess_expression_fit", {
           candidateId: "hyperliquid:SOL:long",
           expressionId: "expr-sol-long",
@@ -329,12 +503,23 @@ describe("supervisor step policy", () => {
         }),
       ],
       messages: [],
-    } as never) as { activeTools: string[]; toolChoice: unknown; messages: unknown[] };
+    } as never) as {
+      activeTools: string[];
+      toolChoice: unknown;
+      messages: unknown[];
+    };
 
     expect(prepared.activeTools).toEqual(["quote_expression"]);
-    expect(prepared.toolChoice).toEqual({ type: "tool", toolName: "quote_expression" });
-    expect(JSON.stringify(prepared.messages)).toContain("Authoritative persisted supervisor state");
-    expect(JSON.stringify(prepared.messages)).toContain("SOL perp was found in live Hyperliquid metadata");
+    expect(prepared.toolChoice).toEqual({
+      type: "tool",
+      toolName: "quote_expression",
+    });
+    expect(JSON.stringify(prepared.messages)).toContain(
+      "Authoritative persisted supervisor state",
+    );
+    expect(JSON.stringify(prepared.messages)).toContain(
+      "SOL perp was found in live Hyperliquid metadata",
+    );
     expect(JSON.stringify(prepared.messages)).toContain("hyperliquid:SOL:long");
     expect(JSON.stringify(prepared.messages)).toContain("fitStatus");
     expect(JSON.stringify(prepared.messages)).toContain("validated");
@@ -346,26 +531,35 @@ describe("supervisor step policy", () => {
 
   it("keeps trade-expression substance when compressing tool messages before finalization", () => {
     const prepared = prepareCassieSupervisorStep({
-      steps: [
-        step("generate_trade_expressions", {}),
+      steps: [step("generate_trade_expressions", {})],
+      messages: [
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "generate_trade_expressions_call",
+              toolName: "generate_trade_expressions",
+              output: {
+                reason:
+                  "The cleanest route is the prediction market because it directly tracks the event.",
+                highestPurityExpression: "Buy YES on the listed event market.",
+                candidates: Array.from({ length: 80 }, (_, index) => ({
+                  instrument: `candidate ${index}`,
+                })),
+              },
+            },
+          ],
+        },
       ],
-      messages: [{
-        role: "tool",
-        content: [{
-          type: "tool-result",
-          toolCallId: "generate_trade_expressions_call",
-          toolName: "generate_trade_expressions",
-          output: {
-            reason: "The cleanest route is the prediction market because it directly tracks the event.",
-            highestPurityExpression: "Buy YES on the listed event market.",
-            candidates: Array.from({ length: 80 }, (_, index) => ({ instrument: `candidate ${index}` })),
-          },
-        }],
-      }],
     } as never) as { messages: unknown[] };
 
-    expect(JSON.stringify(prepared.messages)).toContain("The cleanest route is the prediction market");
-    expect(JSON.stringify(prepared.messages)).toContain("Buy YES on the listed event market");
+    expect(JSON.stringify(prepared.messages)).toContain(
+      "The cleanest route is the prediction market",
+    );
+    expect(JSON.stringify(prepared.messages)).toContain(
+      "Buy YES on the listed event market",
+    );
   });
 
   it("keeps venue candidate arrays when compressing large tool messages", () => {
@@ -373,34 +567,45 @@ describe("supervisor step policy", () => {
       steps: [
         step("frame_opportunity", {}),
         step("generate_trade_expressions", { decision: "needs_market_check" }),
-        step("search_venues", [{
-          venue: "hyperliquid",
-          symbol: "ETH",
-          side: "long",
-          markPrice: 2121.3,
-          reason: "ETH perp was found in live Hyperliquid metadata.",
-        }]),
-      ],
-      messages: [{
-        role: "tool",
-        content: [{
-          type: "tool-result",
-          toolCallId: "search_venues_call",
-          toolName: "search_venues",
-          output: Array.from({ length: 40 }, (_, index) => ({
+        step("search_venues", [
+          {
             venue: "hyperliquid",
-            symbol: index === 0 ? "ETH" : `TEST${index}`,
+            symbol: "ETH",
             side: "long",
-            reason: index === 0 ? "ETH perp was found in live Hyperliquid metadata." : "Extra candidate.",
-          })),
-        }],
-      }],
+            markPrice: 2121.3,
+            reason: "ETH perp was found in live Hyperliquid metadata.",
+          },
+        ]),
+      ],
+      messages: [
+        {
+          role: "tool",
+          content: [
+            {
+              type: "tool-result",
+              toolCallId: "search_venues_call",
+              toolName: "search_venues",
+              output: Array.from({ length: 40 }, (_, index) => ({
+                venue: "hyperliquid",
+                symbol: index === 0 ? "ETH" : `TEST${index}`,
+                side: "long",
+                reason:
+                  index === 0
+                    ? "ETH perp was found in live Hyperliquid metadata."
+                    : "Extra candidate.",
+              })),
+            },
+          ],
+        },
+      ],
     } as never) as { messages: unknown[] };
 
     const serialized = JSON.stringify(prepared.messages);
-    expect(serialized).toContain("ETH perp was found in live Hyperliquid metadata");
-    expect(serialized).toContain("\"count\":40");
-    expect(serialized).toContain("\"omittedItems\":32");
+    expect(serialized).toContain(
+      "ETH perp was found in live Hyperliquid metadata",
+    );
+    expect(serialized).toContain('"count":40');
+    expect(serialized).toContain('"omittedItems":32');
   });
 
   it("preserves every tool result part when compressing large tool messages", () => {
@@ -414,17 +619,19 @@ describe("supervisor step policy", () => {
       },
     }));
     const prepared = prepareCassieSupervisorStep({
-      steps: [
-        step("generate_trade_expressions", {}),
+      steps: [step("generate_trade_expressions", {})],
+      messages: [
+        {
+          role: "tool",
+          content,
+        },
       ],
-      messages: [{
-        role: "tool",
-        content,
-      }],
-    } as never) as { messages: Array<{ content: Array<{ toolCallId: string }> }> };
+    } as never) as {
+      messages: Array<{ content: Array<{ toolCallId: string }> }>;
+    };
 
-    expect(prepared.messages[0]?.content.map((part) => part.toolCallId)).toEqual(
-      content.map((part) => part.toolCallId),
-    );
+    expect(
+      prepared.messages[0]?.content.map((part) => part.toolCallId),
+    ).toEqual(content.map((part) => part.toolCallId));
   });
 });

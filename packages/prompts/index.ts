@@ -179,7 +179,7 @@ Final market ranker. Select from supplied real venue candidates only; do not ver
 Rules:
 - This tool is atomic: it selects a market from already-supplied venue candidates. It does not decide whether the overall thesis is true, whether evidence is sufficient to trade, or whether the run should be no-trade.
 - Rank only real venue candidates supplied in the input.
-- Treat upstream fitAssessments as authoritative for semantic and contract validity. Do not re-litigate source truth, thesis quality, timing, correction risk, or whether a candidate should have been validated.
+- Treat upstream fitAssessments as authoritative for expression-to-candidate mapping. Do not re-litigate source truth, thesis quality, timing, correction risk, or whether a candidate should have been validated.
 - If the thesis is a date-bounded yes/no event and a validated prediction-market candidate matches the side, deadline, and resolution rules, it is usually the highest-purity expression.
 - If the thesis is a continuous price, magnitude, valuation, structural, or untimed claim, do not select a prediction market merely because it is adjacent to the topic.
 - If both a binary catalyst and price outcome are validated, rank the cleaner expression for the user's requested trade while preserving the other as a legitimate alternative in rejectedCandidates only if it is not selected.
@@ -205,7 +205,7 @@ Before returning, verify internally:
 - selectedMarket is one of the supplied candidates and has both validated fit and a matching quote.
 - rejectedCandidates never includes the selected candidate.
 - no_selection is used only when no supplied candidate has both validated fit and a matching quote.
-- Prediction-market selection follows side, deadline, and resolution-rule fit rather than odds attractiveness.
+- Prediction-market selection follows side, deadline, and event fit rather than odds attractiveness.
 
 ${PREDICTION_MARKET_ROUTING_RULES}`,
   });
@@ -722,47 +722,51 @@ Purpose:
 Assess whether a real venue candidate correctly expresses the opportunity identified from the tweet.
 
 Role:
-Semantic and contract-fit assessor. Decide validated, rejected, or needs_more_info; do not rank, quote, or re-verify the source claim.
+Semantic and contract-fit assessor. Decide validated or rejected; do not rank, quote, or re-verify the source claim.
 
 Task:
-Determine whether the candidate is validated, rejected, or needs more information.
+Determine whether the candidate is validated or rejected.
 
 Rail guidance:
-- Crypto: verify asset linkage, side, direct/proxy strength, and whether broad beta/noise overwhelms the catalyst.
-- Pre-IPO/private stock: verify company mapping, instrument structure, valuation linkage, basis risk, oracle lag, and liquidity risk.
-- Public equities, ETFs, commodities, FX, rates, bonds/credit, futures, options/volatility, indices, DeFi yield, baskets, pairs, and multi-leg expressions: validate only when a real configured venue candidate exists; otherwise reject venue candidates that merely resemble the asset class or require unsupported direct execution.
-- Prediction market: verify exact event match, intended side, deadline, resolution rules, exclusions, whether the tweet is exact evidence or merely adjacent, and whether the thesis actually resolves yes/no by the contract's date.
+- Crypto: validate when the listed asset, venue side, and intended exposure match the expression.
+- Pre-IPO/private stock: validate when the listed pre-stock/private-company market maps to the intended company and side; treat basis, oracle lag, liquidity, or reference-method uncertainty as risk notes, not rejection reasons.
+- Public equities, ETFs, commodities, FX, rates, bonds/credit, futures, options/volatility, indices, DeFi yield, baskets, pairs, and multi-leg expressions: validate only when a real configured venue candidate exists and maps to the intended asset/exposure; reject adjacent or unsupported candidates.
+- Prediction market: validate when the supplied market resolves the intended event/side closely enough for the expression; reject only when event, side, deadline, or resolution meaning materially differs.
 
 Rules:
 - Do not auto-validate any candidate.
 - Reject weak proxies unless the causal link is strong.
 - Reject candidates that are merely thematically related.
 - Reject prediction markets that only share a topic with a continuous price, magnitude, valuation, structural, or untimed thesis.
-- Validate cheap prediction-market odds when the contract is the right event, side, deadline, and rule match; low price alone is not a mismatch.
-- Treat prediction markets as additive when the thesis has both a binary catalyst and a price outcome; assess the event contract on event purity, not whether it replaces the price expression.
-- Mark needs_more_info if rules/specs are missing.
-- Do not use price attractiveness here; assess semantic and contract fit only.
+- Validate cheap prediction-market odds when the market is the right event and side; low price alone is not a mismatch.
+- Treat prediction markets as additive when the thesis has both a binary catalyst and a price outcome; assess event purity, not whether it replaces the price expression.
+- If venue discovery found a real candidate and it maps to the intended entity/asset/event and side, validate it with fitScore >= 0.7.
+- Reject candidates with fitScore < 0.7 when they change the entity, asset, event, side, deadline, payoff, or are merely thematic.
+- Do not reject just because secondary documentation, rule text, reference methodology, liquidity depth, or price attractiveness remains imperfect. Put those in basisRisks or requiredFollowUp.
 - Do not invent missing rules, specs, or venue data.
 - Use a stable candidateId built from venue, symbol/instrument, and side when the input does not provide one.
 
 When uncertain:
-- If candidate rules, instrument specs, outcome token, or side mapping are missing, mark needs_more_info rather than validating.
+- If the candidate is real and maps to the expression's entity/asset/event and side, validate it with fitScore >= 0.7.
+- If the candidate cannot be mapped to the intended entity, side, event, or asset exposure, reject it with fitScore < 0.7.
 - If the candidate is merely thematically related, reject it instead of treating it as a proxy.
+- Use basisRisks and requiredFollowUp for non-blocking caveats; they should not flip a matching venue candidate to rejected.
 
 Examples:
-- Candidate is "Will the Fed cut rates at the June FOMC meeting?" for a June rate-cut thesis. Validate if side, deadline, and rules match.
-- Candidate is "Will the Fed cut rates this year?" for a June-only thesis. Reject or mark needs_more_info if the broader deadline changes the payoff.
+- Candidate is "Will the Fed cut rates at the June FOMC meeting?" for a June rate-cut thesis. Validate if side and deadline match the expression.
+- Candidate is "Will the Fed cut rates this year?" for a June-only thesis. Reject it if the broader deadline changes the payoff.
 - Candidate is SOL perp for a SOL network-usage thesis. Validate when side and direct asset linkage match and venue data is real.
-- Candidate is a thematically related AI market for an NVDA earnings thesis. Reject as weak_proxy or unrelated unless the contract directly resolves the earnings event.
-- Candidate odds look cheap but rules match exactly. Validate semantic and contract fit; price attractiveness is not part of this tool.
+- Candidate is xyz:MINIMAX pre-stock perp for a long MiniMax private-company valuation expression. Validate it if the symbol maps to MiniMax and side is long; put valuation-reference or liquidity uncertainty in basisRisks/requiredFollowUp.
+- Candidate is a thematically related AI market for an NVDA earnings thesis. Reject as weak_proxy or unrelated unless the market directly resolves the earnings event.
+- Candidate odds look cheap but the market matches the expression. Validate fit; price attractiveness is not part of this tool.
 
 Before returning, verify internally:
-- fitStatus, sideFit, directness, fitScore, mismatchReasons, requiredFollowUp, and confidence agree.
-- fitStatus follows semantic and contract fit, not whether the trade seems attractive.
+- fitStatus and fitScore agree: validated requires fitScore >= 0.7; rejected requires fitScore < 0.7.
+- fitStatus follows entity/asset/event and side mapping, not whether the trade seems attractive.
 - sideFit reflects the requested side or outcome token.
-- Prediction-market fit checks event wording, resolution criteria, deadline, exclusions, and evidence adjacency.
-- needs_more_info is used when rules, specs, instrument mapping, or side data are missing.
-- mismatchReasons and requiredFollowUp name concrete blocking facts rather than vague caution.
+- Prediction-market fit checks event wording, side, deadline, and resolution meaning.
+- Missing secondary details belong in basisRisks or requiredFollowUp and do not block validation when the venue candidate clearly maps to the expression.
+- mismatchReasons name actual mapping mismatches, not vague caution.
 
 ${PREDICTION_MARKET_ROUTING_RULES}`,
   });

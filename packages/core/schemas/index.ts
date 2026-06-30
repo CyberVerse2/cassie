@@ -293,16 +293,11 @@ export const NoTradeCaseSchema = z.object({
   whatWouldChangeThis: z.array(z.string()),
 });
 
-export const ExpressionFitAssessmentSchema = z.object({
+const ExpressionFitAssessmentBaseSchema = z.object({
   candidateId: z.string(),
   expressionId: z.string(),
   expressionRail: TradableExpressionRailSchema,
   venue: z.string(),
-  fitStatus: z
-    .enum(["validated", "rejected", "needs_more_info"])
-    .describe(
-      "Use validated only when the real venue candidate semantically and contractually matches the intended expression.",
-    ),
   intendedSide: z.string(),
   sideFit: z.enum(["correct", "opposite", "ambiguous", "unknown"]),
   directness: z.enum([
@@ -312,18 +307,36 @@ export const ExpressionFitAssessmentSchema = z.object({
     "unrelated",
     "unknown",
   ]),
-  fitScore: z.number().min(0).max(1),
   semanticFitSummary: z.string(),
   ruleOrContractFitSummary: z
     .string()
     .describe(
-      "Summarize verified venue rules, contract terms, listing details, or instrument specs that support or block the fit.",
+      "Summarize the venue details used to map the candidate. Do not reject solely because secondary documentation is missing when the venue listing clearly maps to the intended expression.",
     ),
   basisRisks: z.array(z.string()),
   mismatchReasons: z.array(z.string()),
   requiredFollowUp: z.array(z.string()),
   confidence: z.number().min(0).max(1),
 });
+
+export const ExpressionFitAssessmentSchema = z.discriminatedUnion("fitStatus", [
+  ExpressionFitAssessmentBaseSchema.extend({
+    fitStatus: z
+      .literal("validated")
+      .describe(
+        "Use validated when the real venue candidate matches the intended expression.",
+      ),
+    fitScore: z.number().min(0.7).max(1),
+  }),
+  ExpressionFitAssessmentBaseSchema.extend({
+    fitStatus: z
+      .literal("rejected")
+      .describe(
+        "Use rejected when the real venue candidate does not match the intended expression.",
+      ),
+    fitScore: z.number().min(0).max(0.699999),
+  }),
+]);
 
 const EvidenceGapDimensionSchema = z.enum([
   "source_reliability",

@@ -23,12 +23,42 @@ describe("schema normalization", () => {
     expect(NoTradeCaseSchema.shape.reason.description).toContain(
       "no configured venue market was found",
     );
-    expect(ExpressionFitAssessmentSchema.shape.fitStatus.description).toContain(
-      "validated only when",
-    );
+    const baseFitAssessment = {
+      candidateId: "hyperliquid:BTC:long",
+      expressionId: "btc_long",
+      expressionRail: "crypto",
+      venue: "hyperliquid",
+      intendedSide: "long",
+      sideFit: "correct",
+      directness: "direct",
+      semanticFitSummary: "BTC long maps directly to the BTC long expression.",
+      ruleOrContractFitSummary: "Venue listing maps to BTC perp exposure.",
+      basisRisks: [],
+      mismatchReasons: [],
+      requiredFollowUp: [],
+      confidence: 0.9,
+    };
     expect(
-      ExpressionFitAssessmentSchema.shape.ruleOrContractFitSummary.description,
-    ).toContain("rules");
+      ExpressionFitAssessmentSchema.parse({
+        ...baseFitAssessment,
+        fitStatus: "validated",
+        fitScore: 0.9,
+      }),
+    ).toMatchObject({ fitStatus: "validated" });
+    expect(() =>
+      ExpressionFitAssessmentSchema.parse({
+        ...baseFitAssessment,
+        fitStatus: "validated",
+        fitScore: 0.69,
+      }),
+    ).toThrow();
+    expect(() =>
+      ExpressionFitAssessmentSchema.parse({
+        ...baseFitAssessment,
+        fitStatus: "rejected",
+        fitScore: 0.82,
+      }),
+    ).toThrow();
   });
 
   it("requires explicit nullable response fields for trade-expression structured output", () => {
