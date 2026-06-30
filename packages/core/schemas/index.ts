@@ -7,6 +7,17 @@ export const CassieIntentSchema = z.enum([
   "watch",
 ]);
 
+export const CassieCommandIntentSchema = z.enum([
+  "not_a_command",
+  ...CassieIntentSchema.options,
+]);
+
+export const CassieCommandClassificationSchema = z.object({
+  intent: CassieCommandIntentSchema,
+  confidence: z.number().min(0).max(1),
+  reason: z.string().min(1),
+});
+
 export const SourceModeSchema = z.enum(["normal", "breaking_news"]);
 
 export const DirectionSchema = z.enum([
@@ -640,6 +651,9 @@ export const RunStepSchema = z.object({
 });
 
 export type CassieIntent = z.infer<typeof CassieIntentSchema>;
+export type CassieCommandClassification = z.infer<
+  typeof CassieCommandClassificationSchema
+>;
 export type SourceMode = z.infer<typeof SourceModeSchema>;
 export type SourcePost = z.infer<typeof SourcePostSchema>;
 export type TelegramConnection = NonNullable<

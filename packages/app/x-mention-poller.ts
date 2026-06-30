@@ -3,6 +3,7 @@ import { processXWebhookPayload } from "./x-webhook.ts";
 import { config as runtimeConfig } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
+import type { StructuredAiClient } from "../ai/client.ts";
 import { XApiReplyClient, XRecentMentionSearchClient, type XRecentMentionTweet, type XReplyClient } from "../notifications/x.ts";
 
 const X_MENTION_POLL_SINCE_KEY = "x_mention_poll:since_id";
@@ -20,6 +21,7 @@ export async function pollXCommandMentions(input: {
   product?: CassieProduct;
   searchClient?: XRecentMentionSearchClient;
   replyClient?: XReplyClient;
+  ai?: StructuredAiClient;
   processInitialBackfill?: boolean;
 } = {}): Promise<PollXCommandMentionsResult> {
   const store = input.store ?? new DrizzleCassieStore();
@@ -57,6 +59,7 @@ export async function pollXCommandMentions(input: {
       cassieHandle: runtimeConfig.x.cassieHandle ?? "cassiedottrade",
       payload: xAccountActivityPayloadFromRecentTweet(tweet, parentTweets.get(replyReferenceId(tweet) ?? "")),
       replyClient,
+      ai: input.ai,
     });
     await store.setRuntimeState(pollStateKey, {
       processedAt: new Date().toISOString(),

@@ -68,6 +68,7 @@ export async function POST(request: Request) {
       failed: result.failed,
       runIds: result.runIds,
       errors: result.errors,
+      skipReasons: result.skipReasons,
     }));
 
     return NextResponse.json(result);

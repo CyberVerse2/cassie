@@ -1,10 +1,22 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { z } from "zod";
-import type { SourcePost } from "../core/schemas/index.ts";
+import {
+  CassieCommandClassificationSchema,
+  type CassieCommandClassification,
+  type SourcePost,
+} from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { config as runtimeConfig } from "../core/config.ts";
 import type { XReplyClient } from "../notifications/x.ts";
 import type { CassieProduct } from "./product.ts";
+import {
+  CassieStructuredClient,
+  type StructuredAiClient,
+} from "../ai/client.ts";
+import {
+  cassieCommandClassificationPromptSpec,
+  structuredPromptInput,
+} from "../prompts/index.ts";
 
 const CASSIE_REGISTER_URL = "https://cassie.trade";
 
@@ -80,7 +92,16 @@ export type ProcessXWebhookPayloadResult = {
   failed: number;
   runIds: string[];
   errors: Array<{ postId?: string; error: string }>;
+  skipReasons: Array<{ postId?: string; reason: XWebhookSkipReason }>;
 };
+
+type XWebhookSkipReason =
+  | "blocked_payload"
+  | "retweet"
+  | "not_cassie_mention"
+  | "no_reply_source"
+  | "not_a_command"
+  | "duplicate";
 
 export type XWebhookDeliveryAttempt = {
   attemptId: string;
@@ -164,6 +185,7 @@ export async function processXWebhookPayload(input: {
   userId?: string;
   cassieHandle?: string;
   replyClient?: XReplyClient;
+  ai?: StructuredAiClient;
 }): Promise<ProcessXWebhookPayloadResult> {
   const cassieHandle = input.cassieHandle ?? runtimeConfig.x.cassieHandle;
   if (!cassieHandle) {
@@ -184,13 +206,19 @@ export async function processXWebhookPayload(input: {
       failed: 0,
       runIds: [],
       errors: [],
+      skipReasons: tweets.map((tweet) => ({
+        postId: tweet.id_str ?? stringValue(tweet.id) ?? undefined,
+        reason: "blocked_payload",
+      })),
     };
   }
 
   const runIds: string[] = [];
   const errors: Array<{ postId?: string; error: string }> = [];
+  const skipReasons: ProcessXWebhookPayloadResult["skipReasons"] = [];
   let skipped = 0;
   let failed = 0;
+  const ai = input.ai ?? new CassieStructuredClient();
 
   for (const tweet of tweets) {
     let postId: string | undefined;
@@ -198,6 +226,10 @@ export async function processXWebhookPayload(input: {
     try {
       if (tweet.retweeted_status != null) {
         skipped += 1;
+        skipReasons.push({
+          postId: stringValue(tweet.id_str ?? tweet.id) ?? undefined,
+          reason: "retweet",
+        });
         continue;
       }
 
@@ -205,14 +237,22 @@ export async function processXWebhookPayload(input: {
       postId = requireSourcePostId(mentionPost);
       if (!mentionsCassie(mentionPost.text, cassieHandle)) {
         skipped += 1;
-        continue;
-      }
-      if (!hasCassieCommand(mentionPost.text)) {
-        skipped += 1;
+        skipReasons.push({ postId, reason: "not_cassie_mention" });
         continue;
       }
       if (!hasReplySource(tweet)) {
         skipped += 1;
+        skipReasons.push({ postId, reason: "no_reply_source" });
+        continue;
+      }
+      const command = await classifyCassieCommand({
+        ai,
+        mentionText: mentionPost.text,
+        cassieHandle,
+      });
+      if (command.intent === "not_a_command") {
+        skipped += 1;
+        skipReasons.push({ postId, reason: "not_a_command" });
         continue;
       }
       const sourcePost = sourcePostForAnalysis(tweet);
@@ -226,6 +266,7 @@ export async function processXWebhookPayload(input: {
       const existing = await input.store.getRuntimeState(stateKey);
       if (existing != null) {
         skipped += 1;
+        skipReasons.push({ postId, reason: "duplicate" });
         continue;
       }
 
@@ -273,7 +314,25 @@ export async function processXWebhookPayload(input: {
     failed,
     runIds,
     errors,
+    skipReasons,
   };
+}
+
+async function classifyCassieCommand(input: {
+  ai: StructuredAiClient;
+  mentionText: string;
+  cassieHandle: string;
+}): Promise<CassieCommandClassification> {
+  return CassieCommandClassificationSchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        cassieCommandClassificationPromptSpec({
+          mentionText: input.mentionText,
+          cassieHandle: input.cassieHandle,
+        }),
+      ),
+    }),
+  );
 }
 
 class UnregisteredXUserError extends Error {
@@ -421,10 +480,6 @@ function stringValue(value: string | number | null | undefined): string | null {
 function mentionsCassie(text: string, cassieHandle: string): boolean {
   const handle = cassieHandle.replace(/^@/, "");
   return new RegExp(`(^|[^A-Za-z0-9_])@${escapeRegExp(handle)}\\b`, "i").test(text);
-}
-
-function hasCassieCommand(text: string): boolean {
-  return /\b(trade|countertrade|watch|critic|critique|review|analy[sz]e)\b/i.test(text);
 }
 
 function escapeRegExp(value: string): string {

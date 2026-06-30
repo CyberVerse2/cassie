@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { pollXCommandMentions } from "../packages/app/x-mention-poller.ts";
 import type { CassieProduct } from "../packages/app/product.ts";
+import type { StructuredAiClient } from "../packages/ai/client.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { XRecentMentionSearchClient, XRecentMentionTweet, XReplyClient } from "../packages/notifications/x.ts";
 
@@ -44,6 +45,7 @@ describe("X mention poller", () => {
         }],
       }) as unknown as XRecentMentionSearchClient,
       replyClient: new FakeXReplyClient(),
+      ai: commandClassifier("trade"),
     });
 
     expect(result).toMatchObject({ found: 1, processed: 1, skipped: 0, runIds: ["run_1"] });
@@ -81,12 +83,14 @@ describe("X mention poller", () => {
       processInitialBackfill: true,
       searchClient: searchClient as unknown as XRecentMentionSearchClient,
       replyClient,
+      ai: commandClassifier("trade"),
     });
     const retry = await pollXCommandMentions({
       store,
       product,
       searchClient: searchClient as unknown as XRecentMentionSearchClient,
       replyClient,
+      ai: commandClassifier("trade"),
     });
 
     expect(first).toMatchObject({
@@ -199,4 +203,16 @@ class FakeXReplyClient implements XReplyClient {
     this.replies.push(input);
     return { tweetId: `reply_${this.replies.length}` };
   }
+}
+
+function commandClassifier(intent: "trade"): StructuredAiClient {
+  return {
+    async generateObject<T>(): Promise<T> {
+      return {
+        intent,
+        confidence: 0.94,
+        reason: "The reply asks Cassie to trade the referenced source.",
+      } as T;
+    },
+  };
 }

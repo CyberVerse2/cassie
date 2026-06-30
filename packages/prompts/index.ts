@@ -3,6 +3,7 @@ import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { z } from "zod";
 import type { ModelTier, StructuredToolConfig } from "../ai/client.ts";
 import {
+  CassieCommandClassificationSchema,
   ExpressionFitAssessmentSchema,
   ExpressionRailSchema,
   MarketSelectionSchema,
@@ -11,6 +12,7 @@ import {
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
   type ExpressionFitAssessment,
+  type CassieCommandClassification,
   type MarketCandidate,
   type MarketSelection,
   type OpportunityFrame,
@@ -455,6 +457,53 @@ export function sourceModeClassificationPrompt(input: {
   userCommand: string;
 }): string {
   return renderPromptSpec(sourceModeClassificationPromptSpec(input));
+}
+
+export function cassieCommandClassificationPromptSpec(input: {
+  mentionText: string;
+  cassieHandle: string;
+}): CassiePromptSpec<CassieCommandClassification> {
+  return makePromptSpec({
+    name: "cassie_command_classification",
+    tier: "cheap",
+    outputSchema: CassieCommandClassificationSchema,
+    payload: {
+      mentionText: input.mentionText,
+      cassieHandle: input.cassieHandle,
+    },
+    stage: `Tool name: classify_cassie_command
+Prompt version: ${PROMPT_VERSION}
+
+Purpose:
+Classify whether an X reply that mentions Cassie is asking Cassie to act, and preserve the intended command.
+
+Role:
+Webhook command-intent classifier. Decide only the user's command intent from the reply text. Do not analyze the source post, choose venues, or generate trades.
+
+Rules:
+- Return trade when the user asks Cassie to enter, buy, short, long, ape, take, play, trade, or otherwise get exposure to the referenced source.
+- Return trade for natural phrases like "get me in", "I'm in", "send it", "take this", "buy this", "let's run this", or "put me on this" when directed at Cassie.
+- Return countertrade when the user asks Cassie to fade, inverse, short against, or counter the referenced source.
+- Return watch when the user asks Cassie to monitor, track, follow, alert, or keep an eye on the referenced source without entering.
+- Return critic for critique, review, analyze, check, sanity-check, or tell me if this is wrong.
+- Return not_a_command for casual mentions, jokes, praise, complaints, questions about Cassie itself, or unclear text with no requested action.
+- Ignore other @handles in the reply. They are conversation context, not the command target.
+- Preserve slang and informal trading language when it clearly asks for exposure.
+- Do not require the exact words trade, watch, review, or countertrade.
+
+Examples:
+- "@cassiedottrade get me in on this" -> trade.
+- "@himgajria @cassiedottrade get me in on this shi" -> trade.
+- "@cassiedottrade fade this" -> countertrade.
+- "@cassiedottrade keep an eye on this" -> watch.
+- "@cassiedottrade is this real?" -> critic.
+- "having @cassiedottrade on the timeline feels great" -> not_a_command.
+
+Before returning, verify internally:
+- intent is based only on the mention text.
+- confidence reflects ambiguity.
+- reason is concise and names the phrase that drove the classification.`,
+  });
 }
 
 export function sourceModeClassificationPromptSpec(input: {

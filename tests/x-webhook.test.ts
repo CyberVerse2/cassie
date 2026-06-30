@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
 import type { CassieProduct } from "../packages/app/product.ts";
 import type { XReplyClient } from "../packages/notifications/x.ts";
+import type { StructuredAiClient } from "../packages/ai/client.ts";
 import {
   processXWebhookPayload,
   recordXWebhookDeliveryAttempt,
@@ -134,6 +135,7 @@ describe("X webhook", () => {
       store,
       userId: "user_1",
       cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
       payload: {
         tweet_create_events: [{
           id_str: "222",
@@ -171,6 +173,42 @@ describe("X webhook", () => {
     });
   });
 
+  it("treats natural get-me-in replies as trade commands", async () => {
+    const store = new InMemoryCassieStore();
+    const createMentionRun = vi.fn(async () => ({ runId: "run_1", status: "queued" as const }));
+    const product = { createMentionRun } as unknown as CassieProduct;
+
+    const result = await processXWebhookPayload({
+      product,
+      store,
+      userId: "user_1",
+      cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
+      payload: {
+        tweet_create_events: [{
+          id_str: "2071810004642926999",
+          full_text: "@himgajria @cassiedottrade get me in on this shi",
+          in_reply_to_status_id_str: "2071534940143980776",
+          in_reply_to_screen_name: "himgajria",
+          user: {
+            screen_name: "TheCyberverse",
+            name: "Celestine",
+          },
+        }],
+      },
+    });
+
+    expect(result).toMatchObject({ received: 1, queued: 1, skipped: 0, failed: 0 });
+    expect(createMentionRun).toHaveBeenCalledWith(expect.objectContaining({
+      userId: "user_1",
+      userCommand: "@himgajria @cassiedottrade get me in on this shi",
+      sourcePost: expect.objectContaining({
+        postId: "2071534940143980776",
+        url: "https://x.com/himgajria/status/2071534940143980776",
+      }),
+    }));
+  });
+
   it("queues webhook mentions under the connected user who tagged Cassie", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings({
@@ -190,6 +228,7 @@ describe("X webhook", () => {
       product,
       store,
       cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
       payload: {
         for_user_id: "2060718466630406149",
         tweet_create_events: [{
@@ -242,6 +281,7 @@ describe("X webhook", () => {
       product,
       store,
       cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
       payload,
       replyClient,
     });
@@ -249,6 +289,7 @@ describe("X webhook", () => {
       product,
       store,
       cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
       payload,
       replyClient,
     });
@@ -280,11 +321,14 @@ describe("X webhook", () => {
       store,
       cassieHandle: "cassiedottrade",
       replyClient,
+      ai: commandClassifier("not_a_command"),
       payload: {
         tweet_create_events: [{
           id_str: "222",
           author_id: "1574209048425242624",
           full_text: "having @cassiedottrade on the timeline feels great",
+          in_reply_to_status_id_str: "111",
+          in_reply_to_screen_name: "source",
           user: {
             id_str: "1574209048425242624",
             screen_name: "trader",
@@ -294,7 +338,13 @@ describe("X webhook", () => {
       },
     });
 
-    expect(result).toMatchObject({ received: 1, queued: 0, skipped: 1, failed: 0 });
+    expect(result).toMatchObject({
+      received: 1,
+      queued: 0,
+      skipped: 1,
+      failed: 0,
+      skipReasons: [{ postId: "222", reason: "not_a_command" }],
+    });
     expect(createMentionRun).not.toHaveBeenCalled();
     expect(replyClient.replies).toEqual([]);
   });
@@ -350,6 +400,7 @@ describe("X webhook", () => {
       store,
       userId: "user_1",
       cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
       payload,
     });
     const retry = await processXWebhookPayload({
@@ -357,6 +408,7 @@ describe("X webhook", () => {
       store,
       userId: "user_1",
       cassieHandle: "cassiedottrade",
+      ai: commandClassifier("trade"),
       payload,
     });
 
@@ -384,4 +436,18 @@ class FakeXReplyClient implements XReplyClient {
     this.replies.push(input);
     return { tweetId: `reply_${this.replies.length}` };
   }
+}
+
+function commandClassifier(intent: "trade" | "not_a_command"): StructuredAiClient {
+  return {
+    async generateObject<T>(): Promise<T> {
+      return {
+        intent,
+        confidence: intent === "trade" ? 0.94 : 0.88,
+        reason: intent === "trade"
+          ? "The reply asks Cassie to enter the referenced opportunity."
+          : "The reply mentions Cassie without asking for an action.",
+      } as T;
+    },
+  };
 }
