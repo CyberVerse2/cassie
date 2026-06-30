@@ -99,13 +99,14 @@ describe("dashboard payload", () => {
     });
     expect(dashboard.openPositions).toHaveLength(1);
     expect(dashboard.portfolioBalance).toMatchObject({
-      currentUsd: 105,
+      currentUsd: 155,
       walletBalanceUsd: 100,
+      openPositionEquityUsd: 55,
       unrealizedPnlUsd: 5,
     });
     expect(dashboard.portfolioBalance.history).toHaveLength(1);
     expect(dashboard.portfolioBalance.history[0]).toMatchObject({
-      valueUsd: 105,
+      valueUsd: 155,
       walletBalanceUsd: 100,
       unrealizedPnlUsd: 5,
     });
@@ -161,9 +162,34 @@ describe("dashboard payload", () => {
       positionEquityUsd: 5.2,
     });
     expect(dashboard.portfolioBalance).toMatchObject({
-      currentUsd: 101.2,
+      currentUsd: 105.2,
       walletBalanceUsd: 100,
+      openPositionEquityUsd: 5.2,
       unrealizedPnlUsd: 1.2,
+    });
+  });
+
+  it("keeps escrowed trade equity inside portfolio value", async () => {
+    const store = new InMemoryCassieStore();
+    await store.upsertUserSettings(settings);
+    await store.addTradeTicket(ticket);
+    await store.addExecutionJob(job);
+    await store.addPosition(position({ positionId: "position_open", status: "open", closedAt: null }));
+
+    const dashboard = await buildDashboardPayload(settings, store, {
+      getUsdcBalanceUsd: async () => 50,
+    });
+
+    expect(dashboard.portfolioBalance).toMatchObject({
+      currentUsd: 105,
+      walletBalanceUsd: 50,
+      openPositionEquityUsd: 55,
+      unrealizedPnlUsd: 5,
+    });
+    expect(dashboard.portfolioBalance.history[0]).toMatchObject({
+      valueUsd: 105,
+      walletBalanceUsd: 50,
+      unrealizedPnlUsd: 5,
     });
   });
 
@@ -184,7 +210,7 @@ describe("dashboard payload", () => {
       getUsdcBalanceUsd: async () => 150,
     });
 
-    expect(dashboard.portfolioBalance.history.map((point) => point.valueUsd)).toEqual([105, 155]);
+    expect(dashboard.portfolioBalance.history.map((point) => point.valueUsd)).toEqual([155, 205]);
     expect(dashboard.portfolioBalance.history.map((point) => point.walletBalanceUsd)).toEqual([100, 150]);
   });
 

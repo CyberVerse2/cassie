@@ -10,7 +10,10 @@ import type {
 import type { CassieStore } from "../../../../../packages/core/db/store.ts";
 import type { UserDashboardData } from "../../../../../packages/core/db/store.ts";
 import type { CassieActivityItem } from "../../lib/activity.ts";
-import { decoratePosition, type UserFacingPosition } from "../positions/_lib/position-response.ts";
+import {
+  decoratePosition,
+  type UserFacingPosition,
+} from "../positions/_lib/position-response.ts";
 
 export const DASHBOARD_ACTIVITY_LIMIT = 80;
 const PORTFOLIO_HISTORY_LIMIT = 500;
@@ -27,6 +30,7 @@ export type DashboardPayload = {
   portfolioBalance: {
     currentUsd: number;
     walletBalanceUsd: number;
+    openPositionEquityUsd: number;
     unrealizedPnlUsd: number;
     history: Array<{
       at: string;
@@ -42,7 +46,9 @@ export type DashboardPayload = {
   activity: CassieActivityItem[];
 };
 
-type PositionReviewPayload = Awaited<ReturnType<CassieStore["getLatestPositionReviews"]>>[number];
+type PositionReviewPayload = Awaited<
+  ReturnType<CassieStore["getLatestPositionReviews"]>
+>[number];
 
 export type WalletBalanceGateway = {
   getUsdcBalanceUsd(privyWalletId: string): Promise<number | null>;
@@ -58,26 +64,47 @@ export async function buildDashboardPayload(
     : Promise.resolve(null);
   const [walletBalanceUsd, dashboardData] = await Promise.all([
     walletBalancePromise,
-    store.loadUserDashboardData(settings.userId, { activityLimit: DASHBOARD_ACTIVITY_LIMIT }),
+    store.loadUserDashboardData(settings.userId, {
+      activityLimit: DASHBOARD_ACTIVITY_LIMIT,
+    }),
   ]);
-  const balance = walletBalanceUsd == null
-    ? null
-    : await store.getWalletFundingBalance(settings.userId, walletBalanceUsd);
+  const balance =
+    walletBalanceUsd == null
+      ? null
+      : await store.getWalletFundingBalance(settings.userId, walletBalanceUsd);
 
-  const positions = dashboardData.positions
-    .sort((left, right) => right.openedAt.localeCompare(left.openedAt));
-  const latestReviewsPromise = store.getLatestPositionReviews(positions.map((position) => position.positionId));
+  const positions = dashboardData.positions.sort((left, right) =>
+    right.openedAt.localeCompare(left.openedAt),
+  );
+  const latestReviewsPromise = store.getLatestPositionReviews(
+    positions.map((position) => position.positionId),
+  );
   const tickets = dashboardData.tradeTickets;
-  const ticketById = new Map(tickets.map((ticket) => [ticket.ticketId, ticket]));
+  const ticketById = new Map(
+    tickets.map((ticket) => [ticket.ticketId, ticket]),
+  );
   const displayPositions = positions.map((position) =>
-    decoratePosition(position, ticketById.get(position.ticketId))
+    decoratePosition(position, ticketById.get(position.ticketId)),
   );
   const latestReviewRows = await latestReviewsPromise;
-  const latestReviews = new Map(latestReviewRows.map((review) => [review.positionId, review]));
+  const latestReviews = new Map(
+    latestReviewRows.map((review) => [review.positionId, review]),
+  );
   const openPositions = displayPositions.filter(isDashboardOpenPosition);
   const walletBalance = balance?.walletBalanceUsd ?? 0;
-  const unrealizedPnlUsd = roundUsd(openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0));
-  const portfolioBalanceUsd = roundUsd(walletBalance + unrealizedPnlUsd);
+  const unrealizedPnlUsd = roundUsd(
+    openPositions.reduce(
+      (total, position) => total + position.unrealizedPnlUsd,
+      0,
+    ),
+  );
+  const openPositionEquityUsd = roundUsd(
+    openPositions.reduce(
+      (total, position) => total + position.positionEquityUsd,
+      0,
+    ),
+  );
+  const portfolioBalanceUsd = roundUsd(walletBalance + openPositionEquityUsd);
   const snapshotAt = new Date().toISOString();
   await store.recordPortfolioBalanceSnapshot({
     userId: settings.userId,
@@ -86,7 +113,10 @@ export async function buildDashboardPayload(
     walletBalanceUsd: walletBalance,
     unrealizedPnlUsd,
   });
-  const portfolioHistory = await store.listPortfolioBalanceSnapshots(settings.userId, PORTFOLIO_HISTORY_LIMIT);
+  const portfolioHistory = await store.listPortfolioBalanceSnapshots(
+    settings.userId,
+    PORTFOLIO_HISTORY_LIMIT,
+  );
 
   return {
     account: {
@@ -98,15 +128,20 @@ export async function buildDashboardPayload(
     portfolioBalance: {
       currentUsd: portfolioBalanceUsd,
       walletBalanceUsd: walletBalance,
+      openPositionEquityUsd,
       unrealizedPnlUsd,
       history: portfolioHistory.map(portfolioHistoryPoint),
     },
     openPositions,
-    closedPositions: displayPositions.filter((position) => position.status === "closed"),
-    latestReviews: Object.fromEntries(positions.map((position) => [
-      position.positionId,
-      latestReviews.get(position.positionId) ?? null,
-    ])),
+    closedPositions: displayPositions.filter(
+      (position) => position.status === "closed",
+    ),
+    latestReviews: Object.fromEntries(
+      positions.map((position) => [
+        position.positionId,
+        latestReviews.get(position.positionId) ?? null,
+      ]),
+    ),
     activity: buildUserActivity(settings.userId, dashboardData),
   };
 }
@@ -127,7 +162,10 @@ function portfolioHistoryPoint(snapshot: {
 }
 
 function formatChartLabel(value: string) {
-  return new Date(value).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
 }
 
 function roundUsd(value: number) {
@@ -140,9 +178,15 @@ export function buildUserActivity(
 ): CassieActivityItem[] {
   const runs = snapshot.controlRuns.filter((run) => run.userId === userId);
   const runById = new Map(runs.map((run) => [run.runId, run]));
-  const tickets = snapshot.tradeTickets.filter((ticket) => ticket.userId === userId);
-  const ticketById = new Map(tickets.map((ticket) => [ticket.ticketId, ticket]));
-  const jobById = new Map(snapshot.executionJobs.map((job) => [job.jobId, job]));
+  const tickets = snapshot.tradeTickets.filter(
+    (ticket) => ticket.userId === userId,
+  );
+  const ticketById = new Map(
+    tickets.map((ticket) => [ticket.ticketId, ticket]),
+  );
+  const jobById = new Map(
+    snapshot.executionJobs.map((job) => [job.jobId, job]),
+  );
   const intentByRunId = buildIntentByRunId(snapshot.runSteps);
 
   return [
@@ -156,7 +200,12 @@ export function buildUserActivity(
         const ticket = ticketById.get(position.ticketId);
         if (!ticket) return [];
         return [
-          tradeActivity(position, ticket, jobById.get(position.executionJobId) ?? null, runById.get(ticket.runId ?? "")),
+          tradeActivity(
+            position,
+            ticket,
+            jobById.get(position.executionJobId) ?? null,
+            runById.get(ticket.runId ?? ""),
+          ),
           ...closeActivity(position, ticket, runById.get(ticket.runId ?? "")),
         ];
       }),
@@ -166,12 +215,17 @@ export function buildUserActivity(
 }
 
 function isDashboardOpenPosition(position: UserFacingPosition) {
-  return position.status === "open"
-    || position.status === "closing"
-    || position.status === "close_failed";
+  return (
+    position.status === "open" ||
+    position.status === "closing" ||
+    position.status === "close_failed"
+  );
 }
 
-function runActivity(run: ControlRun, intent: "watch" | "countertrade" | undefined): CassieActivityItem | null {
+function runActivity(
+  run: ControlRun,
+  intent: "watch" | "countertrade" | undefined,
+): CassieActivityItem | null {
   if (!intent) return null;
   return {
     id: run.runId,
@@ -187,6 +241,8 @@ function runActivity(run: ControlRun, intent: "watch" | "countertrade" | undefin
     source: run.sourcePost.url ? "x" : "cassie",
     sourceUrl: run.sourcePost.url,
     authorHandle: run.sourcePost.authorHandle,
+    authorName: run.sourcePost.authorName,
+    sourceText: run.sourcePost.text,
     error: run.error,
   };
 }
@@ -197,22 +253,26 @@ function closeActivity(
   run: ControlRun | undefined,
 ): CassieActivityItem[] {
   if (position.status !== "closed" || !position.closedAt) return [];
-  return [{
-    id: `${position.positionId}:close`,
-    kind: "trade_close",
-    at: position.closedAt,
-    title: `${ticket.instrument} CLOSE`,
-    subtitle: `${formatSignedUsd(position.unrealizedPnlUsd)} realized P/L · ${summarize(ticket.exitPlan.thesis ?? ticket.thesis)}`,
-    status: position.status,
-    amountUsd: null,
-    instrument: ticket.instrument,
-    venue: ticket.venue,
-    side: null,
-    source: run?.sourcePost.url ? "x" : "cassie",
-    sourceUrl: run?.sourcePost.url ?? null,
-    authorHandle: run?.sourcePost.authorHandle ?? null,
-    error: null,
-  }];
+  return [
+    {
+      id: `${position.positionId}:close`,
+      kind: "trade_close",
+      at: position.closedAt,
+      title: `${ticket.instrument} CLOSE`,
+      subtitle: `${formatSignedUsd(position.unrealizedPnlUsd)} realized P/L · ${summarize(ticket.exitPlan.thesis ?? ticket.thesis)}`,
+      status: position.status,
+      amountUsd: null,
+      instrument: ticket.instrument,
+      venue: ticket.venue,
+      side: null,
+      source: run?.sourcePost.url ? "x" : "cassie",
+      sourceUrl: run?.sourcePost.url ?? null,
+      authorHandle: run?.sourcePost.authorHandle ?? null,
+      authorName: run?.sourcePost.authorName ?? null,
+      sourceText: run?.sourcePost.text ?? null,
+      error: null,
+    },
+  ];
 }
 
 function tradeActivity(
@@ -235,6 +295,8 @@ function tradeActivity(
     source: run?.sourcePost.url ? "x" : "cassie",
     sourceUrl: run?.sourcePost.url ?? null,
     authorHandle: run?.sourcePost.authorHandle ?? null,
+    authorName: run?.sourcePost.authorName ?? null,
+    sourceText: run?.sourcePost.text ?? null,
     error: position.failureReason ?? job?.failureReason ?? null,
   };
 }
@@ -255,10 +317,16 @@ function formatSignedUsd(value: number) {
   return `${prefix}$${Math.abs(value).toFixed(2)}`;
 }
 
-function buildIntentByRunId(steps: RunStep[]): Map<string, "watch" | "countertrade"> {
+function buildIntentByRunId(
+  steps: RunStep[],
+): Map<string, "watch" | "countertrade"> {
   const intents = new Map<string, "watch" | "countertrade">();
   for (const step of steps) {
-    if (step.stepType !== "intake" || step.status !== "succeeded" || step.promptName !== "cassie_source_mode_classification") {
+    if (
+      step.stepType !== "intake" ||
+      step.status !== "succeeded" ||
+      step.promptName !== "cassie_source_mode_classification"
+    ) {
       continue;
     }
     const output = objectRecord(step.output);
@@ -270,5 +338,7 @@ function buildIntentByRunId(steps: RunStep[]): Map<string, "watch" | "countertra
 }
 
 function objectRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }

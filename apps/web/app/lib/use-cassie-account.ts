@@ -49,6 +49,7 @@ export type CassieDashboardPayload = {
   portfolioBalance: {
     currentUsd: number;
     walletBalanceUsd: number;
+    openPositionEquityUsd: number;
     unrealizedPnlUsd: number;
     history: Array<{
       at: string;

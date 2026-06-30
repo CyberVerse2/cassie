@@ -12,5 +12,7 @@ export type CassieActivityItem = {
   source: "cassie" | "x";
   sourceUrl: string | null;
   authorHandle: string | null;
+  authorName: string | null;
+  sourceText: string | null;
   error: string | null;
 };

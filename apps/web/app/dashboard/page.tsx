@@ -3,11 +3,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
-import tweetRun from "../../../../docs/test-run-tweets.json";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
-import { type CassieDashboardPayload, type CassiePosition, useCassieAccount } from "../lib/use-cassie-account";
-import { xHandleFromUrl } from "../lib/x-post";
+import {
+  type CassieDashboardPayload,
+  type CassiePosition,
+  useCassieAccount,
+} from "../lib/use-cassie-account";
 import s from "./dashboard.module.css";
 
 const tickerImages: Record<string, string> = {
@@ -88,57 +90,15 @@ const watching = [
   },
 ];
 
-const taggedTweetAges = ["2h", "5h", "11h", "1d", "2d", "3d"] as const;
-const taggedTweetPrompts = ["trade this", "trade this", "critic this", "watch this", "trade this", "trade this"] as const;
-
-type TestRunTweet = {
-  url: string;
-  current: boolean;
-  authorName?: string;
-  handle?: string;
-  avatarUrl?: string;
-  date?: string;
-  text?: string;
-  cassiePrompt?: string;
-  unavailable?: boolean;
-};
-
-function hasDisplayText(tweet: TestRunTweet): tweet is TestRunTweet & { text: string } {
-  return !tweet.unavailable && typeof tweet.text === "string" && tweet.text.trim().length > 0;
-}
-
-function summarizeTweetText(text: string): string {
-  const cleaned = text
-    .replace(/https?:\/\/\S+/g, "")
-    .replace(/pic\.twitter\.com\/\S+/g, "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (cleaned.length <= 132) return cleaned;
-  const cutoff = cleaned.lastIndexOf(" ", 132);
-  return `${cleaned.slice(0, cutoff > 88 ? cutoff : 132).trim()}...`;
-}
-
-const taggedTweets = (tweetRun.tweets as TestRunTweet[]).filter(hasDisplayText).slice(0, 6).map((tweet, index) => {
-  const handle = xHandleFromUrl(tweet.url);
-  const displayHandle = tweet.handle ?? `@${handle}`;
-  return {
-    ...tweet,
-    authorName: tweet.authorName ?? handle,
-    handle: displayHandle,
-    avatarUrl: tweet.avatarUrl ?? `https://unavatar.io/x/${displayHandle.replace(/^@/, "")}`,
-    age: tweet.date ?? taggedTweetAges[index]!,
-    cassiePrompt: tweet.cassiePrompt ?? taggedTweetPrompts[index]!,
-    preview: summarizeTweetText(tweet.text),
-  };
-});
-
 const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
 
-const usdcIcon = "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
+const usdcIcon =
+  "https://assets.coingecko.com/coins/images/6319/large/usdc.png";
 
 const dashboardQueryKeys = {
   dashboard: ["dashboard"] as const,
-  positionMarks: (positionIds: string[]) => ["dashboard", "positionMarks", positionIds] as const,
+  positionMarks: (positionIds: string[]) =>
+    ["dashboard", "positionMarks", positionIds] as const,
 };
 
 export default function Dashboard() {
@@ -164,7 +124,11 @@ export default function Dashboard() {
         closePosition={account.closePosition}
         refreshAccount={account.refreshAccount}
       />
-      <Voice />
+      <Voice
+        accountReady={account.ready}
+        authenticated={account.authenticated}
+        fetchDashboard={account.fetchDashboard}
+      />
     </main>
   );
 }
@@ -223,7 +187,9 @@ function Aside({
     try {
       await exportKeys();
     } catch (caught) {
-      setExportKeysError(caught instanceof Error ? caught.message : String(caught));
+      setExportKeysError(
+        caught instanceof Error ? caught.message : String(caught),
+      );
     } finally {
       setExportingKeys(false);
     }
@@ -232,7 +198,12 @@ function Aside({
   return (
     <aside className={s.aside}>
       <a className={s.brand} href="/" aria-label="Cassie home">
-        <img className="mark" src="/cassie-logo-transparent.png" alt="" aria-hidden />
+        <img
+          className="mark"
+          src="/cassie-logo-transparent.png"
+          alt=""
+          aria-hidden
+        />
         <span>Cassie</span>
       </a>
 
@@ -242,18 +213,36 @@ function Aside({
             {depositUri ? (
               <StyledQR data={depositUri} />
             ) : (
-              <button type="button" className={`${s.btn} ${s.btnPrimary}`} onClick={login}>
+              <button
+                type="button"
+                className={`${s.btn} ${s.btnPrimary}`}
+                onClick={login}
+              >
                 Sign in
               </button>
             )}
-            <span className={`${s.qrCorner} ${s.qrCornerTopLeft}`} aria-hidden />
-            <span className={`${s.qrCorner} ${s.qrCornerTopRight}`} aria-hidden />
-            <span className={`${s.qrCorner} ${s.qrCornerBottomLeft}`} aria-hidden />
-            <span className={`${s.qrCorner} ${s.qrCornerBottomRight}`} aria-hidden />
+            <span
+              className={`${s.qrCorner} ${s.qrCornerTopLeft}`}
+              aria-hidden
+            />
+            <span
+              className={`${s.qrCorner} ${s.qrCornerTopRight}`}
+              aria-hidden
+            />
+            <span
+              className={`${s.qrCorner} ${s.qrCornerBottomLeft}`}
+              aria-hidden
+            />
+            <span
+              className={`${s.qrCorner} ${s.qrCornerBottomRight}`}
+              aria-hidden
+            />
           </div>
           <div className={s.qrMetaLine}>
             <span>Base USDC</span>
-            <code>{walletAddress ? shortAddress(walletAddress) : "Sign in"}</code>
+            <code>
+              {walletAddress ? shortAddress(walletAddress) : "Sign in"}
+            </code>
           </div>
         </div>
       </div>
@@ -321,12 +310,16 @@ function Aside({
           {userProfile?.avatarUrl ? (
             <img src={userProfile.avatarUrl} alt="" aria-hidden />
           ) : (
-            userProfile?.initial ?? "C"
+            (userProfile?.initial ?? "C")
           )}
         </span>
         <div className={s.identityText}>
-          <span className={s.identityName}>{userProfile?.name ?? "Cassie user"}</span>
-          <span className={s.identityMeta}>{userProfile?.handle ?? "Sign in with X"}</span>
+          <span className={s.identityName}>
+            {userProfile?.name ?? "Cassie user"}
+          </span>
+          <span className={s.identityMeta}>
+            {userProfile?.handle ?? "Sign in with X"}
+          </span>
         </div>
         {authenticated ? (
           <button
@@ -413,13 +406,19 @@ function Defaults({
           aria-label="Default trade size in USDC"
         />
       </span>
-      {error ? <span className={s.defaultsError} role="alert">{error}</span> : null}
+      {error ? (
+        <span className={s.defaultsError} role="alert">
+          {error}
+        </span>
+      ) : null}
     </label>
   );
 }
 
 function formatTradeSize(value: number): string {
-  return Number.isInteger(value) ? String(value) : String(value).replace(/\.?0+$/, "");
+  return Number.isInteger(value)
+    ? String(value)
+    : String(value).replace(/\.?0+$/, "");
 }
 
 interface DataPoint {
@@ -444,7 +443,9 @@ function Center({
   refreshAccount: () => Promise<unknown>;
 }) {
   const queryClient = useQueryClient();
-  const [selectedRange, setSelectedRange] = useState<"1D" | "1W" | "1M" | "1Y" | "All">("1D");
+  const [selectedRange, setSelectedRange] = useState<
+    "1D" | "1W" | "1M" | "1Y" | "All"
+  >("1D");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
@@ -457,10 +458,17 @@ function Center({
   });
   const dashboard = dashboardEnabled ? dashboardQuery.data : undefined;
   const storedOpenPositions = dashboard?.openPositions ?? [];
-  const liveMarkIds = useMemo(() => storedOpenPositions
-    .filter((position) => position.status === "open" && position.venue === "hyperliquid")
-    .map((position) => position.positionId)
-    .sort(), [storedOpenPositions]);
+  const liveMarkIds = useMemo(
+    () =>
+      storedOpenPositions
+        .filter(
+          (position) =>
+            position.status === "open" && position.venue === "hyperliquid",
+        )
+        .map((position) => position.positionId)
+        .sort(),
+    [storedOpenPositions],
+  );
   const positionMarksQuery = useQuery({
     queryKey: dashboardQueryKeys.positionMarks(liveMarkIds),
     queryFn: () => fetchPositionMarks(liveMarkIds),
@@ -468,32 +476,47 @@ function Center({
     refetchInterval: 30_000,
     staleTime: 5_000,
   });
-  const openPositions = useMemo(() =>
-    mergePositions(storedOpenPositions, positionMarksQuery.data ?? []),
-    [positionMarksQuery.data, storedOpenPositions]
+  const openPositions = useMemo(
+    () => mergePositions(storedOpenPositions, positionMarksQuery.data ?? []),
+    [positionMarksQuery.data, storedOpenPositions],
   );
   const closedPositions = dashboard?.closedPositions ?? [];
   const activity = dashboard?.activity ?? [];
-  const dashboardError = dashboardEnabled ? errorMessage(dashboardQuery.error) : null;
+  const dashboardError = dashboardEnabled
+    ? errorMessage(dashboardQuery.error)
+    : null;
 
-  const portfolioBalance = useMemo(() =>
-    portfolioBalanceFromDashboard(dashboard, openPositions),
-    [dashboard, openPositions]
+  const portfolioBalance = useMemo(
+    () => portfolioBalanceFromDashboard(dashboard, openPositions),
+    [dashboard, openPositions],
   );
-  const rangeData = useMemo(() =>
-    filterPortfolioHistory(portfolioBalance.history, selectedRange),
-    [portfolioBalance.history, selectedRange]
+  const rangeData = useMemo(
+    () => filterPortfolioHistory(portfolioBalance.history, selectedRange),
+    [portfolioBalance.history, selectedRange],
   );
   const currentValPoint = rangeData[rangeData.length - 1];
   const displayedPoint = hoveredData || currentValPoint;
   const portfolioLabel = `$${portfolioBalance.currentUsd.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
   const displayedBalance = displayedPoint.value;
-  const largestPositionMover = openPositions
-    .slice()
-    .sort((left, right) => Math.abs(right.unrealizedPnlUsd) - Math.abs(left.unrealizedPnlUsd))[0] ?? null;
-  const netInvested = openPositions.reduce((total, position) => total + position.marginUsd, 0);
-  const unrealized = openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
-  const realized = closedPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0);
+  const largestPositionMover =
+    openPositions
+      .slice()
+      .sort(
+        (left, right) =>
+          Math.abs(right.unrealizedPnlUsd) - Math.abs(left.unrealizedPnlUsd),
+      )[0] ?? null;
+  const netInvested = openPositions.reduce(
+    (total, position) => total + position.marginUsd,
+    0,
+  );
+  const unrealized = openPositions.reduce(
+    (total, position) => total + position.unrealizedPnlUsd,
+    0,
+  );
+  const realized = closedPositions.reduce(
+    (total, position) => total + position.unrealizedPnlUsd,
+    0,
+  );
   const netPnl = realized + unrealized;
 
   const closeMutation = useMutation({
@@ -502,10 +525,14 @@ function Center({
       setClosingId(positionId);
     },
     onSuccess: (updated) => {
-      queryClient.setQueryData<CassieDashboardPayload>(dashboardQueryKeys.dashboard, (current) =>
-        current ? mergeDashboardPosition(current, updated) : current
+      queryClient.setQueryData<CassieDashboardPayload>(
+        dashboardQueryKeys.dashboard,
+        (current) =>
+          current ? mergeDashboardPosition(current, updated) : current,
       );
-      void queryClient.invalidateQueries({ queryKey: dashboardQueryKeys.dashboard });
+      void queryClient.invalidateQueries({
+        queryKey: dashboardQueryKeys.dashboard,
+      });
       void refreshAccount();
     },
     onSettled: () => {
@@ -517,7 +544,8 @@ function Center({
   const effectivePositionError = dashboardError ?? closeError;
 
   async function requestClose(position: CassiePosition) {
-    if (!window.confirm(`Close ${positionSymbol(position)} ${position.side}?`)) return;
+    if (!window.confirm(`Close ${positionSymbol(position)} ${position.side}?`))
+      return;
     closeMutation.mutate(position.positionId);
   }
 
@@ -528,7 +556,11 @@ function Center({
           {[...tickerStrip, ...tickerStrip].map((t, i) => (
             <span className={s.tickerPill} key={`${t.sym}-${i}`}>
               <span className="tk-icon">
-                <img className={s.assetIconImage} src={tickerImages[t.sym]} alt="" />
+                <img
+                  className={s.assetIconImage}
+                  src={tickerImages[t.sym]}
+                  alt=""
+                />
               </span>
               <span className="tk-sym">${t.sym}</span>
               <span className="tk-count">{t.label}</span>
@@ -560,267 +592,359 @@ function Center({
         </button>
       </div>
 
-      {activeTab === "activity" && <ActivityPanel activity={activity} error={dashboardError} />}
+      {activeTab === "activity" && (
+        <ActivityPanel activity={activity} error={dashboardError} />
+      )}
 
       {activeTab === "wallet" && (
-      <div className={s.content}>
-        <header className={s.sectionHeader}>
-          <h2>Portfolio balance</h2>
-          <p>Base USDC plus open position P/L across Polymarket and Hyperliquid.</p>
-        </header>
+        <div className={s.content}>
+          <header className={s.sectionHeader}>
+            <h2>Portfolio balance</h2>
+            <p>
+              Base USDC plus open position P/L across Polymarket and
+              Hyperliquid.
+            </p>
+          </header>
 
-        <div className={s.chartCard}>
-          <div className={s.chartTop}>
-            <span className={s.chartPrice}>
-              ${displayedBalance.toLocaleString(undefined, { minimumFractionDigits: 2 })}
-            </span>
-            <span className={`${s.deltaPill} ${displayedPoint.change >= 0 ? s.deltaUp : s.deltaDown}`}>
-              {displayedPoint.change >= 0 ? "↑" : "↓"} {Math.abs(displayedPoint.change).toFixed(2)}%
-            </span>
-          </div>
-          <div className={s.chartBody}>
-            <LineChart key={selectedRange} data={rangeData} onHover={setHoveredData} />
-          </div>
-          <div className={s.chartFoot}>
-            <div className={s.portfolioMover}>
-              <div className={s.moverHeader}>
-                <span className={s.moverLabel}>Largest position move</span>
-              </div>
-              {largestPositionMover ? (
-              <div className={s.moverBody}>
-                <div className={s.moverAssetInfo}>
-                  <span className={`${s.tokenCell} ${s.moverTokenCell}`}>
-                    <span className="tk">
-                      <img className={`${s.assetIconImage} ${s.moverTokenImage}`} src={positionTokenIcon(largestPositionMover)} alt="" />
-                    </span>
-                    <span className={`tk-venue ${venueTone(largestPositionMover.venue)}`}>
-                      <VenueIcon venue={venueTone(largestPositionMover.venue)} size={7} />
-                    </span>
-                  </span>
-                  <div className="mover-main">
-                    <strong>{positionSymbol(largestPositionMover)}</strong>
-                    <span>{largestPositionMover.exitPlan.thesis}</span>
-                  </div>
-                </div>
-                <div className="mover-value">
-                  <strong className={largestPositionMover.unrealizedPnlUsd >= 0 ? "up" : "down"}>
-                    <span className="mover-delta-icon" aria-hidden>
-                      {largestPositionMover.unrealizedPnlUsd >= 0 ? "▲" : "▼"}
-                    </span>
-                    {formatUsd(Math.abs(largestPositionMover.unrealizedPnlUsd))}
-                  </strong>
-                  <span>
-                    <span className={`mover-side ${sideTone(largestPositionMover.side)}`}>
-                      {largestPositionMover.side.toUpperCase()}
-                    </span>
-                    <span className="mover-sep" aria-hidden>·</span>
-                    {formatUsd(largestPositionMover.positionEquityUsd)}
-                  </span>
-                </div>
-              </div>
-              ) : (
-                <div className={s.moverBody}>
-                  <div className="mover-main">
-                    <strong>No open positions</strong>
-                    <span>Filled Cassie trades will appear here.</span>
-                  </div>
-                </div>
-              )}
+          <div className={s.chartCard}>
+            <div className={s.chartTop}>
+              <span className={s.chartPrice}>
+                $
+                {displayedBalance.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                })}
+              </span>
+              <span
+                className={`${s.deltaPill} ${displayedPoint.change >= 0 ? s.deltaUp : s.deltaDown}`}
+              >
+                {displayedPoint.change >= 0 ? "↑" : "↓"}{" "}
+                {Math.abs(displayedPoint.change).toFixed(2)}%
+              </span>
             </div>
-            <div className={s.ranges}>
-              {ranges.map((r) => (
-                <button
-                  key={r}
-                  className={`${s.rangeBtn} ${r === selectedRange ? s.rangeActive : ""}`}
-                  onClick={() => {
-                    setSelectedRange(r);
-                    setHoveredData(null);
-                  }}
-                >
-                  {r}
-                </button>
+            <div className={s.chartBody}>
+              <LineChart
+                key={selectedRange}
+                data={rangeData}
+                onHover={setHoveredData}
+              />
+            </div>
+            <div className={s.chartFoot}>
+              <div className={s.portfolioMover}>
+                <div className={s.moverHeader}>
+                  <span className={s.moverLabel}>Largest position move</span>
+                </div>
+                {largestPositionMover ? (
+                  <div className={s.moverBody}>
+                    <div className={s.moverAssetInfo}>
+                      <span className={`${s.tokenCell} ${s.moverTokenCell}`}>
+                        <span className="tk">
+                          <img
+                            className={`${s.assetIconImage} ${s.moverTokenImage}`}
+                            src={positionTokenIcon(largestPositionMover)}
+                            alt=""
+                          />
+                        </span>
+                        <span
+                          className={`tk-venue ${venueTone(largestPositionMover.venue)}`}
+                        >
+                          <VenueIcon
+                            venue={venueTone(largestPositionMover.venue)}
+                            size={7}
+                          />
+                        </span>
+                      </span>
+                      <div className="mover-main">
+                        <strong>{positionSymbol(largestPositionMover)}</strong>
+                        <span>{largestPositionMover.exitPlan.thesis}</span>
+                      </div>
+                    </div>
+                    <div className="mover-value">
+                      <strong
+                        className={
+                          largestPositionMover.unrealizedPnlUsd >= 0
+                            ? "up"
+                            : "down"
+                        }
+                      >
+                        <span className="mover-delta-icon" aria-hidden>
+                          {largestPositionMover.unrealizedPnlUsd >= 0
+                            ? "▲"
+                            : "▼"}
+                        </span>
+                        {formatUsd(
+                          Math.abs(largestPositionMover.unrealizedPnlUsd),
+                        )}
+                      </strong>
+                      <span>
+                        <span
+                          className={`mover-side ${sideTone(largestPositionMover.side)}`}
+                        >
+                          {largestPositionMover.side.toUpperCase()}
+                        </span>
+                        <span className="mover-sep" aria-hidden>
+                          ·
+                        </span>
+                        {formatUsd(largestPositionMover.positionEquityUsd)}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={s.moverBody}>
+                    <div className="mover-main">
+                      <strong>No open positions</strong>
+                      <span>Filled Cassie trades will appear here.</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <div className={s.ranges}>
+                {ranges.map((r) => (
+                  <button
+                    key={r}
+                    className={`${s.rangeBtn} ${r === selectedRange ? s.rangeActive : ""}`}
+                    onClick={() => {
+                      setSelectedRange(r);
+                      setHoveredData(null);
+                    }}
+                  >
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className={s.summary}>
+            <div className={s.summaryRow}>
+              <div className={s.summaryVenue}>
+                <div className={s.venueStack}>
+                  <div className={`${s.venueStackIcon} ${s.venueStackFirst}`}>
+                    <VenueIcon venue="hyper" size={12} />
+                  </div>
+                  <div className={`${s.venueStackIcon} ${s.venueStackSecond}`}>
+                    <VenueIcon venue="poly" size={12} />
+                  </div>
+                </div>
+                <span>Positions</span>
+              </div>
+              <div className={s.summaryCell}>
+                <span className="label">Margin</span>
+                <span className="value">{formatUsd(netInvested)}</span>
+              </div>
+              <div className={s.summaryCell}>
+                <span className="label">Closed</span>
+                <span className="value">{closedPositions.length}</span>
+              </div>
+              <div className={s.summaryCell}>
+                <span className="label">Net P/L</span>
+                <span className={`value ${netPnl >= 0 ? "up" : "down"}`}>
+                  {formatSignedUsd(netPnl)}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div
+            className={s.walletSubtabs}
+            role="tablist"
+            aria-label="Portfolio view"
+          >
+            <button
+              type="button"
+              role="tab"
+              aria-selected={walletView === "trades"}
+              className={`${s.walletSubtab} ${walletView === "trades" ? s.walletSubtabActive : ""}`}
+              onClick={() => setWalletView("trades")}
+            >
+              Open positions
+              <span className={s.walletSubtabCount}>
+                {openPositions.length}
+              </span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={walletView === "watching"}
+              className={`${s.walletSubtab} ${walletView === "watching" ? s.walletSubtabActive : ""}`}
+              onClick={() => setWalletView("watching")}
+            >
+              Watching
+              <span className={s.walletSubtabCount}>{watching.length}</span>
+            </button>
+          </div>
+
+          {walletView === "trades" && (
+            <div className={s.table}>
+              <div className={`${s.tr} ${s.thead}`} role="row">
+                <span>Asset</span>
+                <span>Position</span>
+                <span className={s.amountHead}>P/L</span>
+                <span className={s.amountHead}>Value</span>
+                <span />
+              </div>
+              {effectivePositionError ? (
+                <div className={s.emptyState} role="alert">
+                  {effectivePositionError}
+                </div>
+              ) : null}
+              {openPositions.length === 0 && !effectivePositionError ? (
+                <div className={s.emptyState}>No open positions.</div>
+              ) : null}
+              {openPositions.map((position) => (
+                <div className={s.tr} role="row" key={position.positionId}>
+                  <span className={s.tokenCell}>
+                    <span className="tk">
+                      <img
+                        className={s.tokenImage}
+                        src={positionTokenIcon(position)}
+                        alt=""
+                      />
+                    </span>
+                    <span
+                      className={`tk-venue ${venueTone(position.venue)}`}
+                      title={position.venue}
+                    >
+                      <VenueIcon venue={venueTone(position.venue)} size={11} />
+                    </span>
+                    <span className="entry-mark" />
+                  </span>
+                  <span className={s.tradeCopy}>
+                    <strong>
+                      {positionSymbol(position)} {position.side.toUpperCase()}
+                    </strong>
+                    <span>{position.exitPlan.thesis}</span>
+                  </span>
+                  <span className={s.amountCell}>
+                    <span className={s.amountValue}>
+                      {formatSignedUsd(position.unrealizedPnlUsd)}
+                    </span>
+                    <span
+                      className={`${s.valueDelta} ${position.unrealizedPnlUsd >= 0 ? s.amountUp : s.amountDown}`}
+                    >
+                      <span className={s.amountDeltaIcon} aria-hidden>
+                        {position.unrealizedPnlUsd >= 0 ? "▲" : "▼"}
+                      </span>
+                      {Math.abs(position.unrealizedPnlPct).toFixed(2)}%
+                    </span>
+                  </span>
+                  <span className={s.valueCell}>
+                    <span className={s.valuePrice}>
+                      {formatUsd(position.positionEquityUsd)}
+                    </span>
+                    <span
+                      className={`${s.amountSide} ${s[`amountSide_${sideTone(position.side)}`]}`}
+                    >
+                      {position.leverage
+                        ? `${position.leverage}x exposure`
+                        : position.status}
+                    </span>
+                  </span>
+                  <span className={s.tradeActions}>
+                    <a
+                      className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
+                      href={`/trades/${encodeURIComponent(position.positionId)}/pnl`}
+                    >
+                      Share
+                    </a>
+                    <button
+                      className={s.tradeActionBtn}
+                      type="button"
+                      onClick={() => void requestClose(position)}
+                      disabled={
+                        position.status === "closing" ||
+                        closingId === position.positionId
+                      }
+                    >
+                      {position.status === "closing" ||
+                      closingId === position.positionId
+                        ? "Closing"
+                        : "Close"}
+                    </button>
+                  </span>
+                </div>
               ))}
             </div>
-          </div>
-        </div>
+          )}
 
-        <div className={s.summary}>
-          <div className={s.summaryRow}>
-            <div className={s.summaryVenue}>
-              <div className={s.venueStack}>
-                <div className={`${s.venueStackIcon} ${s.venueStackFirst}`}>
-                  <VenueIcon venue="hyper" size={12} />
-                </div>
-                <div className={`${s.venueStackIcon} ${s.venueStackSecond}`}>
-                  <VenueIcon venue="poly" size={12} />
-                </div>
+          {walletView === "watching" && (
+            <div className={s.table}>
+              <div className={`${s.tr} ${s.thead}`} role="row">
+                <span>Asset</span>
+                <span>Idea</span>
+                <span className={s.amountHead}>Now</span>
+                <span className={s.amountHead}>If $100</span>
+                <span />
               </div>
-              <span>Positions</span>
-            </div>
-            <div className={s.summaryCell}>
-              <span className="label">Margin</span>
-              <span className="value">{formatUsd(netInvested)}</span>
-            </div>
-            <div className={s.summaryCell}>
-              <span className="label">Closed</span>
-              <span className="value">{closedPositions.length}</span>
-            </div>
-            <div className={s.summaryCell}>
-              <span className="label">Net P/L</span>
-              <span className={`value ${netPnl >= 0 ? "up" : "down"}`}>{formatSignedUsd(netPnl)}</span>
-            </div>
-          </div>
-        </div>
-
-        <div className={s.walletSubtabs} role="tablist" aria-label="Portfolio view">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={walletView === "trades"}
-            className={`${s.walletSubtab} ${walletView === "trades" ? s.walletSubtabActive : ""}`}
-            onClick={() => setWalletView("trades")}
-          >
-            Open positions
-            <span className={s.walletSubtabCount}>{openPositions.length}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={walletView === "watching"}
-            className={`${s.walletSubtab} ${walletView === "watching" ? s.walletSubtabActive : ""}`}
-            onClick={() => setWalletView("watching")}
-          >
-            Watching
-            <span className={s.walletSubtabCount}>{watching.length}</span>
-          </button>
-        </div>
-
-        {walletView === "trades" && (
-        <div className={s.table}>
-          <div className={`${s.tr} ${s.thead}`} role="row">
-            <span>Asset</span>
-            <span>Position</span>
-            <span className={s.amountHead}>P/L</span>
-            <span className={s.amountHead}>Value</span>
-            <span />
-          </div>
-          {effectivePositionError ? (
-            <div className={s.emptyState} role="alert">{effectivePositionError}</div>
-          ) : null}
-          {openPositions.length === 0 && !effectivePositionError ? (
-            <div className={s.emptyState}>No open positions.</div>
-          ) : null}
-          {openPositions.map((position) => (
-            <div className={s.tr} role="row" key={position.positionId}>
-              <span className={s.tokenCell}>
-                <span className="tk">
-                  <img className={s.tokenImage} src={positionTokenIcon(position)} alt="" />
-                </span>
-                <span className={`tk-venue ${venueTone(position.venue)}`} title={position.venue}>
-                  <VenueIcon venue={venueTone(position.venue)} size={11} />
-                </span>
-                <span className="entry-mark" />
-              </span>
-              <span className={s.tradeCopy}>
-                <strong>{positionSymbol(position)} {position.side.toUpperCase()}</strong>
-                <span>{position.exitPlan.thesis}</span>
-              </span>
-              <span className={s.amountCell}>
-                <span className={s.amountValue}>{formatSignedUsd(position.unrealizedPnlUsd)}</span>
-                <span
-                  className={`${s.valueDelta} ${position.unrealizedPnlUsd >= 0 ? s.amountUp : s.amountDown}`}
-                >
-                  <span className={s.amountDeltaIcon} aria-hidden>
-                    {position.unrealizedPnlUsd >= 0 ? "▲" : "▼"}
+              {watching.map((w) => (
+                <div className={s.tr} role="row" key={w.title}>
+                  <span className={s.tokenCell}>
+                    <span className="tk">
+                      <img
+                        className={s.tokenImage}
+                        src={tokenImages[w.id]}
+                        alt=""
+                      />
+                    </span>
+                    <span
+                      className={`tk-venue ${w.venue}`}
+                      title={w.venueLabel}
+                    >
+                      <VenueIcon venue={w.venue} size={11} />
+                    </span>
                   </span>
-                  {Math.abs(position.unrealizedPnlPct).toFixed(2)}%
-                </span>
-              </span>
-              <span className={s.valueCell}>
-                <span className={s.valuePrice}>{formatUsd(position.positionEquityUsd)}</span>
-                <span className={`${s.amountSide} ${s[`amountSide_${sideTone(position.side)}`]}`}>
-                  {position.leverage ? `${position.leverage}x exposure` : position.status}
-                </span>
-              </span>
-              <span className={s.tradeActions}>
-                <a className={`${s.tradeActionBtn} ${s.shareTradeBtn}`} href={`/trades/${encodeURIComponent(position.positionId)}/pnl`}>
-                  Share
-                </a>
-                <button
-                  className={s.tradeActionBtn}
-                  type="button"
-                  onClick={() => void requestClose(position)}
-                  disabled={position.status === "closing" || closingId === position.positionId}
-                >
-                  {position.status === "closing" || closingId === position.positionId ? "Closing" : "Close"}
-                </button>
-              </span>
-            </div>
-          ))}
-        </div>
-        )}
-
-        {walletView === "watching" && (
-        <div className={s.table}>
-          <div className={`${s.tr} ${s.thead}`} role="row">
-            <span>Asset</span>
-            <span>Idea</span>
-            <span className={s.amountHead}>Now</span>
-            <span className={s.amountHead}>If $100</span>
-            <span />
-          </div>
-          {watching.map((w) => (
-            <div className={s.tr} role="row" key={w.title}>
-              <span className={s.tokenCell}>
-                <span className="tk">
-                  <img className={s.tokenImage} src={tokenImages[w.id]} alt="" />
-                </span>
-                <span className={`tk-venue ${w.venue}`} title={w.venueLabel}>
-                  <VenueIcon venue={w.venue} size={11} />
-                </span>
-              </span>
-              <span className={s.tradeCopy}>
-                <strong>{w.title}</strong>
-                <span>
-                  via <span className={s.watchingSource}>{w.source}</span> · watched {w.watchedAge} ago at {w.watchedAt}
-                </span>
-              </span>
-              <span className={s.amountCell}>
-                <span className={s.amountValue}>{w.current}</span>
-                <span
-                  className={`${s.valueDelta} ${w.tone === "up" ? s.amountUp : s.amountDown}`}
-                >
-                  <span className={s.amountDeltaIcon} aria-hidden>
-                    {w.tone === "up" ? "▲" : "▼"}
+                  <span className={s.tradeCopy}>
+                    <strong>{w.title}</strong>
+                    <span>
+                      via <span className={s.watchingSource}>{w.source}</span> ·
+                      watched {w.watchedAge} ago at {w.watchedAt}
+                    </span>
                   </span>
-                  {w.changePct.replace(/^[+-]/, "")} since watch
-                </span>
-              </span>
-              <span className={s.valueCell}>
-                <span
-                  className={`${s.amountValue} ${w.tone === "up" ? s.watchingPnlUp : s.watchingPnlDown}`}
-                >
-                  {w.hypoPnl}
-                </span>
-                <span className={`${s.amountSide} ${s[`amountSide_${w.sideTone}`]}`}>
-                  {w.side}
-                </span>
-              </span>
-              <button className={s.watchTradeBtn} aria-label={`Trade ${w.title} now`}>
-                Trade
-              </button>
+                  <span className={s.amountCell}>
+                    <span className={s.amountValue}>{w.current}</span>
+                    <span
+                      className={`${s.valueDelta} ${w.tone === "up" ? s.amountUp : s.amountDown}`}
+                    >
+                      <span className={s.amountDeltaIcon} aria-hidden>
+                        {w.tone === "up" ? "▲" : "▼"}
+                      </span>
+                      {w.changePct.replace(/^[+-]/, "")} since watch
+                    </span>
+                  </span>
+                  <span className={s.valueCell}>
+                    <span
+                      className={`${s.amountValue} ${w.tone === "up" ? s.watchingPnlUp : s.watchingPnlDown}`}
+                    >
+                      {w.hypoPnl}
+                    </span>
+                    <span
+                      className={`${s.amountSide} ${s[`amountSide_${w.sideTone}`]}`}
+                    >
+                      {w.side}
+                    </span>
+                  </span>
+                  <button
+                    className={s.watchTradeBtn}
+                    aria-label={`Trade ${w.title} now`}
+                  >
+                    Trade
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </div>
-        )}
-
-      </div>
       )}
     </section>
   );
 }
 
-function ActivityPanel({ activity, error }: { activity: CassieActivityItem[]; error: string | null }) {
+function ActivityPanel({
+  activity,
+  error,
+}: {
+  activity: CassieActivityItem[];
+  error: string | null;
+}) {
   const groups = groupActivity(activity);
   return (
     <div className={s.activity}>
@@ -830,7 +954,17 @@ function ActivityPanel({ activity, error }: { activity: CassieActivityItem[]; er
           <p>History of your interactions with Cassie.</p>
         </div>
         <button type="button" className={s.activityFilter}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
             <line x1="3" y1="6" x2="21" y2="6" />
             <line x1="6" y1="12" x2="18" y2="12" />
             <line x1="10" y1="18" x2="14" y2="18" />
@@ -840,8 +974,14 @@ function ActivityPanel({ activity, error }: { activity: CassieActivityItem[]; er
       </header>
 
       <div className={s.activityFeed}>
-        {error ? <div className={s.emptyState} role="alert">{error}</div> : null}
-        {!error && groups.length === 0 ? <div className={s.emptyState}>No activity yet.</div> : null}
+        {error ? (
+          <div className={s.emptyState} role="alert">
+            {error}
+          </div>
+        ) : null}
+        {!error && groups.length === 0 ? (
+          <div className={s.emptyState}>No activity yet.</div>
+        ) : null}
         {groups.map((group) => (
           <section className={s.activityGroup} key={group.date}>
             <h3 className={s.activityDate}>{group.date}</h3>
@@ -858,10 +998,17 @@ function ActivityPanel({ activity, error }: { activity: CassieActivityItem[]; er
 }
 
 function ActivityItem({ item }: { item: CassieActivityItem }) {
-  const statusTone = item.error ? s.amountDown : item.status === "succeeded" || item.status === "completed" ? s.amountUp : "";
+  const statusTone = item.error
+    ? s.amountDown
+    : item.status === "succeeded" || item.status === "completed"
+      ? s.amountUp
+      : "";
   return (
     <li className={s.activityRow}>
-      <span className={`${s.activityCmdBadge} ${s[`activityCmd_${activityCommand(item.kind)}`]}`} aria-hidden>
+      <span
+        className={`${s.activityCmdBadge} ${s[`activityCmd_${activityCommand(item.kind)}`]}`}
+        aria-hidden
+      >
         <CommandGlyph kind={item.kind} />
       </span>
       <div className={s.activityLabel}>
@@ -876,7 +1023,9 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
         <div className={s.activityWatchText}>
           <strong>
             <span className={s.activityAssetSym}>{item.title}</span>
-            <span className={`${s.amountSide} ${item.side ? s[`amountSide_${sideTone(item.side)}`] : ""}`}>
+            <span
+              className={`${s.amountSide} ${item.side ? s[`amountSide_${sideTone(item.side)}`] : ""}`}
+            >
               {item.side?.toUpperCase() ?? item.status}
             </span>
           </strong>
@@ -885,7 +1034,10 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
             {item.subtitle}
             {item.error ? (
               <>
-                <span className={s.activityWatchSep} aria-hidden> · </span>
+                <span className={s.activityWatchSep} aria-hidden>
+                  {" "}
+                  ·{" "}
+                </span>
                 <span className={statusTone}>{item.error}</span>
               </>
             ) : null}
@@ -899,7 +1051,13 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
         </span>
         {item.source === "x" && (
           <span className={s.activitySourceChip} title="X">
-            <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden>
+            <svg
+              viewBox="0 0 24 24"
+              width="13"
+              height="13"
+              fill="currentColor"
+              aria-hidden
+            >
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
           </span>
@@ -912,7 +1070,16 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
 function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
   if (kind === "trade") {
     return (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        viewBox="0 0 24 24"
+        width="13"
+        height="13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M7 17 17 7" />
         <path d="M9 7h8v8" />
       </svg>
@@ -920,7 +1087,16 @@ function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
   }
   if (kind === "trade_close") {
     return (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        viewBox="0 0 24 24"
+        width="13"
+        height="13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M17 7 7 17" />
         <path d="M7 7h10v10" />
       </svg>
@@ -928,21 +1104,41 @@ function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
   }
   if (kind === "watch") {
     return (
-      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <svg
+        viewBox="0 0 24 24"
+        width="13"
+        height="13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
         <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
         <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
       </svg>
     );
   }
   return (
-    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg
+      viewBox="0 0 24 24"
+      width="13"
+      height="13"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
       <path d="M7 7h10l-3-3" />
       <path d="M17 17H7l3 3" />
     </svg>
   );
 }
 
-function groupActivity(activity: CassieActivityItem[]): Array<{ date: string; items: CassieActivityItem[] }> {
+function groupActivity(
+  activity: CassieActivityItem[],
+): Array<{ date: string; items: CassieActivityItem[] }> {
   const groups = new Map<string, CassieActivityItem[]>();
   for (const item of activity) {
     const date = formatActivityDate(item.at);
@@ -951,7 +1147,9 @@ function groupActivity(activity: CassieActivityItem[]): Array<{ date: string; it
   return [...groups].map(([date, items]) => ({ date, items }));
 }
 
-function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "close" | "watch" | "counter" {
+function activityCommand(
+  kind: CassieActivityItem["kind"],
+): "trade" | "close" | "watch" | "counter" {
   if (kind === "trade") return "trade";
   if (kind === "trade_close") return "close";
   if (kind === "watch") return "watch";
@@ -959,8 +1157,12 @@ function activityCommand(kind: CassieActivityItem["kind"]): "trade" | "close" | 
 }
 
 function activityIcon(item: CassieActivityItem): string {
-  const symbol = item.instrument?.replace(/-PERP$/u, "").split(/\s+/u)[0]?.toUpperCase();
-  if (symbol && item.venue === "hyperliquid") return hyperliquidTokenIcon(symbol);
+  const symbol = item.instrument
+    ?.replace(/-PERP$/u, "")
+    .split(/\s+/u)[0]
+    ?.toUpperCase();
+  if (symbol && item.venue === "hyperliquid")
+    return hyperliquidTokenIcon(symbol);
   if (symbol && tokenImages[symbol]) return tokenImages[symbol];
   if (item.instrument === "USDC") return usdcIcon;
   return "/cassie-logo-transparent.png";
@@ -981,7 +1183,107 @@ function formatActivityTime(value: string): string {
   });
 }
 
-function Voice() {
+type TaggedActivityPost = {
+  id: string;
+  url: string;
+  authorName: string;
+  handle: string;
+  avatarUrl: string;
+  age: string;
+  cassiePrompt: string;
+  preview: string;
+};
+
+function activityPost(item: CassieActivityItem): TaggedActivityPost {
+  const handle = withAt(item.authorHandle ?? "unknown");
+  const handleName = handle.replace(/^@/, "");
+  return {
+    id: item.id,
+    url: item.sourceUrl ?? "#",
+    authorName: item.authorName ?? handleName,
+    handle,
+    avatarUrl: `https://unavatar.io/x/${handleName}`,
+    age: relativeAge(item.at),
+    cassiePrompt: activityPrompt(item),
+    preview: summarizeSourceText(item.sourceText ?? item.subtitle),
+  };
+}
+
+function activityPrompt(item: CassieActivityItem): string {
+  if (item.kind === "trade") return `trade ${item.title}`;
+  if (item.kind === "trade_close")
+    return `close ${item.title.replace(/\s+CLOSE$/u, "")}`;
+  if (item.kind === "counter") return `countertrade ${item.title}`;
+  return `watch ${item.title}`;
+}
+
+function summarizeSourceText(text: string): string {
+  const cleaned = text
+    .replace(/https?:\/\/\S+/g, "")
+    .replace(/pic\.twitter\.com\/\S+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (cleaned.length <= 132) return cleaned;
+  const cutoff = cleaned.lastIndexOf(" ", 132);
+  return `${cleaned.slice(0, cutoff > 88 ? cutoff : 132).trim()}...`;
+}
+
+function relativeAge(value: string): string {
+  const elapsedMs = Date.now() - new Date(value).getTime();
+  if (!Number.isFinite(elapsedMs) || elapsedMs < 0)
+    return formatActivityDate(value);
+  const minutes = Math.floor(elapsedMs / 60_000);
+  if (minutes < 1) return "now";
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(value).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function withAt(handle: string): string {
+  return handle.startsWith("@") ? handle : `@${handle}`;
+}
+
+function Voice({
+  accountReady,
+  authenticated,
+  fetchDashboard,
+}: {
+  accountReady: boolean;
+  authenticated: boolean;
+  fetchDashboard: () => Promise<CassieDashboardPayload>;
+}) {
+  const dashboardEnabled = accountReady && authenticated;
+  const dashboardQuery = useQuery({
+    queryKey: dashboardQueryKeys.dashboard,
+    queryFn: fetchDashboard,
+    enabled: dashboardEnabled,
+  });
+  const taggedActivity = useMemo(
+    () =>
+      (dashboardQuery.data?.activity ?? [])
+        .filter(
+          (item) =>
+            item.source === "x" &&
+            item.sourceUrl &&
+            (item.sourceText || item.subtitle),
+        )
+        .slice(0, 6)
+        .map(activityPost),
+    [dashboardQuery.data?.activity],
+  );
+  const ordersPlaced =
+    dashboardQuery.data?.activity.filter((item) => item.kind === "trade")
+      .length ?? 0;
+  const voiceError = dashboardEnabled
+    ? errorMessage(dashboardQuery.error)
+    : null;
+
   return (
     <section className={s.voice}>
       <div className={s.voiceHero}>
@@ -996,13 +1298,27 @@ function Voice() {
           <span className="verified" aria-label="Twitter verified">
             <svg viewBox="0 0 22 22" aria-hidden>
               <defs>
-                <linearGradient id="twitterGoldOuter" x1="4" x2="19.5" y1="1.5" y2="22" gradientUnits="userSpaceOnUse">
+                <linearGradient
+                  id="twitterGoldOuter"
+                  x1="4"
+                  x2="19.5"
+                  y1="1.5"
+                  y2="22"
+                  gradientUnits="userSpaceOnUse"
+                >
                   <stop stopColor="#F4E72A" />
                   <stop offset=".539" stopColor="#CD8105" />
                   <stop offset=".68" stopColor="#CB7B00" />
                   <stop offset="1" stopColor="#F4E72A" />
                 </linearGradient>
-                <linearGradient id="twitterGoldInner" x1="5" x2="17.5" y1="2.5" y2="19.5" gradientUnits="userSpaceOnUse">
+                <linearGradient
+                  id="twitterGoldInner"
+                  x1="5"
+                  x2="17.5"
+                  y1="2.5"
+                  y2="19.5"
+                  gradientUnits="userSpaceOnUse"
+                >
                   <stop stopColor="#F9E87F" />
                   <stop offset=".406" stopColor="#E2B719" />
                   <stop offset=".989" stopColor="#E2B719" />
@@ -1032,16 +1348,33 @@ function Voice() {
         </span>
         <span className={s.voiceTag}>
           <span className="k">Orders placed</span>{" "}
-          <span className="v">0</span>
+          <span className="v">{ordersPlaced}</span>
         </span>
         <p className={s.voiceBio}>
-          Tweets where people tagged Cassie, with the source post and command kept visible.
+          Tweets where people tagged Cassie, with the source post and command
+          kept visible.
         </p>
       </div>
 
       <div className={s.feed}>
-        {taggedTweets.map((tweet) => (
-          <a className={s.post} href={tweet.url} target="_blank" rel="noreferrer" key={tweet.url}>
+        {voiceError ? (
+          <div className={s.emptyState} role="alert">
+            {voiceError}
+          </div>
+        ) : null}
+        {!voiceError && taggedActivity.length === 0 ? (
+          <div className={s.emptyState}>
+            No tagged Cassie trade activity yet.
+          </div>
+        ) : null}
+        {taggedActivity.map((tweet) => (
+          <a
+            className={s.post}
+            href={tweet.url}
+            target="_blank"
+            rel="noreferrer"
+            key={tweet.id}
+          >
             <header className={s.postHead}>
               <img className="glyph" src={tweet.avatarUrl} alt="" aria-hidden />
               {tweet.authorName}
@@ -1083,8 +1416,12 @@ function LineChart({ data, onHover }: LineChartProps) {
   const chartMin = min - valRange * 0.08;
   const chartMax = max + valRange * 0.08;
 
-  const xAt = (i: number) => data.length <= 1 ? pad.l + innerW : pad.l + (i / (data.length - 1)) * innerW;
-  const yAt = (v: number) => pad.t + innerH - ((v - chartMin) / (chartMax - chartMin)) * innerH;
+  const xAt = (i: number) =>
+    data.length <= 1
+      ? pad.l + innerW
+      : pad.l + (i / (data.length - 1)) * innerW;
+  const yAt = (v: number) =>
+    pad.t + innerH - ((v - chartMin) / (chartMax - chartMin)) * innerH;
 
   const pathOf = (vals: number[]) => {
     let d = "";
@@ -1112,7 +1449,10 @@ function LineChart({ data, onHover }: LineChartProps) {
 
   const dataIndexAt = (clientX: number, rect: DOMRect) => {
     const svgX = ((clientX - rect.left) / rect.width) * w;
-    return Math.max(0, Math.min(data.length - 1, Math.round((svgX / w) * (data.length - 1))));
+    return Math.max(
+      0,
+      Math.min(data.length - 1, Math.round((svgX / w) * (data.length - 1))),
+    );
   };
 
   const setHoverIndex = (dataIndex: number) => {
@@ -1155,17 +1495,56 @@ function LineChart({ data, onHover }: LineChartProps) {
           </linearGradient>
         </defs>
 
-        <line x1="0" y1={pad.t + innerH * 0.25} x2={w} y2={pad.t + innerH * 0.25} className={s.chartGrid} />
-        <line x1="0" y1={pad.t + innerH * 0.5} x2={w} y2={pad.t + innerH * 0.5} className={s.chartGrid} />
-        <line x1="0" y1={pad.t + innerH * 0.75} x2={w} y2={pad.t + innerH * 0.75} className={s.chartGrid} />
+        <line
+          x1="0"
+          y1={pad.t + innerH * 0.25}
+          x2={w}
+          y2={pad.t + innerH * 0.25}
+          className={s.chartGrid}
+        />
+        <line
+          x1="0"
+          y1={pad.t + innerH * 0.5}
+          x2={w}
+          y2={pad.t + innerH * 0.5}
+          className={s.chartGrid}
+        />
+        <line
+          x1="0"
+          y1={pad.t + innerH * 0.75}
+          x2={w}
+          y2={pad.t + innerH * 0.75}
+          className={s.chartGrid}
+        />
 
-        <text x="8" y={pad.t + innerH * 0.25 - 6} fill="var(--ink-faint)" fontSize="10" fontFamily="var(--stack-sans)" fontWeight="500">
+        <text
+          x="8"
+          y={pad.t + innerH * 0.25 - 6}
+          fill="var(--ink-faint)"
+          fontSize="10"
+          fontFamily="var(--stack-sans)"
+          fontWeight="500"
+        >
           ${formatAxisValue(chartMax - (chartMax - chartMin) * 0.25)}
         </text>
-        <text x="8" y={pad.t + innerH * 0.5 - 6} fill="var(--ink-faint)" fontSize="10" fontFamily="var(--stack-sans)" fontWeight="500">
+        <text
+          x="8"
+          y={pad.t + innerH * 0.5 - 6}
+          fill="var(--ink-faint)"
+          fontSize="10"
+          fontFamily="var(--stack-sans)"
+          fontWeight="500"
+        >
           ${formatAxisValue(chartMax - (chartMax - chartMin) * 0.5)}
         </text>
-        <text x="8" y={pad.t + innerH * 0.75 - 6} fill="var(--ink-faint)" fontSize="10" fontFamily="var(--stack-sans)" fontWeight="500">
+        <text
+          x="8"
+          y={pad.t + innerH * 0.75 - 6}
+          fill="var(--ink-faint)"
+          fontSize="10"
+          fontFamily="var(--stack-sans)"
+          fontWeight="500"
+        >
           ${formatAxisValue(chartMax - (chartMax - chartMin) * 0.75)}
         </text>
 
@@ -1212,13 +1591,19 @@ function LineChart({ data, onHover }: LineChartProps) {
           <div className={s.tooltipRow}>
             <span className={s.tooltipLabel}>Balance</span>
             <span className={s.tooltipValue}>
-              ${data[hoveredIndex].value.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+              $
+              {data[hoveredIndex].value.toLocaleString(undefined, {
+                minimumFractionDigits: 2,
+              })}
             </span>
           </div>
           <div className={s.tooltipRow}>
             <span className={s.tooltipLabel}>Change</span>
-            <span className={`${s.tooltipDelta} ${data[hoveredIndex].change >= 0 ? s.up : s.down}`}>
-              {data[hoveredIndex].change >= 0 ? "↑" : "↓"} {Math.abs(data[hoveredIndex].change).toFixed(2)}%
+            <span
+              className={`${s.tooltipDelta} ${data[hoveredIndex].change >= 0 ? s.up : s.down}`}
+            >
+              {data[hoveredIndex].change >= 0 ? "↑" : "↓"}{" "}
+              {Math.abs(data[hoveredIndex].change).toFixed(2)}%
             </span>
           </div>
         </div>
@@ -1233,7 +1618,15 @@ interface VenueIconProps {
   className?: string;
 }
 
-type ActionIconName = "deposit" | "copy" | "check" | "send" | "swap" | "telegram" | "export" | "logout";
+type ActionIconName =
+  | "deposit"
+  | "copy"
+  | "check"
+  | "send"
+  | "swap"
+  | "telegram"
+  | "export"
+  | "logout";
 
 function ActionIcon({ name }: { name: ActionIconName }) {
   const common = {
@@ -1384,8 +1777,12 @@ function hyperliquidTokenIcon(symbol: string) {
 }
 
 function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
-  const updatesById = new Map(updates.map((position) => [position.positionId, position]));
-  return current.map((position) => updatesById.get(position.positionId) ?? position);
+  const updatesById = new Map(
+    updates.map((position) => [position.positionId, position]),
+  );
+  return current.map(
+    (position) => updatesById.get(position.positionId) ?? position,
+  );
 }
 
 function portfolioBalanceFromDashboard(
@@ -1393,8 +1790,13 @@ function portfolioBalanceFromDashboard(
   openPositions: CassiePosition[],
 ) {
   const walletBalanceUsd = dashboard?.portfolioBalance.walletBalanceUsd ?? 0;
-  const unrealizedPnlUsd = roundUsd(openPositions.reduce((total, position) => total + position.unrealizedPnlUsd, 0));
-  const currentUsd = roundUsd(walletBalanceUsd + unrealizedPnlUsd);
+  const openPositionEquityUsd = roundUsd(
+    openPositions.reduce(
+      (total, position) => total + position.positionEquityUsd,
+      0,
+    ),
+  );
+  const currentUsd = roundUsd(walletBalanceUsd + openPositionEquityUsd);
   const serverHistory = dashboard?.portfolioBalance.history ?? [];
   const currentPoint = {
     date: serverHistory[serverHistory.length - 1]?.label ?? "Now",
@@ -1404,22 +1806,30 @@ function portfolioBalanceFromDashboard(
 
   return {
     currentUsd,
-    history: serverHistory.length === 0
-      ? [currentPoint]
-      : [
-        ...serverHistory.slice(0, -1).map((point) => ({
-          date: point.label,
-          value: point.valueUsd,
-          change: percentChange(serverHistory[0]?.valueUsd ?? point.valueUsd, point.valueUsd),
-        })),
-        currentPoint,
-      ],
+    history:
+      serverHistory.length === 0
+        ? [currentPoint]
+        : [
+            ...serverHistory.slice(0, -1).map((point) => ({
+              date: point.label,
+              value: point.valueUsd,
+              change: percentChange(
+                serverHistory[0]?.valueUsd ?? point.valueUsd,
+                point.valueUsd,
+              ),
+            })),
+            currentPoint,
+          ],
   };
 }
 
-function filterPortfolioHistory(data: DataPoint[], range: "1D" | "1W" | "1M" | "1Y" | "All") {
+function filterPortfolioHistory(
+  data: DataPoint[],
+  range: "1D" | "1W" | "1M" | "1Y" | "All",
+) {
   if (range === "All") return data;
-  const maxPoints = range === "1D" ? 24 : range === "1W" ? 7 : range === "1M" ? 30 : 52;
+  const maxPoints =
+    range === "1D" ? 24 : range === "1W" ? 7 : range === "1M" ? 30 : 52;
   return data.slice(-maxPoints);
 }
 
@@ -1427,35 +1837,53 @@ function percentChange(start: number, current: number) {
   return start > 0 ? roundPct(((current - start) / start) * 100) : 0;
 }
 
-function mergeDashboardPosition(current: CassieDashboardPayload, update: CassiePosition): CassieDashboardPayload {
-  const openPositions = upsertDashboardPosition(current.openPositions, update)
-    .filter(isDashboardOpenPosition);
-  const closedPositions = upsertDashboardPosition(current.closedPositions, update)
-    .filter((position) => position.status === "closed");
-  const alreadyOpen = openPositions.some((position) => position.positionId === update.positionId);
-  const alreadyClosed = closedPositions.some((position) => position.positionId === update.positionId);
+function mergeDashboardPosition(
+  current: CassieDashboardPayload,
+  update: CassiePosition,
+): CassieDashboardPayload {
+  const openPositions = upsertDashboardPosition(
+    current.openPositions,
+    update,
+  ).filter(isDashboardOpenPosition);
+  const closedPositions = upsertDashboardPosition(
+    current.closedPositions,
+    update,
+  ).filter((position) => position.status === "closed");
+  const alreadyOpen = openPositions.some(
+    (position) => position.positionId === update.positionId,
+  );
+  const alreadyClosed = closedPositions.some(
+    (position) => position.positionId === update.positionId,
+  );
 
   return {
     ...current,
-    openPositions: isDashboardOpenPosition(update) && !alreadyOpen
-      ? [update, ...openPositions]
-      : openPositions,
-    closedPositions: update.status === "closed" && !alreadyClosed
-      ? [update, ...closedPositions]
-      : closedPositions,
+    openPositions:
+      isDashboardOpenPosition(update) && !alreadyOpen
+        ? [update, ...openPositions]
+        : openPositions,
+    closedPositions:
+      update.status === "closed" && !alreadyClosed
+        ? [update, ...closedPositions]
+        : closedPositions,
   };
 }
 
-function upsertDashboardPosition(positions: CassiePosition[], update: CassiePosition) {
+function upsertDashboardPosition(
+  positions: CassiePosition[],
+  update: CassiePosition,
+) {
   return positions.map((position) =>
-    position.positionId === update.positionId ? update : position
+    position.positionId === update.positionId ? update : position,
   );
 }
 
 function isDashboardOpenPosition(position: CassiePosition) {
-  return position.status === "open"
-    || position.status === "closing"
-    || position.status === "close_failed";
+  return (
+    position.status === "open" ||
+    position.status === "closing" ||
+    position.status === "close_failed"
+  );
 }
 
 function errorMessage(error: unknown) {
@@ -1471,7 +1899,11 @@ function roundPct(value: number) {
 }
 
 function venueTone(venue: string) {
-  return venue === "hyperliquid" ? "hyper" : venue === "polymarket" ? "poly" : venue;
+  return venue === "hyperliquid"
+    ? "hyper"
+    : venue === "polymarket"
+      ? "poly"
+      : venue;
 }
 
 function sideTone(side: string) {
