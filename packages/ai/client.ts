@@ -1,5 +1,6 @@
 import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createXai } from "@ai-sdk/xai";
 import { Output, generateText, type ModelMessage } from "ai";
 import type { ProviderOptions } from "@ai-sdk/provider-utils";
 import { z } from "zod";
@@ -14,7 +15,7 @@ export const DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS = 8_192;
 export const IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS = 32_768;
 
 export type ModelTier = "cheap" | "expensive";
-export type ModelProvider = "deepseek" | "openai";
+export type ModelProvider = "deepseek" | "openai" | "xai";
 
 export type ModelRoute = {
   tier: ModelTier;
@@ -92,15 +93,22 @@ export class MissingImportantAiDependencyError extends MissingAiDependencyError 
 }
 
 const cheapStructuredSteps = new Set(["cassie_market_selection"]);
+const xaiStructuredSteps = new Set(["cassie_context_discovery"]);
 
 export function routeStructuredModel(input: {
   name: string;
   tier?: ModelTier;
   cheapModel?: string;
   expensiveModel?: string;
+  xaiModel?: string;
 }): ModelRoute {
   const cheapModel = input.cheapModel ?? config.ai.cheapModel;
   const expensiveModel = input.expensiveModel ?? config.ai.importantModel;
+  const xaiModel = input.xaiModel ?? config.ai.grokXSearchModel;
+  if (xaiStructuredSteps.has(input.name)) {
+    return { tier: "expensive", provider: "xai", model: xaiModel };
+  }
+
   const tier =
     input.tier ??
     (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
@@ -187,18 +195,41 @@ type OpenAiProviderForStructuredCall = {
   };
 };
 
+type XaiProviderForStructuredCall = {
+  tools: {
+    xSearch: (input: {
+      enableImageUnderstanding: true;
+      enableVideoUnderstanding: true;
+    }) => unknown;
+  };
+};
+
 export function structuredToolsForCall(input: {
   route: ModelRoute;
-  openai: Pick<OpenAiProviderForStructuredCall, "tools">;
+  openai?: Pick<OpenAiProviderForStructuredCall, "tools">;
+  xai?: XaiProviderForStructuredCall;
   tools?: StructuredToolConfig;
 }): Record<string, unknown> | undefined {
-  if (input.route.provider !== "openai" || !input.tools?.webSearch) {
+  if (!input.tools?.webSearch) {
     return undefined;
   }
 
-  return {
-    web_search: input.openai.tools.webSearch(input.tools.webSearch),
-  };
+  if (input.route.provider === "openai" && input.openai) {
+    return {
+      web_search: input.openai.tools.webSearch(input.tools.webSearch),
+    };
+  }
+
+  if (input.route.provider === "xai" && input.xai) {
+    return {
+      x_search: input.xai.tools.xSearch({
+        enableImageUnderstanding: true,
+        enableVideoUnderstanding: true,
+      }),
+    };
+  }
+
+  return undefined;
 }
 
 export function openAiModelForStructuredCall(input: {
@@ -238,6 +269,7 @@ export class CassieStructuredClient implements StructuredAiClient {
       tier: input.tier,
       cheapModel: this.cheapModelName,
       expensiveModel: this.expensiveModelName,
+      xaiModel: config.ai.grokXSearchModel,
     });
 
     const deepSeekKey = config.ai.deepSeekApiKey;
@@ -250,6 +282,12 @@ export class CassieStructuredClient implements StructuredAiClient {
     if (route.provider === "openai" && !openAiKey) {
       throw new MissingImportantAiDependencyError(
         "AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.",
+      );
+    }
+    const xAiKey = config.ai.xAiApiKey;
+    if (route.provider === "xai" && !xAiKey) {
+      throw new MissingImportantAiDependencyError(
+        "AI dependency unavailable. Set XAI_API_KEY to run Cassie's Grok context discovery.",
       );
     }
 
@@ -281,6 +319,16 @@ export class CassieStructuredClient implements StructuredAiClient {
         tools = structuredToolsForCall({
           route,
           openai,
+          tools: input.tools,
+        });
+      } else if (route.provider === "xai") {
+        const xai = createXai({ apiKey: xAiKey });
+        model = xai.responses(route.model) as Parameters<
+          typeof generateText
+        >[0]["model"];
+        tools = structuredToolsForCall({
+          route,
+          xai,
           tools: input.tools,
         });
       } else {

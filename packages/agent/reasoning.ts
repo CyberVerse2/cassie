@@ -3,11 +3,13 @@ import {
   MarketCandidateSchema,
   OpportunityFrameSchema,
   OpportunityTradePlanSchema,
+  SourceContextDiscoverySchema,
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
   type MarketCandidate,
   type OpportunityFrame,
   type OpportunityTradePlan,
+  type SourceContextDiscovery,
   type SourcePost,
   type SourceModeClassification,
   type TradeExpressionPlan,
@@ -16,6 +18,7 @@ import { isConfiguredVenueSearchableExpressionRail } from "../core/expression-ra
 import {
   opportunityFramePromptSpec,
   opportunityTradePlanPromptSpec,
+  sourceContextDiscoveryPromptSpec,
   sourceModeClassificationPromptSpec,
   singleStepTradeExpressionPromptSpec,
   structuredPromptInput,
@@ -30,6 +33,23 @@ export async function classifySourceMode(input: {
     await input.ai.generateObject({
       ...structuredPromptInput(
         sourceModeClassificationPromptSpec({
+          sourcePost: input.sourcePost,
+          userCommand: input.userCommand,
+        }),
+      ),
+    }),
+  );
+}
+
+export async function discoverSourceContext(input: {
+  ai: StructuredAiClient;
+  sourcePost: SourcePost;
+  userCommand: string;
+}): Promise<SourceContextDiscovery> {
+  return SourceContextDiscoverySchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        sourceContextDiscoveryPromptSpec({
           sourcePost: input.sourcePost,
           userCommand: input.userCommand,
         }),
@@ -60,6 +80,7 @@ export async function planOpportunityAndTradeExpressions(input: {
   sourcePost: SourcePost;
   userCommand: string;
   marketCandidates?: MarketCandidate[];
+  contextDiscovery?: SourceContextDiscovery | null;
 }): Promise<OpportunityTradePlan> {
   const marketCandidates = input.marketCandidates
     ? MarketCandidateSchema.array().parse(input.marketCandidates)
@@ -72,6 +93,7 @@ export async function planOpportunityAndTradeExpressions(input: {
           sourcePost: input.sourcePost,
           userCommand: input.userCommand,
           marketCandidates,
+          contextDiscovery: input.contextDiscovery,
         }),
       ),
     }),

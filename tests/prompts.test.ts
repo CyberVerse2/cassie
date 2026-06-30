@@ -13,6 +13,7 @@ import {
   renderPromptSpec,
   singleStepTradeExpressionPrompt,
   singleStepTradeExpressionPromptSpec,
+  sourceContextDiscoveryPromptSpec,
   sourceModeClassificationPrompt,
   sourceModeClassificationPromptSpec,
   structuredPromptInput,
@@ -263,6 +264,10 @@ describe("prompts", () => {
         sourcePost,
         userCommand: "@cassiedottrade trade this",
       }),
+      sourceContextDiscoveryPromptSpec({
+        sourcePost,
+        userCommand: "@cassiedottrade trade this",
+      }),
       singleStepTradeExpressionPromptSpec({
         sourcePost,
         userCommand: "@cassiedottrade trade this",
@@ -296,6 +301,7 @@ describe("prompts", () => {
     expect(specs.map((spec) => spec.name)).toEqual([
       "cassie_source_mode_classification",
       "cassie_opportunity_frame",
+      "cassie_context_discovery",
       "cassie_trade_expressions",
       "cassie_expression_fit",
       "cassie_market_selection",
@@ -303,6 +309,7 @@ describe("prompts", () => {
       "cassie_polymarket_search_result_selection",
     ]);
     expect(specs.map((spec) => spec.version)).toEqual([
+      "2026-05-31",
       "2026-05-31",
       "2026-05-31",
       "2026-05-31",
@@ -325,7 +332,10 @@ describe("prompts", () => {
     expect(specs[1]?.system).toContain(
       "Web search is available in this stage.",
     );
-    for (const spec of specs.slice(2)) {
+    expect(specs[2]?.system).toContain(
+      "Web search is available in this stage.",
+    );
+    for (const spec of specs.slice(3)) {
       expect(spec.system).not.toContain(
         "Web search is available in this stage.",
       );
@@ -362,11 +372,14 @@ describe("prompts", () => {
     );
     expect(opportunityPayload.source).toMatchObject({
       text: sourcePost.text,
+      url: sourcePost.url,
       author: "example",
+      authorName: "Example",
+      createdAt: sourcePost.createdAt,
+      quotedPostText: null,
+      linkedUrls: [],
+      mediaDescriptions: [],
     });
-    expect(opportunityPayload.source).not.toHaveProperty("url");
-    expect(opportunityPayload.source).not.toHaveProperty("created_at");
-    expect(opportunityPayload.source).not.toHaveProperty("linked_urls");
     expect(
       marketSelectionPromptSpec({
         thesis,

@@ -9,6 +9,7 @@ import {
   MarketSelectionSchema,
   OpportunityFrameSchema,
   OpportunityTradePlanSchema,
+  SourceContextDiscoverySchema,
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
   type ExpressionFitAssessment,
@@ -16,6 +17,7 @@ import {
   type MarketCandidate,
   type MarketSelection,
   type OpportunityFrame,
+  type SourceContextDiscovery,
   type SourcePost,
   type SourceModeClassification,
   type Thesis,
@@ -83,7 +85,13 @@ const PREDICTION_MARKET_ROUTING_RULES = `Prediction-market routing rule:
 function sourceForPrompt(sourcePost: SourcePost) {
   return {
     text: sourcePost.text,
+    url: sourcePost.url,
     author: sourcePost.authorHandle,
+    authorName: sourcePost.authorName,
+    createdAt: sourcePost.createdAt,
+    quotedPostText: sourcePost.quotedPostText,
+    linkedUrls: sourcePost.linkedUrls,
+    mediaDescriptions: sourcePost.mediaDescriptions,
   };
 }
 
@@ -564,6 +572,44 @@ Return a concise headlineThesis from the source, affected entities, urgency, ver
   });
 }
 
+export function sourceContextDiscoveryPromptSpec(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+}): CassiePromptSpec<SourceContextDiscovery> {
+  return makePromptSpec({
+    name: "cassie_context_discovery",
+    tier: "expensive",
+    outputSchema: SourceContextDiscoverySchema,
+    payload: {
+      source: sourceForPrompt(input.sourcePost),
+      userCommand: input.userCommand,
+      current_datetime: new Date().toISOString(),
+    },
+    tools: {
+      webSearch: {
+        externalWebAccess: true,
+        searchContextSize: "medium",
+      },
+    },
+    stage: `Tool name: discover_source_context
+Prompt version: ${PROMPT_VERSION}
+
+Purpose:
+Find what an ambiguous tagged post is referring to before trade planning.
+
+Role:
+Context scout. Treat vague social posts as clues. Look around the source, links, media, quoted context, author context, and timely public discussion to identify grounded claims. Do not create trade plans, venues, tickets, prices, odds, or liquidity.
+
+Rules:
+- Return only discovered context: summary, claims, entities, assets, and confidence.
+- Claims must be grounded in source/context you can identify, not invented from vibes.
+- If context remains unresolved, return empty claims/assets/entities as needed, low confidence, and say what could not be resolved in summary.
+- Multiple plausible claims are allowed; keep them concise.
+- Assets should be tickers or asset names only when they are grounded by discovered context.
+- Do not decide no-trade. This step only discovers context.`,
+  });
+}
+
 export function opportunityFramePromptSpec(input: {
   sourcePost: SourcePost;
   userCommand: string;
@@ -630,6 +676,7 @@ export function opportunityTradePlanPrompt(input: {
   sourcePost: SourcePost;
   userCommand: string;
   marketCandidates?: MarketCandidate[];
+  contextDiscovery?: SourceContextDiscovery | null;
 }): string {
   return renderPromptSpec(opportunityTradePlanPromptSpec(input));
 }
@@ -638,6 +685,7 @@ export function opportunityTradePlanPromptSpec(input: {
   sourcePost: SourcePost;
   userCommand: string;
   marketCandidates?: MarketCandidate[];
+  contextDiscovery?: SourceContextDiscovery | null;
 }): CassiePromptSpec<z.infer<typeof OpportunityTradePlanSchema>> {
   return makePromptSpec({
     name: "cassie_opportunity_trade_plan",
@@ -645,6 +693,7 @@ export function opportunityTradePlanPromptSpec(input: {
     outputSchema: OpportunityTradePlanSchema,
     payload: {
       source: sourceForPrompt(input.sourcePost),
+      discoveredContext: input.contextDiscovery ?? null,
       userCommand: input.userCommand,
       marketCandidates: input.marketCandidates ?? null,
       current_datetime: new Date().toISOString(),
@@ -671,7 +720,8 @@ Rules:
 - Return both opportunityFrame and tradeExpression.
 - Do not assume a real market exists.
 - Do not invent tickers, prediction markets, pre-IPO listings, prices, quotes, liquidity, probabilities, or contract rules.
-- opportunityFrame.literalClaim must stay faithful to the source; opportunityFrame.marketImplication must be the economic read-through.
+- opportunityFrame.literalClaim must stay faithful to the source plus discoveredContext; opportunityFrame.marketImplication must be the economic read-through.
+- If discoveredContext is present, use it as the resolved clue context. Do not ignore grounded claims just because the visible post text was vague.
 - Generate abstract candidateExpressions for venue discovery. Venue search validates real markets later.
 - Use tradeExpression.marketDiscovery for shared venue-search state; keep candidateExpressions focused on expression-specific requirements.
 - Generate prediction_market candidateExpressions only when the thesis is a date-bounded yes/no event, explicit event catalyst, event outcome, or price-level contract whose resolution criteria could match the source.
@@ -685,7 +735,8 @@ Rules:
 - Set tradeExpression.decision to no_trade only when no venue search is warranted; otherwise use needs_market_check or route_to_market_router.
 
 When uncertain:
-- If the source is vague, stale, or under-specified, lower confidence and name the missing facts in opportunityFrame.reason and tradeExpression.insufficiency.
+- If discoveredContext is absent and the source is vague, stale, or under-specified, lower confidence and name the missing facts in opportunityFrame.reason and tradeExpression.insufficiency.
+- If discoveredContext is present but low-confidence or empty, then insufficiency can reflect failed context discovery.
 - If the cleanest economic expression is unsupported by configured venues, identify it but explain the execution gap.
 - If venue existence is unknown for a clean expression, use needs_market_check instead of no_trade.
 

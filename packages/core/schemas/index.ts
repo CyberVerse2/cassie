@@ -131,6 +131,14 @@ export const MarketCandidateSchema = z.object({
   reason: z.string(),
 });
 
+export const SourceContextDiscoverySchema = z.object({
+  summary: z.string(),
+  claims: z.array(z.string()),
+  entities: z.array(z.string()),
+  assets: z.array(z.string()),
+  confidence: z.number().min(0).max(1),
+});
+
 export const OpportunityFrameSchema = z.object({
   literalClaim: z.string(),
   opportunity: z.string(),
@@ -612,6 +620,7 @@ export const RunStepStatusSchema = z.enum([
 export const RunStepTypeSchema = z.enum([
   "intake",
   "preflight",
+  "context_discovery",
   "opportunity",
   "trade_expression",
   "market_candidates",
@@ -708,6 +717,9 @@ export type PositionReview = z.infer<typeof PositionReviewSchema>;
 export type AuditEvent = z.infer<typeof AuditEventSchema>;
 export type ControlRunStatus = z.infer<typeof ControlRunStatusSchema>;
 export type SupervisorFinalResult = z.infer<typeof SupervisorFinalResultSchema>;
+export type SourceContextDiscovery = z.infer<
+  typeof SourceContextDiscoverySchema
+>;
 export type RunStepStatus = z.infer<typeof RunStepStatusSchema>;
 export type RunStepType = z.infer<typeof RunStepTypeSchema>;
 export type ControlRun = z.infer<typeof ControlRunSchema>;

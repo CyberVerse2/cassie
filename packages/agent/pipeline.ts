@@ -36,6 +36,7 @@ import {
 import {
   planOpportunityAndTradeExpressions,
   classifySourceMode,
+  discoverSourceContext,
 } from "./reasoning.ts";
 import {
   assessExpressionFit,
@@ -99,6 +100,28 @@ export async function runCassieSupervisorPipeline(input: {
       }),
   });
 
+  const contextDiscovery = await recordRunStep({
+    store: input.store,
+    runId: input.run.runId,
+    stepType: "context_discovery",
+    promptName: "cassie_context_discovery",
+    promptVersion,
+    model: config.ai.grokXSearchModel,
+    stepInput: {
+      userCommand: input.run.userCommand,
+      sourcePost: source,
+    },
+    execute: ({ setThinkingTrace, captureUsage }) =>
+      discoverSourceContext({
+        ai: withThinkingTraceCapture(
+          captureUsage(importantAi),
+          setThinkingTrace,
+        ),
+        sourcePost: source,
+        userCommand: input.run.userCommand,
+      }),
+  });
+
   const opportunityPlan = await recordRunStep({
     store: input.store,
     runId: input.run.runId,
@@ -109,6 +132,7 @@ export async function runCassieSupervisorPipeline(input: {
     stepInput: {
       userCommand: input.run.userCommand,
       sourcePost: source,
+      contextDiscovery,
     },
     execute: ({ setThinkingTrace, captureUsage }) =>
       planOpportunityAndTradeExpressions({
@@ -118,6 +142,7 @@ export async function runCassieSupervisorPipeline(input: {
         ),
         sourcePost: source,
         userCommand: input.run.userCommand,
+        contextDiscovery,
       }),
   });
 
@@ -133,6 +158,7 @@ export async function runCassieSupervisorPipeline(input: {
       derivedFromStepType: "opportunity",
       userCommand: input.run.userCommand,
       sourcePost: source,
+      contextDiscovery,
       opportunityFrame,
     },
     execute: async () => opportunityPlan.tradeExpression,
@@ -311,11 +337,7 @@ async function sourceForPipeline(input: {
 }): Promise<SourcePost> {
   const url =
     xStatusUrl(input.run.sourcePost.url) ?? xStatusUrl(input.run.userCommand);
-  if (
-    !url ||
-    !input.sourceResolver ||
-    hasSubstantiveSourceText(input.run.sourcePost, url)
-  ) {
+  if (!url || !input.sourceResolver) {
     return input.run.sourcePost;
   }
 
@@ -346,11 +368,6 @@ function xStatusUrl(value: string | null | undefined): string | null {
     value.match(/https:\/\/(?:x|twitter)\.com\/[^\s/]+\/status\/\d+/u)?.[0] ??
     null
   );
-}
-
-function hasSubstantiveSourceText(source: SourcePost, url: string): boolean {
-  const text = source.text.trim();
-  return text.length > 40 && text !== url && !text.includes(url);
 }
 
 async function assessCandidates(input: {
