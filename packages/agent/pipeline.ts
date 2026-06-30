@@ -594,9 +594,6 @@ function defaultExitPlan(input: {
     thesis: market?.reason ?? input.tradeExpression.highestPurityExpression,
     invalidationSignals: Array.from(
       new Set([
-        ...input.tradeExpression.candidateExpressions.flatMap(
-          (candidate) => candidate.keyRisks,
-        ),
         ...(input.tradeExpression.insufficiency?.evidenceNeededToClear ?? []),
         "The selected venue quote or liquidity deteriorates materially.",
       ]),

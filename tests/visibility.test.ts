@@ -29,16 +29,11 @@ const tradeExpression: TradeExpressionPlan = {
       abstractMarket: "Exa private equity",
       intendedSide: "long",
       primaryEntityOrEvent: "Exa",
-      relatedEntities: [],
       thesis: "Private-market validation may support Exa valuation.",
-      whyThisExpressesTheOpportunity:
-        "Direct private exposure maps to the thesis.",
       directness: "direct",
-      whatMustBeTrue: ["A configured venue lists Exa private exposure."],
       searchTerms: ["Exa private equity"],
       requiredMarketFeatures: ["Direct Exa exposure"],
       requiredRuleOrContractFeatures: [],
-      keyRisks: ["No configured venue listing."],
       expectedTimeHorizon: "months",
       priority: "medium",
       confidence: 0.4,
@@ -49,6 +44,7 @@ const tradeExpression: TradeExpressionPlan = {
   decision: "needs_market_check",
   reason: "No clean public expression.",
   insufficiency: null,
+  marketDiscovery: null,
 };
 
 const trace: TraceEvent[] = [

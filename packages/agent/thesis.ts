@@ -18,7 +18,6 @@ export function thesisFromTradeExpression(
       [
         tradeExpression.directAsset,
         primaryExpression?.primaryEntityOrEvent,
-        ...(primaryExpression?.relatedEntities ?? []),
       ].filter((value): value is string => Boolean(value)),
     ),
   );
@@ -28,9 +27,7 @@ export function thesisFromTradeExpression(
       primaryExpression?.thesis ??
       (tradeExpression.coreInterpretation || tradeExpression.signal),
     literalClaim: tradeExpression.signal,
-    impliedTradeThesis:
-      primaryExpression?.whyThisExpressesTheOpportunity ||
-      tradeExpression.highestPurityExpression,
+    impliedTradeThesis: tradeExpression.highestPurityExpression,
     sourceOrMetaSignal: null,
     hasExplicitTrade: true,
     hasTradableImplication: tradeExpression.decision !== "no_trade",

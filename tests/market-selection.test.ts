@@ -40,6 +40,7 @@ const tradeExpression: TradeExpressionPlan = {
   decision: "needs_market_check",
   reason: "No configured venue candidate exists.",
   insufficiency: null,
+  marketDiscovery: null,
 };
 
 describe("market selection", () => {

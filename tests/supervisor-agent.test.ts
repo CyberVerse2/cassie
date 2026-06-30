@@ -451,18 +451,13 @@ describe("AI SDK supervisor agent", () => {
           abstractMarket: "Strategy sells Bitcoin this year",
           intendedSide: "no",
           primaryEntityOrEvent: "Strategy Bitcoin sale",
-          relatedEntities: ["Strategy"],
           thesis: "Buy No on an exact Strategy-sells-BTC event market.",
-          whyThisExpressesTheOpportunity:
-            "The event market would directly resolve the literal claim.",
           directness: "direct",
-          whatMustBeTrue: ["An exact event market exists"],
           searchTerms: ["Strategy sells Bitcoin"],
           requiredMarketFeatures: ["Exact event market"],
           requiredRuleOrContractFeatures: [
             "Rules must resolve on Strategy selling BTC",
           ],
-          keyRisks: ["No exact market exists"],
           expectedTimeHorizon: "days",
           priority: "high",
           confidence: 0.8,

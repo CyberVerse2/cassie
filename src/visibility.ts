@@ -48,17 +48,7 @@ export function buildVisibilityReport(input: VisibilityInput) {
           candidateExpressions: arrayField(
             tradeExpression,
             "candidateExpressions",
-          ).map((candidate) => ({
-            expressionId: stringField(candidate, "expressionId"),
-            expressionRail: stringField(candidate, "expressionRail"),
-            expressionType: stringField(candidate, "expressionType"),
-            abstractMarket: stringField(candidate, "abstractMarket"),
-            intendedSide: stringField(candidate, "intendedSide"),
-            thesis: stringField(candidate, "thesis"),
-            directness: stringField(candidate, "directness"),
-            priority: stringField(candidate, "priority"),
-            confidence: numberField(candidate, "confidence"),
-          })),
+          ).map(candidateExpressionSummary),
         }
       : null,
     toolCalls: input.trace.map((event) => ({
@@ -152,6 +142,16 @@ function formatTradeExpression(
         `  - ${candidate.abstractMarket ?? "unknown"} ${candidate.intendedSide ?? "unknown"} rail=${candidate.expressionRail ?? "unknown"} direct=${candidate.directness ?? "unknown"} confidence=${candidate.confidence ?? "?"}`,
     ),
   ];
+}
+
+function candidateExpressionSummary(candidate: unknown) {
+  return {
+    abstractMarket: stringField(candidate, "abstractMarket"),
+    intendedSide: stringField(candidate, "intendedSide"),
+    expressionRail: stringField(candidate, "expressionRail"),
+    directness: stringField(candidate, "directness"),
+    confidence: numberField(candidate, "confidence"),
+  };
 }
 
 function hasField(record: RecordValue | null, field: string): boolean {

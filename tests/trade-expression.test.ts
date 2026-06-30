@@ -98,11 +98,8 @@ describe("trade expression planning", () => {
                 abstractMarket: "ZEC perp or spot",
                 intendedSide: "long",
                 primaryEntityOrEvent: "ZEC",
-                relatedEntities: ["Zcash"],
                 thesis:
                   "ZEC rerates versus broader crypto if demand is underpriced.",
-                whyThisExpressesTheOpportunity:
-                  "A direct ZEC market maps to the tweet's relative-value claim.",
                 directness: "direct",
                 whatMustBeTrue: [
                   "A real ZEC market exists with acceptable liquidity.",
@@ -110,7 +107,6 @@ describe("trade expression planning", () => {
                 searchTerms: ["ZEC", "Zcash"],
                 requiredMarketFeatures: ["listed ZEC spot or perp"],
                 requiredRuleOrContractFeatures: [],
-                keyRisks: ["The thesis may already be priced."],
                 expectedTimeHorizon: "weeks",
                 priority: "high",
                 confidence: 0.55,
@@ -187,6 +183,7 @@ describe("trade expression planning", () => {
       decision: "no_trade",
       reason: "Expression is clean but expected edge is negative.",
       insufficiency: null,
+      marketDiscovery: null,
       rankedCandidates: [{ expressionConfidence: 0.9, expectedEdge: -0.1 }],
     });
 
@@ -215,13 +212,9 @@ describe("trade expression planning", () => {
               abstractMarket: "turbopuffer private-company valuation exposure",
               intendedSide: "long",
               primaryEntityOrEvent: "turbopuffer",
-              relatedEntities: ["SID AI"],
               thesis:
                 "Customer-validation signal could support turbopuffer valuation if a real private-market instrument exists.",
-              whyThisExpressesTheOpportunity:
-                "A direct private-market listing would capture the valuation read-through.",
               directness: "direct",
-              whatMustBeTrue: ["A real configured venue lists turbopuffer."],
               searchTerms: [
                 "turbopuffer pre-IPO",
                 "turbopuffer private market",
@@ -230,7 +223,6 @@ describe("trade expression planning", () => {
               requiredRuleOrContractFeatures: [
                 "Direct exposure to turbopuffer valuation",
               ],
-              keyRisks: ["No listing exists"],
               expectedTimeHorizon: "weeks",
               priority: "medium",
               confidence: 0.24,
@@ -251,6 +243,7 @@ describe("trade expression planning", () => {
             summary: "Venue discovery is missing.",
             evidenceNeededToClear: ["Confirmed configured-venue listing."],
           },
+          marketDiscovery: null,
         } as T;
       },
     };
@@ -292,16 +285,11 @@ describe("trade expression planning", () => {
               abstractMarket: "VIX call option",
               intendedSide: "long",
               primaryEntityOrEvent: "VIX",
-              relatedEntities: [],
               thesis: "Long volatility expresses the thesis directly.",
-              whyThisExpressesTheOpportunity:
-                "Option convexity maps to volatility expansion.",
               directness: "direct",
-              whatMustBeTrue: ["A configured venue supports options."],
               searchTerms: ["VIX call"],
               requiredMarketFeatures: ["listed option"],
               requiredRuleOrContractFeatures: ["option contract"],
-              keyRisks: ["Unsupported execution rail."],
               expectedTimeHorizon: "days",
               priority: "high",
               confidence: 0.28,
@@ -316,6 +304,7 @@ describe("trade expression planning", () => {
           decision: "no_trade",
           reason: "The clean rail is unsupported.",
           insufficiency: null,
+          marketDiscovery: null,
         } as T;
       },
     };

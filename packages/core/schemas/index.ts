@@ -238,29 +238,6 @@ export const TradableExpressionRailSchema = ExpressionRailSchema.exclude([
   "no_trade",
 ]);
 
-export const InstrumentTypeSchema = z.enum([
-  "spot",
-  "perp",
-  "pre_stock_perp",
-  "prediction_market",
-  "equity",
-  "etf",
-  "commodity",
-  "fx",
-  "rate",
-  "bond",
-  "credit",
-  "future",
-  "option",
-  "volatility",
-  "index",
-  "defi_yield",
-  "basket",
-  "pair",
-  "multi_leg",
-  "unknown",
-]);
-
 export const CandidateTradeExpressionSchema = z.object({
   expressionId: z.string(),
   expressionRail: ExpressionRailSchema,
@@ -275,24 +252,19 @@ export const CandidateTradeExpressionSchema = z.object({
   abstractMarket: z.string(),
   intendedSide: z.enum(["long", "short", "yes", "no", "avoid"]),
   primaryEntityOrEvent: z.string().nullable(),
-  relatedEntities: z.array(z.string()).default([]),
   thesis: z.string(),
-  whyThisExpressesTheOpportunity: z.string().optional().default(""),
   directness: z
     .enum(["direct", "strong_proxy", "weak_proxy", "none"])
     .describe(
       "How directly the expression gives causal exposure to the framed opportunity, not merely thematic similarity.",
     ),
-  whatMustBeTrue: z.array(z.string()).default([]),
   searchTerms: z.array(z.string()),
   requiredMarketFeatures: z.array(z.string()),
   requiredRuleOrContractFeatures: z
     .array(z.string())
-    .default([])
     .describe(
       "Required market rules, listing details, resolution criteria, instrument specs, or contract terms that must be verified before selection.",
     ),
-  keyRisks: z.array(z.string()).default([]),
   expectedTimeHorizon: z.enum([
     "minutes",
     "hours",
@@ -353,57 +325,6 @@ export const ExpressionFitAssessmentSchema = z.object({
   confidence: z.number().min(0).max(1),
 });
 
-export const TradeExpressionCandidateSchema = z.object({
-  instrument: z.string(),
-  venue: z.enum(["hyperliquid", "polymarket"]).nullable(),
-  symbol: z.string().nullable(),
-  instrumentType: InstrumentTypeSchema.nullable(),
-  venueQuery: z.string().nullable(),
-  expression: z.enum([
-    "long",
-    "short",
-    "pair",
-    "basket",
-    "market_check",
-    "no_trade",
-  ]),
-  thesis: z.string(),
-  venueChecks: z.array(z.string()),
-  currentMarketPriceOrOdds: z.string().nullable(),
-  fairValueOrExpectedValue: z.string().nullable(),
-  causalDirectness: z.number().min(0).max(1),
-  liquidity: z.number().min(0).max(1),
-  surprise: z.number().min(0).max(1),
-  timing: z.number().min(0).max(1),
-  crowdingRisk: z.number().min(0).max(1),
-  downsideAsymmetry: z.number().min(0).max(1),
-  evidenceQuality: z.number().min(0).max(1),
-  expectedEdge: z.number().min(-1).max(1),
-  tradableNow: z.boolean(),
-  rejectionReason: z.string().nullable(),
-  invalidation: z.array(z.string()),
-  evidenceNeeded: z.array(z.string()),
-});
-
-export const RankedTradeExpressionCandidateSchema = z.object({
-  rank: z.number().int().positive(),
-  candidateId: z.string(),
-  venue: z.enum(["hyperliquid", "polymarket"]),
-  symbol: z.string(),
-  side: z.enum(["long", "short", "buy_yes", "buy_no", "buy", "sell"]),
-  expressionConfidence: z.number().min(0).max(1),
-  thesisFit: z.number().min(0).max(1),
-  causalDirectness: z.number().min(0).max(1),
-  liquidity: z.number().min(0).max(1),
-  venueConfirmation: z.number().min(0).max(1),
-  priceOrOddsConfidence: z.number().min(0).max(1),
-  timingFit: z.number().min(0).max(1),
-  expectedEdge: z.number().min(-1).max(1),
-  tradableNow: z.boolean(),
-  reason: z.string(),
-  invalidation: z.array(z.string()),
-});
-
 const EvidenceGapDimensionSchema = z.enum([
   "source_reliability",
   "primary_source_access",
@@ -428,17 +349,15 @@ export const EvidenceInsufficiencySchema = z.object({
 
 export const MarketDiscoveryPlanSchema = z.object({
   status: z.enum(["not_needed", "needed", "completed", "blocked"]),
-  venues: z.array(z.enum(["hyperliquid", "polymarket"])).default([]),
-  missing: z.array(EvidenceGapDimensionSchema).default([]),
-  instructions: z.string().nullable().default(null),
-  queries: z
-    .array(
-      z.object({
-        expressionId: z.string(),
-        terms: z.array(z.string()).default([]),
-      }),
-    )
-    .default([]),
+  venues: z.array(z.enum(["hyperliquid", "polymarket"])),
+  missing: z.array(EvidenceGapDimensionSchema),
+  instructions: z.string().nullable(),
+  queries: z.array(
+    z.object({
+      expressionId: z.string(),
+      terms: z.array(z.string()),
+    }),
+  ),
 });
 
 export const TradeExpressionPlanSchema = z.object({
@@ -461,7 +380,7 @@ export const TradeExpressionPlanSchema = z.object({
   ]),
   reason: z.string(),
   insufficiency: EvidenceInsufficiencySchema.nullable(),
-  marketDiscovery: MarketDiscoveryPlanSchema.optional(),
+  marketDiscovery: MarketDiscoveryPlanSchema.nullable(),
 });
 
 export const OpportunityTradePlanSchema = z.object({
@@ -741,15 +660,11 @@ export type ExpressionRail = z.infer<typeof ExpressionRailSchema>;
 export type TradableExpressionRail = z.infer<
   typeof TradableExpressionRailSchema
 >;
-export type InstrumentType = z.infer<typeof InstrumentTypeSchema>;
 export type CandidateTradeExpression = z.infer<
   typeof CandidateTradeExpressionSchema
 >;
 export type ExpressionFitAssessment = z.infer<
   typeof ExpressionFitAssessmentSchema
->;
-export type TradeExpressionCandidate = z.infer<
-  typeof TradeExpressionCandidateSchema
 >;
 export type TradeExpressionPlan = z.infer<typeof TradeExpressionPlanSchema>;
 export type CassieActionState = z.infer<typeof CassieActionStateSchema>;
