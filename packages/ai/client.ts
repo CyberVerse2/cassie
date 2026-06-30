@@ -197,6 +197,7 @@ type OpenAiProviderForStructuredCall = {
 
 type XaiProviderForStructuredCall = {
   tools: {
+    webSearch: (input: { enableImageUnderstanding: true }) => unknown;
     xSearch: (input: {
       enableImageUnderstanding: true;
       enableVideoUnderstanding: true;
@@ -222,6 +223,9 @@ export function structuredToolsForCall(input: {
 
   if (input.route.provider === "xai" && input.xai) {
     return {
+      web_search: input.xai.tools.webSearch({
+        enableImageUnderstanding: true,
+      }),
       x_search: input.xai.tools.xSearch({
         enableImageUnderstanding: true,
         enableVideoUnderstanding: true,

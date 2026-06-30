@@ -76,7 +76,8 @@ describe("structured AI model routing", () => {
     expect(extractModelThinkingTrace({ reasoning: [] })).toBeNull();
   });
 
-  it("allows context discovery to use Grok X search", () => {
+  it("allows context discovery to use Grok web and X search", () => {
+    const webSearch = vi.fn(() => ({ id: "xai.web_search" }));
     const xSearch = vi.fn(() => ({ id: "xai.x_search" }));
     const route = routeStructuredModel({ name: "cassie_context_discovery" });
 
@@ -89,10 +90,14 @@ describe("structured AI model routing", () => {
             searchContextSize: "medium",
           },
         },
-        xai: { tools: { xSearch } },
+        xai: { tools: { webSearch, xSearch } },
       }),
     ).toEqual({
+      web_search: { id: "xai.web_search" },
       x_search: { id: "xai.x_search" },
+    });
+    expect(webSearch).toHaveBeenCalledWith({
+      enableImageUnderstanding: true,
     });
     expect(xSearch).toHaveBeenCalledWith({
       enableImageUnderstanding: true,
