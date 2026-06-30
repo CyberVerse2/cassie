@@ -372,6 +372,9 @@ describe("prompts", () => {
     expect(contextDiscoverySystem).toContain(
       "Before returning assets: [], first check whether the discovered claims imply an affected public company",
     );
+    expect(contextDiscoverySystem).toContain(
+      "search for public companies, tokens, commodities, suppliers, customers, competitors, or venue-searchable assets exposed to that category",
+    );
     const opportunityPayload = JSON.parse(
       String(
         opportunityFramePromptSpec({
