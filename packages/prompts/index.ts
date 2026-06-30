@@ -605,8 +605,9 @@ Rules:
 - Claims must be grounded in source/context you can identify, not invented from vibes.
 - If context remains unresolved, return empty claims/assets/entities as needed, low confidence, and say what could not be resolved in summary.
 - Multiple plausible claims are allowed; keep them concise.
-- For assets, do not limit yourself to tickers or asset names explicitly discovered in the context. Ask: are there any assets that you can infer will be affected by this?
-- Include inferred affected assets when the context implies an affected company, token, commodity, sector exposure, or venue-searchable asset, and make the inference legible in summary or claims.
+- For assets, do not limit yourself to tickers or asset names explicitly discovered in the context. Always ask: are there any assets that you can infer will be affected by this?
+- Before returning assets: [], first check whether the discovered claims imply an affected public company, token, commodity, sector exposure, product-exposed business, supplier, customer, competitor, or venue-searchable asset.
+- Include inferred affected assets when the context implies them, and make the inference legible in summary or claims by naming the causal link.
 - Do not decide no-trade. This step only discovers context.`,
   });
 }
