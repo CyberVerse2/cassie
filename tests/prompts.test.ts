@@ -370,10 +370,13 @@ describe("prompts", () => {
       "are there any assets that you can infer will be affected by this?",
     );
     expect(contextDiscoverySystem).toContain(
-      "Before returning assets: [], first check whether the discovered claims imply an affected public company",
+      "Before returning assets: [], first determine whether the discovered claims imply any materially affected public company",
     );
     expect(contextDiscoverySystem).toContain(
-      "search for public companies, tokens, commodities, suppliers, customers, competitors, or venue-searchable assets exposed to that category",
+      "Infer affected assets from the causal implications of the discovered claims",
+    );
+    expect(contextDiscoverySystem).toContain(
+      "Use both web search and X search",
     );
     const opportunityPayload = JSON.parse(
       String(
