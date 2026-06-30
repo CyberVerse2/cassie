@@ -91,9 +91,9 @@ export async function runCassieSupervisorPipeline(input: {
       userCommand: input.run.userCommand,
       sourcePost: source,
     },
-    execute: ({ setThinkingTrace }) =>
+    execute: ({ setThinkingTrace, captureUsage }) =>
       classifySourceMode({
-        ai: withThinkingTraceCapture(cheapAi, setThinkingTrace),
+        ai: withThinkingTraceCapture(captureUsage(cheapAi), setThinkingTrace),
         sourcePost: source,
         userCommand: input.run.userCommand,
       }),
@@ -110,9 +110,12 @@ export async function runCassieSupervisorPipeline(input: {
       userCommand: input.run.userCommand,
       sourcePost: source,
     },
-    execute: ({ setThinkingTrace }) =>
+    execute: ({ setThinkingTrace, captureUsage }) =>
       planOpportunityAndTradeExpressions({
-        ai: withThinkingTraceCapture(importantAi, setThinkingTrace),
+        ai: withThinkingTraceCapture(
+          captureUsage(importantAi),
+          setThinkingTrace,
+        ),
         sourcePost: source,
         userCommand: input.run.userCommand,
       }),
@@ -372,9 +375,12 @@ async function assessCandidates(input: {
           candidate,
           side: predictionMarketSideForCandidate(candidate),
         },
-        execute: ({ setThinkingTrace }) =>
+        execute: ({ setThinkingTrace, captureUsage }) =>
           assessExpressionFit({
-            ai: withThinkingTraceCapture(input.ai, setThinkingTrace),
+            ai: withThinkingTraceCapture(
+              captureUsage(input.ai),
+              setThinkingTrace,
+            ),
             opportunityFrame: input.opportunityFrame,
             tradeExpression: input.tradeExpression,
             candidate,

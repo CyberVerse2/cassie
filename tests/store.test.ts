@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
+import { recordRunStep } from "../packages/agent/steps.ts";
+import type { StructuredAiClient } from "../packages/ai/client.ts";
 import type {
   ExecutionJob,
   Position,
@@ -174,6 +176,80 @@ describe("InMemoryCassieStore", () => {
     expect(snapshot.modelCallUsage).toMatchObject([
       { purpose: "supervisor_step", totalTokens: 30 },
     ]);
+  });
+
+  it("records structured AI usage for a run step", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie trade this",
+      sourcePost: {
+        platform: "x",
+        postId: "post_1",
+        url: null,
+        authorHandle: "example",
+        authorName: "Example",
+        text: "SOL ETF is inevitable.",
+        createdAt: null,
+        quotedPostText: null,
+        linkedUrls: [],
+        mediaDescriptions: [],
+      },
+    });
+
+    await recordRunStep({
+      store,
+      runId: run.runId,
+      stepType: "opportunity",
+      promptName: "cassie_opportunity_trade_plan",
+      promptVersion: "2026-05-31",
+      model: "gpt-5.4-mini",
+      stepInput: {},
+      execute: async ({ captureUsage }) => {
+        const ai = captureUsage({
+          async generateObject<T>(
+            input: Parameters<StructuredAiClient["generateObject"]>[0],
+          ) {
+            await input.onUsage?.({
+              provider: "openai",
+              model: "gpt-5.4-mini",
+              inputTokens: 100,
+              outputTokens: 25,
+              reasoningTokens: 10,
+              cachedTokens: 5,
+              totalTokens: 125,
+            });
+            return { ok: true } as T;
+          },
+        });
+        return ai.generateObject({
+          schema: {} as never,
+          prompt: "test",
+          name: "cassie_opportunity_trade_plan",
+        });
+      },
+    });
+
+    const snapshot = await store.load();
+    expect(snapshot.modelCallUsage).toMatchObject([
+      {
+        controlRunId: run.runId,
+        purpose: "opportunity",
+        provider: "openai",
+        model: "gpt-5.4-mini",
+        promptName: "cassie_opportunity_trade_plan",
+        promptVersion: "2026-05-31",
+        inputTokens: 100,
+        outputTokens: 25,
+        reasoningTokens: 10,
+        cachedTokens: 5,
+        totalTokens: 125,
+        status: "succeeded",
+      },
+    ]);
+    expect(snapshot.modelCallUsage[0]?.runStepId).toBe(
+      snapshot.runSteps[0]?.stepId,
+    );
   });
 
   it("syncs Privy identity into user settings", async () => {

@@ -1,9 +1,12 @@
 import type { RunStepType } from "../core/schemas/index.ts";
 import type { CassieStore } from "../core/db/store.ts";
+import type { StructuredAiClient } from "../ai/client.ts";
+import { withUsageCapture } from "../ai/client.ts";
 import { formatErrorForLog } from "../core/helpers/error-format.ts";
 
 export type RunStepExecutionContext = {
   setThinkingTrace: (thinkingTrace: string | null) => void;
+  captureUsage: (ai: StructuredAiClient) => StructuredAiClient;
 };
 
 export async function recordRunStep<T>(input: {
@@ -36,6 +39,28 @@ export async function recordRunStep<T>(input: {
       setThinkingTrace: (value) => {
         thinkingTrace = value;
       },
+      captureUsage: (ai) =>
+        withUsageCapture(ai, async (usage) => {
+          await input.store.addModelCallUsage({
+            controlRunId: input.runId,
+            runStepId: started.stepId,
+            purpose: input.stepType,
+            provider: usage.provider,
+            model: usage.model,
+            promptName: input.promptName ?? null,
+            promptVersion: input.promptVersion ?? null,
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            reasoningTokens: usage.reasoningTokens,
+            cachedTokens: usage.cachedTokens,
+            totalTokens: usage.totalTokens,
+            estimatedCostUsd: null,
+            latencyMs: null,
+            thinkingTrace,
+            status: "succeeded",
+            error: null,
+          });
+        }),
     });
     await input.store.updateRunStep({
       ...started,

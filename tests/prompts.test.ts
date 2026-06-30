@@ -520,6 +520,13 @@ describe("prompts", () => {
     expect(prompt).not.toContain('"marketDiscoveryConfidence"');
     expect(prompt).not.toContain('"publicMarketReadThrough"');
     expect(prompt).not.toContain('"insufficiency"');
+    expect(prompt).not.toContain('"marketDiscovery"');
+    expect(prompt).not.toContain('"conditionId"');
+    expect(prompt).not.toContain('"outcomeTokenId"');
+    expect(prompt).not.toContain('"marketQuestion"');
+    expect(prompt).not.toContain('"yesPrice"');
+    expect(prompt).not.toContain('"noPrice"');
+    expect(prompt).not.toContain('"heldSidePrice"');
     expect(prompt).not.toContain('"abstractMarket"');
     expect(prompt).not.toContain('"relatedEntities"');
     expect(prompt).not.toContain('"whatMustBeTrue"');

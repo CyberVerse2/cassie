@@ -31,6 +31,16 @@ export type StructuredToolConfig = {
   };
 };
 
+export type StructuredAiUsage = {
+  provider: ModelProvider;
+  model: string;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  cachedTokens: number | null;
+  totalTokens: number | null;
+};
+
 export interface StructuredAiClient {
   generateObject<T>(input: {
     schema: z.ZodType<T>;
@@ -42,6 +52,7 @@ export interface StructuredAiClient {
     providerOptions?: ProviderOptions;
     tools?: StructuredToolConfig;
     onThinkingTrace?: (thinkingTrace: string | null) => void;
+    onUsage?: (usage: StructuredAiUsage) => void | Promise<void>;
   }): Promise<T>;
 }
 
@@ -63,22 +74,24 @@ export class StructuredAiCallError extends Error {
 }
 
 export class MissingAiDependencyError extends Error {
-  constructor(message = "AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap AI tools.") {
+  constructor(
+    message = "AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap AI tools.",
+  ) {
     super(message);
     this.name = "MissingAiDependencyError";
   }
 }
 
 export class MissingImportantAiDependencyError extends MissingAiDependencyError {
-  constructor(message = "AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.") {
+  constructor(
+    message = "AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.",
+  ) {
     super(message);
     this.name = "MissingImportantAiDependencyError";
   }
 }
 
-const cheapStructuredSteps = new Set([
-  "cassie_market_selection",
-]);
+const cheapStructuredSteps = new Set(["cassie_market_selection"]);
 
 export function routeStructuredModel(input: {
   name: string;
@@ -88,7 +101,9 @@ export function routeStructuredModel(input: {
 }): ModelRoute {
   const cheapModel = input.cheapModel ?? config.ai.cheapModel;
   const expensiveModel = input.expensiveModel ?? config.ai.importantModel;
-  const tier = input.tier ?? (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
+  const tier =
+    input.tier ??
+    (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");
 
   return tier === "cheap"
     ? { tier, provider: "deepseek", model: cheapModel }
@@ -98,11 +113,11 @@ export function routeStructuredModel(input: {
 export function providerOptionsForRoute(route: ModelRoute) {
   return route.provider === "openai"
     ? {
-      openai: {
-        reasoningEffort: IMPORTANT_OPENAI_REASONING_EFFORT,
-        reasoningSummary: "auto",
-      },
-    }
+        openai: {
+          reasoningEffort: IMPORTANT_OPENAI_REASONING_EFFORT,
+          reasoningSummary: "auto",
+        },
+      }
     : undefined;
 }
 
@@ -110,13 +125,19 @@ export function extractModelThinkingTrace(result: {
   reasoningText?: string;
   reasoning?: unknown[];
 }): string | null {
-  if (typeof result.reasoningText === "string" && result.reasoningText.trim().length > 0) {
+  if (
+    typeof result.reasoningText === "string" &&
+    result.reasoningText.trim().length > 0
+  ) {
     return result.reasoningText;
   }
 
   const reasoningText = (result.reasoning ?? [])
     .map((part) => {
-      const record = part && typeof part === "object" ? part as Record<string, unknown> : {};
+      const record =
+        part && typeof part === "object"
+          ? (part as Record<string, unknown>)
+          : {};
       return typeof record.text === "string" ? record.text : "";
     })
     .join("")
@@ -129,13 +150,30 @@ export function withThinkingTraceCapture(
   onThinkingTrace: (thinkingTrace: string | null) => void,
 ): StructuredAiClient {
   return {
-    generateObject: (input) => ai.generateObject({
-      ...input,
-      onThinkingTrace: (thinkingTrace) => {
-        onThinkingTrace(thinkingTrace);
-        input.onThinkingTrace?.(thinkingTrace);
-      },
-    }),
+    generateObject: (input) =>
+      ai.generateObject({
+        ...input,
+        onThinkingTrace: (thinkingTrace) => {
+          onThinkingTrace(thinkingTrace);
+          input.onThinkingTrace?.(thinkingTrace);
+        },
+      }),
+  };
+}
+
+export function withUsageCapture(
+  ai: StructuredAiClient,
+  onUsage: (usage: StructuredAiUsage) => void | Promise<void>,
+): StructuredAiClient {
+  return {
+    generateObject: (input) =>
+      ai.generateObject({
+        ...input,
+        onUsage: async (usage) => {
+          await onUsage(usage);
+          await input.onUsage?.(usage);
+        },
+      }),
   };
 }
 
@@ -193,6 +231,7 @@ export class CassieStructuredClient implements StructuredAiClient {
     providerOptions?: ProviderOptions;
     tools?: StructuredToolConfig;
     onThinkingTrace?: (thinkingTrace: string | null) => void;
+    onUsage?: (usage: StructuredAiUsage) => void | Promise<void>;
   }): Promise<T> {
     const route = routeStructuredModel({
       name: input.name,
@@ -203,20 +242,25 @@ export class CassieStructuredClient implements StructuredAiClient {
 
     const deepSeekKey = config.ai.deepSeekApiKey;
     if (route.provider === "deepseek" && !deepSeekKey) {
-      throw new MissingAiDependencyError("AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.");
+      throw new MissingAiDependencyError(
+        "AI dependency unavailable. Set DEEPSEEK_API_KEY to run Cassie's cheap DeepSeek bookkeeping tools.",
+      );
     }
     const openAiKey = config.ai.openAiApiKey;
     if (route.provider === "openai" && !openAiKey) {
-      throw new MissingImportantAiDependencyError("AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.");
+      throw new MissingImportantAiDependencyError(
+        "AI dependency unavailable. Set OPENAI_API_KEY to run Cassie's important GPT judgment tools.",
+      );
     }
 
     const finishTrace = this.trace?.start({
       name: input.name,
       kind: "ai",
       model: route.model,
-      thinkingTrace: route.tier === "cheap"
-        ? "Requesting cheap structured extraction/classification and validating it against the expected schema."
-        : "Requesting an expensive structured judgment and validating it against the expected schema.",
+      thinkingTrace:
+        route.tier === "cheap"
+          ? "Requesting cheap structured extraction/classification and validating it against the expected schema."
+          : "Requesting an expensive structured judgment and validating it against the expected schema.",
       input: {
         schemaName: input.name,
         promptChars: promptTextForTrace(input).length,
@@ -231,7 +275,9 @@ export class CassieStructuredClient implements StructuredAiClient {
 
       if (route.provider === "openai") {
         const openai = createOpenAI({ apiKey: openAiKey });
-        model = openAiModelForStructuredCall({ route, openai }) as Parameters<typeof generateText>[0]["model"];
+        model = openAiModelForStructuredCall({ route, openai }) as Parameters<
+          typeof generateText
+        >[0]["model"];
         tools = structuredToolsForCall({
           route,
           openai,
@@ -250,14 +296,17 @@ export class CassieStructuredClient implements StructuredAiClient {
         ...promptParametersForStructuredCall(input),
         maxRetries: structuredMaxRetries(),
         maxOutputTokens: maxOutputTokensForTier(route.tier),
-        providerOptions: input.providerOptions ?? providerOptionsForRoute(route),
+        providerOptions:
+          input.providerOptions ?? providerOptionsForRoute(route),
         tools: tools as never,
       });
 
+      const usage = structuredUsageRecord(route, result.totalUsage);
       finishTrace?.({
         output: result.output,
         usage: result.totalUsage,
       });
+      await input.onUsage?.(usage);
       input.onThinkingTrace?.(extractModelThinkingTrace(result));
 
       return result.output;
@@ -290,6 +339,24 @@ export function promptParametersForStructuredCall(input: {
   return { prompt: input.prompt };
 }
 
+function structuredUsageRecord(
+  route: ModelRoute,
+  usage: unknown,
+): StructuredAiUsage {
+  const record = objectRecord(usage);
+  const outputDetails = objectRecord(record.outputTokenDetails);
+  const inputDetails = objectRecord(record.inputTokenDetails);
+  return {
+    provider: route.provider,
+    model: route.model,
+    inputTokens: numberOrNull(record.inputTokens),
+    outputTokens: numberOrNull(record.outputTokens),
+    reasoningTokens: numberOrNull(outputDetails.reasoningTokens),
+    cachedTokens: numberOrNull(inputDetails.cacheReadTokens),
+    totalTokens: numberOrNull(record.totalTokens),
+  };
+}
+
 function promptTextForTrace(input: {
   prompt?: string;
   system?: string;
@@ -310,4 +377,14 @@ function maxOutputTokensForTier(tier: ModelTier): number {
   return tier === "expensive"
     ? IMPORTANT_STRUCTURED_MAX_OUTPUT_TOKENS
     : DIRECT_STRUCTURED_MAX_OUTPUT_TOKENS;
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function numberOrNull(value: unknown): number | null {
+  return typeof value === "number" ? value : null;
 }

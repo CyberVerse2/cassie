@@ -264,7 +264,6 @@ function assessmentTradeExpression(value: TradeExpressionPlan) {
     directAsset: value.directAsset,
     highestPurityExpression: value.highestPurityExpression,
     decision: value.decision,
-    marketDiscovery: value.marketDiscovery,
     candidateExpressions: value.candidateExpressions.map((candidate) => ({
       expressionId: candidate.expressionId,
       expressionRail: candidate.expressionRail,
@@ -279,6 +278,54 @@ function assessmentTradeExpression(value: TradeExpressionPlan) {
       requiredMarketFeatures: candidate.requiredMarketFeatures,
       requiredRuleOrContractFeatures: candidate.requiredRuleOrContractFeatures,
     })),
+  };
+}
+
+function assessmentMarketCandidate(candidate: MarketCandidate) {
+  if (candidate.venue === "hyperliquid") {
+    return {
+      venue: candidate.venue,
+      symbol: candidate.symbol,
+      instrument: candidate.instrument,
+      side: candidate.side,
+      markPrice: candidate.markPrice,
+      spreadBps: candidate.spreadBps,
+      liquidityScore: candidate.liquidityScore,
+      estimatedSlippageBps: candidate.estimatedSlippageBps,
+      minOrderSizeUsd: candidate.minOrderSizeUsd,
+      thesisFit: candidate.thesisFit,
+      reason: candidate.reason,
+      warnings: candidate.warnings,
+    };
+  }
+
+  return {
+    venue: candidate.venue,
+    symbol: candidate.symbol,
+    instrument: candidate.instrument,
+    side: candidate.side,
+    marketQuestion: candidate.marketQuestion,
+    marketSlug: candidate.marketSlug,
+    outcome: candidate.outcome,
+    conditionId: candidate.conditionId,
+    outcomeTokenId: candidate.outcomeTokenId,
+    yesOutcomeTokenId: candidate.yesOutcomeTokenId,
+    noOutcomeTokenId: candidate.noOutcomeTokenId,
+    yesPrice: candidate.yesPrice,
+    noPrice: candidate.noPrice,
+    heldSidePrice: candidate.heldSidePrice,
+    volumeUsd: candidate.volumeUsd,
+    liquidityUsd: candidate.liquidityUsd,
+    endDate: candidate.endDate,
+    markPrice: candidate.markPrice,
+    spreadBps: candidate.spreadBps,
+    liquidityScore: candidate.liquidityScore,
+    estimatedSlippageBps: candidate.estimatedSlippageBps,
+    minOrderSizeUsd: candidate.minOrderSizeUsd,
+    thesisFit: candidate.thesisFit,
+    reason: candidate.reason,
+    warnings: candidate.warnings,
+    resolutionRules: candidate.resolutionRules ?? null,
   };
 }
 
@@ -712,7 +759,7 @@ export function expressionFitPromptSpec(input: {
     payload: {
       opportunityFrame: input.opportunityFrame,
       tradeExpression: assessmentTradeExpression(input.tradeExpression),
-      candidate: input.candidate,
+      candidate: assessmentMarketCandidate(input.candidate),
       side: input.side,
     },
     stage: `Tool name: assess_expression_fit
