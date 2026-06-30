@@ -60,7 +60,7 @@ const polymarketCandidate: MarketCandidate = {
 describe("venue search", () => {
   it("lets one venue return candidates when another venue fails", async () => {
     const candidates = await searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           throw new Error("Hyperliquid unavailable");
         },
@@ -115,7 +115,7 @@ describe("venue search", () => {
     };
 
     await expect(searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           return [hyperliquidCandidate];
         },
@@ -190,7 +190,7 @@ describe("venue search", () => {
     };
 
     const candidates = await searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           return [btcCandidate];
         },
@@ -275,7 +275,7 @@ describe("venue search", () => {
     });
 
     const candidates = await searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           calls.push("hyperliquid:start");
           await hyperliquidGate;
@@ -319,7 +319,7 @@ describe("venue search", () => {
     let marketSearches = 0;
     let polymarketSearches = 0;
     const candidates = await searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           marketSearches += 1;
           return [polymarketCandidate];
@@ -359,7 +359,7 @@ describe("venue search", () => {
   it("searches configured direct rails when candidate expressions need venue discovery", async () => {
     let marketSearches = 0;
     const candidates = await searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           marketSearches += 1;
           return [polymarketCandidate];
@@ -410,7 +410,7 @@ describe("venue search", () => {
   it("does not search direct venues for unsupported execution rails", async () => {
     let marketSearches = 0;
     const candidates = await searchVenues({
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           marketSearches += 1;
           return [polymarketCandidate];

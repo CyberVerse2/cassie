@@ -2,10 +2,12 @@ import type { StructuredAiClient } from "../ai/client.ts";
 import {
   MarketCandidateSchema,
   OpportunityFrameSchema,
+  OpportunityTradePlanSchema,
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
   type MarketCandidate,
   type OpportunityFrame,
+  type OpportunityTradePlan,
   type SourcePost,
   type SourceModeClassification,
   type TradeExpressionPlan,
@@ -13,6 +15,7 @@ import {
 import { isConfiguredVenueSearchableExpressionRail } from "../core/expression-rails.ts";
 import {
   opportunityFramePromptSpec,
+  opportunityTradePlanPromptSpec,
   sourceModeClassificationPromptSpec,
   singleStepTradeExpressionPromptSpec,
   structuredPromptInput,
@@ -23,12 +26,16 @@ export async function classifySourceMode(input: {
   sourcePost: SourcePost;
   userCommand: string;
 }): Promise<SourceModeClassification> {
-  return SourceModeClassificationSchema.parse(await input.ai.generateObject({
-    ...structuredPromptInput(sourceModeClassificationPromptSpec({
-      sourcePost: input.sourcePost,
-      userCommand: input.userCommand,
-    })),
-  }));
+  return SourceModeClassificationSchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        sourceModeClassificationPromptSpec({
+          sourcePost: input.sourcePost,
+          userCommand: input.userCommand,
+        }),
+      ),
+    }),
+  );
 }
 
 export async function frameOpportunity(input: {
@@ -36,12 +43,44 @@ export async function frameOpportunity(input: {
   sourcePost: SourcePost;
   userCommand: string;
 }): Promise<OpportunityFrame> {
-  return OpportunityFrameSchema.parse(await input.ai.generateObject({
-    ...structuredPromptInput(opportunityFramePromptSpec({
-      sourcePost: input.sourcePost,
-      userCommand: input.userCommand,
-    })),
-  }));
+  return OpportunityFrameSchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        opportunityFramePromptSpec({
+          sourcePost: input.sourcePost,
+          userCommand: input.userCommand,
+        }),
+      ),
+    }),
+  );
+}
+
+export async function planOpportunityAndTradeExpressions(input: {
+  ai: StructuredAiClient;
+  sourcePost: SourcePost;
+  userCommand: string;
+  marketCandidates?: MarketCandidate[];
+}): Promise<OpportunityTradePlan> {
+  const marketCandidates = input.marketCandidates
+    ? MarketCandidateSchema.array().parse(input.marketCandidates)
+    : undefined;
+
+  const plan = OpportunityTradePlanSchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        opportunityTradePlanPromptSpec({
+          sourcePost: input.sourcePost,
+          userCommand: input.userCommand,
+          marketCandidates,
+        }),
+      ),
+    }),
+  );
+
+  return {
+    ...plan,
+    tradeExpression: normalizeTradeExpressionDecision(plan.tradeExpression),
+  };
 }
 
 export async function generateTradeExpressions(input: {
@@ -55,37 +94,52 @@ export async function generateTradeExpressions(input: {
     ? MarketCandidateSchema.array().parse(input.marketCandidates)
     : undefined;
 
-  const tradeExpression = TradeExpressionPlanSchema.parse(await input.ai.generateObject({
-    ...structuredPromptInput(singleStepTradeExpressionPromptSpec({
-      sourcePost: input.sourcePost,
-      userCommand: input.userCommand,
-      opportunityFrame: input.opportunityFrame,
-      marketCandidates,
-    })),
-  }));
+  const tradeExpression = TradeExpressionPlanSchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        singleStepTradeExpressionPromptSpec({
+          sourcePost: input.sourcePost,
+          userCommand: input.userCommand,
+          opportunityFrame: input.opportunityFrame,
+          marketCandidates,
+        }),
+      ),
+    }),
+  );
 
   return normalizeTradeExpressionDecision(tradeExpression);
 }
 
-function normalizeTradeExpressionDecision(tradeExpression: TradeExpressionPlan): TradeExpressionPlan {
-  if (tradeExpression.decision !== "no_trade" || !hasSearchableExpression(tradeExpression)) {
+function normalizeTradeExpressionDecision(
+  tradeExpression: TradeExpressionPlan,
+): TradeExpressionPlan {
+  if (
+    tradeExpression.decision !== "no_trade" ||
+    !hasSearchableExpression(tradeExpression)
+  ) {
     return tradeExpression;
   }
 
   return {
     ...tradeExpression,
     decision: "needs_market_check",
-    reason: tradeExpression.reason || "Venue discovery is required before finalizing no-trade.",
-    marketRouterInstructions: tradeExpression.marketRouterInstructions
-      ?? "Search configured venues for the non-no-trade candidate expressions before finalizing no-trade.",
+    reason:
+      tradeExpression.reason ||
+      "Venue discovery is required before finalizing no-trade.",
+    marketRouterInstructions:
+      tradeExpression.marketRouterInstructions ??
+      "Search configured venues for the non-no-trade candidate expressions before finalizing no-trade.",
   };
 }
 
-function hasSearchableExpression(tradeExpression: TradeExpressionPlan): boolean {
-  return tradeExpression.candidateExpressions.some((candidate) =>
-    isConfiguredVenueSearchableExpressionRail(candidate.expressionRail)
-      && candidate.intendedSide !== "avoid"
-      && candidate.searchTerms.length > 0
-      && candidate.requiredMarketFeatures.length > 0,
+function hasSearchableExpression(
+  tradeExpression: TradeExpressionPlan,
+): boolean {
+  return tradeExpression.candidateExpressions.some(
+    (candidate) =>
+      isConfiguredVenueSearchableExpressionRail(candidate.expressionRail) &&
+      candidate.intendedSide !== "avoid" &&
+      candidate.searchTerms.length > 0 &&
+      candidate.requiredMarketFeatures.length > 0,
   );
 }

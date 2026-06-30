@@ -1,6 +1,4 @@
-import {
-  type ExecutionClient,
-} from "../execution/index.ts";
+import { type ExecutionClient } from "../execution/index.ts";
 import {
   type ControlRun,
   type SourcePost,
@@ -12,19 +10,14 @@ import {
   GraphileExecutionJobQueue,
   type CassieJobQueue,
 } from "../jobs/queue.ts";
-import {
-  executeExecutionJob,
-} from "../jobs/execution-job.ts";
+import { executeExecutionJob } from "../jobs/execution-job.ts";
 
 export class CassieProduct {
   constructor(
     private readonly store: CassieStore = new DrizzleCassieStore(),
     private readonly executionClient: ExecutionClient | null = null,
-    _legacyAccountStateProvider: unknown = undefined,
     private readonly jobQueue: CassieJobQueue = new GraphileExecutionJobQueue(),
-  ) {
-    void _legacyAccountStateProvider;
-  }
+  ) {}
 
   async upsertSettings(settings: UserSettings): Promise<UserSettings> {
     await this.store.upsertUserSettings(settings);
@@ -89,5 +82,4 @@ export class CassieProduct {
     });
     return { processed: true, job };
   }
-
 }

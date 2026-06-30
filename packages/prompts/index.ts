@@ -7,12 +7,14 @@ import {
   ExpressionRailSchema,
   MarketSelectionSchema,
   OpportunityFrameSchema,
+  OpportunityTradePlanSchema,
   SourceModeClassificationSchema,
   TradeExpressionPlanSchema,
   type ExpressionFitAssessment,
   type MarketCandidate,
   type MarketSelection,
   type OpportunityFrame,
+  type OpportunityTradePlan,
   type SourcePost,
   type SourceModeClassification,
   type Thesis,
@@ -122,9 +124,10 @@ export function renderPromptSpec(spec: CassiePromptSpec<unknown>): string {
   return [
     spec.system,
     ...spec.messages.map((message) => {
-      const content = typeof message.content === "string"
-        ? message.content
-        : JSON.stringify(message.content, null, 2);
+      const content =
+        typeof message.content === "string"
+          ? message.content
+          : JSON.stringify(message.content, null, 2);
       return `Input:\n${content}`;
     }),
   ].join("\n\n");
@@ -226,9 +229,10 @@ function marketSelectionPayload(input: {
 }
 
 function rankFocusedTradeExpression(value: unknown) {
-  const tradeExpression = value && typeof value === "object" && !Array.isArray(value)
-    ? value as Partial<TradeExpressionPlan>
-    : null;
+  const tradeExpression =
+    value && typeof value === "object" && !Array.isArray(value)
+      ? (value as Partial<TradeExpressionPlan>)
+      : null;
   if (!tradeExpression) return value ?? null;
 
   return {
@@ -238,21 +242,25 @@ function rankFocusedTradeExpression(value: unknown) {
     highestPurityExpression: tradeExpression.highestPurityExpression,
     decision: tradeExpression.decision,
     marketRouterInstructions: tradeExpression.marketRouterInstructions,
-    abstractExpressions: (tradeExpression.candidateExpressions ?? []).map((candidate) => ({
-      expressionId: candidate.expressionId,
-      expressionRail: candidate.expressionRail,
-      expressionType: candidate.expressionType,
-      intendedSide: candidate.intendedSide,
-      primaryEntityOrEvent: candidate.primaryEntityOrEvent,
-      thesis: candidate.thesis,
-      whyThisExpressesTheOpportunity: candidate.whyThisExpressesTheOpportunity,
-      directness: candidate.directness,
-      priority: candidate.priority,
-      confidence: candidate.confidence,
-      searchTerms: candidate.searchTerms,
-      requiredMarketFeatures: candidate.requiredMarketFeatures,
-      requiredRuleOrContractFeatures: candidate.requiredRuleOrContractFeatures,
-    })),
+    abstractExpressions: (tradeExpression.candidateExpressions ?? []).map(
+      (candidate) => ({
+        expressionId: candidate.expressionId,
+        expressionRail: candidate.expressionRail,
+        expressionType: candidate.expressionType,
+        intendedSide: candidate.intendedSide,
+        primaryEntityOrEvent: candidate.primaryEntityOrEvent,
+        thesis: candidate.thesis,
+        whyThisExpressesTheOpportunity:
+          candidate.whyThisExpressesTheOpportunity,
+        directness: candidate.directness,
+        priority: candidate.priority,
+        confidence: candidate.confidence,
+        searchTerms: candidate.searchTerms,
+        requiredMarketFeatures: candidate.requiredMarketFeatures,
+        requiredRuleOrContractFeatures:
+          candidate.requiredRuleOrContractFeatures,
+      }),
+    ),
   };
 }
 
@@ -527,6 +535,80 @@ Before returning, verify internally:
 - expressionFamilies include the cleanest economic expression even when unsupported direct execution means it may become no-trade later.
 - No real venue listing, ticker, contract, odds, price, or liquidity is assumed.
 - verificationNeed and reason name the missing facts that could block expression generation.`,
+  });
+}
+
+export function opportunityTradePlanPrompt(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+  marketCandidates?: MarketCandidate[];
+}): string {
+  return renderPromptSpec(opportunityTradePlanPromptSpec(input));
+}
+
+export function opportunityTradePlanPromptSpec(input: {
+  sourcePost: SourcePost;
+  userCommand: string;
+  marketCandidates?: MarketCandidate[];
+}): CassiePromptSpec<OpportunityTradePlan> {
+  return makePromptSpec({
+    name: "cassie_opportunity_trade_plan",
+    tier: "expensive",
+    outputSchema: OpportunityTradePlanSchema,
+    payload: {
+      source: sourceForPrompt(input.sourcePost),
+      userCommand: input.userCommand,
+      marketCandidates: input.marketCandidates ?? null,
+      current_datetime: new Date().toISOString(),
+      allowed_expression_rails: ALLOWED_EXPRESSION_RAILS,
+      configured_venue_capabilities: CONFIGURED_VENUE_CAPABILITIES,
+      unsupported_direct_execution_rails: UNSUPPORTED_DIRECT_EXECUTION_RAILS,
+    },
+    tools: {
+      webSearch: {
+        externalWebAccess: true,
+        searchContextSize: "low",
+      },
+    },
+    stage: `Tool name: plan_opportunity_and_trade_expressions
+Prompt version: ${PROMPT_VERSION}
+
+Purpose:
+Frame the market opportunity and produce abstract candidate trade expressions in one structured step. Do not search venues, quote markets, rank candidates, or create a ticket.
+
+Role:
+Opportunity framer and abstract expression planner. Separate the source's literal claim from the economic read-through, then produce candidateExpressions for configured venue discovery.
+
+Rules:
+- Return both opportunityFrame and tradeExpression.
+- Do not assume a real market exists.
+- Do not invent tickers, prediction markets, pre-IPO listings, prices, quotes, liquidity, probabilities, or contract rules.
+- opportunityFrame.literalClaim must stay faithful to the source; opportunityFrame.marketImplication must be the economic read-through.
+- Generate candidateExpressions first. Venue search validates real markets later.
+- Generate prediction_market candidateExpressions only when the thesis is a date-bounded yes/no event, explicit event catalyst, event outcome, or price-level contract whose resolution criteria could match the source.
+- If the source implies both a binary catalyst and continuous price impact, generate the prediction_market expression as additive to the direct asset-class expression, not a substitute.
+- For prediction_market expressions, intendedSide must be the side that would resolve true if the source claim is true. Represent uncertainty with confidence, insufficiency, noTradeCase, or shouldVerifyTruthBeforeTrading.
+- Set directAssetTradable true only when at least one direct expression can be searched on configured venues, even before a real venue listing is confirmed.
+- Do not use no_trade when a non-no_trade candidateExpression still needs venue discovery; use needs_market_check so configured venues can confirm or reject the expression.
+- Identify unsupported clean expressions, but do not mark them tradableNow or directAssetTradable unless a configured venue route is explicitly plausible.
+- Include noTradeCase only when no market for the thesis is found or no candidateExpression deserves configured venue discovery; do not use it for thesis disagreement, stale/weak source judgment, or already-priced opinions.
+- Include proxy expressions only when causal linkage is strong.
+- Set tradeExpression.decision to no_trade only when no venue search is warranted; otherwise use needs_market_check or route_to_market_router.
+
+When uncertain:
+- If the source is vague, stale, or under-specified, lower confidence and name the missing facts in opportunityFrame.reason and tradeExpression.insufficiency.
+- If the cleanest economic expression is unsupported by configured venues, identify it but explain the execution gap.
+- If venue existence is unknown for a clean expression, use needs_market_check instead of no_trade.
+
+Before returning, verify internally:
+- opportunityFrame and tradeExpression describe the same thesis and user intent.
+- candidateExpressions is the primary output for venue routing.
+- Every non-no_trade candidateExpression has searchTerms, requiredMarketFeatures, and a clear thesis.
+- prediction_market candidates include the event, intended side, deadline or resolution window, and requiredRuleOrContractFeatures.
+- decision is no_trade only when no candidateExpression deserves configured venue discovery.
+- No real venue listing, ticker, contract, odds, price, or liquidity is assumed.
+
+${PREDICTION_MARKET_ROUTING_RULES}`,
   });
 }
 

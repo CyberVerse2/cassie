@@ -8,18 +8,29 @@ import { sourcePostFromInput } from "../packages/helpers/source-post-input.ts";
 import type { SourcePost } from "../packages/core/schemas/index.ts";
 import { runCassieSupervisorForRun } from "../packages/agent/agent.ts";
 import { CassieProduct } from "../packages/app/product.ts";
-import { DrizzleCassieStore as ControlPlaneStore } from "../packages/core/db/drizzle-store.ts";
-import type { CassieStore, CassieStoreSnapshot } from "../packages/core/db/store.ts";
+import { DrizzleCassieStore } from "../packages/core/db/drizzle-store.ts";
+import type {
+  CassieStore,
+  CassieStoreSnapshot,
+} from "../packages/core/db/store.ts";
 import { enqueueTradeTicketsForRun } from "../packages/jobs/execution-job.ts";
-import { frameOpportunity, generateTradeExpressions } from "../packages/agent/tools.ts";
-import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
 import {
-  config,
-} from "../packages/core/config.ts";
+  frameOpportunity,
+  generateTradeExpressions,
+} from "../packages/agent/tools.ts";
+import { TraceRecorder, type TraceEvent } from "../packages/core/trace.ts";
+import { config } from "../packages/core/config.ts";
 import { buildVisibilityReport, formatVisibilityReport } from "./visibility.ts";
 import { formatRunTimeline } from "./timeline.ts";
 import { buildCliUserSettings } from "./cli-settings.ts";
-import { createTerminalTheme, indentWrap, normalizeStatus, statusTag, terminalTable, type TerminalTheme } from "./helpers/terminal-ui.ts";
+import {
+  createTerminalTheme,
+  indentWrap,
+  normalizeStatus,
+  statusTag,
+  terminalTable,
+  type TerminalTheme,
+} from "./helpers/terminal-ui.ts";
 
 type CliFlags = Record<string, string | boolean>;
 
@@ -151,8 +162,10 @@ async function settingsSet(args: ParsedArgs) {
 }
 
 async function run(args: ParsedArgs) {
-  const store = new ControlPlaneStore();
-  const queued = await new CassieProduct(store).createMentionRun(await mentionRequestFromArgs(args));
+  const store = new DrizzleCassieStore();
+  const queued = await new CassieProduct(store).createMentionRun(
+    await mentionRequestFromArgs(args),
+  );
   const snapshot = await store.load();
   const timeline = formatRunTimeline(snapshot, queued.runId);
   if (!args.flags.json && !args.flags["quiet-timeline"]) {
@@ -171,14 +184,14 @@ async function runSupervisor(args: ParsedArgs) {
   const runId = requiredPositional(args, 0, "runId");
   return executeRunWithTimeline({
     args,
-    store: new ControlPlaneStore(),
+    store: new DrizzleCassieStore(),
     runId,
   });
 }
 
 async function executeRunWithTimeline(input: {
   args: ParsedArgs;
-  store: ControlPlaneStore;
+  store: DrizzleCassieStore;
   runId: string;
   queued?: unknown;
 }) {
@@ -198,7 +211,8 @@ async function executeRunWithTimeline(input: {
   if (showTimeline) {
     console.error(timeline);
   }
-  if (args.flags.json) return { runId, queued, result, executionQueue, timeline };
+  if (args.flags.json)
+    return { runId, queued, result, executionQueue, timeline };
   if (args.flags.full) return { runId, queued, result, executionQueue };
   return summarizeRun(snapshot, runId);
 }
@@ -268,7 +282,11 @@ async function smokeAi(args: ParsedArgs) {
   const ai = new CassieStructuredClient(undefined, args.trace);
   const userCommand = flag(args, "command", "@Cassie should we trade this?");
   const sourcePost = await sourcePostFromFlags(args);
-  const opportunityFrame = await frameOpportunity({ ai, sourcePost, userCommand });
+  const opportunityFrame = await frameOpportunity({
+    ai,
+    sourcePost,
+    userCommand,
+  });
   const tradeExpression = await generateTradeExpressions({
     ai,
     sourcePost,
@@ -283,8 +301,16 @@ async function smokeMarket(args: ParsedArgs) {
   const asset = flag(args, "asset", "SOL").toUpperCase();
   const candidates = await new CompositeMarketDataProvider().findCandidates({
     thesis: {
-      claim: flag(args, "claim", `${asset} has a bullish catalyst that may be underpriced.`),
-      direction: flag(args, "direction", "bullish") as "bullish" | "bearish" | "neutral" | "unclear",
+      claim: flag(
+        args,
+        "claim",
+        `${asset} has a bullish catalyst that may be underpriced.`,
+      ),
+      direction: flag(args, "direction", "bullish") as
+        | "bullish"
+        | "bearish"
+        | "neutral"
+        | "unclear",
       mentionedAssets: [asset],
       topics: csvFlag(args, "topics", ["market_structure"]),
       timeHorizon: "weeks",
@@ -302,13 +328,17 @@ async function smokeMarket(args: ParsedArgs) {
 }
 
 function product() {
-  return new CassieProduct(new ControlPlaneStore());
+  return new CassieProduct(new DrizzleCassieStore());
 }
 
 async function mentionRequestFromArgs(args: ParsedArgs) {
   return {
     userId: userIdFromArgs(args),
-    userCommand: flag(args, "command", args.positionals.join(" ") || "@Cassie trade this"),
+    userCommand: flag(
+      args,
+      "command",
+      args.positionals.join(" ") || "@Cassie trade this",
+    ),
     sourcePost: await mentionSourcePostFromArgs(args),
   };
 }
@@ -319,10 +349,14 @@ function userIdFromArgs(args: ParsedArgs): string {
 
 function defaultCliUserId(): string {
   if (config.cli.userId) return config.cli.userId;
-  throw new CliError("CLI default user requires CASSIE_CLI_USER_ID. Set it or pass --user.");
+  throw new CliError(
+    "CLI default user requires CASSIE_CLI_USER_ID. Set it or pass --user.",
+  );
 }
 
-async function mentionSourcePostFromArgs(args: ParsedArgs): Promise<SourcePost> {
+async function mentionSourcePostFromArgs(
+  args: ParsedArgs,
+): Promise<SourcePost> {
   return sourcePostFromFlags(args, { useRoundRobin: true });
 }
 
@@ -343,8 +377,11 @@ function summarizeState(snapshot: CassieStoreSnapshot) {
 
 function summarizeRun(snapshot: CassieStoreSnapshot, runId: string) {
   const theme = createTerminalTheme();
-  const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
-  if (!run) return `${theme.title("CASSIE RUN")}\n${statusTag("missing", theme)} ${runId}`;
+  const run = snapshot.controlRuns.find(
+    (candidate) => candidate.runId === runId,
+  );
+  if (!run)
+    return `${theme.title("CASSIE RUN")}\n${statusTag("missing", theme)} ${runId}`;
 
   const steps = snapshot.runSteps
     .filter((step) => step.runId === runId)
@@ -356,7 +393,10 @@ function summarizeRun(snapshot: CassieStoreSnapshot, runId: string) {
       output: summarizeLiveOutput(step.output),
       error: step.error,
     }));
-  const result = run.result && typeof run.result === "object" ? run.result as Record<string, unknown> : {};
+  const result =
+    run.result && typeof run.result === "object"
+      ? (run.result as Record<string, unknown>)
+      : {};
   const actionState = stringOrNull(result.actionState) ?? "unknown";
   const responseType = stringOrNull(result.responseType) ?? "unknown";
   const ticketId = stringOrNull(result.ticketId) ?? "none";
@@ -395,7 +435,10 @@ function summarizeRun(snapshot: CassieStoreSnapshot, runId: string) {
         formatStepType(step.type),
         normalizeStatus(step.status),
         step.model ?? "none",
-        truncateTerminal(step.error ? `error: ${step.error}` : step.output ?? "done", 96),
+        truncateTerminal(
+          step.error ? `error: ${step.error}` : (step.output ?? "done"),
+          96,
+        ),
       ]),
       theme,
     }),
@@ -416,7 +459,9 @@ function formatStepType(value: string): string {
 }
 
 function truncateTerminal(value: string, maxLength: number): string {
-  return value.length > maxLength ? `${value.slice(0, Math.max(0, maxLength - 3))}...` : value;
+  return value.length > maxLength
+    ? `${value.slice(0, Math.max(0, maxLength - 3))}...`
+    : value;
 }
 
 async function sourcePostFromFlags(
@@ -436,7 +481,9 @@ async function sourcePostFromFlags(
     quotedPostText: nullableFlag(args, "quote"),
     linkedUrls: csvFlag(args, "links", []),
     mediaDescriptions: csvFlag(args, "media", []),
-    defaultPostText: options.useRoundRobin ? null : "Solana ETF approval is basically inevitable now. Market is asleep.",
+    defaultPostText: options.useRoundRobin
+      ? null
+      : "Solana ETF approval is basically inevitable now. Market is asleep.",
   });
 }
 
@@ -462,7 +509,12 @@ function parseArgs(argv: string[]): ParsedArgs {
     }
   }
 
-  return { command: rawCommand, positionals, flags, trace: new TraceRecorder() };
+  return {
+    command: rawCommand,
+    positionals,
+    flags,
+    trace: new TraceRecorder(),
+  };
 }
 
 function createCliTrace(args: ParsedArgs): TraceRecorder {
@@ -477,7 +529,9 @@ function createCliTrace(args: ParsedArgs): TraceRecorder {
 
 function printTraceEvent(event: TraceEvent) {
   if (event.status === "running") {
-    console.error(`[trace:${event.stepId}] start ${event.name} (${event.kind}${event.model ? `, ${event.model}` : ""})`);
+    console.error(
+      `[trace:${event.stepId}] start ${event.name} (${event.kind}${event.model ? `, ${event.model}` : ""})`,
+    );
     console.error(`  ${event.thinkingTrace}`);
     return;
   }
@@ -486,7 +540,9 @@ function printTraceEvent(event: TraceEvent) {
     ? ` tokens=${event.usage.totalTokens ?? "?"} in=${event.usage.inputTokens ?? "?"} out=${event.usage.outputTokens ?? "?"} reasoning=${event.usage.reasoningTokens ?? "?"}`
     : "";
   const status = event.status === "succeeded" ? "done" : "fail";
-  console.error(`[trace:${event.stepId}] ${status} ${event.name} ${event.durationMs ?? 0}ms${usage}`);
+  console.error(
+    `[trace:${event.stepId}] ${status} ${event.name} ${event.durationMs ?? 0}ms${usage}`,
+  );
   if (event.error) {
     console.error(`  error: ${event.error}`);
   }
@@ -500,7 +556,9 @@ function startLiveRunTimeline(store: CassieStore, runId: string) {
 
   console.error(theme.title("CASSIE LIVE RUN"));
   console.error(`${theme.run("[run]")} ${runId}`);
-  console.error(`|-- ${theme.dim("waiting for persisted supervisor steps...")}`);
+  console.error(
+    `|-- ${theme.dim("waiting for persisted supervisor steps...")}`,
+  );
 
   const render = async () => {
     if (pending) return;
@@ -543,16 +601,28 @@ function startLiveRunTimeline(store: CassieStore, runId: string) {
   };
 }
 
-function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: TerminalTheme) {
+function liveRunEvents(
+  snapshot: CassieStoreSnapshot,
+  runId: string,
+  theme: TerminalTheme,
+) {
   const events: Array<{ key: string; signature: string; lines: string[] }> = [];
-  const run = snapshot.controlRuns.find((candidate) => candidate.runId === runId);
+  const run = snapshot.controlRuns.find(
+    (candidate) => candidate.runId === runId,
+  );
   if (run) {
     events.push({
       key: `run:${run.runId}`,
       signature: `${run.status}:${run.updatedAt}:${run.error ?? ""}`,
       lines: [
         `${statusTag(run.status, theme)} ${theme.section(run.runId)} ${run.status}`,
-        ...(run.error ? indentWrap({ text: `${theme.fail("error")} ${run.error}`, indent: "|-- ", theme }) : []),
+        ...(run.error
+          ? indentWrap({
+              text: `${theme.fail("error")} ${run.error}`,
+              indent: "|-- ",
+              theme,
+            })
+          : []),
       ],
     });
   }
@@ -567,9 +637,25 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
       lines: [
         `|-- ${liveToolBadge(step.model, step.stepType, theme)} ${step.stepType} ${statusTag(step.status, theme)} ${liveDuration(step.startedAt, step.completedAt)}`,
         `|   |-- ${theme.label("tool")} ${step.promptName ?? step.stepType}${step.model ? ` (${step.model})` : ""}`,
-        ...indentWrap({ text: `${theme.label("thinking")} ${liveThinking(step.stepType)}`, indent: "|   |-- ", theme }),
-        ...(output ? indentWrap({ text: `${theme.label("output")} ${output}`, indent: "|   |-- ", theme }) : []),
-        ...(step.error ? indentWrap({ text: `${theme.fail("error")} ${step.error}`, indent: "|   |-- ", theme }) : []),
+        ...indentWrap({
+          text: `${theme.label("thinking")} ${liveThinking(step.stepType)}`,
+          indent: "|   |-- ",
+          theme,
+        }),
+        ...(output
+          ? indentWrap({
+              text: `${theme.label("output")} ${output}`,
+              indent: "|   |-- ",
+              theme,
+            })
+          : []),
+        ...(step.error
+          ? indentWrap({
+              text: `${theme.fail("error")} ${step.error}`,
+              indent: "|   |-- ",
+              theme,
+            })
+          : []),
       ],
     });
   }
@@ -577,7 +663,11 @@ function liveRunEvents(snapshot: CassieStoreSnapshot, runId: string, theme: Term
   return events;
 }
 
-function liveToolBadge(model: string | null, stepType: string, theme: TerminalTheme): string {
+function liveToolBadge(
+  model: string | null,
+  stepType: string,
+  theme: TerminalTheme,
+): string {
   if (model) return theme.ai("[ai]");
   if (stepType === "ticket") return theme.ticket("[ticket]");
   return "[tool]";
@@ -611,18 +701,30 @@ function liveThinking(stepType: string): string {
 function summarizeLiveOutput(output: unknown): string | null {
   if (!output || typeof output !== "object") return null;
   const record = output as Record<string, unknown>;
-  const fields = ["userIntent", "literalClaim", "opportunity", "decision", "responseType", "publicSummary"];
+  const fields = [
+    "userIntent",
+    "literalClaim",
+    "opportunity",
+    "decision",
+    "responseType",
+    "publicSummary",
+  ];
   const summary = fields
     .map((fieldName) => {
       const value = record[fieldName];
-      return typeof value === "string" ? `${fieldName}=${truncate(value, 160)}` : null;
+      return typeof value === "string"
+        ? `${fieldName}=${truncate(value, 160)}`
+        : null;
     })
     .filter((value): value is string => Boolean(value))
     .join(" ");
   return summary.length > 0 ? summary : null;
 }
 
-function liveDuration(startedAt: string | null, completedAt: string | null): string {
+function liveDuration(
+  startedAt: string | null,
+  completedAt: string | null,
+): string {
   if (!startedAt) return "unknown";
   const start = Date.parse(startedAt);
   const end = completedAt ? Date.parse(completedAt) : Date.now();
@@ -646,16 +748,27 @@ function nullableFlag(args: ParsedArgs, name: string): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function csvFlag(args: ParsedArgs, name: string, defaultValue: string[]): string[] {
+function csvFlag(
+  args: ParsedArgs,
+  name: string,
+  defaultValue: string[],
+): string[] {
   const value = args.flags[name];
   if (typeof value !== "string" || value.length === 0) {
     return defaultValue;
   }
 
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
 }
 
-function numberFlag(args: ParsedArgs, name: string, defaultValue: number): number {
+function numberFlag(
+  args: ParsedArgs,
+  name: string,
+  defaultValue: number,
+): number {
   const value = args.flags[name];
   if (typeof value !== "string") {
     return defaultValue;
@@ -669,7 +782,11 @@ function numberFlag(args: ParsedArgs, name: string, defaultValue: number): numbe
   return parsed;
 }
 
-function requiredPositional(args: ParsedArgs, index: number, name: string): string {
+function requiredPositional(
+  args: ParsedArgs,
+  index: number,
+  name: string,
+): string {
   const value = args.positionals[index];
   if (!value) {
     throw new CliError(`Missing required ${name}.`);
@@ -719,7 +836,9 @@ function printError(error: unknown) {
   }
 
   if (isConnectionRefusedError(error)) {
-    console.error("Cassie database is unavailable. Start Postgres and verify DATABASE_URL before running this command.");
+    console.error(
+      "Cassie database is unavailable. Start Postgres and verify DATABASE_URL before running this command.",
+    );
     return;
   }
 

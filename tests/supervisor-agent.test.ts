@@ -326,7 +326,7 @@ describe("AI SDK supervisor agent", () => {
       },
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -358,7 +358,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
           },
@@ -440,7 +440,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [selectedMarket.selectedMarket!];
           },
@@ -475,7 +475,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
           },
@@ -514,7 +514,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -562,7 +562,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
           },
@@ -590,7 +590,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
           },
@@ -622,7 +622,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
           },
@@ -661,7 +661,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [firstCandidate, secondCandidate];
           },
@@ -745,7 +745,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [candidate];
           },
@@ -806,7 +806,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai,
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [marketSelection.selectedMarket!];
           },
@@ -868,7 +868,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai,
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -1004,7 +1004,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai,
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -1086,7 +1086,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai,
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -1167,7 +1167,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai,
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -1238,7 +1238,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -1287,7 +1287,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },
@@ -1338,7 +1338,7 @@ describe("AI SDK supervisor agent", () => {
       userSettings: settings,
       deps: {
         ai: new FakeAi(),
-        marketData: {
+        hyperliquidMarketData: {
           async findCandidates() {
             return [];
           },

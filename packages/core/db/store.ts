@@ -70,16 +70,24 @@ export type UserDashboardDataOptions = {
   activityLimit: number;
 };
 
-export type NewRunStep = Omit<RunStep, "stepId" | "startedAt" | "completedAt"> & {
+export type NewRunStep = Omit<
+  RunStep,
+  "stepId" | "startedAt" | "completedAt"
+> & {
   completedAt?: string | null;
 };
 
 export interface CassieStore {
   load(): Promise<CassieStoreSnapshot>;
-  loadUserDashboardData(userId: string, options: UserDashboardDataOptions): Promise<UserDashboardData>;
+  loadUserDashboardData(
+    userId: string,
+    options: UserDashboardDataOptions,
+  ): Promise<UserDashboardData>;
   upsertUserSettings(settings: UserSettings): Promise<void>;
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
-  getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined>;
+  getUserSettingsByPrivyUserId(
+    privyUserId: string,
+  ): Promise<UserSettings | undefined>;
   getUserSettingsByXIdentity(input: {
     userId?: string | null;
     username?: string | null;
@@ -98,11 +106,14 @@ export interface CassieStore {
     sourcePost: SourcePost;
   }): Promise<ControlRun>;
   updateRun(run: ControlRun): Promise<ControlRun>;
+  claimRun(runId: string): Promise<ControlRun | null>;
   getRun(runId: string): Promise<ControlRun | undefined>;
   addRunStep(input: NewRunStep): Promise<RunStep>;
   updateRunStep(step: RunStep): Promise<RunStep>;
   getRunSteps(runId: string): Promise<RunStep[]>;
-  addMention(input: Omit<MentionRecord, "mentionId" | "createdAt">): Promise<MentionRecord>;
+  addMention(
+    input: Omit<MentionRecord, "mentionId" | "createdAt">,
+  ): Promise<MentionRecord>;
   addModelCallUsage(input: NewModelCallUsage): Promise<ModelCallUsageRecord>;
   addTradeTicket(ticket: TradeTicket): Promise<TradeTicket>;
   updateTradeTicket(ticket: TradeTicket): Promise<TradeTicket>;
@@ -114,18 +125,30 @@ export interface CassieStore {
   addPosition(position: Position): Promise<Position>;
   updatePosition(position: Position): Promise<Position>;
   getPosition(positionId: string): Promise<Position | undefined>;
-  getPositionByExecutionJob(executionJobId: string): Promise<Position | undefined>;
+  getPositionByExecutionJob(
+    executionJobId: string,
+  ): Promise<Position | undefined>;
   listOpenPositions(userId?: string): Promise<Position[]>;
   listUserPositions(userId: string): Promise<Position[]>;
   addPositionReview(review: PositionReview): Promise<PositionReview>;
-  getLatestPositionReview(positionId: string): Promise<PositionReview | undefined>;
+  getLatestPositionReview(
+    positionId: string,
+  ): Promise<PositionReview | undefined>;
   getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]>;
   listPositionReviews(positionId: string): Promise<PositionReview[]>;
-  recordPortfolioBalanceSnapshot(input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
-    at?: string;
-  }): Promise<PortfolioBalanceSnapshot>;
-  listPortfolioBalanceSnapshots(userId: string, limit: number): Promise<PortfolioBalanceSnapshot[]>;
-  getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance>;
+  recordPortfolioBalanceSnapshot(
+    input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
+      at?: string;
+    },
+  ): Promise<PortfolioBalanceSnapshot>;
+  listPortfolioBalanceSnapshots(
+    userId: string,
+    limit: number,
+  ): Promise<PortfolioBalanceSnapshot[]>;
+  getWalletFundingBalance(
+    userId: string,
+    walletBalanceUsd: number,
+  ): Promise<WalletFundingBalance>;
   reserveWalletSpend(input: {
     ticket: TradeTicket;
     job: ExecutionJob;
@@ -182,11 +205,20 @@ export class InMemoryCassieStore implements CassieStore {
     return structuredClone(this.snapshot);
   }
 
-  async loadUserDashboardData(userId: string, options: UserDashboardDataOptions): Promise<UserDashboardData> {
-    const positions = this.snapshot.positions.filter((position) => position.userId === userId);
+  async loadUserDashboardData(
+    userId: string,
+    options: UserDashboardDataOptions,
+  ): Promise<UserDashboardData> {
+    const positions = this.snapshot.positions.filter(
+      (position) => position.userId === userId,
+    );
     const ticketIds = new Set(positions.map((position) => position.ticketId));
-    const tickets = this.snapshot.tradeTickets.filter((ticket) => ticket.userId === userId || ticketIds.has(ticket.ticketId));
-    const executionJobIds = new Set(positions.map((position) => position.executionJobId));
+    const tickets = this.snapshot.tradeTickets.filter(
+      (ticket) => ticket.userId === userId || ticketIds.has(ticket.ticketId),
+    );
+    const executionJobIds = new Set(
+      positions.map((position) => position.executionJobId),
+    );
     const controlRuns = this.snapshot.controlRuns
       .filter((run) => run.userId === userId)
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -194,7 +226,9 @@ export class InMemoryCassieStore implements CassieStore {
     const runIds = new Set(controlRuns.map((run) => run.runId));
     return {
       tradeTickets: tickets,
-      executionJobs: this.snapshot.executionJobs.filter((job) => executionJobIds.has(job.jobId)),
+      executionJobs: this.snapshot.executionJobs.filter((job) =>
+        executionJobIds.has(job.jobId),
+      ),
       positions,
       controlRuns,
       runSteps: this.snapshot.runSteps.filter((step) => runIds.has(step.runId)),
@@ -209,11 +243,17 @@ export class InMemoryCassieStore implements CassieStore {
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
-    return this.snapshot.userSettings.find((settings) => settings.userId === userId);
+    return this.snapshot.userSettings.find(
+      (settings) => settings.userId === userId,
+    );
   }
 
-  async getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined> {
-    return this.snapshot.userSettings.find((settings) => settings.privyUserId === privyUserId);
+  async getUserSettingsByPrivyUserId(
+    privyUserId: string,
+  ): Promise<UserSettings | undefined> {
+    return this.snapshot.userSettings.find(
+      (settings) => settings.privyUserId === privyUserId,
+    );
   }
 
   async getUserSettingsByXIdentity(input: {
@@ -221,10 +261,11 @@ export class InMemoryCassieStore implements CassieStore {
     username?: string | null;
   }): Promise<UserSettings | undefined> {
     const username = normalizeXUsername(input.username);
-    return this.snapshot.userSettings.find((settings) =>
-      (input.userId && settings.x?.userId === input.userId)
-      || (username && normalizeXUsername(settings.x?.username) === username)
-      || (username && normalizeXUsername(settings.profile.handle) === username)
+    return this.snapshot.userSettings.find(
+      (settings) =>
+        (input.userId && settings.x?.userId === input.userId) ||
+        (username && normalizeXUsername(settings.x?.username) === username) ||
+        (username && normalizeXUsername(settings.profile.handle) === username),
     );
   }
 
@@ -244,7 +285,8 @@ export class InMemoryCassieStore implements CassieStore {
       walletAddress: input.walletAddress,
       profile: input.profile,
       x: input.x ?? existing?.x ?? null,
-      defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+      defaultTradeSizeUsd:
+        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
       telegram: existing?.telegram ?? null,
     };
     await this.upsertUserSettings(settings);
@@ -277,6 +319,21 @@ export class InMemoryCassieStore implements CassieStore {
     return run;
   }
 
+  async claimRun(runId: string): Promise<ControlRun | null> {
+    const run = this.snapshot.controlRuns.find(
+      (candidate) => candidate.runId === runId,
+    );
+    if (!run || run.status !== "queued") return null;
+    const claimed: ControlRun = {
+      ...run,
+      status: "running",
+      error: null,
+      updatedAt: new Date().toISOString(),
+    };
+    await this.updateRun(claimed);
+    return claimed;
+  }
+
   async getRun(runId: string): Promise<ControlRun | undefined> {
     return this.snapshot.controlRuns.find((run) => run.runId === runId);
   }
@@ -304,7 +361,9 @@ export class InMemoryCassieStore implements CassieStore {
     return this.snapshot.runSteps.filter((step) => step.runId === runId);
   }
 
-  async addMention(input: Omit<MentionRecord, "mentionId" | "createdAt">): Promise<MentionRecord> {
+  async addMention(
+    input: Omit<MentionRecord, "mentionId" | "createdAt">,
+  ): Promise<MentionRecord> {
     const mention: MentionRecord = {
       ...input,
       mentionId: randomUUID(),
@@ -321,7 +380,9 @@ export class InMemoryCassieStore implements CassieStore {
     return mention;
   }
 
-  async addModelCallUsage(input: NewModelCallUsage): Promise<ModelCallUsageRecord> {
+  async addModelCallUsage(
+    input: NewModelCallUsage,
+  ): Promise<ModelCallUsageRecord> {
     const record: ModelCallUsageRecord = {
       ...input,
       id: randomUUID(),
@@ -352,12 +413,16 @@ export class InMemoryCassieStore implements CassieStore {
   }
 
   async getTradeTicket(ticketId: string): Promise<TradeTicket | undefined> {
-    return this.snapshot.tradeTickets.find((ticket) => ticket.ticketId === ticketId);
+    return this.snapshot.tradeTickets.find(
+      (ticket) => ticket.ticketId === ticketId,
+    );
   }
 
   async getTradeTickets(ticketIds: string[]): Promise<TradeTicket[]> {
     const ids = new Set(ticketIds);
-    return this.snapshot.tradeTickets.filter((ticket) => ids.has(ticket.ticketId));
+    return this.snapshot.tradeTickets.filter((ticket) =>
+      ids.has(ticket.ticketId),
+    );
   }
 
   async addExecutionJob(job: ExecutionJob): Promise<ExecutionJob> {
@@ -373,8 +438,8 @@ export class InMemoryCassieStore implements CassieStore {
   }
 
   async updateExecutionJob(job: ExecutionJob): Promise<ExecutionJob> {
-    this.snapshot.executionJobs = this.snapshot.executionJobs.map((candidate) =>
-      candidate.jobId === job.jobId ? job : candidate,
+    this.snapshot.executionJobs = this.snapshot.executionJobs.map(
+      (candidate) => (candidate.jobId === job.jobId ? job : candidate),
     );
     return job;
   }
@@ -403,21 +468,30 @@ export class InMemoryCassieStore implements CassieStore {
   }
 
   async getPosition(positionId: string): Promise<Position | undefined> {
-    return this.snapshot.positions.find((position) => position.positionId === positionId);
+    return this.snapshot.positions.find(
+      (position) => position.positionId === positionId,
+    );
   }
 
-  async getPositionByExecutionJob(executionJobId: string): Promise<Position | undefined> {
-    return this.snapshot.positions.find((position) => position.executionJobId === executionJobId);
+  async getPositionByExecutionJob(
+    executionJobId: string,
+  ): Promise<Position | undefined> {
+    return this.snapshot.positions.find(
+      (position) => position.executionJobId === executionJobId,
+    );
   }
 
   async listOpenPositions(userId?: string): Promise<Position[]> {
-    return this.snapshot.positions.filter((position) =>
-      position.status === "open" && (!userId || position.userId === userId)
+    return this.snapshot.positions.filter(
+      (position) =>
+        position.status === "open" && (!userId || position.userId === userId),
     );
   }
 
   async listUserPositions(userId: string): Promise<Position[]> {
-    return this.snapshot.positions.filter((position) => position.userId === userId);
+    return this.snapshot.positions.filter(
+      (position) => position.userId === userId,
+    );
   }
 
   async addPositionReview(review: PositionReview): Promise<PositionReview> {
@@ -425,13 +499,19 @@ export class InMemoryCassieStore implements CassieStore {
     return review;
   }
 
-  async getLatestPositionReview(positionId: string): Promise<PositionReview | undefined> {
+  async getLatestPositionReview(
+    positionId: string,
+  ): Promise<PositionReview | undefined> {
     return this.snapshot.positionReviews
       .filter((review) => review.positionId === positionId)
-      .sort((left, right) => right.reviewedAt.localeCompare(left.reviewedAt))[0];
+      .sort((left, right) =>
+        right.reviewedAt.localeCompare(left.reviewedAt),
+      )[0];
   }
 
-  async getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]> {
+  async getLatestPositionReviews(
+    positionIds: string[],
+  ): Promise<PositionReview[]> {
     const ids = new Set(positionIds);
     const latest = new Map<string, PositionReview>();
     for (const review of this.snapshot.positionReviews) {
@@ -450,9 +530,11 @@ export class InMemoryCassieStore implements CassieStore {
       .sort((left, right) => left.reviewedAt.localeCompare(right.reviewedAt));
   }
 
-  async recordPortfolioBalanceSnapshot(input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
-    at?: string;
-  }): Promise<PortfolioBalanceSnapshot> {
+  async recordPortfolioBalanceSnapshot(
+    input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
+      at?: string;
+    },
+  ): Promise<PortfolioBalanceSnapshot> {
     const latest = this.snapshot.portfolioBalanceSnapshots
       .filter((snapshot) => snapshot.userId === input.userId)
       .at(-1);
@@ -470,7 +552,10 @@ export class InMemoryCassieStore implements CassieStore {
     return snapshot;
   }
 
-  async listPortfolioBalanceSnapshots(userId: string, limit: number): Promise<PortfolioBalanceSnapshot[]> {
+  async listPortfolioBalanceSnapshots(
+    userId: string,
+    limit: number,
+  ): Promise<PortfolioBalanceSnapshot[]> {
     return this.snapshot.portfolioBalanceSnapshots
       .filter((snapshot) => snapshot.userId === userId)
       .sort((left, right) => right.at.localeCompare(left.at))
@@ -478,7 +563,10 @@ export class InMemoryCassieStore implements CassieStore {
       .sort((left, right) => left.at.localeCompare(right.at));
   }
 
-  async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
+  async getWalletFundingBalance(
+    userId: string,
+    walletBalanceUsd: number,
+  ): Promise<WalletFundingBalance> {
     return walletFundingBalance({
       userId,
       walletBalanceUsdCents: nonnegativeUsdToCents(walletBalanceUsd),
@@ -494,7 +582,10 @@ export class InMemoryCassieStore implements CassieStore {
   }): Promise<WalletFundingBalance> {
     const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     if (this.hasWalletSpendEntry("trade_reserve", input.job.jobId)) {
-      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      return this.getWalletFundingBalance(
+        input.ticket.userId,
+        input.walletBalanceUsd,
+      );
     }
 
     const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
@@ -503,15 +594,21 @@ export class InMemoryCassieStore implements CassieStore {
       throw new Error("Insufficient user wallet balance.");
     }
 
-    this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
-      userId: input.ticket.userId,
-      type: "trade_reserve",
-      amountUsd: centsToUsd(ticketSizeCents),
-      ticketId: input.ticket.ticketId,
-      executionJobId: input.job.jobId,
-      metadata: { venue: input.ticket.venue, instrument: input.ticket.instrument, side: input.ticket.side },
-      createdAt: new Date().toISOString(),
-    }));
+    this.snapshot.walletSpendLedgerEntries.push(
+      walletSpendLedgerEntry({
+        userId: input.ticket.userId,
+        type: "trade_reserve",
+        amountUsd: centsToUsd(ticketSizeCents),
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: {
+          venue: input.ticket.venue,
+          instrument: input.ticket.instrument,
+          side: input.ticket.side,
+        },
+        createdAt: new Date().toISOString(),
+      }),
+    );
     return walletFundingBalance({
       userId: input.ticket.userId,
       walletBalanceUsdCents,
@@ -529,7 +626,10 @@ export class InMemoryCassieStore implements CassieStore {
   }): Promise<WalletFundingBalance> {
     const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     if (this.hasWalletSpendEntry("trade_release", input.job.jobId)) {
-      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      return this.getWalletFundingBalance(
+        input.ticket.userId,
+        input.walletBalanceUsd,
+      );
     }
 
     const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
@@ -538,15 +638,17 @@ export class InMemoryCassieStore implements CassieStore {
       throw new Error("Cannot release a missing trade reservation.");
     }
 
-    this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
-      userId: input.ticket.userId,
-      type: "trade_release",
-      amountUsd: centsToUsd(ticketSizeCents),
-      ticketId: input.ticket.ticketId,
-      executionJobId: input.job.jobId,
-      metadata: input.metadata ?? { reason: input.reason },
-      createdAt: new Date().toISOString(),
-    }));
+    this.snapshot.walletSpendLedgerEntries.push(
+      walletSpendLedgerEntry({
+        userId: input.ticket.userId,
+        type: "trade_release",
+        amountUsd: centsToUsd(ticketSizeCents),
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: input.metadata ?? { reason: input.reason },
+        createdAt: new Date().toISOString(),
+      }),
+    );
     return walletFundingBalance({
       userId: input.ticket.userId,
       walletBalanceUsdCents,
@@ -564,19 +666,27 @@ export class InMemoryCassieStore implements CassieStore {
   }): Promise<WalletFundingBalance> {
     const prefundCents = positiveUsdToCents(input.amountUsd);
     if (this.hasWalletSpendEntry("trade_prefund", input.job.jobId)) {
-      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      return this.getWalletFundingBalance(
+        input.ticket.userId,
+        input.walletBalanceUsd,
+      );
     }
 
-    this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
-      userId: input.ticket.userId,
-      type: "trade_prefund",
-      amountUsd: centsToUsd(prefundCents),
-      ticketId: input.ticket.ticketId,
-      executionJobId: input.job.jobId,
-      metadata: input.metadata,
-      createdAt: new Date().toISOString(),
-    }));
-    return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+    this.snapshot.walletSpendLedgerEntries.push(
+      walletSpendLedgerEntry({
+        userId: input.ticket.userId,
+        type: "trade_prefund",
+        amountUsd: centsToUsd(prefundCents),
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        metadata: input.metadata,
+        createdAt: new Date().toISOString(),
+      }),
+    );
+    return this.getWalletFundingBalance(
+      input.ticket.userId,
+      input.walletBalanceUsd,
+    );
   }
 
   async settleWalletSpend(input: {
@@ -588,10 +698,16 @@ export class InMemoryCassieStore implements CassieStore {
   }): Promise<WalletFundingBalance> {
     const ticketSizeCents = positiveUsdToCents(input.ticket.sizeUsd);
     if (this.hasWalletSpendEntry("trade_spend", input.job.jobId)) {
-      return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+      return this.getWalletFundingBalance(
+        input.ticket.userId,
+        input.walletBalanceUsd,
+      );
     }
 
-    const filledSizeCents = normalizedFilledSizeCents(input.ticket, input.executionResult);
+    const filledSizeCents = normalizedFilledSizeCents(
+      input.ticket,
+      input.executionResult,
+    );
     const releaseCents = ticketSizeCents - filledSizeCents;
     const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
     const reservedUsdCents = this.openReservedUsdCents(input.ticket.userId);
@@ -600,25 +716,31 @@ export class InMemoryCassieStore implements CassieStore {
     }
 
     const now = new Date().toISOString();
-    this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
-      userId: input.ticket.userId,
-      type: "trade_spend",
-      amountUsd: centsToUsd(filledSizeCents),
-      ticketId: input.ticket.ticketId,
-      executionJobId: input.job.jobId,
-      metadata: input.executionResult,
-      createdAt: now,
-    }));
-    if (releaseCents > 0) {
-      this.snapshot.walletSpendLedgerEntries.push(walletSpendLedgerEntry({
+    this.snapshot.walletSpendLedgerEntries.push(
+      walletSpendLedgerEntry({
         userId: input.ticket.userId,
-        type: "trade_release",
-        amountUsd: centsToUsd(releaseCents),
+        type: "trade_spend",
+        amountUsd: centsToUsd(filledSizeCents),
         ticketId: input.ticket.ticketId,
         executionJobId: input.job.jobId,
-        metadata: input.releaseMetadata ?? { reason: "unfilled_order_amount" },
+        metadata: input.executionResult,
         createdAt: now,
-      }));
+      }),
+    );
+    if (releaseCents > 0) {
+      this.snapshot.walletSpendLedgerEntries.push(
+        walletSpendLedgerEntry({
+          userId: input.ticket.userId,
+          type: "trade_release",
+          amountUsd: centsToUsd(releaseCents),
+          ticketId: input.ticket.ticketId,
+          executionJobId: input.job.jobId,
+          metadata: input.releaseMetadata ?? {
+            reason: "unfilled_order_amount",
+          },
+          createdAt: now,
+        }),
+      );
     }
     return walletFundingBalance({
       userId: input.ticket.userId,
@@ -628,11 +750,16 @@ export class InMemoryCassieStore implements CassieStore {
     });
   }
 
-  async listTradeTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
-    const existingExecutionTicketIds = new Set(this.snapshot.executionJobs.map((job) => job.ticketId));
-    return this.snapshot.tradeTickets.filter((ticket) =>
-      ticket.runId === runId &&
-      !existingExecutionTicketIds.has(ticket.ticketId)
+  async listTradeTicketsWithoutExecutionJob(
+    runId: string,
+  ): Promise<TradeTicket[]> {
+    const existingExecutionTicketIds = new Set(
+      this.snapshot.executionJobs.map((job) => job.ticketId),
+    );
+    return this.snapshot.tradeTickets.filter(
+      (ticket) =>
+        ticket.runId === runId &&
+        !existingExecutionTicketIds.has(ticket.ticketId),
     );
   }
 
@@ -648,7 +775,9 @@ export class InMemoryCassieStore implements CassieStore {
     this.runtimeState.set(key, value);
   }
 
-  async audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent> {
+  async audit(
+    input: Omit<AuditEvent, "eventId" | "createdAt">,
+  ): Promise<AuditEvent> {
     const event: AuditEvent = {
       ...input,
       eventId: randomUUID(),
@@ -658,16 +787,20 @@ export class InMemoryCassieStore implements CassieStore {
     return event;
   }
 
-  private hasWalletSpendEntry(type: WalletSpendLedgerEntry["type"], executionJobId: string): boolean {
-    return this.snapshot.walletSpendLedgerEntries.some((entry) =>
-      entry.type === type && entry.executionJobId === executionJobId
+  private hasWalletSpendEntry(
+    type: WalletSpendLedgerEntry["type"],
+    executionJobId: string,
+  ): boolean {
+    return this.snapshot.walletSpendLedgerEntries.some(
+      (entry) => entry.type === type && entry.executionJobId === executionJobId,
     );
   }
 
   private openReservedUsdCents(userId: string): number {
     return this.snapshot.walletSpendLedgerEntries.reduce((total, entry) => {
       if (entry.userId !== userId) return total;
-      if (entry.type === "trade_reserve") return total + nonnegativeUsdToCents(entry.amountUsd);
+      if (entry.type === "trade_reserve")
+        return total + nonnegativeUsdToCents(entry.amountUsd);
       if (entry.type === "trade_release" || entry.type === "trade_spend") {
         return total - nonnegativeUsdToCents(entry.amountUsd);
       }
@@ -716,15 +849,26 @@ function roundUsd(amountUsd: number): number {
 }
 
 function samePortfolioBalanceSnapshot(
-  left: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
-  right: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
+  left: Pick<
+    PortfolioBalanceSnapshot,
+    "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd"
+  >,
+  right: Pick<
+    PortfolioBalanceSnapshot,
+    "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd"
+  >,
 ): boolean {
-  return usdToCents(left.valueUsd) === usdToCents(right.valueUsd)
-    && usdToCents(left.walletBalanceUsd) === usdToCents(right.walletBalanceUsd)
-    && usdToCents(left.unrealizedPnlUsd) === usdToCents(right.unrealizedPnlUsd);
+  return (
+    usdToCents(left.valueUsd) === usdToCents(right.valueUsd) &&
+    usdToCents(left.walletBalanceUsd) === usdToCents(right.walletBalanceUsd) &&
+    usdToCents(left.unrealizedPnlUsd) === usdToCents(right.unrealizedPnlUsd)
+  );
 }
 
-function monotonicSnapshotAt(at: string, previousAt: string | undefined): string {
+function monotonicSnapshotAt(
+  at: string,
+  previousAt: string | undefined,
+): string {
   if (!previousAt || at > previousAt) return at;
   return new Date(Date.parse(previousAt) + 1).toISOString();
 }
@@ -733,12 +877,19 @@ function normalizedFilledSizeCents(
   ticket: TradeTicket,
   executionResult: NonNullable<ExecutionJob["executionResult"]>,
 ): number {
-  if (!Number.isFinite(executionResult.filledSizeUsd) || executionResult.filledSizeUsd < 0) {
+  if (
+    !Number.isFinite(executionResult.filledSizeUsd) ||
+    executionResult.filledSizeUsd < 0
+  ) {
     throw new Error("Execution result filledSizeUsd must be nonnegative.");
   }
-  const filledSizeCents = usdToCents(executionResult.collateralUsedUsd ?? executionResult.filledSizeUsd);
+  const filledSizeCents = usdToCents(
+    executionResult.collateralUsedUsd ?? executionResult.filledSizeUsd,
+  );
   if (filledSizeCents > positiveUsdToCents(ticket.sizeUsd)) {
-    throw new Error("Execution result used more collateral than the reserved ticket size.");
+    throw new Error(
+      "Execution result used more collateral than the reserved ticket size.",
+    );
   }
   return filledSizeCents;
 }
@@ -749,7 +900,8 @@ function walletFundingBalance(input: {
   reservedUsdCents: number;
   updatedAt: string;
 }): WalletFundingBalance {
-  const spendableUsdCents = input.walletBalanceUsdCents - input.reservedUsdCents;
+  const spendableUsdCents =
+    input.walletBalanceUsdCents - input.reservedUsdCents;
   return {
     userId: input.userId,
     walletBalanceUsd: centsToUsd(input.walletBalanceUsdCents),
@@ -759,7 +911,9 @@ function walletFundingBalance(input: {
   };
 }
 
-function walletSpendLedgerEntry(input: Omit<WalletSpendLedgerEntry, "entryId">): WalletSpendLedgerEntry {
+function walletSpendLedgerEntry(
+  input: Omit<WalletSpendLedgerEntry, "entryId">,
+): WalletSpendLedgerEntry {
   return {
     ...input,
     entryId: randomUUID(),

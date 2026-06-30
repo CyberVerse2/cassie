@@ -79,7 +79,9 @@ export class DrizzleCassieStore implements CassieStore {
       executionJobs: jobRows.map((row) => row.job),
       positions: positionRows.map((row) => row.position),
       positionReviews: reviewRows.map((row) => row.review),
-      portfolioBalanceSnapshots: portfolioBalanceRows.map((row) => row.snapshot),
+      portfolioBalanceSnapshots: portfolioBalanceRows.map(
+        (row) => row.snapshot,
+      ),
       walletSpendLedgerEntries: walletSpendLedgerRows.map((row) => ({
         entryId: row.entryId,
         userId: row.userId,
@@ -122,12 +124,11 @@ export class DrizzleCassieStore implements CassieStore {
     };
   }
 
-  async loadUserDashboardData(userId: string, options: UserDashboardDataOptions): Promise<UserDashboardData> {
-    const [
-      positionRows,
-      ticketRows,
-      controlRunRows,
-    ] = await Promise.all([
+  async loadUserDashboardData(
+    userId: string,
+    options: UserDashboardDataOptions,
+  ): Promise<UserDashboardData> {
+    const [positionRows, ticketRows, controlRunRows] = await Promise.all([
       this.db
         .select()
         .from(positions)
@@ -145,24 +146,23 @@ export class DrizzleCassieStore implements CassieStore {
         .limit(options.activityLimit),
     ]);
     const userPositions = positionRows.map((row) => row.position);
-    const executionJobIds = [...new Set(userPositions.map((position) => position.executionJobId))];
+    const executionJobIds = [
+      ...new Set(userPositions.map((position) => position.executionJobId)),
+    ];
     const runIds = controlRunRows.map((row) => row.runId);
-    const [
-      jobRows,
-      stepRows,
-    ] = await Promise.all([
+    const [jobRows, stepRows] = await Promise.all([
       executionJobIds.length === 0
         ? Promise.resolve([])
         : this.db
-          .select()
-          .from(executionJobs)
-          .where(inArray(executionJobs.jobId, executionJobIds)),
+            .select()
+            .from(executionJobs)
+            .where(inArray(executionJobs.jobId, executionJobIds)),
       runIds.length === 0
         ? Promise.resolve([])
         : this.db
-          .select()
-          .from(runSteps)
-          .where(inArray(runSteps.runId, runIds)),
+            .select()
+            .from(runSteps)
+            .where(inArray(runSteps.runId, runIds)),
     ]);
 
     return {
@@ -215,7 +215,9 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.settings;
   }
 
-  async getUserSettingsByPrivyUserId(privyUserId: string): Promise<UserSettings | undefined> {
+  async getUserSettingsByPrivyUserId(
+    privyUserId: string,
+  ): Promise<UserSettings | undefined> {
     const rows = await this.db
       .select()
       .from(userSettings)
@@ -233,10 +235,12 @@ export class DrizzleCassieStore implements CassieStore {
     const rows = await this.db.select().from(userSettings);
     return rows
       .map((row) => row.settings)
-      .find((settings) =>
-        (input.userId && settings.x?.userId === input.userId)
-        || (username && normalizeXUsername(settings.x?.username) === username)
-        || (username && normalizeXUsername(settings.profile.handle) === username)
+      .find(
+        (settings) =>
+          (input.userId && settings.x?.userId === input.userId) ||
+          (username && normalizeXUsername(settings.x?.username) === username) ||
+          (username &&
+            normalizeXUsername(settings.profile.handle) === username),
       );
   }
 
@@ -256,7 +260,8 @@ export class DrizzleCassieStore implements CassieStore {
       walletAddress: input.walletAddress,
       profile: input.profile,
       x: input.x ?? existing?.x ?? null,
-      defaultTradeSizeUsd: input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+      defaultTradeSizeUsd:
+        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
       telegram: existing?.telegram ?? null,
     };
     await this.upsertUserSettings(settings);
@@ -297,6 +302,24 @@ export class DrizzleCassieStore implements CassieStore {
       .where(eq(controlRuns.runId, run.runId));
 
     return run;
+  }
+
+  async claimRun(runId: string): Promise<ControlRun | null> {
+    const now = new Date().toISOString();
+    const rows = await this.db
+      .update(controlRuns)
+      .set({
+        status: "running",
+        error: null,
+        updatedAt: now,
+      })
+      .where(
+        and(eq(controlRuns.runId, runId), eq(controlRuns.status, "queued")),
+      )
+      .returning();
+
+    const row = rows[0];
+    return row ? { ...row, result: row.result ?? null } : null;
   }
 
   async getRun(runId: string): Promise<ControlRun | undefined> {
@@ -356,7 +379,9 @@ export class DrizzleCassieStore implements CassieStore {
     }));
   }
 
-  async addMention(input: Omit<MentionRecord, "mentionId" | "createdAt">): Promise<MentionRecord> {
+  async addMention(
+    input: Omit<MentionRecord, "mentionId" | "createdAt">,
+  ): Promise<MentionRecord> {
     const mention: MentionRecord = {
       ...input,
       mentionId: randomUUID(),
@@ -527,7 +552,9 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.position;
   }
 
-  async getPositionByExecutionJob(executionJobId: string): Promise<Position | undefined> {
+  async getPositionByExecutionJob(
+    executionJobId: string,
+  ): Promise<Position | undefined> {
     const rows = await this.db
       .select()
       .from(positions)
@@ -538,14 +565,14 @@ export class DrizzleCassieStore implements CassieStore {
   }
 
   async listOpenPositions(userId?: string): Promise<Position[]> {
-    const query = this.db
-      .select()
-      .from(positions)
-      .$dynamic();
-    const rows = await (userId
-      ? query.where(and(eq(positions.status, "open"), eq(positions.userId, userId)))
-      : query.where(eq(positions.status, "open")))
-      .orderBy(asc(positions.openedAt));
+    const query = this.db.select().from(positions).$dynamic();
+    const rows = await (
+      userId
+        ? query.where(
+            and(eq(positions.status, "open"), eq(positions.userId, userId)),
+          )
+        : query.where(eq(positions.status, "open"))
+    ).orderBy(asc(positions.openedAt));
 
     return rows.map((row) => row.position);
   }
@@ -572,7 +599,9 @@ export class DrizzleCassieStore implements CassieStore {
     return review;
   }
 
-  async getLatestPositionReview(positionId: string): Promise<PositionReview | undefined> {
+  async getLatestPositionReview(
+    positionId: string,
+  ): Promise<PositionReview | undefined> {
     const rows = await this.db
       .select()
       .from(positionReviews)
@@ -583,7 +612,9 @@ export class DrizzleCassieStore implements CassieStore {
     return rows[0]?.review;
   }
 
-  async getLatestPositionReviews(positionIds: string[]): Promise<PositionReview[]> {
+  async getLatestPositionReviews(
+    positionIds: string[],
+  ): Promise<PositionReview[]> {
     const uniqueIds = [...new Set(positionIds)];
     if (uniqueIds.length === 0) return [];
     const rows = await this.db
@@ -610,9 +641,11 @@ export class DrizzleCassieStore implements CassieStore {
     return rows.map((row) => row.review);
   }
 
-  async recordPortfolioBalanceSnapshot(input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
-    at?: string;
-  }): Promise<PortfolioBalanceSnapshot> {
+  async recordPortfolioBalanceSnapshot(
+    input: Omit<PortfolioBalanceSnapshot, "snapshotId" | "at"> & {
+      at?: string;
+    },
+  ): Promise<PortfolioBalanceSnapshot> {
     const latest = await this.db
       .select()
       .from(portfolioBalanceSnapshots)
@@ -639,7 +672,10 @@ export class DrizzleCassieStore implements CassieStore {
     return snapshot;
   }
 
-  async listPortfolioBalanceSnapshots(userId: string, limit: number): Promise<PortfolioBalanceSnapshot[]> {
+  async listPortfolioBalanceSnapshots(
+    userId: string,
+    limit: number,
+  ): Promise<PortfolioBalanceSnapshot[]> {
     const rows = await this.db
       .select()
       .from(portfolioBalanceSnapshots)
@@ -647,10 +683,15 @@ export class DrizzleCassieStore implements CassieStore {
       .orderBy(desc(portfolioBalanceSnapshots.at))
       .limit(limit);
 
-    return rows.map((row) => row.snapshot).sort((left, right) => left.at.localeCompare(right.at));
+    return rows
+      .map((row) => row.snapshot)
+      .sort((left, right) => left.at.localeCompare(right.at));
   }
 
-  async getWalletFundingBalance(userId: string, walletBalanceUsd: number): Promise<WalletFundingBalance> {
+  async getWalletFundingBalance(
+    userId: string,
+    walletBalanceUsd: number,
+  ): Promise<WalletFundingBalance> {
     return walletFundingBalance({
       userId,
       walletBalanceUsdCents: nonnegativeUsdToCents(walletBalanceUsd),
@@ -670,35 +711,51 @@ export class DrizzleCassieStore implements CassieStore {
       const existingReserve = await tx
         .select()
         .from(walletSpendLedgerEntries)
-        .where(and(
-          eq(walletSpendLedgerEntries.type, "trade_reserve"),
-          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
-        ))
+        .where(
+          and(
+            eq(walletSpendLedgerEntries.type, "trade_reserve"),
+            eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
+          ),
+        )
         .limit(1);
       if (existingReserve[0]) {
         return walletFundingBalance({
           userId: input.ticket.userId,
           walletBalanceUsdCents: nonnegativeUsdToCents(input.walletBalanceUsd),
-          reservedUsdCents: await this.openReservedUsdCents(input.ticket.userId, tx),
+          reservedUsdCents: await this.openReservedUsdCents(
+            input.ticket.userId,
+            tx,
+          ),
           updatedAt: new Date().toISOString(),
         });
       }
 
-      const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
-      const reservedUsdCents = await this.openReservedUsdCents(input.ticket.userId, tx);
+      const walletBalanceUsdCents = nonnegativeUsdToCents(
+        input.walletBalanceUsd,
+      );
+      const reservedUsdCents = await this.openReservedUsdCents(
+        input.ticket.userId,
+        tx,
+      );
       if (walletBalanceUsdCents - reservedUsdCents < ticketSizeCents) {
         throw new Error("Insufficient user wallet balance.");
       }
 
-      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
-        userId: input.ticket.userId,
-        type: "trade_reserve",
-        amountUsdCents: ticketSizeCents,
-        ticketId: input.ticket.ticketId,
-        executionJobId: input.job.jobId,
-        metadata: { venue: input.ticket.venue, instrument: input.ticket.instrument, side: input.ticket.side },
-        createdAt: new Date().toISOString(),
-      }));
+      await tx.insert(walletSpendLedgerEntries).values(
+        walletSpendLedgerEntry({
+          userId: input.ticket.userId,
+          type: "trade_reserve",
+          amountUsdCents: ticketSizeCents,
+          ticketId: input.ticket.ticketId,
+          executionJobId: input.job.jobId,
+          metadata: {
+            venue: input.ticket.venue,
+            instrument: input.ticket.instrument,
+            side: input.ticket.side,
+          },
+          createdAt: new Date().toISOString(),
+        }),
+      );
       return walletFundingBalance({
         userId: input.ticket.userId,
         walletBalanceUsdCents,
@@ -721,30 +778,42 @@ export class DrizzleCassieStore implements CassieStore {
       const existingRelease = await tx
         .select()
         .from(walletSpendLedgerEntries)
-        .where(and(
-          eq(walletSpendLedgerEntries.type, "trade_release"),
-          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
-        ))
+        .where(
+          and(
+            eq(walletSpendLedgerEntries.type, "trade_release"),
+            eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
+          ),
+        )
         .limit(1);
       if (existingRelease[0]) {
-        return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+        return this.getWalletFundingBalance(
+          input.ticket.userId,
+          input.walletBalanceUsd,
+        );
       }
 
-      const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
-      const reservedUsdCents = await this.openReservedUsdCents(input.ticket.userId, tx);
+      const walletBalanceUsdCents = nonnegativeUsdToCents(
+        input.walletBalanceUsd,
+      );
+      const reservedUsdCents = await this.openReservedUsdCents(
+        input.ticket.userId,
+        tx,
+      );
       if (reservedUsdCents < ticketSizeCents) {
         throw new Error("Cannot release a missing trade reservation.");
       }
 
-      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
-        userId: input.ticket.userId,
-        type: "trade_release",
-        amountUsdCents: ticketSizeCents,
-        ticketId: input.ticket.ticketId,
-        executionJobId: input.job.jobId,
-        metadata: input.metadata ?? { reason: input.reason },
-        createdAt: new Date().toISOString(),
-      }));
+      await tx.insert(walletSpendLedgerEntries).values(
+        walletSpendLedgerEntry({
+          userId: input.ticket.userId,
+          type: "trade_release",
+          amountUsdCents: ticketSizeCents,
+          ticketId: input.ticket.ticketId,
+          executionJobId: input.job.jobId,
+          metadata: input.metadata ?? { reason: input.reason },
+          createdAt: new Date().toISOString(),
+        }),
+      );
       return walletFundingBalance({
         userId: input.ticket.userId,
         walletBalanceUsdCents,
@@ -767,33 +836,43 @@ export class DrizzleCassieStore implements CassieStore {
       const existingPrefund = await tx
         .select()
         .from(walletSpendLedgerEntries)
-        .where(and(
-          eq(walletSpendLedgerEntries.type, "trade_prefund"),
-          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
-        ))
+        .where(
+          and(
+            eq(walletSpendLedgerEntries.type, "trade_prefund"),
+            eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
+          ),
+        )
         .limit(1);
       if (existingPrefund[0]) {
         return walletFundingBalance({
           userId: input.ticket.userId,
           walletBalanceUsdCents: nonnegativeUsdToCents(input.walletBalanceUsd),
-          reservedUsdCents: await this.openReservedUsdCents(input.ticket.userId, tx),
+          reservedUsdCents: await this.openReservedUsdCents(
+            input.ticket.userId,
+            tx,
+          ),
           updatedAt: new Date().toISOString(),
         });
       }
 
-      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
-        userId: input.ticket.userId,
-        type: "trade_prefund",
-        amountUsdCents: prefundCents,
-        ticketId: input.ticket.ticketId,
-        executionJobId: input.job.jobId,
-        metadata: input.metadata,
-        createdAt: new Date().toISOString(),
-      }));
+      await tx.insert(walletSpendLedgerEntries).values(
+        walletSpendLedgerEntry({
+          userId: input.ticket.userId,
+          type: "trade_prefund",
+          amountUsdCents: prefundCents,
+          ticketId: input.ticket.ticketId,
+          executionJobId: input.job.jobId,
+          metadata: input.metadata,
+          createdAt: new Date().toISOString(),
+        }),
+      );
       return walletFundingBalance({
         userId: input.ticket.userId,
         walletBalanceUsdCents: nonnegativeUsdToCents(input.walletBalanceUsd),
-        reservedUsdCents: await this.openReservedUsdCents(input.ticket.userId, tx),
+        reservedUsdCents: await this.openReservedUsdCents(
+          input.ticket.userId,
+          tx,
+        ),
         updatedAt: new Date().toISOString(),
       });
     });
@@ -812,44 +891,63 @@ export class DrizzleCassieStore implements CassieStore {
       const existingSettlement = await tx
         .select()
         .from(walletSpendLedgerEntries)
-        .where(and(
-          eq(walletSpendLedgerEntries.type, "trade_spend"),
-          eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
-        ))
+        .where(
+          and(
+            eq(walletSpendLedgerEntries.type, "trade_spend"),
+            eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
+          ),
+        )
         .limit(1);
       if (existingSettlement[0]) {
-        return this.getWalletFundingBalance(input.ticket.userId, input.walletBalanceUsd);
+        return this.getWalletFundingBalance(
+          input.ticket.userId,
+          input.walletBalanceUsd,
+        );
       }
 
-      const filledSizeCents = normalizedFilledSizeCents(input.ticket, input.executionResult);
+      const filledSizeCents = normalizedFilledSizeCents(
+        input.ticket,
+        input.executionResult,
+      );
       const releaseCents = ticketSizeCents - filledSizeCents;
       const now = new Date().toISOString();
-      const walletBalanceUsdCents = nonnegativeUsdToCents(input.walletBalanceUsd);
-      const reservedUsdCents = await this.openReservedUsdCents(input.ticket.userId, tx);
+      const walletBalanceUsdCents = nonnegativeUsdToCents(
+        input.walletBalanceUsd,
+      );
+      const reservedUsdCents = await this.openReservedUsdCents(
+        input.ticket.userId,
+        tx,
+      );
       if (reservedUsdCents < ticketSizeCents) {
         throw new Error("Cannot settle a missing trade reservation.");
       }
 
-      await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
-        userId: input.ticket.userId,
-        type: "trade_spend",
-        amountUsdCents: filledSizeCents,
-        ticketId: input.ticket.ticketId,
-        executionJobId: input.job.jobId,
-        metadata: input.executionResult,
-        createdAt: now,
-      }));
-
-      if (releaseCents > 0) {
-        await tx.insert(walletSpendLedgerEntries).values(walletSpendLedgerEntry({
+      await tx.insert(walletSpendLedgerEntries).values(
+        walletSpendLedgerEntry({
           userId: input.ticket.userId,
-          type: "trade_release",
-          amountUsdCents: releaseCents,
+          type: "trade_spend",
+          amountUsdCents: filledSizeCents,
           ticketId: input.ticket.ticketId,
           executionJobId: input.job.jobId,
-          metadata: input.releaseMetadata ?? { reason: "unfilled_order_amount" },
+          metadata: input.executionResult,
           createdAt: now,
-        }));
+        }),
+      );
+
+      if (releaseCents > 0) {
+        await tx.insert(walletSpendLedgerEntries).values(
+          walletSpendLedgerEntry({
+            userId: input.ticket.userId,
+            type: "trade_release",
+            amountUsdCents: releaseCents,
+            ticketId: input.ticket.ticketId,
+            executionJobId: input.job.jobId,
+            metadata: input.releaseMetadata ?? {
+              reason: "unfilled_order_amount",
+            },
+            createdAt: now,
+          }),
+        );
       }
       return walletFundingBalance({
         userId: input.ticket.userId,
@@ -860,7 +958,9 @@ export class DrizzleCassieStore implements CassieStore {
     });
   }
 
-  async listTradeTicketsWithoutExecutionJob(runId: string): Promise<TradeTicket[]> {
+  async listTradeTicketsWithoutExecutionJob(
+    runId: string,
+  ): Promise<TradeTicket[]> {
     const ticketRows = await this.db
       .select()
       .from(tradeTickets)
@@ -876,9 +976,13 @@ export class DrizzleCassieStore implements CassieStore {
       .select({ ticketId: executionJobs.ticketId })
       .from(executionJobs)
       .where(inArray(executionJobs.ticketId, ticketIds));
-    const existingExecutionTicketIds = new Set(jobRows.map((row) => row.ticketId));
+    const existingExecutionTicketIds = new Set(
+      jobRows.map((row) => row.ticketId),
+    );
 
-    return tickets.filter((ticket) => !existingExecutionTicketIds.has(ticket.ticketId));
+    return tickets.filter(
+      (ticket) => !existingExecutionTicketIds.has(ticket.ticketId),
+    );
   }
 
   async getNextQueuedExecutionJob(): Promise<ExecutionJob | undefined> {
@@ -918,7 +1022,9 @@ export class DrizzleCassieStore implements CassieStore {
       });
   }
 
-  async audit(input: Omit<AuditEvent, "eventId" | "createdAt">): Promise<AuditEvent> {
+  async audit(
+    input: Omit<AuditEvent, "eventId" | "createdAt">,
+  ): Promise<AuditEvent> {
     const event: AuditEvent = {
       ...input,
       eventId: randomUUID(),
@@ -940,7 +1046,8 @@ export class DrizzleCassieStore implements CassieStore {
 
     return rows.reduce((total, entry) => {
       if (entry.type === "trade_reserve") return total + entry.amountUsdCents;
-      if (entry.type === "trade_release" || entry.type === "trade_spend") return total - entry.amountUsdCents;
+      if (entry.type === "trade_release" || entry.type === "trade_spend")
+        return total - entry.amountUsdCents;
       return total;
     }, 0);
   }
@@ -951,8 +1058,13 @@ function normalizeXUsername(value: string | null | undefined): string | null {
   return normalized ? normalized : null;
 }
 
-async function lockWalletSpendUser(db: { execute(query: ReturnType<typeof sql>): Promise<unknown> }, userId: string) {
-  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`);
+async function lockWalletSpendUser(
+  db: { execute(query: ReturnType<typeof sql>): Promise<unknown> },
+  userId: string,
+) {
+  await db.execute(
+    sql`select pg_advisory_xact_lock(hashtextextended(${userId}, 0))`,
+  );
 }
 
 function positiveUsdToCents(amountUsd: number): number {
@@ -990,15 +1102,26 @@ function roundUsd(amountUsd: number): number {
 }
 
 function samePortfolioBalanceSnapshot(
-  left: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
-  right: Pick<PortfolioBalanceSnapshot, "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd">,
+  left: Pick<
+    PortfolioBalanceSnapshot,
+    "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd"
+  >,
+  right: Pick<
+    PortfolioBalanceSnapshot,
+    "valueUsd" | "walletBalanceUsd" | "unrealizedPnlUsd"
+  >,
 ): boolean {
-  return usdToCents(left.valueUsd) === usdToCents(right.valueUsd)
-    && usdToCents(left.walletBalanceUsd) === usdToCents(right.walletBalanceUsd)
-    && usdToCents(left.unrealizedPnlUsd) === usdToCents(right.unrealizedPnlUsd);
+  return (
+    usdToCents(left.valueUsd) === usdToCents(right.valueUsd) &&
+    usdToCents(left.walletBalanceUsd) === usdToCents(right.walletBalanceUsd) &&
+    usdToCents(left.unrealizedPnlUsd) === usdToCents(right.unrealizedPnlUsd)
+  );
 }
 
-function monotonicSnapshotAt(at: string, previousAt: string | undefined): string {
+function monotonicSnapshotAt(
+  at: string,
+  previousAt: string | undefined,
+): string {
   if (!previousAt || at > previousAt) return at;
   return new Date(Date.parse(previousAt) + 1).toISOString();
 }
@@ -1007,12 +1130,19 @@ function normalizedFilledSizeCents(
   ticket: TradeTicket,
   executionResult: NonNullable<ExecutionJob["executionResult"]>,
 ): number {
-  if (!Number.isFinite(executionResult.filledSizeUsd) || executionResult.filledSizeUsd < 0) {
+  if (
+    !Number.isFinite(executionResult.filledSizeUsd) ||
+    executionResult.filledSizeUsd < 0
+  ) {
     throw new Error("Execution result filledSizeUsd must be nonnegative.");
   }
-  const filledSizeCents = usdToCents(executionResult.collateralUsedUsd ?? executionResult.filledSizeUsd);
+  const filledSizeCents = usdToCents(
+    executionResult.collateralUsedUsd ?? executionResult.filledSizeUsd,
+  );
   if (filledSizeCents > positiveUsdToCents(ticket.sizeUsd)) {
-    throw new Error("Execution result used more collateral than the reserved ticket size.");
+    throw new Error(
+      "Execution result used more collateral than the reserved ticket size.",
+    );
   }
   return filledSizeCents;
 }
@@ -1023,7 +1153,8 @@ function walletFundingBalance(input: {
   reservedUsdCents: number;
   updatedAt: string;
 }): WalletFundingBalance {
-  const spendableUsdCents = input.walletBalanceUsdCents - input.reservedUsdCents;
+  const spendableUsdCents =
+    input.walletBalanceUsdCents - input.reservedUsdCents;
   return {
     userId: input.userId,
     walletBalanceUsd: centsToUsd(input.walletBalanceUsdCents),

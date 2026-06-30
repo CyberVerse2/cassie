@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { CassieProduct } from "../packages/app/product.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
-import type { ControlRun, ExecutionJob, SourcePost, UserSettings } from "../packages/core/schemas/index.ts";
+import type {
+  ControlRun,
+  ExecutionJob,
+  SourcePost,
+  UserSettings,
+} from "../packages/core/schemas/index.ts";
 import type { CassieJobQueue } from "../packages/jobs/queue.ts";
 
 const sourcePost: SourcePost = {
@@ -29,7 +34,9 @@ const settings: UserSettings = {
 class FakeCassieJobQueue implements CassieJobQueue {
   readonly supervisorRunIds: string[] = [];
 
-  async enqueueExecution(_job: ExecutionJob): Promise<{ executionJobId: string; graphileJobId: string | null }> {
+  async enqueueExecution(
+    _job: ExecutionJob,
+  ): Promise<{ executionJobId: string; graphileJobId: string | null }> {
     throw new Error("execution must not be queued during intake");
   }
 
@@ -81,18 +88,15 @@ describe("durable run persistence", () => {
     expect(state.runSteps).toHaveLength(1);
     expect(state.runSteps[0]?.stepType).toBe("opportunity");
     expect(state.runSteps[0]?.output).toEqual({ userIntent: "trade" });
-    expect(state.runSteps[0]?.thinkingTrace).toBe("The model returned a concise reasoning summary.");
+    expect(state.runSteps[0]?.thinkingTrace).toBe(
+      "The model returned a concise reasoning summary.",
+    );
   });
 
   it("mention intake creates a queued run without executing the supervisor synchronously", async () => {
     const store = new InMemoryCassieStore();
     const queue = new FakeCassieJobQueue();
-    const product = new CassieProduct(
-      store,
-      null,
-      undefined,
-      queue,
-    );
+    const product = new CassieProduct(store, null, queue);
 
     await product.upsertSettings(settings);
     const result = await product.createMentionRun({
@@ -109,7 +113,7 @@ describe("durable run persistence", () => {
   it("returns a run with its recorded steps", async () => {
     const store = new InMemoryCassieStore();
     const queue = new FakeCassieJobQueue();
-    const product = new CassieProduct(store, null, undefined, queue);
+    const product = new CassieProduct(store, null, queue);
 
     await product.upsertSettings(settings);
     const result = await product.createMentionRun({

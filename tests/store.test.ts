@@ -63,7 +63,37 @@ describe("InMemoryCassieStore", () => {
     expect(snapshot.userSettings).toHaveLength(1);
     expect(snapshot.mentions).toHaveLength(1);
     expect(snapshot.controlRuns).toHaveLength(1);
-    expect(snapshot.auditEvents.map((event) => event.eventType)).toContain("mention.received");
+    expect(snapshot.auditEvents.map((event) => event.eventType)).toContain(
+      "mention.received",
+    );
+  });
+
+  it("claims queued runs only once", async () => {
+    const store = new InMemoryCassieStore();
+    const run = await store.createRun({
+      userId: "user_1",
+      userCommand: "@Cassie trade this",
+      sourcePost: {
+        platform: "x",
+        postId: "post_1",
+        url: null,
+        authorHandle: "example",
+        authorName: "Example",
+        text: "SOL ETF is inevitable.",
+        createdAt: null,
+        quotedPostText: null,
+        linkedUrls: [],
+        mediaDescriptions: [],
+      },
+    });
+
+    const claimed = await store.claimRun(run.runId);
+    expect(claimed?.status).toBe("running");
+    expect(claimed?.error).toBeNull();
+    await expect(store.claimRun(run.runId)).resolves.toBeNull();
+
+    const stored = await store.getRun(run.runId);
+    expect(stored?.status).toBe("running");
   });
 
   it("finds execution jobs and trade tickets without loading callers into full snapshots", async () => {
@@ -95,8 +125,11 @@ describe("InMemoryCassieStore", () => {
     await store.addExecutionJob(job);
 
     expect(await store.getExecutionJob("job_1")).toEqual(job);
-    expect((await store.listTradeTicketsWithoutExecutionJob("run_1")).map((entry) => entry.ticketId))
-      .toEqual(["ticket_1"]);
+    expect(
+      (await store.listTradeTicketsWithoutExecutionJob("run_1")).map(
+        (entry) => entry.ticketId,
+      ),
+    ).toEqual(["ticket_1"]);
   });
 
   it("stores model call usage for a control run", async () => {
@@ -138,7 +171,9 @@ describe("InMemoryCassieStore", () => {
     });
 
     const snapshot = await store.load();
-    expect(snapshot.modelCallUsage).toMatchObject([{ purpose: "supervisor_step", totalTokens: 30 }]);
+    expect(snapshot.modelCallUsage).toMatchObject([
+      { purpose: "supervisor_step", totalTokens: 30 },
+    ]);
   });
 
   it("syncs Privy identity into user settings", async () => {
@@ -154,7 +189,11 @@ describe("InMemoryCassieStore", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_2",
       walletAddress: "0x2222222222222222222222222222222222222222",
-      profile: { name: "Cassie Trader", handle: "@cassietrader", avatarUrl: "https://example.com/avatar.png" },
+      profile: {
+        name: "Cassie Trader",
+        handle: "@cassietrader",
+        avatarUrl: "https://example.com/avatar.png",
+      },
       defaultTradeSizeUsd: 25,
     });
 
@@ -164,7 +203,11 @@ describe("InMemoryCassieStore", () => {
       privyUserId: "did:privy:user_1",
       privyWalletId: "wallet_2",
       walletAddress: "0x2222222222222222222222222222222222222222",
-      profile: { name: "Cassie Trader", handle: "@cassietrader", avatarUrl: "https://example.com/avatar.png" },
+      profile: {
+        name: "Cassie Trader",
+        handle: "@cassietrader",
+        avatarUrl: "https://example.com/avatar.png",
+      },
       defaultTradeSizeUsd: 25,
     });
     expect((await store.load()).userSettings).toHaveLength(1);
@@ -205,13 +248,20 @@ describe("InMemoryCassieStore", () => {
       spendableUsd: 50,
     });
 
-    await expect(store.reserveWalletSpend({
-      ticket: { ...ticket, ticketId: "ticket_2", sizeUsd: 75 },
-      job: { ...job, jobId: "job_2", ticketId: "ticket_2" },
-      walletBalanceUsd: 100,
-    })).rejects.toThrow("Insufficient user wallet balance.");
+    await expect(
+      store.reserveWalletSpend({
+        ticket: { ...ticket, ticketId: "ticket_2", sizeUsd: 75 },
+        job: { ...job, jobId: "job_2", ticketId: "ticket_2" },
+        walletBalanceUsd: 100,
+      }),
+    ).rejects.toThrow("Insufficient user wallet balance.");
 
-    await store.releaseWalletSpend({ ticket, job, reason: "venue unavailable", walletBalanceUsd: 100 });
+    await store.releaseWalletSpend({
+      ticket,
+      job,
+      reason: "venue unavailable",
+      walletBalanceUsd: 100,
+    });
     expect(await store.getWalletFundingBalance("user_1", 100)).toMatchObject({
       walletBalanceUsd: 100,
       reservedUsd: 0,
@@ -257,10 +307,12 @@ describe("InMemoryCassieStore", () => {
       },
     });
 
-    expect((await store.load()).walletSpendLedgerEntries.map((entry) => ({
-      type: entry.type,
-      amountUsd: entry.amountUsd,
-    }))).toEqual([
+    expect(
+      (await store.load()).walletSpendLedgerEntries.map((entry) => ({
+        type: entry.type,
+        amountUsd: entry.amountUsd,
+      })),
+    ).toEqual([
       { type: "trade_reserve", amountUsd: 50 },
       { type: "trade_spend", amountUsd: 33.33 },
       { type: "trade_release", amountUsd: 16.67 },
@@ -332,6 +384,8 @@ describe("InMemoryCassieStore", () => {
     await store.updatePosition(closed);
 
     expect(await store.listOpenPositions("user_1")).toEqual([]);
-    expect(await store.getPosition("position_1")).toMatchObject({ status: "closed" });
+    expect(await store.getPosition("position_1")).toMatchObject({
+      status: "closed",
+    });
   });
 });

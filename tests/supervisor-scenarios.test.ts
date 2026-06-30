@@ -168,7 +168,7 @@ async function createScenario(command: string, settings: UserSettings = baseSett
     userSettings: settings,
     deps: {
       ai: new ScenarioAi(),
-      marketData: {
+      hyperliquidMarketData: {
         async findCandidates() {
           return [marketSelection.selectedMarket!];
         },

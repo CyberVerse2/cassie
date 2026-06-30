@@ -13,7 +13,10 @@ import type {
   PolymarketSearchResultForSelection,
   PolymarketSearchResultSelector,
 } from "./selection.ts";
-import { MissingConnectorConfigError, readJsonResponse } from "../core/helpers/connector-errors.ts";
+import {
+  MissingConnectorConfigError,
+  readJsonResponse,
+} from "../core/helpers/connector-errors.ts";
 import {
   isConfiguredDirectVenueExpressionRail,
   isDirectEnoughForConfiguredVenueSearch,
@@ -63,7 +66,8 @@ type HyperliquidSpotMetaAndCtxs = [
 ];
 
 type HyperliquidAssetCtx = HyperliquidMetaAndCtxs[1][number];
-type HyperliquidSpotUniverseAsset = HyperliquidSpotMetaAndCtxs[0]["universe"][number];
+type HyperliquidSpotUniverseAsset =
+  HyperliquidSpotMetaAndCtxs[0]["universe"][number];
 type HyperliquidSpotToken = HyperliquidSpotMetaAndCtxs[0]["tokens"][number];
 type HyperliquidPerpDexs = (null | { name: string })[];
 
@@ -116,7 +120,10 @@ export interface PolymarketSearchClient {
 export class PolymarketSdkSearchClient implements PolymarketSearchClient {
   constructor(private client?: PublicClient) {}
 
-  async searchMarkets(query: string, limit: number): Promise<PolymarketMarket[]> {
+  async searchMarkets(
+    query: string,
+    limit: number,
+  ): Promise<PolymarketMarket[]> {
     const url = new URL("https://gamma-api.polymarket.com/events");
     url.searchParams.set("search", query);
     url.searchParams.set("active", "true");
@@ -137,7 +144,9 @@ export class PolymarketSdkSearchClient implements PolymarketSearchClient {
   async fetchBuyPrice(tokenId: string): Promise<number | null> {
     const client = await this.getClient();
     const { OrderSide } = await import("@polymarket/client");
-    return nullableNumber(await client.fetchPrice({ tokenId, side: OrderSide.BUY }));
+    return nullableNumber(
+      await client.fetchPrice({ tokenId, side: OrderSide.BUY }),
+    );
   }
 
   async fetchSpread(tokenId: string): Promise<number | null> {
@@ -172,6 +181,7 @@ type PolymarketBook = {
 
 const POLYMARKET_LIQUIDITY_SCORE_FULL_USD = 500_000;
 const POLYMARKET_LOW_LIQUIDITY_WARNING_USD = 1_000;
+const POLYMARKET_SEARCH_RESULTS_FOR_AI_LIMIT = 50;
 
 export class CompositeMarketDataProvider implements MarketDataProvider {
   constructor(
@@ -184,7 +194,9 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
     thesis: Thesis;
     tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate[]> {
-    const results = await Promise.all(this.providers.map((provider) => provider.findCandidates(input)));
+    const results = await Promise.all(
+      this.providers.map((provider) => provider.findCandidates(input)),
+    );
     return results.flat();
   }
 }
@@ -192,16 +204,31 @@ export class CompositeMarketDataProvider implements MarketDataProvider {
 export class HyperliquidMarketDataProvider implements MarketDataProvider {
   constructor(private readonly endpoint = "https://api.hyperliquid.xyz/info") {}
 
-  async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
-    const exactSymbolAnchors = hyperliquidExactSymbolTokens(input.thesis, input.tradeExpression);
+  async findCandidates(input: {
+    thesis: Thesis;
+    tradeExpression?: TradeExpressionPlan;
+  }): Promise<MarketCandidate[]> {
+    const exactSymbolAnchors = hyperliquidExactSymbolTokens(
+      input.thesis,
+      input.tradeExpression,
+    );
     if (exactSymbolAnchors.length === 0) return [];
 
-    const liveMatches = await this.findLiveAssetMatches(input, exactSymbolAnchors);
-    const candidates = await Promise.all(liveMatches.map((match) => this.marketCandidateFromLiveAsset({
-      ...match,
-      thesis: input.thesis,
-    })));
-    return candidates.filter((candidate): candidate is MarketCandidate => Boolean(candidate));
+    const liveMatches = await this.findLiveAssetMatches(
+      input,
+      exactSymbolAnchors,
+    );
+    const candidates = await Promise.all(
+      liveMatches.map((match) =>
+        this.marketCandidateFromLiveAsset({
+          ...match,
+          thesis: input.thesis,
+        }),
+      ),
+    );
+    return candidates.filter((candidate): candidate is MarketCandidate =>
+      Boolean(candidate),
+    );
   }
 
   private async getPerpDexs(): Promise<HyperliquidPerpDexs> {
@@ -211,10 +238,15 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
       body: JSON.stringify({ type: "perpDexs" }),
     });
 
-    return readJsonResponse<HyperliquidPerpDexs>("Hyperliquid perp dex discovery", response);
+    return readJsonResponse<HyperliquidPerpDexs>(
+      "Hyperliquid perp dex discovery",
+      response,
+    );
   }
 
-  private async getMetaAndAssetCtxs(dex?: string | null): Promise<HyperliquidMetaAndCtxs> {
+  private async getMetaAndAssetCtxs(
+    dex?: string | null,
+  ): Promise<HyperliquidMetaAndCtxs> {
     const response = await fetch(this.endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -224,7 +256,10 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
       }),
     });
 
-    return readJsonResponse<HyperliquidMetaAndCtxs>("Hyperliquid market data", response);
+    return readJsonResponse<HyperliquidMetaAndCtxs>(
+      "Hyperliquid market data",
+      response,
+    );
   }
 
   private async getSpotMetaAndAssetCtxs(): Promise<HyperliquidSpotMetaAndCtxs> {
@@ -234,31 +269,44 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
       body: JSON.stringify({ type: "spotMetaAndAssetCtxs" }),
     });
 
-    return readJsonResponse<HyperliquidSpotMetaAndCtxs>("Hyperliquid spot market data", response);
+    return readJsonResponse<HyperliquidSpotMetaAndCtxs>(
+      "Hyperliquid spot market data",
+      response,
+    );
   }
 
-  private async findLiveAssetMatches(input: {
-    thesis: Thesis;
-    tradeExpression?: TradeExpressionPlan;
-  }, exactSymbolAnchors: string[]): Promise<HyperliquidLiveAssetMatch[]> {
-    const normalizedAnchors = normalizedHyperliquidSymbolAnchors(exactSymbolAnchors);
+  private async findLiveAssetMatches(
+    input: {
+      thesis: Thesis;
+      tradeExpression?: TradeExpressionPlan;
+    },
+    exactSymbolAnchors: string[],
+  ): Promise<HyperliquidLiveAssetMatch[]> {
+    const normalizedAnchors =
+      normalizedHyperliquidSymbolAnchors(exactSymbolAnchors);
     const [perpDexs, spotMetaAndCtxs] = await Promise.all([
       this.getPerpDexs(),
       this.getSpotMetaAndAssetCtxs(),
     ]);
     const dexes = uniqueHyperliquidDexes(perpDexs);
-    const liveMetas = await Promise.all(dexes.map(async (dex) => ({
-      dex,
-      data: await this.getMetaAndAssetCtxs(dex),
-    })));
+    const liveMetas = await Promise.all(
+      dexes.map(async (dex) => ({
+        dex,
+        data: await this.getMetaAndAssetCtxs(dex),
+      })),
+    );
     const matches: HyperliquidLiveAssetMatch[] = [];
     const seen = new Set<string>();
 
-    for (const { dex, data: [meta, ctxs] } of liveMetas) {
+    for (const {
+      dex,
+      data: [meta, ctxs],
+    } of liveMetas) {
       if (!isHyperliquidUsdcCollateralMeta(meta)) continue;
 
       for (const [index, asset] of meta.universe.entries()) {
-        if (!hyperliquidAssetMatchesExactAnchors(asset.name, normalizedAnchors)) continue;
+        if (!hyperliquidAssetMatchesExactAnchors(asset.name, normalizedAnchors))
+          continue;
 
         const key = `${dex ?? "main"}:${asset.name}`;
         if (seen.has(key)) continue;
@@ -269,7 +317,10 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
           bookCoin: asset.name,
           sizeDecimals: asset.szDecimals ?? 6,
           ctx: ctxs[index],
-          instrument: hyperliquidInstrumentForLiveAsset(dex, input.tradeExpression),
+          instrument: hyperliquidInstrumentForLiveAsset(
+            dex,
+            input.tradeExpression,
+          ),
           reasonAssetName: asset.name,
           tradeExpression: input.tradeExpression,
         });
@@ -277,12 +328,22 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     }
 
     const [spotMeta, spotCtxs] = spotMetaAndCtxs;
-    const tokensByIndex = new Map(spotMeta.tokens.map((token) => [token.index, token]));
+    const tokensByIndex = new Map(
+      spotMeta.tokens.map((token) => [token.index, token]),
+    );
     for (const market of spotMeta.universe) {
       const baseToken = tokensByIndex.get(market.tokens[0]!);
       const quoteToken = tokensByIndex.get(market.tokens[1]!);
       if (!baseToken || !quoteToken) continue;
-      if (!hyperliquidSpotMarketMatchesExactAnchors(market, baseToken, quoteToken, normalizedAnchors)) continue;
+      if (
+        !hyperliquidSpotMarketMatchesExactAnchors(
+          market,
+          baseToken,
+          quoteToken,
+          normalizedAnchors,
+        )
+      )
+        continue;
 
       const key = `spot:${market.index}`;
       if (seen.has(key)) continue;
@@ -314,24 +375,30 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
     thesis: Thesis;
     tradeExpression?: TradeExpressionPlan;
   }): Promise<MarketCandidate | null> {
-    const side = hyperliquidSideFromTradeExpression({
-      tradeExpression: input.tradeExpression,
-      symbol: input.symbol,
-      reasonAssetName: input.reasonAssetName,
-      kind: input.kind,
-    }) ?? hyperliquidSideFromThesis(input.thesis, input.kind);
+    const side =
+      hyperliquidSideFromTradeExpression({
+        tradeExpression: input.tradeExpression,
+        symbol: input.symbol,
+        reasonAssetName: input.reasonAssetName,
+        kind: input.kind,
+      }) ?? hyperliquidSideFromThesis(input.thesis, input.kind);
     if (!side) {
       return null;
     }
 
     const volume = Number(input.ctx?.dayNtlVlm ?? 0);
     const book = await this.getL2Book(input.bookCoin);
-    const bookMetrics = orderBookMetrics(book.levels?.[0] ?? [], book.levels?.[1] ?? []);
+    const bookMetrics = orderBookMetrics(
+      book.levels?.[0] ?? [],
+      book.levels?.[1] ?? [],
+    );
 
     if (!bookMetrics) {
       return null;
     }
-    const minLotNotionalUsd = bookMetrics.mid ? bookMetrics.mid * 10 ** -input.sizeDecimals : 0;
+    const minLotNotionalUsd = bookMetrics.mid
+      ? bookMetrics.mid * 10 ** -input.sizeDecimals
+      : 0;
 
     return {
       venue: "hyperliquid",
@@ -352,7 +419,10 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
       liquidityUsd: null,
       endDate: null,
       warnings: [],
-      markPrice: Number(input.ctx?.markPx ?? input.ctx?.midPx ?? bookMetrics?.mid ?? 0) || null,
+      markPrice:
+        Number(
+          input.ctx?.markPx ?? input.ctx?.midPx ?? bookMetrics?.mid ?? 0,
+        ) || null,
       liquidityScore: Math.min(1, volume / 50_000_000),
       spreadBps: bookMetrics.spreadBps,
       estimatedSlippageBps: bookMetrics.estimatedSlippageBps,
@@ -373,26 +443,31 @@ export class HyperliquidMarketDataProvider implements MarketDataProvider {
   }
 }
 
-function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExpressionPlan): string[] {
+function hyperliquidExactSymbolTokens(
+  thesis: Thesis,
+  tradeExpression?: TradeExpressionPlan,
+): string[] {
   const anchors = tradeExpression
     ? [
-      ...exactSymbolAnchorCandidates(tradeExpression.directAsset),
-      ...explicitHyperliquidInstructionSymbolAnchors(tradeExpression.marketRouterInstructions),
-      ...(tradeExpression.candidateExpressions.flatMap((candidate) => [
-        isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
-          && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
-          ? candidate.primaryEntityOrEvent
-          : null,
-        ...(isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
-          && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
-          ? exactSymbolAnchorCandidates(candidate.abstractMarket)
-          : []),
-        ...(isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
-            && isDirectEnoughForConfiguredVenueSearch(candidate.directness)
-          ? candidate.searchTerms
-          : []),
-      ]) ?? []),
-    ]
+        ...exactSymbolAnchorCandidates(tradeExpression.directAsset),
+        ...explicitHyperliquidInstructionSymbolAnchors(
+          tradeExpression.marketRouterInstructions,
+        ),
+        ...(tradeExpression.candidateExpressions.flatMap((candidate) => [
+          isConfiguredDirectVenueExpressionRail(candidate.expressionRail) &&
+          isDirectEnoughForConfiguredVenueSearch(candidate.directness)
+            ? candidate.primaryEntityOrEvent
+            : null,
+          ...(isConfiguredDirectVenueExpressionRail(candidate.expressionRail) &&
+          isDirectEnoughForConfiguredVenueSearch(candidate.directness)
+            ? exactSymbolAnchorCandidates(candidate.abstractMarket)
+            : []),
+          ...(isConfiguredDirectVenueExpressionRail(candidate.expressionRail) &&
+          isDirectEnoughForConfiguredVenueSearch(candidate.directness)
+            ? candidate.searchTerms
+            : []),
+        ]) ?? []),
+      ]
     : thesis.mentionedAssets;
 
   return anchors
@@ -402,28 +477,30 @@ function hyperliquidExactSymbolTokens(thesis: Thesis, tradeExpression?: TradeExp
 
 function exactSymbolAnchorCandidates(value: string | null): string[] {
   if (!value) return [];
-  return [
-    value,
-    ...value.split(/[^a-z0-9:_-]+/iu),
-  ];
+  return [value, ...value.split(/[^a-z0-9:_-]+/iu)];
 }
 
-function explicitHyperliquidInstructionSymbolAnchors(value: string | null): string[] {
+function explicitHyperliquidInstructionSymbolAnchors(
+  value: string | null,
+): string[] {
   if (!value) return [];
   return value
     .split(/[^a-zA-Z0-9:_$-]+/u)
     .map((token) => token.trim())
-    .filter((token) => token.startsWith("$") || /^[A-Z0-9:_-]{2,}$/u.test(token));
+    .filter(
+      (token) => token.startsWith("$") || /^[A-Z0-9:_-]{2,}$/u.test(token),
+    );
 }
 
 function isExactSymbolAnchor(value: string): boolean {
   const normalized = value.trim().toLowerCase();
   if (
-    !normalized
-    || normalized.includes("unknown")
-    || normalized.includes("proxy")
-    || HYPERLIQUID_GENERIC_SYMBOL_ANCHORS.has(normalized)
-  ) return false;
+    !normalized ||
+    normalized.includes("unknown") ||
+    normalized.includes("proxy") ||
+    HYPERLIQUID_GENERIC_SYMBOL_ANCHORS.has(normalized)
+  )
+    return false;
   return /^[a-z0-9:_/-]+$/i.test(value.trim());
 }
 
@@ -441,8 +518,15 @@ const HYPERLIQUID_GENERIC_SYMBOL_ANCHORS = new Set([
   "trading",
 ]);
 
-function uniqueHyperliquidDexes(perpDexs: HyperliquidPerpDexs): Array<string | null> {
-  const dexes = [null, ...perpDexs.map((dex) => dex?.name ?? null).filter((name): name is string => Boolean(name))];
+function uniqueHyperliquidDexes(
+  perpDexs: HyperliquidPerpDexs,
+): Array<string | null> {
+  const dexes = [
+    null,
+    ...perpDexs
+      .map((dex) => dex?.name ?? null)
+      .filter((name): name is string => Boolean(name)),
+  ];
   const seen = new Set<string>();
   return dexes.filter((dex) => {
     const key = dex ?? "";
@@ -452,20 +536,28 @@ function uniqueHyperliquidDexes(perpDexs: HyperliquidPerpDexs): Array<string | n
   });
 }
 
-function normalizedHyperliquidSymbolAnchors(exactSymbolAnchors: string[]): Set<string> {
-  return new Set(exactSymbolAnchors.map(normalizeHyperliquidSymbolAnchor).filter(Boolean));
+function normalizedHyperliquidSymbolAnchors(
+  exactSymbolAnchors: string[],
+): Set<string> {
+  return new Set(
+    exactSymbolAnchors.map(normalizeHyperliquidSymbolAnchor).filter(Boolean),
+  );
 }
 
-function hyperliquidAssetMatchesExactAnchors(assetName: string, normalizedAnchors: Set<string>): boolean {
-  const symbolCandidates = [
-    assetName,
-    hyperliquidBaseSymbol(assetName),
-  ].map(normalizeHyperliquidSymbolAnchor);
+function hyperliquidAssetMatchesExactAnchors(
+  assetName: string,
+  normalizedAnchors: Set<string>,
+): boolean {
+  const symbolCandidates = [assetName, hyperliquidBaseSymbol(assetName)].map(
+    normalizeHyperliquidSymbolAnchor,
+  );
 
   return symbolCandidates.some((symbol) => normalizedAnchors.has(symbol));
 }
 
-function isHyperliquidUsdcCollateralMeta(meta: HyperliquidMetaAndCtxs[0]): boolean {
+function isHyperliquidUsdcCollateralMeta(
+  meta: HyperliquidMetaAndCtxs[0],
+): boolean {
   return (meta.collateralToken ?? 0) === 0;
 }
 
@@ -511,7 +603,10 @@ function hyperliquidMetadataWords(value: string | null): string[] {
   return value?.split(/[^a-z0-9]+/iu).filter(Boolean) ?? [];
 }
 
-function hyperliquidSpotSymbol(baseToken: HyperliquidSpotToken, quoteToken: HyperliquidSpotToken): string {
+function hyperliquidSpotSymbol(
+  baseToken: HyperliquidSpotToken,
+  quoteToken: HyperliquidSpotToken,
+): string {
   return `${baseToken.name}/${quoteToken.name}`;
 }
 
@@ -519,13 +614,24 @@ function hyperliquidBaseSymbol(value: string): string {
   return (value.split(":").at(-1) ?? value).split("/")[0]!.split("-")[0]!;
 }
 
-function hyperliquidInstrumentForLiveAsset(dex: string | null, tradeExpression?: TradeExpressionPlan): string {
+function hyperliquidInstrumentForLiveAsset(
+  dex: string | null,
+  tradeExpression?: TradeExpressionPlan,
+): string {
   if (!dex) return "perp";
-  if (tradeExpression?.candidateExpressions.some((candidate) => candidate.expressionRail === "pre_ipo")) return "pre_stock_perp";
+  if (
+    tradeExpression?.candidateExpressions.some(
+      (candidate) => candidate.expressionRail === "pre_ipo",
+    )
+  )
+    return "pre_stock_perp";
   return "synthetic_perp";
 }
 
-function hyperliquidSideFromThesis(thesis: Thesis, kind: "perp" | "spot"): "long" | "short" | "buy" | "sell" | null {
+function hyperliquidSideFromThesis(
+  thesis: Thesis,
+  kind: "perp" | "spot",
+): "long" | "short" | "buy" | "sell" | null {
   if (kind === "spot") {
     if (thesis.direction === "bullish") return "buy";
     if (thesis.direction === "bearish") return "sell";
@@ -542,12 +648,24 @@ function hyperliquidSideFromTradeExpression(input: {
   reasonAssetName: string;
   kind: "perp" | "spot";
 }): "long" | "short" | "buy" | "sell" | null {
-  const expression = input.tradeExpression?.candidateExpressions.find((candidate) => {
-    if (!isConfiguredDirectVenueExpressionRail(candidate.expressionRail)) return false;
-    if (!isDirectEnoughForConfiguredVenueSearch(candidate.directness)) return false;
-    if (candidate.intendedSide !== "long" && candidate.intendedSide !== "short") return false;
-    return hyperliquidCandidateExpressionMatchesSymbol(candidate, input.symbol, input.reasonAssetName);
-  });
+  const expression = input.tradeExpression?.candidateExpressions.find(
+    (candidate) => {
+      if (!isConfiguredDirectVenueExpressionRail(candidate.expressionRail))
+        return false;
+      if (!isDirectEnoughForConfiguredVenueSearch(candidate.directness))
+        return false;
+      if (
+        candidate.intendedSide !== "long" &&
+        candidate.intendedSide !== "short"
+      )
+        return false;
+      return hyperliquidCandidateExpressionMatchesSymbol(
+        candidate,
+        input.symbol,
+        input.reasonAssetName,
+      );
+    },
+  );
 
   if (!expression) return null;
   const side = expression.intendedSide === "long" ? "long" : "short";
@@ -562,13 +680,15 @@ function hyperliquidCandidateExpressionMatchesSymbol(
   symbol: string,
   reasonAssetName: string,
 ): boolean {
-  const symbolVariants = new Set([
-    symbol,
-    reasonAssetName,
-    hyperliquidBaseSymbol(symbol),
-    hyperliquidBaseSymbol(reasonAssetName),
-    ...hyperliquidMetadataWords(reasonAssetName),
-  ].flatMap(hyperliquidSymbolVariants));
+  const symbolVariants = new Set(
+    [
+      symbol,
+      reasonAssetName,
+      hyperliquidBaseSymbol(symbol),
+      hyperliquidBaseSymbol(reasonAssetName),
+      ...hyperliquidMetadataWords(reasonAssetName),
+    ].flatMap(hyperliquidSymbolVariants),
+  );
 
   return [
     candidate.primaryEntityOrEvent,
@@ -576,37 +696,51 @@ function hyperliquidCandidateExpressionMatchesSymbol(
     ...candidate.searchTerms,
   ]
     .filter((value): value is string => Boolean(value))
-    .flatMap((value) => [
-      value,
-      ...hyperliquidMetadataWords(value),
-    ])
+    .flatMap((value) => [value, ...hyperliquidMetadataWords(value)])
     .flatMap(hyperliquidSymbolVariants)
     .some((anchor) => symbolVariants.has(anchor));
 }
 
-export class PolymarketMarketDataProvider implements MarketDataProvider, PolymarketMarketFinder {
+export class PolymarketMarketDataProvider
+  implements MarketDataProvider, PolymarketMarketFinder
+{
   constructor(
     private readonly searchClient: PolymarketSearchClient = new PolymarketSdkSearchClient(),
     private readonly queryPlanner?: PolymarketDiscoveryQueryPlanner,
     private readonly searchResultSelector?: PolymarketSearchResultSelector,
   ) {}
 
-  async findCandidates(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan }): Promise<MarketCandidate[]> {
+  async findCandidates(input: {
+    thesis: Thesis;
+    tradeExpression?: TradeExpressionPlan;
+  }): Promise<MarketCandidate[]> {
     return this.findPolymarketMarkets(input);
   }
 
-  async findPolymarketMarkets(input: { thesis: Thesis; tradeExpression?: TradeExpressionPlan; limit?: number }): Promise<MarketCandidate[]> {
+  async findPolymarketMarkets(input: {
+    thesis: Thesis;
+    tradeExpression?: TradeExpressionPlan;
+    limit?: number;
+  }): Promise<MarketCandidate[]> {
     if (!this.queryPlanner) {
-      throw new MissingConnectorConfigError("Polymarket semantic discovery", "AiPolymarketDiscoveryQueryPlanner");
+      throw new MissingConnectorConfigError(
+        "Polymarket semantic discovery",
+        "AiPolymarketDiscoveryQueryPlanner",
+      );
     }
     if (!this.searchResultSelector) {
-      throw new MissingConnectorConfigError("Polymarket semantic result selection", "AiPolymarketSearchResultSelector");
+      throw new MissingConnectorConfigError(
+        "Polymarket semantic result selection",
+        "AiPolymarketSearchResultSelector",
+      );
     }
 
     const limit = input.limit ?? 10;
     const queries = await this.queryPlanner.planPolymarketSearchQueries(input);
     const marketResponses = await Promise.all(
-      queries.map((query) => this.searchClient.searchMarkets(query, Math.max(limit, 10))),
+      queries.map((query) =>
+        this.searchClient.searchMarkets(query, Math.max(limit, 10)),
+      ),
     );
     const markets = await this.selectMatchingPolymarketMarkets({
       thesis: input.thesis,
@@ -615,58 +749,74 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
       limit,
     });
 
-    const candidates = await Promise.all(markets
-      .filter((market) => market.active !== false && market.closed !== true)
-      .map(async (market): Promise<MarketCandidate | null> => {
-        const outcome = polymarketOutcomeForTradeExpression(input.tradeExpression, input.thesis);
-        const buyNo = outcome === "no";
-        const normalized = normalizePolymarketMarket(market);
-        const outcomeTokenId = normalized.tokenIds[buyNo ? 1 : 0] ?? null;
-        const heldPrice = outcome === "no" ? normalized.noPrice : normalized.yesPrice;
-        if (!outcomeTokenId) {
-          throw new Error(`Polymarket market ${market.slug ?? market.id ?? market.question ?? "unknown"} has no outcome token id.`);
-        }
+    const candidates = await Promise.all(
+      markets
+        .filter((market) => market.active !== false && market.closed !== true)
+        .map(async (market): Promise<MarketCandidate | null> => {
+          const outcome = polymarketOutcomeForTradeExpression(
+            input.tradeExpression,
+            input.thesis,
+          );
+          const buyNo = outcome === "no";
+          const normalized = normalizePolymarketMarket(market);
+          const outcomeTokenId = normalized.tokenIds[buyNo ? 1 : 0] ?? null;
+          const heldPrice =
+            outcome === "no" ? normalized.noPrice : normalized.yesPrice;
+          if (!outcomeTokenId) {
+            throw new Error(
+              `Polymarket market ${market.slug ?? market.id ?? market.question ?? "unknown"} has no outcome token id.`,
+            );
+          }
 
-        const book = await this.getBook(outcomeTokenId);
-        const metrics = orderBookMetrics(book.bids ?? [], book.asks ?? []);
+          const book = await this.getBook(outcomeTokenId);
+          const metrics = orderBookMetrics(book.bids ?? [], book.asks ?? []);
 
-        if (!metrics) {
-          return null;
-        }
+          if (!metrics) {
+            return null;
+          }
 
-        const warnings = polymarketWarnings(normalized);
+          const warnings = polymarketWarnings(normalized);
 
-        return {
-          venue: "polymarket",
-          instrument: normalized.slug,
-          side: outcome === "no" ? "buy_no" as const : "buy_yes" as const,
-          symbol: normalized.slug,
-          conditionId: normalized.conditionId,
-          outcomeTokenId,
-          yesOutcomeTokenId: normalized.tokenIds[0] ?? null,
-          noOutcomeTokenId: normalized.tokenIds[1] ?? null,
-          marketQuestion: normalized.question,
-          marketSlug: normalized.slug,
-          resolutionRules: normalized.resolutionRules,
-          outcome,
-          yesPrice: normalized.yesPrice,
-          noPrice: normalized.noPrice,
-          heldSidePrice: metrics.mid ?? heldPrice,
-          volumeUsd: normalized.volumeUsd,
-          liquidityUsd: normalized.liquidityUsd,
-          endDate: normalized.endDate,
-          markPrice: metrics.mid ?? (heldPrice && heldPrice > 0 ? heldPrice : null),
-          liquidityScore: Math.min(1, Math.max(normalized.liquidityUsd, normalized.volumeUsd) / POLYMARKET_LIQUIDITY_SCORE_FULL_USD),
-          spreadBps: metrics.spreadBps,
-          estimatedSlippageBps: metrics.estimatedSlippageBps,
-          minOrderSizeUsd: 1,
-          thesisFit: input.thesis.confidence,
-          reason: normalized.question,
-          warnings,
-        };
-      }));
+          return {
+            venue: "polymarket",
+            instrument: normalized.slug,
+            side: outcome === "no" ? ("buy_no" as const) : ("buy_yes" as const),
+            symbol: normalized.slug,
+            conditionId: normalized.conditionId,
+            outcomeTokenId,
+            yesOutcomeTokenId: normalized.tokenIds[0] ?? null,
+            noOutcomeTokenId: normalized.tokenIds[1] ?? null,
+            marketQuestion: normalized.question,
+            marketSlug: normalized.slug,
+            resolutionRules: normalized.resolutionRules,
+            outcome,
+            yesPrice: normalized.yesPrice,
+            noPrice: normalized.noPrice,
+            heldSidePrice: metrics.mid ?? heldPrice,
+            volumeUsd: normalized.volumeUsd,
+            liquidityUsd: normalized.liquidityUsd,
+            endDate: normalized.endDate,
+            markPrice:
+              metrics.mid ?? (heldPrice && heldPrice > 0 ? heldPrice : null),
+            liquidityScore: Math.min(
+              1,
+              Math.max(normalized.liquidityUsd, normalized.volumeUsd) /
+                POLYMARKET_LIQUIDITY_SCORE_FULL_USD,
+            ),
+            spreadBps: metrics.spreadBps,
+            estimatedSlippageBps: metrics.estimatedSlippageBps,
+            minOrderSizeUsd: 1,
+            thesisFit: input.thesis.confidence,
+            reason: normalized.question,
+            warnings,
+          };
+        }),
+    );
 
-    return candidates.filter((candidate): candidate is MarketCandidate => candidate !== null && candidate.spreadBps > 0);
+    return candidates.filter(
+      (candidate): candidate is MarketCandidate =>
+        candidate !== null && candidate.spreadBps > 0,
+    );
   }
 
   private async selectMatchingPolymarketMarkets(input: {
@@ -675,43 +825,65 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     markets: PolymarketMarket[];
     limit: number;
   }): Promise<PolymarketMarket[]> {
-    const activeMarkets = input.markets.filter((market) => market.active !== false && market.closed !== true);
-    const selectableMarkets = activeMarkets.flatMap((market): PolymarketSearchResultForSelection[] => {
-      const slug = market.slug ?? "";
-      const question = market.question ?? "";
-      if (!slug || !question) return [];
-      return [{
-        slug,
-        question,
-        active: market.active,
-        closed: market.closed,
-        endDate: market.endDate,
-        resolutionRules: polymarketResolutionRules(market),
-        outcomes: market.outcomes,
-        outcomePrices: market.outcomePrices,
-        liquidityUsd: nullableNumber(market.liquidityNum),
-        volumeUsd: nullableNumber(market.volumeNum),
-      }];
-    });
+    const activeMarkets = input.markets.filter(
+      (market) => market.active !== false && market.closed !== true,
+    );
+    const selectableMarkets = activeMarkets.flatMap(
+      (market): PolymarketSearchResultForSelection[] => {
+        const slug = market.slug ?? "";
+        const question = market.question ?? "";
+        if (!slug || !question) return [];
+        return [
+          {
+            slug,
+            question,
+            active: market.active,
+            closed: market.closed,
+            endDate: market.endDate,
+            resolutionRules: polymarketResolutionRules(market),
+            outcomes: market.outcomes,
+            outcomePrices: market.outcomePrices,
+            liquidityUsd: nullableNumber(market.liquidityNum),
+            volumeUsd: nullableNumber(market.volumeNum),
+          },
+        ];
+      },
+    );
     if (selectableMarkets.length === 0) return [];
 
-    const selectedSlugs = await this.searchResultSelector!.selectPolymarketSearchResults({
-      thesis: input.thesis,
-      tradeExpression: input.tradeExpression,
-      markets: selectableMarkets,
-      limit: input.limit,
-    });
+    const selectedSlugs =
+      await this.searchResultSelector!.selectPolymarketSearchResults({
+        thesis: input.thesis,
+        tradeExpression: input.tradeExpression,
+        markets: rankPolymarketSearchResultsForAi({
+          thesis: input.thesis,
+          tradeExpression: input.tradeExpression,
+          markets: selectableMarkets,
+        }).slice(0, POLYMARKET_SEARCH_RESULTS_FOR_AI_LIMIT),
+        limit: input.limit,
+      });
     const selectedSlugSet = new Set(selectedSlugs);
     return activeMarkets
-      .filter((market) => typeof market.slug === "string" && selectedSlugSet.has(market.slug))
-      .sort((a, b) => selectedSlugs.indexOf(a.slug ?? "") - selectedSlugs.indexOf(b.slug ?? ""))
+      .filter(
+        (market) =>
+          typeof market.slug === "string" && selectedSlugSet.has(market.slug),
+      )
+      .sort(
+        (a, b) =>
+          selectedSlugs.indexOf(a.slug ?? "") -
+          selectedSlugs.indexOf(b.slug ?? ""),
+      )
       .slice(0, input.limit);
   }
 
   async assessPolymarketMarket(input: {
     thesis: Thesis;
     tradeExpression?: TradeExpressionPlan;
-    market: { conditionId?: string | null; marketSlug?: string | null; question?: string | null };
+    market: {
+      conditionId?: string | null;
+      marketSlug?: string | null;
+      question?: string | null;
+    };
     side: "yes" | "no";
   }): Promise<PolymarketMarketAssessment> {
     const candidates = await this.findPolymarketMarkets({
@@ -720,28 +892,59 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
       limit: 20,
     });
     const candidate = candidates.find((item) => {
-      if (input.market.conditionId && item.conditionId === input.market.conditionId) return true;
-      if (input.market.marketSlug && item.marketSlug === input.market.marketSlug) return true;
-      if (input.market.question && item.marketQuestion === input.market.question) return true;
+      if (
+        input.market.conditionId &&
+        item.conditionId === input.market.conditionId
+      )
+        return true;
+      if (
+        input.market.marketSlug &&
+        item.marketSlug === input.market.marketSlug
+      )
+        return true;
+      if (
+        input.market.question &&
+        item.marketQuestion === input.market.question
+      )
+        return true;
       return false;
     });
 
     if (!candidate) {
-      throw new Error("Polymarket assessment could not find the requested market in live discovery results.");
+      throw new Error(
+        "Polymarket assessment could not find the requested market in live discovery results.",
+      );
     }
 
     const wantsNo = input.side === "no";
-    const trade = candidate.side === (wantsNo ? "buy_no" : "buy_yes")
-      ? candidate
-      : await this.flipPolymarketCandidateSide(candidate, input.side);
+    const trade =
+      candidate.side === (wantsNo ? "buy_no" : "buy_yes")
+        ? candidate
+        : await this.flipPolymarketCandidateSide(candidate, input.side);
 
-    if (!trade.conditionId || !trade.outcomeTokenId || !trade.marketQuestion || !trade.marketSlug || !trade.outcome || trade.yesPrice == null || trade.noPrice == null || trade.heldSidePrice == null) {
-      throw new Error("Polymarket assessment requires condition_id, outcome token, question, slug, outcome, and normalized prices.");
+    if (
+      !trade.conditionId ||
+      !trade.outcomeTokenId ||
+      !trade.marketQuestion ||
+      !trade.marketSlug ||
+      !trade.outcome ||
+      trade.yesPrice == null ||
+      trade.noPrice == null ||
+      trade.heldSidePrice == null
+    ) {
+      throw new Error(
+        "Polymarket assessment requires condition_id, outcome token, question, slug, outcome, and normalized prices.",
+      );
     }
 
     const warnings = Array.from(new Set([...(trade.warnings ?? [])]));
     return {
-      fit: trade.thesisFit >= 0.7 ? "strong" : trade.thesisFit >= 0.4 ? "weak" : "no_fit",
+      fit:
+        trade.thesisFit >= 0.7
+          ? "strong"
+          : trade.thesisFit >= 0.4
+            ? "weak"
+            : "no_fit",
       fitReason: trade.reason,
       warnings,
       trade: {
@@ -773,7 +976,9 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     ]);
     const metrics = orderBookMetrics(book.bids ?? [], book.asks ?? []);
     if (!metrics) {
-      throw new Error(`Polymarket order book is empty for token ${input.outcomeTokenId}.`);
+      throw new Error(
+        `Polymarket order book is empty for token ${input.outcomeTokenId}.`,
+      );
     }
     const heldSidePrice = buyPrice ?? metrics.mid;
 
@@ -781,8 +986,8 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
       conditionId: input.conditionId ?? null,
       outcomeTokenId: input.outcomeTokenId,
       outcome: input.side,
-      yesPrice: input.side === "yes" ? heldSidePrice : input.yesPrice ?? null,
-      noPrice: input.side === "no" ? heldSidePrice : input.noPrice ?? null,
+      yesPrice: input.side === "yes" ? heldSidePrice : (input.yesPrice ?? null),
+      noPrice: input.side === "no" ? heldSidePrice : (input.noPrice ?? null),
       heldSidePrice,
       bid: metrics.bid,
       ask: metrics.ask,
@@ -792,10 +997,16 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
     };
   }
 
-  private async flipPolymarketCandidateSide(candidate: MarketCandidate, side: "yes" | "no"): Promise<MarketCandidate> {
-    const outcomeTokenId = side === "yes" ? candidate.yesOutcomeTokenId : candidate.noOutcomeTokenId;
+  private async flipPolymarketCandidateSide(
+    candidate: MarketCandidate,
+    side: "yes" | "no",
+  ): Promise<MarketCandidate> {
+    const outcomeTokenId =
+      side === "yes" ? candidate.yesOutcomeTokenId : candidate.noOutcomeTokenId;
     if (!outcomeTokenId) {
-      throw new Error("Cannot flip a Polymarket candidate without both outcome token IDs from discovery.");
+      throw new Error(
+        "Cannot flip a Polymarket candidate without both outcome token IDs from discovery.",
+      );
     }
     const quote = await this.quotePolymarketMarket({
       conditionId: candidate.conditionId,
@@ -818,6 +1029,63 @@ export class PolymarketMarketDataProvider implements MarketDataProvider, Polymar
   private async getBook(tokenId: string): Promise<PolymarketBook> {
     return this.searchClient.fetchOrderBook(tokenId);
   }
+}
+
+function rankPolymarketSearchResultsForAi(input: {
+  thesis: Thesis;
+  tradeExpression?: TradeExpressionPlan;
+  markets: PolymarketSearchResultForSelection[];
+}): PolymarketSearchResultForSelection[] {
+  const relevanceTerms = polymarketSearchRelevanceTerms(
+    input.thesis,
+    input.tradeExpression,
+  );
+  return input.markets
+    .map((market, index) => ({
+      market,
+      index,
+      score: polymarketSearchResultScore(market, relevanceTerms),
+    }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map((ranked) => ranked.market);
+}
+
+function polymarketSearchResultScore(
+  market: PolymarketSearchResultForSelection,
+  relevanceTerms: Set<string>,
+): number {
+  const searchable =
+    `${market.slug} ${market.question} ${market.resolutionRules ?? ""}`.toLowerCase();
+  let score = 0;
+  for (const term of relevanceTerms) {
+    if (searchable.includes(term)) score += term.length >= 5 ? 20 : 10;
+  }
+  if (market.endDate) score += 5;
+  score += Math.log10(Math.max(0, market.liquidityUsd ?? 0) + 1) * 3;
+  score += Math.log10(Math.max(0, market.volumeUsd ?? 0) + 1) * 2;
+  return score;
+}
+
+function polymarketSearchRelevanceTerms(
+  thesis: Thesis,
+  tradeExpression?: TradeExpressionPlan,
+): Set<string> {
+  return new Set(
+    [
+      thesis.claim,
+      ...thesis.mentionedAssets,
+      ...thesis.topics,
+      tradeExpression?.directAsset ?? null,
+      ...(tradeExpression?.candidateExpressions.flatMap((candidate) => [
+        candidate.primaryEntityOrEvent,
+        candidate.abstractMarket,
+        ...candidate.searchTerms,
+      ]) ?? []),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .flatMap((value) => value.toLowerCase().split(/[^a-z0-9]+/u))
+      .filter((term) => term.length >= 3),
+  );
 }
 
 function orderBookMetrics(
@@ -872,7 +1140,13 @@ function estimateBuySlippageBps(
   for (const level of asks) {
     const price = Number(level.px ?? level.price);
     const size = Number(level.sz ?? level.size);
-    if (!Number.isFinite(price) || !Number.isFinite(size) || price <= 0 || size <= 0) continue;
+    if (
+      !Number.isFinite(price) ||
+      !Number.isFinite(size) ||
+      price <= 0 ||
+      size <= 0
+    )
+      continue;
     const levelNotional = price * size;
     const spend = Math.min(remaining, levelNotional);
     spent += spend;
@@ -889,7 +1163,10 @@ function estimateBuySlippageBps(
   return Math.max(0, Math.round(((averagePrice - bestAsk) / bestAsk) * 10_000));
 }
 
-function parseStringArray(value: string | string[] | undefined, context: { field: string; market: string }): string[] {
+function parseStringArray(
+  value: string | string[] | undefined,
+  context: { field: string; market: string },
+): string[] {
   if (Array.isArray(value)) {
     if (value.some((item) => typeof item !== "string")) {
       throw malformedPolymarketStringArrayError(context);
@@ -905,17 +1182,21 @@ function parseStringArray(value: string | string[] | undefined, context: { field
     throw malformedPolymarketStringArrayError(context, error);
   }
 
-  if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== "string")) {
+  if (
+    !Array.isArray(parsed) ||
+    parsed.some((item) => typeof item !== "string")
+  ) {
     throw malformedPolymarketStringArrayError(context);
   }
 
   return parsed;
 }
 
-function parseNumberArray(value: string | string[] | undefined, context: { field: string; market: string }): number[] {
-  const items = Array.isArray(value)
-    ? value
-    : parseJsonArray(value, context);
+function parseNumberArray(
+  value: string | string[] | undefined,
+  context: { field: string; market: string },
+): number[] {
+  const items = Array.isArray(value) ? value : parseJsonArray(value, context);
 
   return items
     .filter((item) => item !== null)
@@ -934,7 +1215,10 @@ function parseNumberArray(value: string | string[] | undefined, context: { field
     });
 }
 
-function parseJsonArray(value: string | undefined, context: { field: string; market: string }): unknown[] {
+function parseJsonArray(
+  value: string | undefined,
+  context: { field: string; market: string },
+): unknown[] {
   if (!value) return [];
 
   let parsed: unknown;
@@ -951,34 +1235,50 @@ function parseJsonArray(value: string | undefined, context: { field: string; mar
   return parsed;
 }
 
-function malformedPolymarketStringArrayError(context: { field: string; market: string }, cause?: unknown): Error {
+function malformedPolymarketStringArrayError(
+  context: { field: string; market: string },
+  cause?: unknown,
+): Error {
   const causeMessage = cause instanceof Error ? ` ${cause.message}` : "";
-  return new Error(`Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of strings or string[].${causeMessage}`);
+  return new Error(
+    `Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of strings or string[].${causeMessage}`,
+  );
 }
 
-function malformedPolymarketNumberArrayError(context: { field: string; market: string }): Error {
-  return new Error(`Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of numeric strings or numbers.`);
+function malformedPolymarketNumberArrayError(context: {
+  field: string;
+  market: string;
+}): Error {
+  return new Error(
+    `Malformed Polymarket provider field ${context.field} for market ${context.market}. Expected a JSON array of numeric strings or numbers.`,
+  );
 }
 
 function polymarketBookFromSdkBook(book: OrderBook): PolymarketBook {
   return {
-    bids: book.bids?.map((level) => ({
-      price: String(level.price),
-      size: String(level.size),
-    })) ?? [],
-    asks: book.asks?.map((level) => ({
-      price: String(level.price),
-      size: String(level.size),
-    })) ?? [],
+    bids:
+      book.bids?.map((level) => ({
+        price: String(level.price),
+        size: String(level.size),
+      })) ?? [],
+    asks:
+      book.asks?.map((level) => ({
+        price: String(level.price),
+        size: String(level.size),
+      })) ?? [],
   };
 }
 
-function nullableNumber(value: string | number | null | undefined): number | null {
+function nullableNumber(
+  value: string | number | null | undefined,
+): number | null {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymarketMarket {
+function normalizePolymarketMarket(
+  market: PolymarketMarket,
+): NormalizedPolymarketMarket {
   const slug = market.slug ?? market.id ?? market.question;
   if (!slug) {
     throw new Error("Polymarket market is missing a slug.");
@@ -987,8 +1287,14 @@ function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymark
     throw new Error(`Polymarket market ${slug} is missing condition_id.`);
   }
 
-  const tokenIds = parseStringArray(market.clobTokenIds, { field: "clobTokenIds", market: slug });
-  const prices = parseNumberArray(market.outcomePrices, { field: "outcomePrices", market: slug });
+  const tokenIds = parseStringArray(market.clobTokenIds, {
+    field: "clobTokenIds",
+    market: slug,
+  });
+  const prices = parseNumberArray(market.outcomePrices, {
+    field: "outcomePrices",
+    market: slug,
+  });
   const yesPrice = prices[0] ?? null;
   const noPrice = prices[1] ?? (yesPrice == null ? null : 1 - yesPrice);
 
@@ -1010,9 +1316,14 @@ function normalizePolymarketMarket(market: PolymarketMarket): NormalizedPolymark
 function polymarketResolutionRules(market: PolymarketMarket): string | null {
   const text = [
     market.description,
-    market.resolutionSource ? `Resolution source: ${market.resolutionSource}` : null,
+    market.resolutionSource
+      ? `Resolution source: ${market.resolutionSource}`
+      : null,
   ]
-    .filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+    .filter(
+      (value): value is string =>
+        typeof value === "string" && value.trim().length > 0,
+    )
     .map((value) => value.trim())
     .join("\n\n");
   return text.length > 0 ? text : null;
@@ -1029,12 +1340,15 @@ function polymarketWarnings(market: NormalizedPolymarketMarket): string[] {
   return warnings;
 }
 
-function uniquePolymarketMarkets(markets: PolymarketMarket[]): PolymarketMarket[] {
+function uniquePolymarketMarkets(
+  markets: PolymarketMarket[],
+): PolymarketMarket[] {
   const seen = new Set<string>();
   const unique: PolymarketMarket[] = [];
 
   for (const market of markets) {
-    const key = market.conditionId ?? market.slug ?? market.id ?? market.question;
+    const key =
+      market.conditionId ?? market.slug ?? market.id ?? market.question;
     if (!key || seen.has(key)) continue;
     seen.add(key);
     unique.push(market);
@@ -1047,12 +1361,14 @@ function polymarketOutcomeForTradeExpression(
   tradeExpression: TradeExpressionPlan | undefined,
   thesis: Thesis,
 ): "yes" | "no" {
-  const expressionSide = tradeExpression?.candidateExpressions.find((candidate) =>
-    candidate.expressionRail === "prediction_market"
-      && candidate.intendedSide !== "avoid"
-      && candidate.directness === "direct",
+  const expressionSide = tradeExpression?.candidateExpressions.find(
+    (candidate) =>
+      candidate.expressionRail === "prediction_market" &&
+      candidate.intendedSide !== "avoid" &&
+      candidate.directness === "direct",
   )?.intendedSide;
 
-  if (expressionSide === "yes" || expressionSide === "no") return expressionSide;
+  if (expressionSide === "yes" || expressionSide === "no")
+    return expressionSide;
   return thesis.direction === "bearish" ? "no" : "yes";
 }

@@ -6,8 +6,9 @@ import {
   providerOptionsForRoute,
   type StructuredAiClient,
 } from "../ai/client.ts";
-import { CompositeMarketDataProvider } from "../adapters/index.ts";
 import {
+  CompositeMarketDataProvider,
+  HyperliquidMarketDataProvider,
   PolymarketMarketDataProvider,
 } from "../adapters/index.ts";
 import {
@@ -21,7 +22,11 @@ import type { CassieStore } from "../core/db/store.ts";
 import type { ControlRun } from "../core/schemas/index.ts";
 import { SupervisorFinalResultSchema } from "../core/schemas/index.ts";
 import { formatErrorForLog } from "../core/helpers/error-format.ts";
-import { createCassieSupervisorTools, finalizeRunFromPersistedSteps } from "./tools.ts";
+import {
+  createCassieSupervisorTools,
+  finalizeRunFromPersistedSteps,
+} from "./tools.ts";
+import { runCassieSupervisorPipeline } from "./pipeline.ts";
 import { GrokXSourceResolver, type SourceResolver } from "./source.ts";
 import {
   createCassieStopConditions,
@@ -36,7 +41,7 @@ export interface CassieDependencies {
   ai?: StructuredAiClient;
   cheapAi?: StructuredAiClient;
   importantAi?: StructuredAiClient;
-  marketData: MarketDataProvider;
+  hyperliquidMarketData: MarketDataProvider;
   polymarketMarketFinder?: PolymarketMarketFinder;
   sourceResolver?: SourceResolver;
 }
@@ -47,22 +52,48 @@ export async function runCassieSupervisorForRun(input: {
   deps?: CassieDependencies;
 }) {
   const store = input.store ?? new DrizzleCassieStore();
-  const run = await store.getRun(input.runId);
-  if (!run) throw new Error(`Run ${input.runId} was not found.`);
+  const running = await store.claimRun(input.runId);
+  if (!running) {
+    const existing = await store.getRun(input.runId);
+    if (!existing) throw new Error(`Run ${input.runId} was not found.`);
+    await store.audit({
+      entityId: existing.runId,
+      entityType: "run",
+      eventType: "agent.run_claim.skipped",
+      message: `Cassie supervisor skipped run with status ${existing.status}.`,
+      data: { runId: existing.runId, status: existing.status },
+    });
+    return { skipped: true, run: existing };
+  }
 
-  const userSettings = await store.getUserSettings(run.userId);
-  if (!userSettings) throw new Error(`No Cassie settings found for user ${run.userId}.`);
-
-  const running = {
-    ...run,
-    status: "running" as const,
-    error: null,
-    updatedAt: new Date().toISOString(),
-  };
-  await store.updateRun(running);
+  const userSettings = await store.getUserSettings(running.userId);
+  if (!userSettings)
+    throw new Error(`No Cassie settings found for user ${running.userId}.`);
 
   try {
     const deps = input.deps ?? defaultDependencies();
+    if (config.supervisor.mode === "pipeline") {
+      const finalResult = await runCassieSupervisorPipeline({
+        store,
+        deps,
+        run: running,
+        userSettings,
+      });
+      await store.audit({
+        entityId: running.runId,
+        entityType: "run",
+        eventType: "agent.finished",
+        message: "Cassie deterministic supervisor pipeline finished.",
+        data: {
+          runId: running.runId,
+          mode: "pipeline",
+          responseType: finalResult.responseType,
+          actionState: finalResult.actionState,
+        },
+      });
+      return finalResult;
+    }
+
     const tools = createCassieSupervisorTools({
       store,
       deps,
@@ -85,39 +116,41 @@ export async function runCassieSupervisorForRun(input: {
       prepareStep: prepareCassieSupervisorStep,
       onStepFinish: async (step) => {
         const usage = usageRecord(step.usage);
-        await store.addModelCallUsage({
-          controlRunId: running.runId,
-          runStepId: null,
-          purpose: "supervisor_step",
-          provider: providerFromModel(step.model),
-          model: modelName(step.model),
-          promptName: "cassie_supervisor",
-          promptVersion: "2026-05-20",
-          inputTokens: usage.inputTokens,
-          outputTokens: usage.outputTokens,
-          reasoningTokens: usage.reasoningTokens,
-          cachedTokens: usage.cachedTokens,
-          totalTokens: usage.totalTokens,
-          estimatedCostUsd: null,
-          latencyMs: null,
-          thinkingTrace: extractModelThinkingTrace(step),
-          status: "succeeded",
-          error: null,
-        });
-        await store.audit({
-          entityId: running.runId,
-          entityType: "run",
-          eventType: "agent.step.finished",
-          message: "Cassie supervisor step finished.",
-          data: {
-            runId: running.runId,
-            stepNumber: step.stepNumber,
-            model: step.model,
-            finishReason: step.finishReason,
-            usage: step.usage,
-            toolCalls: step.toolCalls.map((call) => call.toolName),
-          },
-        });
+        await Promise.all([
+          store.addModelCallUsage({
+            controlRunId: running.runId,
+            runStepId: null,
+            purpose: "supervisor_step",
+            provider: providerFromModel(step.model),
+            model: modelName(step.model),
+            promptName: "cassie_supervisor",
+            promptVersion: "2026-05-20",
+            inputTokens: usage.inputTokens,
+            outputTokens: usage.outputTokens,
+            reasoningTokens: usage.reasoningTokens,
+            cachedTokens: usage.cachedTokens,
+            totalTokens: usage.totalTokens,
+            estimatedCostUsd: null,
+            latencyMs: null,
+            thinkingTrace: extractModelThinkingTrace(step),
+            status: "succeeded",
+            error: null,
+          }),
+          store.audit({
+            entityId: running.runId,
+            entityType: "run",
+            eventType: "agent.step.finished",
+            message: "Cassie supervisor step finished.",
+            data: {
+              runId: running.runId,
+              stepNumber: step.stepNumber,
+              model: step.model,
+              finishReason: step.finishReason,
+              usage: step.usage,
+              toolCalls: step.toolCalls.map((call) => call.toolName),
+            },
+          }),
+        ]);
       },
       onFinish: async (event) => {
         await store.audit({
@@ -150,8 +183,9 @@ export async function runCassieSupervisorForRun(input: {
         stepMs: config.supervisor.stepTimeoutMs,
       },
     });
-    const finalResult = extractFinalizeRunOutput(result)
-      ?? await finalizeRunFromPersistedSteps({ store, run: running });
+    const finalResult =
+      extractFinalizeRunOutput(result) ??
+      (await finalizeRunFromPersistedSteps({ store, run: running }));
 
     const completed = await store.getRun(running.runId);
     if (completed?.status === "running") {
@@ -177,7 +211,10 @@ export async function runCassieSupervisorForRun(input: {
   }
 }
 
-function extractFinalizeRunOutput(result: { toolResults: unknown[]; steps: Array<{ toolResults: unknown[] }> }) {
+function extractFinalizeRunOutput(result: {
+  toolResults: unknown[];
+  steps: Array<{ toolResults: unknown[] }>;
+}) {
   const toolResults = [
     ...result.steps.flatMap((step) => step.toolResults),
     ...result.toolResults,
@@ -192,17 +229,22 @@ function extractFinalizeRunOutput(result: { toolResults: unknown[]; steps: Array
 
 function defaultDependencies(): CassieDependencies {
   const ai = new CassieStructuredClient();
+  const polymarketMarketFinder = new PolymarketMarketDataProvider(
+    undefined,
+    new AiPolymarketDiscoveryQueryPlanner(ai),
+    new AiPolymarketSearchResultSelector(ai),
+  );
+
   return {
     ai,
     cheapAi: ai,
     importantAi: ai,
-    marketData: new CompositeMarketDataProvider(),
+    // Hyperliquid direct symbol discovery is intentionally separate from Polymarket's AI-backed semantic search.
+    hyperliquidMarketData: new CompositeMarketDataProvider([
+      new HyperliquidMarketDataProvider(),
+    ]),
     sourceResolver: new GrokXSourceResolver(),
-    polymarketMarketFinder: new PolymarketMarketDataProvider(
-      undefined,
-      new AiPolymarketDiscoveryQueryPlanner(ai),
-      new AiPolymarketSearchResultSelector(ai),
-    ),
+    polymarketMarketFinder,
   };
 }
 
@@ -262,11 +304,15 @@ function buildSupervisorPrompt(run: ControlRun): string {
     `Run ID: ${run.runId}`,
     `User command: ${run.userCommand}`,
     "Source post:",
-    JSON.stringify({
-      text: run.sourcePost.text,
-      url: run.sourcePost.url,
-      author: run.sourcePost.authorHandle,
-    }, null, 2),
+    JSON.stringify(
+      {
+        text: run.sourcePost.text,
+        url: run.sourcePost.url,
+        author: run.sourcePost.authorHandle,
+      },
+      null,
+      2,
+    ),
   ].join("\n");
 }
 
@@ -280,7 +326,9 @@ function createAuditTelemetryIntegration(
         entityId: run.runId,
         entityType: "run",
         eventType: event.success ? "agent.tool.finished" : "agent.tool.failed",
-        message: event.success ? "Cassie supervisor tool finished." : "Cassie supervisor tool failed.",
+        message: event.success
+          ? "Cassie supervisor tool finished."
+          : "Cassie supervisor tool failed.",
         data: {
           runId: run.runId,
           stepNumber: event.stepNumber,
@@ -308,7 +356,9 @@ function usageRecord(usage: unknown) {
 }
 
 function objectRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? value as Record<string, unknown> : {};
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function numberOrNull(value: unknown): number | null {
@@ -327,5 +377,5 @@ function providerFromModel(model: unknown): string {
   const name = modelName(model);
   if (name.startsWith("deepseek-")) return "deepseek";
   if (name.startsWith("gemini-")) return "google";
-  return name.includes("/") ? name.split("/")[0] ?? "unknown" : "openai";
+  return name.includes("/") ? (name.split("/")[0] ?? "unknown") : "openai";
 }

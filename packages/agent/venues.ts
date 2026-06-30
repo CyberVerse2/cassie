@@ -18,7 +18,10 @@ import {
 } from "../adapters/selection.ts";
 import { formatErrorForLog } from "../core/helpers/error-format.ts";
 import { isConfiguredDirectVenueExpressionRail } from "../core/expression-rails.ts";
-import { expressionFitPromptSpec, structuredPromptInput } from "../prompts/index.ts";
+import {
+  expressionFitPromptSpec,
+  structuredPromptInput,
+} from "../prompts/index.ts";
 
 export type TradeExpressionIntent = {
   thesis: Thesis;
@@ -33,7 +36,7 @@ export type VenueSearchIntent = TradeExpressionIntent & {
 export type VenueMarketCandidate = MarketCandidate;
 
 export async function searchVenues(input: {
-  marketData: MarketDataProvider;
+  hyperliquidMarketData: MarketDataProvider;
   polymarket?: PolymarketMarketFinder;
   thesis: Thesis;
   tradeExpression: TradeExpressionPlan;
@@ -42,15 +45,22 @@ export async function searchVenues(input: {
 }): Promise<VenueMarketCandidate[]> {
   const searchIntent = buildVenueSearchIntent(input);
   const venues = searchIntent.venues;
-  const tasks: Array<{ venue: "hyperliquid" | "polymarket"; run: () => Promise<VenueMarketCandidate[]> }> = [];
+  const tasks: Array<{
+    venue: "hyperliquid" | "polymarket";
+    run: () => Promise<VenueMarketCandidate[]>;
+  }> = [];
 
-  if (venues.includes("hyperliquid") && shouldSearchDirectVenue(input.tradeExpression)) {
+  if (
+    venues.includes("hyperliquid") &&
+    shouldSearchDirectVenue(input.tradeExpression)
+  ) {
     tasks.push({
       venue: "hyperliquid",
-      run: () => input.marketData.findCandidates({
-        thesis: searchIntent.thesis,
-        tradeExpression: searchIntent.tradeExpression,
-      }),
+      run: () =>
+        input.hyperliquidMarketData.findCandidates({
+          thesis: searchIntent.thesis,
+          tradeExpression: searchIntent.tradeExpression,
+        }),
     });
   }
 
@@ -59,7 +69,9 @@ export async function searchVenues(input: {
       venue: "polymarket",
       run: () => {
         if (!input.polymarket) {
-          throw new Error("search_venues requires a configured Polymarket market finder dependency.");
+          throw new Error(
+            "search_venues requires a configured Polymarket market finder dependency.",
+          );
         }
         return findPolymarketMarkets({
           polymarket: input.polymarket,
@@ -75,36 +87,46 @@ export async function searchVenues(input: {
     return [];
   }
 
-  const results = await Promise.all(tasks.map(async (task) => {
-    try {
-      return {
-        venue: task.venue,
-        candidates: await task.run(),
-        error: null,
-      };
-    } catch (error) {
-      return {
-        venue: task.venue,
-        candidates: [],
-        error: errorMessage(error),
-      };
-    }
-  }));
+  const results = await Promise.all(
+    tasks.map(async (task) => {
+      try {
+        return {
+          venue: task.venue,
+          candidates: await task.run(),
+          error: null,
+        };
+      } catch (error) {
+        return {
+          venue: task.venue,
+          candidates: [],
+          error: errorMessage(error),
+        };
+      }
+    }),
+  );
 
   const failures = results
     .filter((result) => result.error)
     .map((result) => `${result.venue}: ${result.error}`);
 
   const requiredFailures = results
-    .filter((result) => result.error && isRequiredVenueFailure(searchIntent.tradeExpression, result.venue))
+    .filter(
+      (result) =>
+        result.error &&
+        isRequiredVenueFailure(searchIntent.tradeExpression, result.venue),
+    )
     .map((result) => `${result.venue}: ${result.error}`);
 
   if (requiredFailures.length > 0) {
-    throw new Error(`Required venue search failed: ${requiredFailures.join("; ")}`);
+    throw new Error(
+      `Required venue search failed: ${requiredFailures.join("; ")}`,
+    );
   }
 
   if (failures.length > 0 && failures.length === tasks.length) {
-    throw new Error(`Venue search failed across all requested venues: ${failures.join("; ")}`);
+    throw new Error(
+      `Venue search failed across all requested venues: ${failures.join("; ")}`,
+    );
   }
 
   return sortCandidatesByExpressionPriority(
@@ -119,43 +141,56 @@ function isRequiredVenueFailure(
 ): boolean {
   if (venue !== "polymarket") return false;
 
-  return tradeExpression.candidateExpressions.some((candidate) =>
-    candidate.expressionRail === "prediction_market"
-      && candidate.priority === "high"
-      && candidate.intendedSide !== "avoid"
-      && candidate.directness === "direct"
-      && candidate.searchTerms.length > 0,
+  return tradeExpression.candidateExpressions.some(
+    (candidate) =>
+      candidate.expressionRail === "prediction_market" &&
+      candidate.priority === "high" &&
+      candidate.intendedSide !== "avoid" &&
+      candidate.directness === "direct" &&
+      candidate.searchTerms.length > 0,
   );
 }
 
-function shouldSearchDirectVenue(tradeExpression: TradeExpressionPlan): boolean {
-  return tradeExpression.directAssetTradable
-    || tradeExpression.candidateExpressions.some((candidate) =>
-      isConfiguredDirectVenueExpressionRail(candidate.expressionRail)
-        && candidate.intendedSide !== "avoid"
-        && candidate.searchTerms.length > 0,
-    );
+function shouldSearchDirectVenue(
+  tradeExpression: TradeExpressionPlan,
+): boolean {
+  return (
+    tradeExpression.directAssetTradable ||
+    tradeExpression.candidateExpressions.some(
+      (candidate) =>
+        isConfiguredDirectVenueExpressionRail(candidate.expressionRail) &&
+        candidate.intendedSide !== "avoid" &&
+        candidate.searchTerms.length > 0,
+    )
+  );
 }
 
 function sortCandidatesByExpressionPriority(
   candidates: VenueMarketCandidate[],
   tradeExpression: TradeExpressionPlan,
 ): VenueMarketCandidate[] {
-  return [...candidates].sort((a, b) =>
-    candidateExpressionScore(b, tradeExpression) - candidateExpressionScore(a, tradeExpression));
+  return [...candidates].sort(
+    (a, b) =>
+      candidateExpressionScore(b, tradeExpression) -
+      candidateExpressionScore(a, tradeExpression),
+  );
 }
 
 function candidateExpressionScore(
   candidate: VenueMarketCandidate,
   tradeExpression: TradeExpressionPlan,
 ): number {
-  return Math.max(0, ...tradeExpression.candidateExpressions
-    .filter((expression) => candidateMatchesExpression(candidate, expression))
-    .map((expression) =>
-      priorityScore(expression.priority)
-        + directnessScore(expression.directness)
-        + expression.confidence,
-    ));
+  return Math.max(
+    0,
+    ...tradeExpression.candidateExpressions
+      .filter((expression) => candidateMatchesExpression(candidate, expression))
+      .map(
+        (expression) =>
+          priorityScore(expression.priority) +
+          directnessScore(expression.directness) +
+          expression.confidence,
+      ),
+  );
 }
 
 function candidateMatchesExpression(
@@ -164,14 +199,20 @@ function candidateMatchesExpression(
 ): boolean {
   if (expression.intendedSide === "avoid") return false;
   if (candidate.venue === "polymarket") {
-    return expression.expressionRail === "prediction_market"
-      && predictionMarketCandidateSide(candidate) === expression.intendedSide;
+    return (
+      expression.expressionRail === "prediction_market" &&
+      predictionMarketCandidateSide(candidate) === expression.intendedSide
+    );
   }
-  return isConfiguredDirectVenueExpressionRail(expression.expressionRail)
-    && candidate.side === expression.intendedSide;
+  return (
+    isConfiguredDirectVenueExpressionRail(expression.expressionRail) &&
+    candidate.side === expression.intendedSide
+  );
 }
 
-function predictionMarketCandidateSide(candidate: VenueMarketCandidate): "yes" | "no" | null {
+function predictionMarketCandidateSide(
+  candidate: VenueMarketCandidate,
+): "yes" | "no" | null {
   if (candidate.side === "buy_yes" || candidate.outcome === "yes") return "yes";
   if (candidate.side === "buy_no" || candidate.outcome === "no") return "no";
   return null;
@@ -216,14 +257,18 @@ export async function assessExpressionFit(input: {
   side?: "yes" | "no";
 }): Promise<ExpressionFitAssessment> {
   const candidate = MarketCandidateSchema.parse(input.candidate);
-  return ExpressionFitAssessmentSchema.parse(await input.ai.generateObject({
-    ...structuredPromptInput(expressionFitPromptSpec({
-      opportunityFrame: input.opportunityFrame,
-      tradeExpression: input.tradeExpression,
-      candidate,
-      side: input.side,
-    })),
-  }));
+  return ExpressionFitAssessmentSchema.parse(
+    await input.ai.generateObject({
+      ...structuredPromptInput(
+        expressionFitPromptSpec({
+          opportunityFrame: input.opportunityFrame,
+          tradeExpression: input.tradeExpression,
+          candidate,
+          side: input.side,
+        }),
+      ),
+    }),
+  );
 }
 
 export async function quoteExpression(input: {
@@ -235,19 +280,23 @@ export async function quoteExpression(input: {
     return MarketCandidateSchema.parse(input.candidate);
   }
   if (!input.polymarket) {
-    throw new Error("quote_expression requires a configured Polymarket market finder dependency.");
+    throw new Error(
+      "quote_expression requires a configured Polymarket market finder dependency.",
+    );
   }
   if (!input.candidate.outcomeTokenId) {
     throw new Error("quote_expression requires a Polymarket outcome token id.");
   }
-  return PolymarketQuoteSchema.parse(await quotePolymarketMarket({
-    polymarket: input.polymarket,
-    conditionId: input.candidate.conditionId,
-    outcomeTokenId: input.candidate.outcomeTokenId,
-    side: input.side ?? polymarketSideFromCandidate(input.candidate),
-    yesPrice: input.candidate.yesPrice,
-    noPrice: input.candidate.noPrice,
-  }));
+  return PolymarketQuoteSchema.parse(
+    await quotePolymarketMarket({
+      polymarket: input.polymarket,
+      conditionId: input.candidate.conditionId,
+      outcomeTokenId: input.candidate.outcomeTokenId,
+      side: input.side ?? polymarketSideFromCandidate(input.candidate),
+      yesPrice: input.candidate.yesPrice,
+      noPrice: input.candidate.noPrice,
+    }),
+  );
 }
 
 function polymarketSideFromCandidate(candidate: MarketCandidate): "yes" | "no" {
@@ -255,20 +304,24 @@ function polymarketSideFromCandidate(candidate: MarketCandidate): "yes" | "no" {
   return "yes";
 }
 
-function uniqueMarketCandidates(candidates: MarketCandidate[]): MarketCandidate[] {
+function uniqueMarketCandidates(
+  candidates: MarketCandidate[],
+): MarketCandidate[] {
   const seen = new Set<string>();
-  return MarketCandidateSchema.array().parse(candidates).filter((candidate) => {
-    const key = [
-      candidate.venue,
-      candidate.symbol,
-      candidate.side,
-      candidate.conditionId ?? "",
-      candidate.outcomeTokenId ?? "",
-    ].join("|");
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return MarketCandidateSchema.array()
+    .parse(candidates)
+    .filter((candidate) => {
+      const key = [
+        candidate.venue,
+        candidate.symbol,
+        candidate.side,
+        candidate.conditionId ?? "",
+        candidate.outcomeTokenId ?? "",
+      ].join("|");
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
 }
 
 const errorMessage = formatErrorForLog;
