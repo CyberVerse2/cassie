@@ -362,6 +362,14 @@ describe("prompts", () => {
         searchContextSize: "low",
       },
     });
+    expect(
+      sourceContextDiscoveryPromptSpec({
+        sourcePost,
+        userCommand: "@cassiedottrade trade this",
+      }).system,
+    ).toContain(
+      "are there any assets that you can infer will be affected by this?",
+    );
     const opportunityPayload = JSON.parse(
       String(
         opportunityFramePromptSpec({
