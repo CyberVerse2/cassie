@@ -93,6 +93,7 @@ export class MissingImportantAiDependencyError extends MissingAiDependencyError 
 }
 
 const cheapStructuredSteps = new Set(["cassie_market_selection"]);
+const xaiStructuredSteps = new Set(["cassie_context_discovery"]);
 
 export function routeStructuredModel(input: {
   name: string;
@@ -103,6 +104,11 @@ export function routeStructuredModel(input: {
 }): ModelRoute {
   const cheapModel = input.cheapModel ?? config.ai.cheapModel;
   const expensiveModel = input.expensiveModel ?? config.ai.importantModel;
+  const xaiModel = input.xaiModel ?? config.ai.grokXSearchModel;
+  if (xaiStructuredSteps.has(input.name)) {
+    return { tier: "expensive", provider: "xai", model: xaiModel };
+  }
+
   const tier =
     input.tier ??
     (cheapStructuredSteps.has(input.name) ? "cheap" : "expensive");

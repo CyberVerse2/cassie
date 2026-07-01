@@ -106,7 +106,7 @@ export async function runCassieSupervisorPipeline(input: {
     stepType: "context_discovery",
     promptName: "cassie_context_discovery",
     promptVersion,
-    model: config.ai.importantModel,
+    model: config.ai.grokXSearchModel,
     stepInput: {
       userCommand: input.run.userCommand,
       sourcePost: source,

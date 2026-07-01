@@ -607,7 +607,9 @@ Rules:
 - Multiple plausible claims are allowed; keep them concise.
 - For assets, do not limit yourself to tickers or asset names explicitly discovered in the context. Always ask: are there any assets that you can infer will be affected by this?
 - Infer affected assets from the causal implications of the discovered claims, including indirect exposure through products, revenue lines, regulation, supply/demand, customers, suppliers, competitors, or sector linkage.
-- Before returning assets: [], first determine whether the discovered claims imply any materially affected public company, token, commodity, sector exposure, or venue-searchable asset.
+- Assets must be concrete and venue-searchable: specific public companies (by ticker), tokens, or commodities. An abstract sector, industry, category, or supply chain (e.g. "compounding pharmacies", "peptide suppliers", "the semiconductor sector") is NOT a valid asset on its own.
+- When a claim points to a sector, product category, or regulatory regime, do not stop there: enumerate the best-known publicly traded companies that operate in or derive material revenue from that space — including telehealth, pharma, retail, platform, and supplier names — and return the most materially exposed ones by ticker, even if none were mentioned in the source.
+- Before returning assets: [], first determine whether the discovered claims imply any materially affected public company, token, or commodity; only return empty when no specific named tradeable asset plausibly exists.
 - Include inferred affected assets when the context implies them, and make the inference legible in summary or claims by naming the causal link.
 - Do not decide no-trade. This step only discovers context.`,
   });
