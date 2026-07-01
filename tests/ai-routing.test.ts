@@ -61,6 +61,18 @@ describe("structured AI model routing", () => {
     ).toBeUndefined();
   });
 
+  it("sets Grok reasoning effort to high for context discovery", () => {
+    expect(
+      providerOptionsForRoute(
+        routeStructuredModel({ name: "cassie_context_discovery" }),
+      ),
+    ).toEqual({
+      xai: {
+        reasoningEffort: "high",
+      },
+    });
+  });
+
   it("extracts only model-provided thinking trace text", () => {
     expect(
       extractModelThinkingTrace({

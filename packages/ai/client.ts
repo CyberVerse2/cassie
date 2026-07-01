@@ -24,6 +24,7 @@ export type ModelRoute = {
 };
 
 export const IMPORTANT_OPENAI_REASONING_EFFORT = "medium";
+export const IMPORTANT_XAI_REASONING_EFFORT = "high";
 
 export type StructuredToolConfig = {
   webSearch?: {
@@ -119,14 +120,22 @@ export function routeStructuredModel(input: {
 }
 
 export function providerOptionsForRoute(route: ModelRoute) {
-  return route.provider === "openai"
-    ? {
-        openai: {
-          reasoningEffort: IMPORTANT_OPENAI_REASONING_EFFORT,
-          reasoningSummary: "auto",
-        },
-      }
-    : undefined;
+  if (route.provider === "openai") {
+    return {
+      openai: {
+        reasoningEffort: IMPORTANT_OPENAI_REASONING_EFFORT,
+        reasoningSummary: "auto",
+      },
+    };
+  }
+  if (route.provider === "xai") {
+    return {
+      xai: {
+        reasoningEffort: IMPORTANT_XAI_REASONING_EFFORT,
+      },
+    };
+  }
+  return undefined;
 }
 
 export function extractModelThinkingTrace(result: {
