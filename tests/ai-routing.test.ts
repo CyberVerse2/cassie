@@ -33,13 +33,13 @@ describe("structured AI model routing", () => {
     });
   });
 
-  it("routes context discovery to Grok X search", () => {
+  it("routes context discovery to GPT 5.4 mini", () => {
     expect(
       routeStructuredModel({ name: "cassie_context_discovery" }),
     ).toMatchObject({
-      provider: "xai",
+      provider: "openai",
       tier: "expensive",
-      model: "grok-4.3",
+      model: "gpt-5.4-mini",
     });
   });
 
@@ -76,9 +76,8 @@ describe("structured AI model routing", () => {
     expect(extractModelThinkingTrace({ reasoning: [] })).toBeNull();
   });
 
-  it("allows context discovery to use Grok web and X search", () => {
-    const webSearch = vi.fn(() => ({ id: "xai.web_search" }));
-    const xSearch = vi.fn(() => ({ id: "xai.x_search" }));
+  it("allows context discovery to use OpenAI built-in web search", () => {
+    const webSearch = vi.fn(() => ({ id: "openai.web_search" }));
     const route = routeStructuredModel({ name: "cassie_context_discovery" });
 
     expect(
@@ -90,18 +89,14 @@ describe("structured AI model routing", () => {
             searchContextSize: "medium",
           },
         },
-        xai: { tools: { webSearch, xSearch } },
+        openai: { tools: { webSearch } },
       }),
     ).toEqual({
-      web_search: { id: "xai.web_search" },
-      x_search: { id: "xai.x_search" },
+      web_search: { id: "openai.web_search" },
     });
     expect(webSearch).toHaveBeenCalledWith({
-      enableImageUnderstanding: true,
-    });
-    expect(xSearch).toHaveBeenCalledWith({
-      enableImageUnderstanding: true,
-      enableVideoUnderstanding: true,
+      externalWebAccess: true,
+      searchContextSize: "medium",
     });
   });
 
