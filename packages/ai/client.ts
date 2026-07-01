@@ -119,7 +119,9 @@ export function routeStructuredModel(input: {
     : { tier, provider: "openai", model: expensiveModel };
 }
 
-export function providerOptionsForRoute(route: ModelRoute) {
+export function providerOptionsForRoute(
+  route: ModelRoute,
+): ProviderOptions | undefined {
   if (route.provider === "openai") {
     return {
       openai: {
