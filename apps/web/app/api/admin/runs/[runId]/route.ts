@@ -11,8 +11,20 @@ import {
   tradeTickets,
 } from "../../../../../../../packages/core/db/schema";
 import { adminErrorResponse, assertAdminAuthorized } from "../../../_lib/admin-auth";
+import { CassieProduct } from "../../../../../../../packages/app/product";
 
 export const runtime = "nodejs";
+
+export async function POST(request: Request, context: { params: Promise<{ runId: string }> }) {
+  try {
+    assertAdminAuthorized(request);
+    const { runId } = await context.params;
+    const result = await new CassieProduct().rerunRun(runId);
+    return NextResponse.json(result);
+  } catch (error) {
+    return adminErrorResponse(error);
+  }
+}
 
 export async function GET(request: Request, context: { params: Promise<{ runId: string }> }) {
   try {

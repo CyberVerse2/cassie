@@ -126,4 +126,38 @@ describe("durable run persistence", () => {
     expect(inspected.run.runId).toBe(result.runId);
     expect(inspected.steps.map((step) => step.stepType)).toEqual(["intake"]);
   });
+
+  it("reruns an existing run as a fresh queued run with the same request", async () => {
+    const store = new InMemoryCassieStore();
+    const queue = new FakeCassieJobQueue();
+    const product = new CassieProduct(store, null, queue);
+
+    await product.upsertSettings(settings);
+    const original = await product.createMentionRun({
+      userId: "user_1",
+      userCommand: "@Cassie get me in",
+      sourcePost,
+    });
+
+    const rerun = await product.rerunRun(original.runId);
+
+    expect(rerun.sourceRunId).toBe(original.runId);
+    expect(rerun.runId).not.toBe(original.runId);
+    expect(rerun.status).toBe("queued");
+    expect(queue.supervisorRunIds).toEqual([original.runId, rerun.runId]);
+
+    const inspected = await product.getRun(rerun.runId);
+    expect(inspected.run.userCommand).toBe("@Cassie get me in");
+    expect(inspected.run.sourcePost).toEqual(sourcePost);
+    expect(inspected.steps.map((step) => step.stepType)).toEqual(["intake"]);
+  });
+
+  it("rejects rerun of an unknown run", async () => {
+    const store = new InMemoryCassieStore();
+    const queue = new FakeCassieJobQueue();
+    const product = new CassieProduct(store, null, queue);
+
+    await expect(product.rerunRun("run_missing")).rejects.toThrow(/was not found/);
+    expect(queue.supervisorRunIds).toEqual([]);
+  });
 });

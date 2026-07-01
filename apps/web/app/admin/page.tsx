@@ -1,6 +1,6 @@
 "use client";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type {
   AdminData,
@@ -587,6 +587,7 @@ function RunDetailDrawer({
   focusedTicketId: string | null;
   onClose: () => void;
 }) {
+  const queryClient = useQueryClient();
   const detailQuery = useQuery({
     queryKey: adminQueryKeys.run(token, runId),
     queryFn: () => adminFetch<AdminRunDetail>(`/api/admin/runs/${encodeURIComponent(runId)}`, token),
@@ -595,6 +596,18 @@ function RunDetailDrawer({
   });
   const detail = detailQuery.data ?? null;
   const error = errorMessage(detailQuery.error);
+
+  const rerun = useMutation({
+    mutationFn: () =>
+      adminPost<{ runId: string; status: string; sourceRunId: string }>(
+        `/api/admin/runs/${encodeURIComponent(runId)}`,
+        token,
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: adminQueryKeys.overview(token) });
+    },
+  });
+  const rerunError = errorMessage(rerun.error);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -618,12 +631,31 @@ function RunDetailDrawer({
             <span className={s.drawerEyebrow}>{focusedTicketId ? "Ticket execution" : "Run"}</span>
             <code className={s.drawerId}>{focusedTicketId ?? runId}</code>
           </div>
-          <button type="button" className={s.drawerClose} onClick={onClose} aria-label="Close">
-            ✕
-          </button>
+          <div className={s.drawerActions}>
+            {focusedTicketId ? null : (
+              <button
+                type="button"
+                className={s.drawerRerun}
+                onClick={() => rerun.mutate()}
+                disabled={rerun.isPending}
+              >
+                <RefreshIcon spinning={rerun.isPending} />
+                {rerun.isPending ? "Requeuing…" : "Rerun"}
+              </button>
+            )}
+            <button type="button" className={s.drawerClose} onClick={onClose} aria-label="Close">
+              ✕
+            </button>
+          </div>
         </header>
 
         <div className={s.drawerBody}>
+          {rerun.isSuccess && rerun.data ? (
+            <div className={s.banner}>
+              Queued new run <code>{rerun.data.runId}</code>. It will run on the next worker cycle.
+            </div>
+          ) : null}
+          {rerunError ? <div className={s.banner}>{rerunError}</div> : null}
           {detailQuery.isLoading ? <div className={s.empty}>Loading run…</div> : null}
           {error ? <div className={s.banner}>{error}</div> : null}
           {detail ? <RunDetailBody detail={detail} focusedTicketId={focusedTicketId} /> : null}
@@ -1058,6 +1090,21 @@ async function adminFetch<T>(url: string, token: string, onUnauthorized?: () => 
   }
   const payload = await response.json();
   if (!response.ok) throw new Error(payload?.error ?? "Failed to load admin data.");
+  return payload as T;
+}
+
+async function adminPost<T>(url: string, token: string, onUnauthorized?: () => void): Promise<T> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (response.status === 401) {
+    onUnauthorized?.();
+    throw new Error("Admin session expired.");
+  }
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload?.error ?? "Failed to run admin action.");
   return payload as T;
 }
 

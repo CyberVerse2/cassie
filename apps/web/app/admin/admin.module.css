@@ -834,6 +834,32 @@ a.sourceText:hover {
 
 .drawerClose:hover { border-color: var(--gilt); color: var(--ink); }
 
+.drawerActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  flex-shrink: 0;
+}
+
+.drawerRerun {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-1);
+  color: var(--ink-mute);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 160ms ease, color 160ms ease;
+}
+
+.drawerRerun:hover:not(:disabled) { border-color: var(--gilt); color: var(--ink); }
+.drawerRerun:disabled { opacity: 0.6; cursor: default; }
+
 .drawerBody {
   flex: 1;
   overflow-y: auto;

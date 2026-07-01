@@ -53,6 +53,38 @@ export class CassieProduct {
     return { runId: run.runId, status: run.status };
   }
 
+  async rerunRun(runId: string): Promise<{
+    runId: string;
+    status: ControlRun["status"];
+    sourceRunId: string;
+  }> {
+    const source = await this.store.getRun(runId);
+    if (!source) {
+      throw new Error(`Run ${runId} was not found.`);
+    }
+
+    const request = {
+      userId: source.userId,
+      userCommand: source.userCommand,
+      sourcePost: source.sourcePost,
+    };
+    const run = await this.store.createRun(request);
+    await this.store.addRunStep({
+      runId: run.runId,
+      stepType: "intake",
+      status: "succeeded",
+      input: request,
+      output: { queued: true },
+      error: null,
+      model: null,
+      promptName: null,
+      promptVersion: null,
+      completedAt: new Date().toISOString(),
+    });
+    await this.jobQueue.enqueueSupervisor(run);
+    return { runId: run.runId, status: run.status, sourceRunId: runId };
+  }
+
   async state() {
     return this.store.load();
   }
