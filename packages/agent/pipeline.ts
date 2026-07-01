@@ -48,6 +48,7 @@ import {
   thesisFromTradeExpression,
 } from "./thesis.ts";
 import { config } from "../core/config.ts";
+import { formatErrorForLog } from "../core/helpers/error-format.ts";
 
 const promptVersion = "2026-05-31";
 const MAX_PIPELINE_ASSESSMENTS = 5;
@@ -81,46 +82,49 @@ export async function runCassieSupervisorPipeline(input: {
     sourceResolver: input.deps.sourceResolver,
   });
 
-  await recordRunStep({
-    store: input.store,
-    runId: input.run.runId,
-    stepType: "intake",
-    promptName: "cassie_source_mode_classification",
-    promptVersion,
-    model: config.ai.cheapModel,
-    stepInput: {
-      userCommand: input.run.userCommand,
-      sourcePost: source,
-    },
-    execute: ({ setThinkingTrace, captureUsage }) =>
-      classifySourceMode({
-        ai: withThinkingTraceCapture(captureUsage(cheapAi), setThinkingTrace),
-        sourcePost: source,
+  // The mode classification is persisted for audit only; nothing downstream
+  // reads it, so it can overlap with the slower context-discovery search.
+  const [, contextDiscovery] = await Promise.all([
+    recordRunStep({
+      store: input.store,
+      runId: input.run.runId,
+      stepType: "intake",
+      promptName: "cassie_source_mode_classification",
+      promptVersion,
+      model: config.ai.cheapModel,
+      stepInput: {
         userCommand: input.run.userCommand,
-      }),
-  });
-
-  const contextDiscovery = await recordRunStep({
-    store: input.store,
-    runId: input.run.runId,
-    stepType: "context_discovery",
-    promptName: "cassie_context_discovery",
-    promptVersion,
-    model: config.ai.grokXSearchModel,
-    stepInput: {
-      userCommand: input.run.userCommand,
-      sourcePost: source,
-    },
-    execute: ({ setThinkingTrace, captureUsage }) =>
-      discoverSourceContext({
-        ai: withThinkingTraceCapture(
-          captureUsage(importantAi),
-          setThinkingTrace,
-        ),
         sourcePost: source,
+      },
+      execute: ({ setThinkingTrace, captureUsage }) =>
+        classifySourceMode({
+          ai: withThinkingTraceCapture(captureUsage(cheapAi), setThinkingTrace),
+          sourcePost: source,
+          userCommand: input.run.userCommand,
+        }),
+    }),
+    recordRunStep({
+      store: input.store,
+      runId: input.run.runId,
+      stepType: "context_discovery",
+      promptName: "cassie_context_discovery",
+      promptVersion,
+      model: config.ai.grokXSearchModel,
+      stepInput: {
         userCommand: input.run.userCommand,
-      }),
-  });
+        sourcePost: source,
+      },
+      execute: ({ setThinkingTrace, captureUsage }) =>
+        discoverSourceContext({
+          ai: withThinkingTraceCapture(
+            captureUsage(importantAi),
+            setThinkingTrace,
+          ),
+          sourcePost: source,
+          userCommand: input.run.userCommand,
+        }),
+    }),
+  ]);
 
   const opportunityPlan = await recordRunStep({
     store: input.store,
@@ -204,7 +208,7 @@ export async function runCassieSupervisorPipeline(input: {
     });
   }
 
-  const fitAssessments = await assessCandidates({
+  const assessedCandidates = await assessCandidates({
     store: input.store,
     run: input.run,
     ai: importantAi,
@@ -212,20 +216,20 @@ export async function runCassieSupervisorPipeline(input: {
     tradeExpression,
     candidates: marketCandidates,
   });
-  const validatedFitAssessments = fitAssessments.filter(
-    (assessment) => assessment.fitStatus === "validated",
+  const validatedCandidates = assessedCandidates.filter(
+    ({ assessment }) => assessment.fitStatus === "validated",
   );
-  const selectedFitAssessment = bestFitAssessment(validatedFitAssessments);
-  if (!selectedFitAssessment) {
-    const bestRejected = bestFitAssessment(fitAssessments);
+  const selected = bestAssessedCandidate(validatedCandidates);
+  if (!selected) {
+    const bestRejected = bestAssessedCandidate(assessedCandidates);
     const reason =
-      bestRejected?.semanticFitSummary ??
+      bestRejected?.assessment.semanticFitSummary ??
       "No venue candidate validated against the trade expression.";
     const marketSelection = await recordNoSelection({
       store: input.store,
       runId: input.run.runId,
       reason,
-      rejectedFit: bestRejected,
+      rejectedFit: bestRejected?.assessment,
     });
     return finalizePipelineRun({
       store: input.store,
@@ -237,17 +241,14 @@ export async function runCassieSupervisorPipeline(input: {
     });
   }
 
-  const selectedCandidate = candidateForFitAssessment(
-    marketCandidates,
-    selectedFitAssessment,
-  );
+  const selectedCandidate = selected.candidate;
   const quote = await recordRunStep({
     store: input.store,
     runId: input.run.runId,
     stepType: "market_quote",
     stepInput: {
       candidate: selectedCandidate,
-      fitAssessment: selectedFitAssessment,
+      fitAssessment: selected.assessment,
       side: predictionMarketSideForCandidate(selectedCandidate),
     },
     execute: () =>
@@ -265,15 +266,13 @@ export async function runCassieSupervisorPipeline(input: {
     stepInput: {
       tradeExpression,
       candidates: [selectedCandidate],
-      fitAssessments,
+      fitAssessments: assessedCandidates.map(({ assessment }) => assessment),
       quotes: [quote],
     },
     execute: async () =>
       marketSelectionFromBestFit({
-        selectedCandidate,
-        selectedFitAssessment,
-        candidates: marketCandidates,
-        fitAssessments,
+        selected,
+        assessedCandidates,
       }),
   });
 
@@ -370,6 +369,11 @@ function xStatusUrl(value: string | null | undefined): string | null {
   );
 }
 
+type AssessedCandidate = {
+  candidate: MarketCandidate;
+  assessment: ExpressionFitAssessment;
+};
+
 async function assessCandidates(input: {
   store: CassieStore;
   run: ControlRun;
@@ -377,35 +381,56 @@ async function assessCandidates(input: {
   opportunityFrame: OpportunityFrame;
   tradeExpression: TradeExpressionPlan;
   candidates: MarketCandidate[];
-}): Promise<ExpressionFitAssessment[]> {
+}): Promise<AssessedCandidate[]> {
   const candidates = input.candidates.slice(0, MAX_PIPELINE_ASSESSMENTS);
-  return Promise.all(
-    candidates.map((candidate) =>
-      recordRunStep({
-        store: input.store,
-        runId: input.run.runId,
-        stepType: "market_assessment",
-        promptName: "cassie_expression_fit",
-        promptVersion,
-        model: config.ai.importantModel,
-        stepInput: {
-          candidate,
-          side: predictionMarketSideForCandidate(candidate),
-        },
-        execute: ({ setThinkingTrace, captureUsage }) =>
-          assessExpressionFit({
-            ai: withThinkingTraceCapture(
-              captureUsage(input.ai),
-              setThinkingTrace,
-            ),
-            opportunityFrame: input.opportunityFrame,
-            tradeExpression: input.tradeExpression,
+  // allSettled so one failed assessment doesn't sink the run while other
+  // candidates validated; recordRunStep persists each failure before rethrow.
+  const results = await Promise.allSettled(
+    candidates.map(
+      async (candidate): Promise<AssessedCandidate> => ({
+        candidate,
+        assessment: await recordRunStep({
+          store: input.store,
+          runId: input.run.runId,
+          stepType: "market_assessment",
+          promptName: "cassie_expression_fit",
+          promptVersion,
+          model: config.ai.importantModel,
+          stepInput: {
             candidate,
             side: predictionMarketSideForCandidate(candidate),
-          }),
+          },
+          execute: ({ setThinkingTrace, captureUsage }) =>
+            assessExpressionFit({
+              ai: withThinkingTraceCapture(
+                captureUsage(input.ai),
+                setThinkingTrace,
+              ),
+              opportunityFrame: input.opportunityFrame,
+              tradeExpression: input.tradeExpression,
+              candidate,
+              side: predictionMarketSideForCandidate(candidate),
+            }),
+        }),
       }),
     ),
   );
+  const assessed = results
+    .filter(
+      (result): result is PromiseFulfilledResult<AssessedCandidate> =>
+        result.status === "fulfilled",
+    )
+    .map((result) => result.value);
+  if (assessed.length === 0 && candidates.length > 0) {
+    const errors = results
+      .filter(
+        (result): result is PromiseRejectedResult =>
+          result.status === "rejected",
+      )
+      .map((result) => formatErrorForLog(result.reason));
+    throw new Error(`All market assessments failed: ${errors.join("; ")}`);
+  }
+  return assessed;
 }
 
 async function recordNoSelection(input: {
@@ -498,65 +523,42 @@ function preflightUserPolicy(userSettings: UserSettings) {
   };
 }
 
-function bestFitAssessment(
-  fitAssessments: ExpressionFitAssessment[],
-): ExpressionFitAssessment | null {
-  return (
-    [...fitAssessments].sort(
-      (left, right) => right.fitScore - left.fitScore,
-    )[0] ?? null
+function bestAssessedCandidate(
+  assessedCandidates: AssessedCandidate[],
+): AssessedCandidate | null {
+  return assessedCandidates.reduce<AssessedCandidate | null>(
+    (best, current) =>
+      best && best.assessment.fitScore >= current.assessment.fitScore
+        ? best
+        : current,
+    null,
   );
-}
-
-function candidateForFitAssessment(
-  candidates: MarketCandidate[],
-  fitAssessment: ExpressionFitAssessment,
-): MarketCandidate {
-  const match = candidates.find((candidate) =>
-    marketCandidateAssessmentKeys(candidate).some(
-      (key) =>
-        normalizedCandidateId(key) ===
-        normalizedCandidateId(fitAssessment.candidateId),
-    ),
-  );
-  if (!match) {
-    throw new Error(
-      `Validated candidate ${fitAssessment.candidateId} was not found in venue-search results.`,
-    );
-  }
-  return match;
 }
 
 function marketSelectionFromBestFit(input: {
-  selectedCandidate: MarketCandidate;
-  selectedFitAssessment: ExpressionFitAssessment;
-  candidates: MarketCandidate[];
-  fitAssessments: ExpressionFitAssessment[];
+  selected: AssessedCandidate;
+  assessedCandidates: AssessedCandidate[];
 }): MarketSelection {
   return MarketSelectionSchema.parse({
     decision: "select_market",
-    selectedMarket: input.selectedCandidate,
-    selectedCandidateId: input.selectedFitAssessment.candidateId,
+    selectedMarket: input.selected.candidate,
+    selectedCandidateId: input.selected.assessment.candidateId,
     rejectionReason: null,
-    rankedCandidates: input.fitAssessments
-      .filter((assessment) => assessment.fitStatus === "validated")
-      .sort((left, right) => right.fitScore - left.fitScore)
-      .map((assessment) => {
-        const candidate = candidateForFitAssessment(
-          input.candidates,
-          assessment,
-        );
-        return {
-          candidateId: assessment.candidateId,
-          thesisFit: assessment.fitScore,
-          liquidityFit: candidate.liquidityScore ?? 0,
-          payoffFit: assessment.confidence,
-          reason: assessment.semanticFitSummary,
-        };
-      }),
-    rejectedCandidates: input.fitAssessments
-      .filter((assessment) => assessment.fitStatus !== "validated")
-      .map((assessment) => ({
+    rankedCandidates: input.assessedCandidates
+      .filter(({ assessment }) => assessment.fitStatus === "validated")
+      .sort(
+        (left, right) => right.assessment.fitScore - left.assessment.fitScore,
+      )
+      .map(({ candidate, assessment }) => ({
+        candidateId: assessment.candidateId,
+        thesisFit: assessment.fitScore,
+        liquidityFit: candidate.liquidityScore ?? 0,
+        payoffFit: assessment.confidence,
+        reason: assessment.semanticFitSummary,
+      })),
+    rejectedCandidates: input.assessedCandidates
+      .filter(({ assessment }) => assessment.fitStatus !== "validated")
+      .map(({ assessment }) => ({
         venue: assessment.venue,
         symbol: assessment.candidateId,
         reason: [assessment.semanticFitSummary, ...assessment.mismatchReasons]
@@ -565,35 +567,6 @@ function marketSelectionFromBestFit(input: {
       })),
     noTradeReason: null,
   });
-}
-
-function marketCandidateAssessmentKeys(candidate: MarketCandidate): string[] {
-  return Array.from(
-    new Set([
-      `${candidate.venue}:${candidate.symbol}:${candidate.side}`,
-      `${candidate.venue}:${candidate.symbol}:${candidate.instrument}:${candidate.side}`,
-      `${candidate.venue}:${candidate.instrument}:${candidate.symbol}:${candidate.side}`,
-      `${candidate.venue}:${candidate.marketSlug ?? candidate.symbol}:${candidate.side}`,
-      `${candidate.venue}:${candidate.conditionId ?? candidate.symbol}:${candidate.side}`,
-      marketCandidateLookupKey(candidate),
-    ]),
-  );
-}
-
-function marketCandidateLookupKey(candidate: MarketCandidate): string {
-  if (candidate.venue === "polymarket") {
-    return [
-      candidate.venue,
-      candidate.conditionId ?? candidate.marketSlug ?? candidate.symbol,
-      candidate.outcomeTokenId ?? candidate.outcome ?? candidate.side,
-      candidate.side,
-    ].join("|");
-  }
-  return [candidate.venue, candidate.symbol, candidate.side].join("|");
-}
-
-function normalizedCandidateId(value: string): string {
-  return value.trim().toLowerCase().replace(/[_|]+/gu, ":");
 }
 
 function predictionMarketSideForCandidate(
