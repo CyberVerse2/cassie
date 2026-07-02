@@ -1577,16 +1577,16 @@ function Voice({
 
   return (
     <section className={s.voice}>
-      <header className={s.tapeMast}>
-        <span className={s.tapeAvatar}>
+      <div className={s.voiceHero}>
+        <div className={s.voiceLogo}>
           <img src="/cassie-logo-transparent.png" alt="" aria-hidden />
-        </span>
-        <div className={s.tapeMastText}>
-          <span className={s.tapeTitle}>The Tape</span>
-          <span className={s.tapeSub}>
-            Live calls from the timeline &middot;{" "}
-            <span className={s.tapeHandle}>@cassiedottrade</span>
-            <span className="verified" aria-label="Twitter verified">
+        </div>
+      </div>
+
+      <div className={s.voiceMeta}>
+        <span className={s.voiceTitle}>
+          cassie
+          <span className="verified" aria-label="Twitter verified">
             <svg viewBox="0 0 22 22" aria-hidden>
               <defs>
                 <linearGradient
@@ -1635,13 +1635,17 @@ function Voice({
               />
             </svg>
           </span>
-          </span>
-        </div>
+          <span className="handle">@cassiedottrade</span>
+        </span>
         <span className={s.voiceTag}>
-          <span className="k">Calls</span>{" "}
+          <span className="k">Calls placed</span>{" "}
           <span className="v">{ordersPlaced}</span>
         </span>
-      </header>
+        <p className={s.voiceBio}>
+          <span className={s.tapeTitle}>The Tape</span>
+          Live calls from the timeline.
+        </p>
+      </div>
 
       <div className={s.feed}>
         {voiceError ? (
