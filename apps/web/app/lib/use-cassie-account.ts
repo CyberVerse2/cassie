@@ -12,7 +12,7 @@ import {
   type User,
   type Wallet,
 } from "@privy-io/react-auth";
-import { encodeFunctionData, erc20Abi } from "viem";
+import { encodeFunctionData, erc20Abi, isAddress } from "viem";
 import type { CassieActivityItem } from "./activity";
 import { authClient } from "./auth-client";
 
@@ -392,10 +392,9 @@ export function useCassieAccount() {
       queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
     },
   });
-  // One-click Privy funds migration: sends the embedded wallet's Base USDC to
-  // the Circle deposit address through Privy's confirmation popup, then marks
-  // the migration complete.
-  const migratePrivyFundsRequest = useCallback(async () => {
+  // Sends the embedded wallet's full Base USDC balance to a destination
+  // address through Privy's confirmation popup.
+  const sendEmbeddedWalletUsdc = useCallback(async (toAddress: string, description: string) => {
     const account = queryClient.getQueryData<CassieAccount | null>(cassieAccountQueryKey);
     if (!privy.authenticated) {
       throw new Error("Log in with your existing session before moving funds.");
@@ -403,10 +402,10 @@ export function useCassieAccount() {
     if (!embeddedWallet?.address) {
       throw new Error("No Privy wallet is available to move funds from.");
     }
-    if (!account?.depositAddress) {
-      throw new Error("Your new deposit address is not ready yet.");
+    if (!isAddress(toAddress)) {
+      throw new Error("That does not look like a valid address.");
     }
-    const balanceUsd = account.balance?.walletBalanceUsd ?? 0;
+    const balanceUsd = account?.balance?.walletBalanceUsd ?? 0;
     const amountMicroUsdc = BigInt(Math.floor(balanceUsd * 1_000_000));
     if (amountMicroUsdc <= BigInt(0)) {
       throw new Error("There is no USDC left to move.");
@@ -417,15 +416,29 @@ export function useCassieAccount() {
       data: encodeFunctionData({
         abi: erc20Abi,
         functionName: "transfer",
-        args: [account.depositAddress as `0x${string}`, amountMicroUsdc],
+        args: [toAddress, amountMicroUsdc],
       }),
     }, {
       address: embeddedWallet.address,
       uiOptions: {
-        description: `Send $${balanceUsd.toFixed(2)} USDC to your new Cassie deposit address.`,
-        buttonText: "Move funds",
+        description: `${description} ($${balanceUsd.toFixed(2)} USDC on Base).`,
+        buttonText: "Send",
       },
     });
+    return balanceUsd;
+  }, [embeddedWallet, privy, queryClient, sendTransaction]);
+
+  // One-click migration: send to the Circle deposit address, then mark the
+  // migration complete.
+  const migratePrivyFundsRequest = useCallback(async () => {
+    const account = queryClient.getQueryData<CassieAccount | null>(cassieAccountQueryKey);
+    if (!account?.depositAddress) {
+      throw new Error("Your new deposit address is not ready yet.");
+    }
+    await sendEmbeddedWalletUsdc(
+      account.depositAddress,
+      "Move funds to your new Cassie deposit address",
+    );
     const response = await fetch("/api/migration", {
       method: "POST",
       headers: {
@@ -440,11 +453,19 @@ export function useCassieAccount() {
       throw new Error(payload.error ?? "Funds moved, but the migration state update failed.");
     }
     return payload.account;
-  }, [authHeaders, clearExpiredSession, embeddedWallet, privy, queryClient, sendTransaction]);
+  }, [authHeaders, clearExpiredSession, queryClient, sendEmbeddedWalletUsdc]);
   const migratePrivyFundsMutation = useMutation({
     mutationFn: migratePrivyFundsRequest,
     onSuccess: (nextAccount) => {
       queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
+    },
+  });
+  // Withdrawal: send the old wallet's USDC to any user-provided address.
+  const withdrawPrivyFundsMutation = useMutation({
+    mutationFn: (toAddress: string) =>
+      sendEmbeddedWalletUsdc(toAddress.trim(), "Withdraw your USDC"),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: cassieAccountQueryKey });
     },
   });
 
@@ -596,6 +617,8 @@ export function useCassieAccount() {
     dismissMigration: () => dismissMigrationMutation.mutateAsync(),
     migratePrivyFunds: () => migratePrivyFundsMutation.mutateAsync(),
     migratingFunds: migratePrivyFundsMutation.isPending,
+    withdrawPrivyFunds: (toAddress: string) => withdrawPrivyFundsMutation.mutateAsync(toAddress),
+    withdrawingFunds: withdrawPrivyFundsMutation.isPending,
     walletReadyForSpending: Boolean(embeddedWallet?.id && embeddedWallet.delegated),
     login,
     logout,
