@@ -116,10 +116,6 @@ export default function Dashboard() {
         userProfile={account.userProfile}
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
         updateDefaultTradeSize={account.updateDefaultTradeSize}
-        migrationPrompt={account.migrationPrompt}
-        dismissMigration={account.dismissMigration}
-        migratePrivyFunds={account.migratePrivyFunds}
-        migratingFunds={account.migratingFunds}
         withdrawPrivyFunds={account.withdrawPrivyFunds}
         withdrawingFunds={account.withdrawingFunds}
       />
@@ -150,10 +146,6 @@ function Aside({
   userProfile,
   defaultTradeSizeUsd,
   updateDefaultTradeSize,
-  migrationPrompt,
-  dismissMigration,
-  migratePrivyFunds,
-  migratingFunds,
   withdrawPrivyFunds,
   withdrawingFunds,
 }: {
@@ -171,14 +163,9 @@ function Aside({
   } | null;
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
-  migrationPrompt?: boolean;
-  dismissMigration?: () => Promise<unknown>;
-  migratePrivyFunds?: () => Promise<unknown>;
-  migratingFunds?: boolean;
   withdrawPrivyFunds?: (toAddress: string) => Promise<unknown>;
   withdrawingFunds?: boolean;
 }) {
-  const [migrateError, setMigrateError] = useState<string | null>(null);
   const [withdrawTo, setWithdrawTo] = useState("");
   const [withdrawError, setWithdrawError] = useState<string | null>(null);
   const [withdrawSent, setWithdrawSent] = useState(false);
@@ -248,39 +235,6 @@ function Aside({
         />
         <span>Cassie</span>
       </a>
-
-      {migrationPrompt && depositAddress && (
-        <div className={s.depositCard} role="status">
-          <strong>Move your funds</strong>
-          <p>
-            Your old Base wallet still holds USDC. Move it to your new Cassie
-            wallet in one click — Cassie credits it automatically.
-          </p>
-          <div className={s.mentionRow}>
-            <button
-              type="button"
-              className={`${s.btn} ${s.btnPrimary}`}
-              disabled={migratingFunds}
-              onClick={() => {
-                setMigrateError(null);
-                void migratePrivyFunds?.().catch((caught) => {
-                  setMigrateError(caught instanceof Error ? caught.message : String(caught));
-                });
-              }}
-            >
-              {migratingFunds ? "Moving funds" : "Move funds"}
-            </button>
-            <button
-              type="button"
-              className={s.btn}
-              onClick={() => void dismissMigration?.()}
-            >
-              Later
-            </button>
-          </div>
-          {migrateError && <p>{migrateError}</p>}
-        </div>
-      )}
 
       {authenticated && walletAddress && (
         <div className={s.depositCard}>

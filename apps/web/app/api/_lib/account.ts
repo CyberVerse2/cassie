@@ -3,12 +3,10 @@ import { z } from "zod";
 import { authenticateRequest, type AuthenticatedSession } from "../../../../../packages/adapters/auth/session";
 import { CircleWalletAdapter } from "../../../../../packages/adapters/circle";
 import { PrivyAdapter } from "../../../../../packages/adapters/privy";
-import { config } from "../../../../../packages/core/config";
 import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
 import type { CassieStore } from "../../../../../packages/core/db/store";
 import { MissingConnectorConfigError } from "../../../../../packages/core/helpers/connector-errors";
 import { depositWalletBalanceUsd } from "../../../../../packages/app/deposit-balance";
-import { shouldPromptPrivyMigration } from "../../../../../packages/app/privy-migration";
 import { UserProfileSchema, type UserDepositAddress, type UserSettings } from "../../../../../packages/core/schemas";
 
 export const MIN_DEFAULT_TRADE_SIZE_USD = 6;
@@ -66,14 +64,6 @@ export async function accountResponse(
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       telegram: settings.telegram ?? null,
       balance: balance ?? null,
-      migration: settings.migration ?? null,
-      // Never prompt while Circle runs on testnet: real Base USDC sent to a
-      // testnet-managed deposit address would be stranded.
-      migrationPrompt: !config.circle.testnet && shouldPromptPrivyMigration({
-        settings,
-        privyBalanceUsd: settings.privyWalletId ? walletBalanceUsd : null,
-        hasDepositAddress: Boolean(depositAddress),
-      }),
     },
   });
 }

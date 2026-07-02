@@ -11,9 +11,9 @@ step — run it only when the preconditions hold.
 2. Legacy rows are matched: no `user_settings` row with `settings.x.userId`
    null that still has activity (else first backfill from `profile.handle`).
 3. Privy embedded-wallet balances are drained: for every row with
-   `privy_wallet_id`, `PrivyAdapter.getUsdcBalanceUsd` ≈ 0, or the user has
-   been prompted (see `settings.migration`) and long-tail funds are accepted as
-   user-recoverable via Privy's export (`exportKeys` flow).
+   `privy_wallet_id`, `PrivyAdapter.getUsdcBalanceUsd` ≈ 0 — users move funds
+   out via the dashboard Withdraw card (`/api/withdraw`), or long-tail funds
+   are accepted as user-recoverable via Privy's export (`exportKeys` flow).
 4. All open positions opened under the Privy funding mode are closed (their
    close refunds go on-chain to the Privy wallet address).
 

@@ -41,11 +41,6 @@ type CassieAccount = {
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
-  migration: {
-    privyFundsPromptDismissedAt?: string | null;
-    privyFundsMovedAt?: string | null;
-  } | null;
-  migrationPrompt: boolean;
 };
 
 export type CassieDashboardPayload = {
@@ -362,31 +357,6 @@ export function useCassieAccount() {
       queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
     },
   });
-  const dismissMigrationRequest = useCallback(async () => {
-    if (!authenticated) {
-      throw new Error("Log in before dismissing the migration prompt.");
-    }
-    const response = await fetch("/api/migration", {
-      method: "POST",
-      headers: {
-        ...await authHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ action: "dismiss" }),
-    });
-    await clearExpiredSession(response);
-    const payload = await response.json() as { account?: CassieAccount; error?: string };
-    if (!response.ok || !payload.account) {
-      throw new Error(payload.error ?? "Migration prompt dismissal failed.");
-    }
-    return payload.account;
-  }, [authHeaders, authenticated, clearExpiredSession]);
-  const dismissMigrationMutation = useMutation({
-    mutationFn: dismissMigrationRequest,
-    onSuccess: (nextAccount) => {
-      queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
-    },
-  });
   // Sends the legacy wallet's full USDC balance to a destination address.
   // Runs server-side through the delegated signer, so it works for cookie
   // sessions with no active Privy session.
@@ -416,35 +386,6 @@ export function useCassieAccount() {
     return payload.withdrawal;
   }, [authHeaders, authenticated, clearExpiredSession]);
 
-  // One-click migration: send to the Circle deposit address, then mark the
-  // migration complete.
-  const migratePrivyFundsRequest = useCallback(async () => {
-    const account = queryClient.getQueryData<CassieAccount | null>(cassieAccountQueryKey);
-    if (!account?.depositAddress) {
-      throw new Error("Your new deposit address is not ready yet.");
-    }
-    await sendLegacyWalletUsdc(account.depositAddress);
-    const response = await fetch("/api/migration", {
-      method: "POST",
-      headers: {
-        ...await authHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ action: "moved" }),
-    });
-    await clearExpiredSession(response);
-    const payload = await response.json() as { account?: CassieAccount; error?: string };
-    if (!response.ok || !payload.account) {
-      throw new Error(payload.error ?? "Funds moved, but the migration state update failed.");
-    }
-    return payload.account;
-  }, [authHeaders, clearExpiredSession, queryClient, sendLegacyWalletUsdc]);
-  const migratePrivyFundsMutation = useMutation({
-    mutationFn: migratePrivyFundsRequest,
-    onSuccess: (nextAccount) => {
-      queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
-    },
-  });
   // Withdrawal: send the old wallet's USDC to any user-provided address.
   const withdrawPrivyFundsMutation = useMutation({
     mutationFn: (toAddress: string) => sendLegacyWalletUsdc(toAddress.trim()),
@@ -597,10 +538,6 @@ export function useCassieAccount() {
     error,
     walletAddress: embeddedWallet?.address ?? account?.walletAddress ?? null,
     depositAddress: account?.depositAddress ?? null,
-    migrationPrompt: account?.migrationPrompt ?? false,
-    dismissMigration: () => dismissMigrationMutation.mutateAsync(),
-    migratePrivyFunds: () => migratePrivyFundsMutation.mutateAsync(),
-    migratingFunds: migratePrivyFundsMutation.isPending,
     withdrawPrivyFunds: (toAddress: string) => withdrawPrivyFundsMutation.mutateAsync(toAddress),
     withdrawingFunds: withdrawPrivyFundsMutation.isPending,
     walletReadyForSpending: Boolean(embeddedWallet?.id && embeddedWallet.delegated),

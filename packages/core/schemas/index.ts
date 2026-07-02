@@ -80,13 +80,6 @@ export const UserSettingsSchema = z.object({
     })
     .nullable()
     .optional(),
-  migration: z
-    .object({
-      privyFundsPromptDismissedAt: z.string().nullable().optional(),
-      privyFundsMovedAt: z.string().nullable().optional(),
-    })
-    .nullable()
-    .optional(),
 });
 
 export const ThesisSchema = z.object({
