@@ -1,3 +1,6 @@
+import { and, eq } from "drizzle-orm";
+import { authAccounts, authUsers } from "../../core/db/auth-schema.ts";
+import { createCassieDb } from "../../core/db/client.ts";
 import { MissingConnectorConfigError } from "../../core/helpers/connector-errors.ts";
 import type { CassieStore } from "../../core/db/store.ts";
 import type { UserSettings } from "../../core/schemas/index.ts";
@@ -21,15 +24,47 @@ export type XSessionIdentity = {
   image: string | null;
 };
 
+export type XAccountStore = {
+  twitterAccountId(authUserId: string): Promise<string | null>;
+  persistXIdentity(
+    authUserId: string,
+    xUserId: string,
+    xUsername: string | null,
+  ): Promise<void>;
+};
+
+const defaultXAccountStore: XAccountStore = {
+  async twitterAccountId(authUserId) {
+    const db = createCassieDb();
+    const rows = await db
+      .select()
+      .from(authAccounts)
+      .where(and(
+        eq(authAccounts.userId, authUserId),
+        eq(authAccounts.providerId, "twitter"),
+      ))
+      .limit(1);
+    return rows[0]?.accountId ?? null;
+  },
+  async persistXIdentity(authUserId, xUserId, xUsername) {
+    const db = createCassieDb();
+    await db
+      .update(authUsers)
+      .set({ xUserId, xUsername })
+      .where(eq(authUsers.id, authUserId));
+  },
+};
+
 export async function authenticateRequest(
   request: Request,
   deps: {
     store: CassieStore;
     auth?: CassieAuth;
+    accounts?: XAccountStore;
     privyGateway?: Pick<PrivyWalletGateway, "verifyAccessToken">;
   },
 ): Promise<AuthenticatedSession> {
-  const identity = await cookieSessionIdentity(request, deps.auth);
+  const identity = await cookieSessionIdentity(request, deps.auth, deps.accounts);
   if (identity) {
     const settings = await resolveXSessionSettings(deps.store, identity);
     return {
@@ -90,6 +125,7 @@ export async function resolveXSessionSettings(
 async function cookieSessionIdentity(
   request: Request,
   auth?: CassieAuth,
+  accounts: XAccountStore = defaultXAccountStore,
 ): Promise<XSessionIdentity | null> {
   if (!request.headers.get("cookie")) {
     return null;
@@ -111,10 +147,29 @@ async function cookieSessionIdentity(
   const user = session.user as typeof session.user & {
     xUserId?: string | null;
     xUsername?: string | null;
+    email?: string | null;
   };
+  let xUserId = user.xUserId ?? null;
+  let xUsername = user.xUsername ?? null;
+  if (!xUserId) {
+    // better-auth strips input:false additional fields at signup, so the
+    // X user id may be missing on the user row. The linked twitter account
+    // row always carries it; recover from there and self-heal the user row.
+    xUserId = await accounts.twitterAccountId(session.user.id);
+    // The twitter provider stores the X username as the email fallback when
+    // the app cannot read the real email.
+    if (!xUsername && user.email && !user.email.includes("@")) {
+      xUsername = user.email;
+    }
+    if (xUserId) {
+      await accounts
+        .persistXIdentity(session.user.id, xUserId, xUsername)
+        .catch(() => undefined);
+    }
+  }
   return {
-    xUserId: user.xUserId ?? null,
-    xUsername: user.xUsername ?? null,
+    xUserId,
+    xUsername,
     name: user.name,
     image: user.image ?? null,
   };

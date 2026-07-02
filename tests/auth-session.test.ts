@@ -142,6 +142,55 @@ describe("authenticateRequest dual path", () => {
     expect(session.settings?.x).toEqual({ userId: "x_123", username: "cassie" });
   });
 
+  it("recovers the X user id from the linked twitter account when the user row lacks it", async () => {
+    const store = new InMemoryCassieStore();
+    const auth = fakeAuth({
+      user: {
+        id: "auth_user_1",
+        name: "Celestine",
+        image: null,
+        // additionalFields stripped at signup: no xUserId/xUsername,
+        // email holds the username fallback.
+        email: "CyberVerse_",
+      },
+    });
+    const accounts = {
+      twitterAccountId: vi.fn().mockResolvedValue("1574209048425242624"),
+      persistXIdentity: vi.fn().mockResolvedValue(undefined),
+    };
+
+    const session = await authenticateRequest(cookieRequest(), { store, auth, accounts });
+
+    expect(session.method).toBe("cookie");
+    expect(session.userId).toBe("x:1574209048425242624");
+    expect(session.settings?.x).toEqual({
+      userId: "1574209048425242624",
+      username: "CyberVerse_",
+    });
+    expect(accounts.twitterAccountId).toHaveBeenCalledWith("auth_user_1");
+    expect(accounts.persistXIdentity).toHaveBeenCalledWith(
+      "auth_user_1",
+      "1574209048425242624",
+      "CyberVerse_",
+    );
+  });
+
+  it("still rejects when no twitter account is linked", async () => {
+    const store = new InMemoryCassieStore();
+    const auth = fakeAuth({
+      user: { id: "auth_user_1", name: "Ghost", image: null, email: "ghost@example.com" },
+    });
+    const accounts = {
+      twitterAccountId: vi.fn().mockResolvedValue(null),
+      persistXIdentity: vi.fn(),
+    };
+
+    await expect(
+      authenticateRequest(cookieRequest(), { store, auth, accounts }),
+    ).rejects.toThrow("X session is missing the X user id.");
+    expect(accounts.persistXIdentity).not.toHaveBeenCalled();
+  });
+
   it("falls back to a Privy bearer token when no cookie session exists", async () => {
     const store = new InMemoryCassieStore();
     await store.syncPrivyUser({
