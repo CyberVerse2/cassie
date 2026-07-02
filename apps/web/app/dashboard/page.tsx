@@ -434,6 +434,7 @@ function Center({
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
   const [walletView, setWalletView] = useState<"trades" | "watching" | "history">("trades");
+  const [shareTarget, setShareTarget] = useState<{ positionId: string; label: string } | null>(null);
   const [closingId, setClosingId] = useState<string | null>(null);
   const dashboardEnabled = accountReady && authenticated;
   const dashboardQuery = useQuery({
@@ -536,6 +537,13 @@ function Center({
 
   return (
     <section className={s.main}>
+      {shareTarget && (
+        <ShareTradeModal
+          positionId={shareTarget.positionId}
+          label={shareTarget.label}
+          onClose={() => setShareTarget(null)}
+        />
+      )}
       <div className={s.tickerShell}>
         <div className={s.tickerStrip}>
           {[...tickerStrip, ...tickerStrip].map((t, i) => (
@@ -834,12 +842,16 @@ function Center({
                     </span>
                   </span>
                   <span className={s.tradeActions}>
-                    <a
+                    <button
+                      type="button"
                       className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
-                      href={`/trades/${encodeURIComponent(position.positionId)}/pnl`}
+                      onClick={() => setShareTarget({
+                        positionId: position.positionId,
+                        label: `Cassie is ${position.side.toUpperCase()} ${positionSymbol(position)}`,
+                      })}
                     >
                       Share
-                    </a>
+                    </button>
                     <button
                       className={s.tradeActionBtn}
                       type="button"
@@ -934,12 +946,16 @@ function Center({
                     </span>
                   </span>
                   <span className={s.tradeActions}>
-                    <a
+                    <button
+                      type="button"
                       className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
-                      href={`/trades/${encodeURIComponent(position.positionId)}/pnl`}
+                      onClick={() => setShareTarget({
+                        positionId: position.positionId,
+                        label: `Cassie closed ${positionSymbol(position)} at ${formatSignedUsdClient(position.unrealizedPnlUsd)} P/L`,
+                      })}
                     >
                       Share
-                    </a>
+                    </button>
                   </span>
                 </div>
               ))}
@@ -1010,6 +1026,80 @@ function ActivityPanel({
   );
 }
 
+function ShareTradeModal({
+  positionId,
+  label,
+  onClose,
+}: {
+  positionId: string;
+  label: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const path = `/trades/${encodeURIComponent(positionId)}/pnl`;
+  const url = typeof window !== "undefined"
+    ? `${window.location.origin}${path}`
+    : path;
+  const intent = `https://x.com/intent/post?text=${encodeURIComponent(label)}&url=${encodeURIComponent(url)}`;
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  async function copyLink() {
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1800);
+    await window.navigator.clipboard.writeText(url);
+  }
+
+  return (
+    <div className={s.shareOverlay} role="presentation" onClick={onClose}>
+      <div
+        className={s.shareModal}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Share trade"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <img
+          className={s.sharePreview}
+          src={`${path}/opengraph-image`}
+          alt="Trade card preview"
+        />
+        <div className={s.shareActions}>
+          <a
+            className={`${s.tradeActionBtn}`}
+            href={intent}
+            target="_blank"
+            rel="noreferrer"
+          >
+            Post to X
+          </a>
+          <button
+            type="button"
+            className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
+            onClick={() => void copyLink()}
+          >
+            {copied ? "Copied" : "Copy link"}
+          </button>
+          <button
+            type="button"
+            className={s.shareClose}
+            onClick={onClose}
+            aria-label="Close share dialog"
+          >
+            ×
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TokenImg({
   src,
   className,
@@ -1040,6 +1130,10 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
   const sharePositionId = item.kind === "trade" || item.kind === "trade_close"
     ? item.id.replace(/:close$/u, "")
     : null;
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareLabel = item.kind === "trade_close"
+    ? `Cassie closed ${item.title}`
+    : `Cassie opened ${item.title}${item.side ? ` ${item.side.toUpperCase()}` : ""}`;
   return (
     <li className={s.activityRow}>
       <span
@@ -1083,10 +1177,18 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
       </div>
 
       <span className={s.activitySources}>
+        {sharePositionId && shareOpen && (
+          <ShareTradeModal
+            positionId={sharePositionId}
+            label={shareLabel}
+            onClose={() => setShareOpen(false)}
+          />
+        )}
         {sharePositionId && (
-          <a
+          <button
+            type="button"
             className={`${s.activitySourceChip} ${s.activityShare}`}
-            href={`/trades/${encodeURIComponent(sharePositionId)}/pnl`}
+            onClick={() => setShareOpen(true)}
             title="Share this trade to X"
             aria-label="Share this trade to X"
           >
@@ -1105,7 +1207,7 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
               <path d="M12 15V4" />
               <path d="m7 9 5-5 5 5" />
             </svg>
-          </a>
+          </button>
         )}
         <span className={s.activitySourceChip} title="Cassie">
           <img src="/cassie-logo-transparent.png" alt="Cassie" />
