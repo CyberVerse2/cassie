@@ -70,21 +70,26 @@ export default function Dashboard() {
   // Assume seen until localStorage is checked so the overlay never flashes
   // for returning users during hydration.
   const [firstCallSeen, setFirstCallSeen] = useState(true);
+  // ?intro=1 forces the intro regardless of balance or seen-state (demos).
+  const [forceFirstCall, setForceFirstCall] = useState(false);
   useEffect(() => {
     setFirstCallSeen(window.localStorage.getItem(firstCallSeenKey) === "1");
+    setForceFirstCall(new URLSearchParams(window.location.search).has("intro"));
   }, []);
 
   const balance = account.account?.balance ?? null;
   const showFirstCall =
-    !firstCallSeen &&
-    account.ready &&
-    account.authenticated &&
-    balance !== null &&
-    balance.walletBalanceUsd === 0;
+    forceFirstCall ||
+    (!firstCallSeen &&
+      account.ready &&
+      account.authenticated &&
+      balance !== null &&
+      balance.walletBalanceUsd === 0);
 
   function dismissFirstCall() {
     window.localStorage.setItem(firstCallSeenKey, "1");
     setFirstCallSeen(true);
+    setForceFirstCall(false);
   }
 
   return (
