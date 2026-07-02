@@ -255,6 +255,37 @@ function runActivity(
   };
 }
 
+const SELECTION_BOILERPLATE =
+  /found in (live )?\w* ?metadata|maps (directly )?to the thesis|directly maps to/iu;
+
+function displayInstrument(ticket: TradeTicket): string {
+  const symbol = ticket.venueData?.symbol;
+  if (symbol) {
+    const bare = symbol.includes(":") ? symbol.slice(symbol.indexOf(":") + 1) : symbol;
+    return bare.replace(/-PERP$/iu, "").toUpperCase();
+  }
+  return ticket.instrument.replace(/[-_]+/gu, " ");
+}
+
+function venueLabel(venue: string): string {
+  if (venue === "hyperliquid") return "Hyperliquid perp";
+  if (venue === "polymarket") return "Polymarket";
+  return venue;
+}
+
+// Theses that are really market-selection justifications add nothing for the
+// user; show the venue instead.
+function displayThesis(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const cleaned = summarize(value);
+  if (SELECTION_BOILERPLATE.test(cleaned)) return null;
+  return cleaned;
+}
+
+function activitySubtitle(parts: Array<string | null>): string {
+  return parts.filter((part): part is string => Boolean(part)).join(" \u00b7 ");
+}
+
 function closeActivity(
   position: Position,
   ticket: TradeTicket,
@@ -266,8 +297,12 @@ function closeActivity(
       id: `${position.positionId}:close`,
       kind: "trade_close",
       at: position.closedAt,
-      title: `${ticket.instrument} CLOSE`,
-      subtitle: `${formatSignedUsd(position.unrealizedPnlUsd)} realized P/L · ${summarize(ticket.exitPlan.thesis ?? ticket.thesis)}`,
+      title: displayInstrument(ticket),
+      subtitle: activitySubtitle([
+        `${formatSignedUsd(position.unrealizedPnlUsd)} realized P/L`,
+        venueLabel(ticket.venue),
+        displayThesis(ticket.exitPlan.thesis ?? ticket.thesis),
+      ]),
       status: position.status,
       amountUsd: null,
       instrument: ticket.instrument,
@@ -293,8 +328,11 @@ function tradeActivity(
     id: position.positionId,
     kind: "trade",
     at: position.openedAt,
-    title: `${ticket.instrument} ${ticket.side.toUpperCase()}`,
-    subtitle: summarize(ticket.thesis),
+    title: displayInstrument(ticket),
+    subtitle: activitySubtitle([
+      venueLabel(ticket.venue),
+      displayThesis(ticket.thesis) ?? "Opened from a live market signal",
+    ]),
     status: position.status,
     amountUsd: position.filledSizeUsd,
     instrument: ticket.instrument,

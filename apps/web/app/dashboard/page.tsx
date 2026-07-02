@@ -109,6 +109,8 @@ export default function Dashboard() {
       <Aside
         walletAddress={account.walletAddress}
         depositAddress={account.depositAddress}
+        balance={account.account?.balance ?? null}
+        telegramConnected={Boolean(account.account?.telegram)}
         login={account.login}
         logout={account.logout}
         exportKeys={account.exportKeys}
@@ -137,6 +139,8 @@ export default function Dashboard() {
 function Aside({
   walletAddress,
   depositAddress,
+  balance,
+  telegramConnected,
   login,
   logout,
   exportKeys,
@@ -147,6 +151,8 @@ function Aside({
 }: {
   walletAddress: string | null;
   depositAddress?: string | null;
+  balance: { walletBalanceUsd: number; reservedUsd: number; spendableUsd: number } | null;
+  telegramConnected?: boolean;
   login: () => void;
   logout: () => Promise<void>;
   exportKeys: () => Promise<void>;
@@ -161,6 +167,7 @@ function Aside({
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
 }) {
   const [copied, setCopied] = useState(false);
+  const [depositOpen, setDepositOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportingKeys, setExportingKeys] = useState(false);
   const [exportKeysError, setExportKeysError] = useState<string | null>(null);
@@ -169,6 +176,10 @@ function Aside({
   const depositUri = depositTo
     ? multiChain ? `ethereum:${depositTo}` : `ethereum:${depositTo}@8453`
     : null;
+  const hasFunds = (balance?.walletBalanceUsd ?? 0) > 0;
+  // Deposit is the primary job when the account is empty; otherwise it hides
+  // behind the button.
+  const showDeposit = depositOpen || !hasFunds;
 
   async function copyAddress() {
     if (!depositTo) return;
@@ -214,51 +225,33 @@ function Aside({
         <span>Cassie</span>
       </a>
 
-      <div className={s.depositCard} id="deposit">
-        <div className={s.qrFrame}>
-          <div className={s.qrSurface}>
-            {depositUri ? (
-              <StyledQR data={depositUri} />
-            ) : (
-              <button
-                type="button"
-                className={`${s.btn} ${s.btnPrimary}`}
-                onClick={login}
-              >
-                Sign in
-              </button>
-            )}
-            <span
-              className={`${s.qrCorner} ${s.qrCornerTopLeft}`}
-              aria-hidden
-            />
-            <span
-              className={`${s.qrCorner} ${s.qrCornerTopRight}`}
-              aria-hidden
-            />
-            <span
-              className={`${s.qrCorner} ${s.qrCornerBottomLeft}`}
-              aria-hidden
-            />
-            <span
-              className={`${s.qrCorner} ${s.qrCornerBottomRight}`}
-              aria-hidden
-            />
-          </div>
-          <div className={s.qrMetaLine}>
-            <span>{multiChain ? "USDC · any supported chain" : "Base USDC"}</span>
-            <code>
-              {depositTo ? shortAddress(depositTo) : "Sign in"}
-            </code>
-          </div>
-        </div>
+      <div className={s.balanceCard}>
+        <span className={s.balanceLabel}>Balance</span>
+        <span className={s.balanceValue}>
+          {authenticated ? fmtUsd(balance?.walletBalanceUsd ?? 0) : "—"}
+        </span>
+        <span className={s.balanceMeta}>
+          {authenticated
+            ? balance && balance.reservedUsd > 0
+              ? `${fmtUsd(balance.spendableUsd)} spendable · ${fmtUsd(balance.reservedUsd)} in trades`
+              : hasFunds
+                ? "All spendable"
+                : "Fund your account to start trading"
+            : "Sign in to see your balance"}
+        </span>
       </div>
 
       <div className={s.mentionRow}>
-        <a className={`${s.btn} ${s.btnPrimary}`} href="#deposit">
+        <button
+          type="button"
+          className={`${s.btn} ${s.btnPrimary}`}
+          onClick={() => setDepositOpen((open) => !open)}
+          aria-expanded={showDeposit}
+          aria-controls="deposit"
+        >
           <ActionIcon name="deposit" />
           Deposit
-        </a>
+        </button>
         <button
           className={`${s.btn} ${s.copyDepositBtn}`}
           type="button"
@@ -271,6 +264,45 @@ function Aside({
         </button>
       </div>
 
+      {showDeposit && (
+        <div className={s.depositCard} id="deposit">
+          <div className={s.qrFrame}>
+            <div className={s.qrSurface}>
+              {depositUri ? (
+                <StyledQR data={depositUri} />
+              ) : (
+                <button
+                  type="button"
+                  className={`${s.btn} ${s.btnPrimary}`}
+                  onClick={login}
+                >
+                  Sign in
+                </button>
+              )}
+              <span className={`${s.qrCorner} ${s.qrCornerTopLeft}`} aria-hidden />
+              <span className={`${s.qrCorner} ${s.qrCornerTopRight}`} aria-hidden />
+              <span className={`${s.qrCorner} ${s.qrCornerBottomLeft}`} aria-hidden />
+              <span className={`${s.qrCorner} ${s.qrCornerBottomRight}`} aria-hidden />
+            </div>
+            <div className={s.qrMeta}>
+              <button
+                type="button"
+                className={s.qrAddress}
+                onClick={copyAddress}
+                disabled={!depositTo}
+                title={depositTo ? (copied ? "Copied" : "Copy address") : undefined}
+              >
+                <code>{depositTo ? shortAddress(depositTo) : "Sign in"}</code>
+                {depositTo && <ActionIcon name={copied ? "check" : "copy"} />}
+              </button>
+              <span className={s.qrCaption}>
+                {multiChain ? "USDC · any supported chain" : "Base USDC"}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Defaults
         authenticated={authenticated}
         defaultTradeSizeUsd={defaultTradeSizeUsd}
@@ -278,37 +310,33 @@ function Aside({
       />
 
       <nav className={s.nav} aria-label="Portfolio actions">
-        <span className={s.navSection}>Move</span>
-        <a className={s.navLink} href="#send">
-          <ActionIcon name="send" />
-          <span>Send</span>
-        </a>
-        <a className={s.navLink} href="#swap">
-          <ActionIcon name="swap" />
-          <span>Swap</span>
-        </a>
-
-        <span className={s.navSection}>Connect</span>
         <a className={s.navLink} href="#telegram">
           <ActionIcon name="telegram" />
           <span>Telegram alerts</span>
+          <span
+            className={`${s.navDot} ${telegramConnected ? s.navDot_on : ""}`}
+            aria-label={telegramConnected ? "Connected" : "Not connected"}
+          />
         </a>
-
-        <span className={s.navSection}>Portfolio</span>
-        <button
-          className={`${s.navLink} ${s.navButton}`}
-          type="button"
-          onClick={() => void requestExportKeys()}
-          disabled={!authenticated || !walletAddress || exportingKeys}
-          aria-describedby={exportKeysError ? "export-keys-error" : undefined}
-        >
-          <ActionIcon name="export" />
-          <span>{exportingKeys ? "Opening export" : "Export keys"}</span>
-        </button>
-        {exportKeysError ? (
-          <span className={s.navError} id="export-keys-error" role="alert">
-            {exportKeysError}
-          </span>
+        {walletAddress ? (
+          <>
+            <span className={s.navSection}>Advanced</span>
+            <button
+              className={`${s.navLink} ${s.navButton}`}
+              type="button"
+              onClick={() => void requestExportKeys()}
+              disabled={!authenticated || exportingKeys}
+              aria-describedby={exportKeysError ? "export-keys-error" : undefined}
+            >
+              <ActionIcon name="export" />
+              <span>{exportingKeys ? "Opening export" : "Export legacy wallet keys"}</span>
+            </button>
+            {exportKeysError ? (
+              <span className={s.navError} id="export-keys-error" role="alert">
+                {exportKeysError}
+              </span>
+            ) : null}
+          </>
         ) : null}
       </nav>
 
@@ -390,10 +418,7 @@ function Defaults({
 
   return (
     <label className={s.defaults}>
-      <div className={s.defaultsHead}>
-        <span className={s.defaultsLabel}>Configure</span>
-        <span className={s.defaultsCaption}>default cassie will trade</span>
-      </div>
+      <span className={s.defaultsCaption}>Default trade size</span>
       <span className={s.defaultsField}>
         <span className={s.defaultsCurrency}>$</span>
         <input
@@ -1761,6 +1786,10 @@ function VenueIcon({ venue, size = 16, className }: VenueIconProps) {
   }
 
   return null;
+}
+
+function fmtUsd(value: number): string {
+  return `$${value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function shortAddress(address: string) {

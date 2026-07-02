@@ -52,7 +52,7 @@ export function StyledQR({ data, size = 132 }: { data: string; size?: number }) 
   const pad = cell * 0.7;
 
   return (
-    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Base deposit QR code">
+    <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} role="img" aria-label="Deposit QR code">
       <rect width={size} height={size} rx={size * 0.06} fill="#ffffff" />
       {finders.map((f, i) => {
         const fx = f.x * cell;
@@ -89,7 +89,7 @@ export function StyledQR({ data, size = 132 }: { data: string; size?: number }) 
         rx={cell * 0.6}
         fill="#ffffff"
       />
-      <rect x={logoX} y={logoY} width={logoW} height={logoW} rx={cell * 0.35} fill="#0052FF" />
+      <rect x={logoX} y={logoY} width={logoW} height={logoW} rx={cell * 0.35} fill="var(--gilt, #d9a94f)" />
     </svg>
   );
 }
