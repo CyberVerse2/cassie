@@ -128,7 +128,7 @@ describe("dashboard payload", () => {
     expect(dashboard.activity[0]).toMatchObject({
       kind: "trade_close",
       at: "2026-06-01T00:00:00.000Z",
-      title: "SOL-PERP CLOSE",
+      title: "SOL",
       subtitle: expect.stringContaining("+$5.00 realized P/L"),
     });
   });
