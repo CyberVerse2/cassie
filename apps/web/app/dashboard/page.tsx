@@ -670,7 +670,7 @@ function Center({
                     <div className={s.moverAssetInfo}>
                       <span className={`${s.tokenCell} ${s.moverTokenCell}`}>
                         <span className="tk">
-                          <img
+                          <TokenImg
                             className={`${s.assetIconImage} ${s.moverTokenImage}`}
                             src={positionTokenIcon(largestPositionMover)}
                             alt=""
@@ -826,7 +826,7 @@ function Center({
                 <div className={s.tr} role="row" key={position.positionId}>
                   <span className={s.tokenCell}>
                     <span className="tk">
-                      <img
+                      <TokenImg
                         className={s.tokenImage}
                         src={positionTokenIcon(position)}
                         alt=""
@@ -1029,6 +1029,27 @@ function ActivityPanel({
   );
 }
 
+function TokenImg({
+  src,
+  className,
+  alt = "",
+}: {
+  src: string;
+  className?: string;
+  alt?: string;
+}) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <img
+      className={className}
+      src={failed ? "/cassie-logo-transparent.png" : src}
+      alt={alt}
+      aria-hidden
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 function ActivityItem({ item }: { item: CassieActivityItem }) {
   const statusTone = item.error
     ? s.amountDown
@@ -1050,7 +1071,7 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
 
       <div className={s.activityWatch}>
         <span className={s.activityAssetIcon}>
-          <img src={activityIcon(item)} alt="" aria-hidden />
+          <TokenImg src={activityIcon(item)} />
         </span>
         <div className={s.activityWatchText}>
           <strong>
@@ -1189,13 +1210,21 @@ function activityCommand(
 }
 
 function activityIcon(item: CassieActivityItem): string {
-  const symbol = item.instrument
+  // Trade rows carry the humanized asset symbol in the title; instrument can
+  // be a venue slug like synthetic_perp that no icon CDN knows.
+  const source = item.kind === "trade" || item.kind === "trade_close"
+    ? item.title
+    : item.instrument;
+  const symbol = source
     ?.replace(/-PERP$/u, "")
     .split(/\s+/u)[0]
     ?.toUpperCase();
+  if (symbol && tokenImages[symbol]) return tokenImages[symbol];
+  if (item.venue === "polymarket") {
+    return "https://assets.dub.co/companies/polymarket.svg";
+  }
   if (symbol && item.venue === "hyperliquid")
     return hyperliquidTokenIcon(symbol);
-  if (symbol && tokenImages[symbol]) return tokenImages[symbol];
   if (item.instrument === "USDC") return usdcIcon;
   return "/cassie-logo-transparent.png";
 }
