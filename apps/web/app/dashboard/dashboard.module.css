@@ -326,6 +326,18 @@
   border-bottom-right-radius: 10px;
 }
 
+.activityShare {
+  color: var(--gilt);
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 150ms ease, border-color 150ms ease;
+}
+
+.activityShare:hover {
+  color: var(--gilt-glow);
+  border-color: color-mix(in oklab, var(--gilt) 50%, transparent);
+}
+
 .balanceCard {
   display: grid;
   gap: 4px;

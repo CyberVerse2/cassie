@@ -331,7 +331,7 @@ function tradeActivity(
     title: displayInstrument(ticket),
     subtitle: activitySubtitle([
       venueLabel(ticket.venue),
-      displayThesis(ticket.thesis) ?? "Opened from a live market signal",
+      displayThesis(ticket.thesis),
     ]),
     status: position.status,
     amountUsd: position.filledSizeUsd,

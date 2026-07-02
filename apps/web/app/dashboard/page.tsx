@@ -13,14 +13,14 @@ import {
 import s from "./dashboard.module.css";
 
 const tickerImages: Record<string, string> = {
-  SOL: "https://assets.dub.co/companies/polymarket.svg",
-  ETH: "https://assets.coingecko.com/coins/images/279/large/ethereum.png",
-  AI16Z: "https://assets.coingecko.com/coins/images/51322/large/ai16z.png",
-  FED: "https://assets.dub.co/companies/polymarket.svg",
-  BTC: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
+  SOL: "https://app.hyperliquid.xyz/coins/SOL.svg",
+  ETH: "https://app.hyperliquid.xyz/coins/ETH.svg",
+  AI16Z: "https://app.hyperliquid.xyz/coins/AI16Z.svg",
+  FED: "/cassie-logo-transparent.png",
+  BTC: "https://app.hyperliquid.xyz/coins/BTC.svg",
   HYPE: "https://app.hyperliquid.xyz/coins/HYPE.svg",
-  AVNT: "https://assets.dub.co/companies/polymarket.svg",
-  GOLD: "https://assets.dub.co/companies/polymarket.svg",
+  AVNT: "https://app.hyperliquid.xyz/coins/AVNT.svg",
+  GOLD: "/cassie-logo-transparent.png",
 };
 
 const tokenImages: Record<string, string> = {
@@ -42,53 +42,6 @@ const tickerStrip = [
   { sym: "GOLD", label: "41 trades" },
 ];
 
-const watching = [
-  {
-    id: "BTC",
-    title: "BTC to $120k by quarter end",
-    source: "@maya_trades",
-    venue: "hyper",
-    venueLabel: "Hyperliquid",
-    side: "LONG",
-    sideTone: "long",
-    watchedAt: "$101,840",
-    current: "$104,210",
-    changePct: "+2.3%",
-    hypoPnl: "+$2.33",
-    tone: "up",
-    watchedAge: "2h",
-  },
-  {
-    id: "ETH",
-    title: "ETH back to $2,800",
-    source: "@noah_eth",
-    venue: "hyper",
-    venueLabel: "Hyperliquid",
-    side: "SHORT",
-    sideTone: "short",
-    watchedAt: "$3,108",
-    current: "$3,042",
-    changePct: "+2.1%",
-    hypoPnl: "+$2.12",
-    tone: "up",
-    watchedAge: "5h",
-  },
-  {
-    id: "SOL",
-    title: "SOL ETF approval locks YES",
-    source: "@ira_markets",
-    venue: "poly",
-    venueLabel: "Polymarket",
-    side: "YES",
-    sideTone: "yes",
-    watchedAt: "61¢",
-    current: "63¢",
-    changePct: "+3.3%",
-    hypoPnl: "+$3.27",
-    tone: "up",
-    watchedAge: "1d",
-  },
-];
 
 const ranges = ["1D", "1W", "1M", "1Y", "All"] as const;
 
@@ -480,7 +433,7 @@ function Center({
   >("1D");
   const [hoveredData, setHoveredData] = useState<DataPoint | null>(null);
   const [activeTab, setActiveTab] = useState<"wallet" | "activity">("wallet");
-  const [walletView, setWalletView] = useState<"trades" | "watching">("trades");
+  const [walletView, setWalletView] = useState<"trades" | "watching" | "history">("trades");
   const [closingId, setClosingId] = useState<string | null>(null);
   const dashboardEnabled = accountReady && authenticated;
   const dashboardQuery = useQuery({
@@ -588,10 +541,9 @@ function Center({
           {[...tickerStrip, ...tickerStrip].map((t, i) => (
             <span className={s.tickerPill} key={`${t.sym}-${i}`}>
               <span className="tk-icon">
-                <img
+                <TokenImg
                   className={s.assetIconImage}
-                  src={tickerImages[t.sym]}
-                  alt=""
+                  src={tickerImages[t.sym] ?? "/cassie-logo-transparent.png"}
                 />
               </span>
               <span className="tk-sym">${t.sym}</span>
@@ -801,7 +753,17 @@ function Center({
               onClick={() => setWalletView("watching")}
             >
               Watching
-              <span className={s.walletSubtabCount}>{watching.length}</span>
+              <span className={s.walletSubtabCount}>0</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={walletView === "history"}
+              className={`${s.walletSubtab} ${walletView === "history" ? s.walletSubtabActive : ""}`}
+              onClick={() => setWalletView("history")}
+            >
+              Trade history
+              <span className={s.walletSubtabCount}>{closedPositions.length}</span>
             </button>
           </div>
 
@@ -900,66 +862,85 @@ function Center({
 
           {walletView === "watching" && (
             <div className={s.table}>
+              <div className={s.emptyState}>
+                Nothing being watched yet. Reply &quot;watch this&quot; when you
+                mention @cassiedottrade on X and it will show up here.
+              </div>
+            </div>
+          )}
+
+          {walletView === "history" && (
+            <div className={s.table}>
               <div className={`${s.tr} ${s.thead}`} role="row">
                 <span>Asset</span>
-                <span>Idea</span>
-                <span className={s.amountHead}>Now</span>
-                <span className={s.amountHead}>If $100</span>
+                <span>Trade</span>
+                <span className={s.amountHead}>Size</span>
+                <span className={s.amountHead}>Realized P/L</span>
                 <span />
               </div>
-              {watching.map((w) => (
-                <div className={s.tr} role="row" key={w.title}>
+              {closedPositions.length === 0 && (
+                <div className={s.emptyState}>No closed trades yet.</div>
+              )}
+              {closedPositions.map((position) => (
+                <div className={s.tr} role="row" key={position.positionId}>
                   <span className={s.tokenCell}>
                     <span className="tk">
-                      <img
+                      <TokenImg
                         className={s.tokenImage}
-                        src={tokenImages[w.id]}
-                        alt=""
+                        src={positionTokenIcon(position)}
                       />
                     </span>
                     <span
-                      className={`tk-venue ${w.venue}`}
-                      title={w.venueLabel}
+                      className={`tk-venue ${venueTone(position.venue)}`}
+                      title={position.venue}
                     >
-                      <VenueIcon venue={w.venue} size={11} />
+                      <VenueIcon
+                        venue={position.venue === "hyperliquid" ? "hyper" : "poly"}
+                        size={11}
+                      />
                     </span>
                   </span>
                   <span className={s.tradeCopy}>
-                    <strong>{w.title}</strong>
+                    <strong>{positionSymbol(position)}</strong>
                     <span>
-                      via <span className={s.watchingSource}>{w.source}</span> ·
-                      watched {w.watchedAge} ago at {w.watchedAt}
+                      {position.closedAt
+                        ? `closed ${formatActivityDate(position.closedAt)}`
+                        : "closed"}
                     </span>
                   </span>
                   <span className={s.amountCell}>
-                    <span className={s.amountValue}>{w.current}</span>
+                    <span className={s.amountValue}>
+                      {formatUsd(position.entrySizeUsd)}
+                    </span>
                     <span
-                      className={`${s.valueDelta} ${w.tone === "up" ? s.amountUp : s.amountDown}`}
+                      className={`${s.amountSide} ${s[`amountSide_${sideTone(position.side)}`]}`}
                     >
-                      <span className={s.amountDeltaIcon} aria-hidden>
-                        {w.tone === "up" ? "▲" : "▼"}
-                      </span>
-                      {w.changePct.replace(/^[+-]/, "")} since watch
+                      {position.side.toUpperCase()}
                     </span>
                   </span>
                   <span className={s.valueCell}>
                     <span
-                      className={`${s.amountValue} ${w.tone === "up" ? s.watchingPnlUp : s.watchingPnlDown}`}
+                      className={`${s.amountValue} ${position.unrealizedPnlUsd >= 0 ? s.amountUp : s.amountDown}`}
                     >
-                      {w.hypoPnl}
+                      {formatSignedUsdClient(position.unrealizedPnlUsd)}
                     </span>
                     <span
-                      className={`${s.amountSide} ${s[`amountSide_${w.sideTone}`]}`}
+                      className={`${s.valueDelta} ${position.unrealizedPnlUsd >= 0 ? s.amountUp : s.amountDown}`}
                     >
-                      {w.side}
+                      <span className={s.amountDeltaIcon} aria-hidden>
+                        {position.unrealizedPnlUsd >= 0 ? "▲" : "▼"}
+                      </span>
+                      {Math.abs(position.unrealizedPnlPct).toFixed(2)}%
                     </span>
                   </span>
-                  <button
-                    className={s.watchTradeBtn}
-                    aria-label={`Trade ${w.title} now`}
-                  >
-                    Trade
-                  </button>
+                  <span className={s.tradeActions}>
+                    <a
+                      className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
+                      href={`/trades/${encodeURIComponent(position.positionId)}/pnl`}
+                    >
+                      Share
+                    </a>
+                  </span>
                 </div>
               ))}
             </div>
@@ -1056,6 +1037,9 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
     : item.status === "succeeded" || item.status === "completed"
       ? s.amountUp
       : "";
+  const sharePositionId = item.kind === "trade" || item.kind === "trade_close"
+    ? item.id.replace(/:close$/u, "")
+    : null;
   return (
     <li className={s.activityRow}>
       <span
@@ -1099,6 +1083,30 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
       </div>
 
       <span className={s.activitySources}>
+        {sharePositionId && (
+          <a
+            className={`${s.activitySourceChip} ${s.activityShare}`}
+            href={`/trades/${encodeURIComponent(sharePositionId)}/pnl`}
+            title="Share this trade to X"
+            aria-label="Share this trade to X"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="12"
+              height="12"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+              <path d="M12 15V4" />
+              <path d="m7 9 5-5 5 5" />
+            </svg>
+          </a>
+        )}
         <span className={s.activitySourceChip} title="Cassie">
           <img src="/cassie-logo-transparent.png" alt="Cassie" />
         </span>
@@ -1815,6 +1823,11 @@ function VenueIcon({ venue, size = 16, className }: VenueIconProps) {
   }
 
   return null;
+}
+
+function formatSignedUsdClient(value: number): string {
+  const sign = value >= 0 ? "+" : "\u2212";
+  return `${sign}$${Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function fmtUsd(value: number): string {
