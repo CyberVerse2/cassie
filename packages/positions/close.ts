@@ -1,6 +1,7 @@
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import { type ExecutionJob, type Position, type TradeTicket } from "../core/schemas/index.ts";
+import { type Chain, type ExecutionJob, type Position, type TradeTicket } from "../core/schemas/index.ts";
+import { CircleWalletAdapter } from "../adapters/circle/index.ts";
 import { PrivyAdapter } from "../adapters/privy/index.ts";
 import type { UsdcTransfer, WalletGateway } from "../adapters/wallet/gateway.ts";
 import { HyperliquidPositionCloseClient, PolymarketPositionCloseClient, type PositionCloseClient } from "../execution/index.ts";
@@ -89,30 +90,30 @@ export async function executeClosePosition(input: {
     assertFullCloseFill(position, result);
     const openJob = await store.getExecutionJob(position.executionJobId);
     const realizedPnlUsd = roundUsd(result.filledSizeUsd - position.filledSizeUsd);
+    // Payouts are physical in both modes: the treasury sends the close
+    // proceeds (collateral +/- PnL) back to the wallet the trade spent from.
+    const payout = settings.walletAddress
+      ? {
+        walletGateway: input.walletGateway ?? new PrivyAdapter(),
+        userWalletAddress: settings.walletAddress,
+        chain: "base" as const,
+      }
+      : {
+        walletGateway: input.walletGateway ?? new CircleWalletAdapter(),
+        userWalletAddress: depositAddress!.evmAddress,
+        chain: config.circle.defaultChain,
+      };
     let refundTransfer: UsdcTransfer | null = null;
     let refundFailureReason: string | null = null;
     try {
-      if (settings.walletAddress) {
-        const walletGateway = input.walletGateway ?? new PrivyAdapter();
-        refundTransfer = await refundClosedPosition({
-          walletGateway,
-          userWalletAddress: settings.walletAddress,
-          position,
-          ticket,
-          result,
-          openResult: openJob?.executionResult ?? null,
-          realizedPnlUsd,
-        });
-      } else {
-        await creditClosedPosition({
-          store,
-          position,
-          ticket,
-          result,
-          openResult: openJob?.executionResult ?? null,
-          realizedPnlUsd,
-        });
-      }
+      refundTransfer = await refundClosedPosition({
+        ...payout,
+        position,
+        ticket,
+        result,
+        openResult: openJob?.executionResult ?? null,
+        realizedPnlUsd,
+      });
     } catch (error) {
       refundFailureReason = error instanceof Error ? error.message : String(error);
     }
@@ -188,30 +189,10 @@ function assertFullCloseFill(position: Position, result: PositionCloseResult): v
   }
 }
 
-async function creditClosedPosition(input: {
-  store: CassieStore;
-  position: Position;
-  ticket: TradeTicket;
-  result: PositionCloseResult;
-  openResult: ExecutionJob["executionResult"];
-  realizedPnlUsd: number;
-}): Promise<void> {
-  const amountUsd = closeRefundAmountUsd(input);
-  if (amountUsd <= 0) return;
-  await input.store.recordRefundCredit({
-    userId: input.position.userId,
-    amountUsd,
-    referenceId: `position_close:${input.position.positionId}`,
-    metadata: {
-      positionId: input.position.positionId,
-      realizedPnlUsd: input.realizedPnlUsd,
-    },
-  });
-}
-
 async function refundClosedPosition(input: {
   walletGateway: PositionRefundGateway;
   userWalletAddress: string;
+  chain: Chain;
   position: Position;
   ticket: TradeTicket;
   result: PositionCloseResult;
@@ -224,7 +205,7 @@ async function refundClosedPosition(input: {
     userWalletAddress: input.userWalletAddress,
     amountUsd,
     referenceId: `position_close:${input.position.positionId}`,
-    chain: "base",
+    chain: input.chain,
   });
 }
 

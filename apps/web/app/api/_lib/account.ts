@@ -6,6 +6,7 @@ import { PrivyAdapter } from "../../../../../packages/adapters/privy";
 import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-store";
 import type { CassieStore } from "../../../../../packages/core/db/store";
 import { MissingConnectorConfigError } from "../../../../../packages/core/helpers/connector-errors";
+import { depositWalletBalanceUsd } from "../../../../../packages/app/deposit-balance";
 import { shouldPromptPrivyMigration } from "../../../../../packages/app/privy-migration";
 import { UserProfileSchema, type UserDepositAddress, type UserSettings } from "../../../../../packages/core/schemas";
 
@@ -46,12 +47,12 @@ export async function accountResponse(
   const depositAddress = await ensureDepositAddress(store, settings.userId);
   const walletBalanceUsd = settings.privyWalletId
     ? await walletGateway.getUsdcBalanceUsd({ walletId: settings.privyWalletId })
-    : null;
+    : depositAddress
+      ? await depositWalletBalanceUsd(depositAddress)
+      : null;
   const balance = walletBalanceUsd != null
     ? await store.getWalletFundingBalance(settings.userId, walletBalanceUsd)
-    : depositAddress
-      ? await store.getDepositFundingBalance(settings.userId)
-      : null;
+    : null;
   return NextResponse.json({
     account: {
       userId: settings.userId,

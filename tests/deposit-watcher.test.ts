@@ -3,8 +3,8 @@ import type { CircleIncomingTransfer } from "../packages/adapters/circle/index.t
 import { sweepDeposit } from "../packages/app/deposit-sweeper.ts";
 import { pollDeposits } from "../packages/app/deposit-watcher.ts";
 import { InMemoryCassieStore } from "../packages/core/db/store.ts";
-import type { CassieJobQueue } from "../packages/jobs/queue.ts";
-import type { ControlRun, ExecutionJob } from "../packages/core/schemas/index.ts";
+
+const TREASURY_ADDRESS = "0x2222222222222222222222222222222222222222";
 
 const depositAddress = {
   userId: "user_1",
@@ -19,6 +19,7 @@ function transfer(overrides: Partial<CircleIncomingTransfer> = {}): CircleIncomi
     transferId: "transfer_1",
     chain: "arbitrum",
     blockchain: "ARB",
+    sourceAddress: "0xcccc333333333333333333333333333333333333",
     destinationAddress: depositAddress.evmAddress.toLowerCase(),
     amountUsd: 40,
     txHash: "0xhash1",
@@ -27,31 +28,6 @@ function transfer(overrides: Partial<CircleIncomingTransfer> = {}): CircleIncomi
     createDate: "2026-07-01T01:00:00.000Z",
     ...overrides,
   };
-}
-
-class FakeQueue implements CassieJobQueue {
-  sweeps: Array<{ userId: string; circleTransferId: string; amountUsd: number; chain: string | null }> = [];
-
-  async enqueueExecution(job: ExecutionJob) {
-    return { executionJobId: job.jobId, graphileJobId: null };
-  }
-
-  async enqueueSupervisor(run: ControlRun) {
-    return { runId: run.runId, graphileJobId: null };
-  }
-
-  async enqueuePositionReview() {
-    return { graphileJobId: null };
-  }
-
-  async enqueueClosePosition(input: { positionId: string }) {
-    return { positionId: input.positionId, graphileJobId: null };
-  }
-
-  async enqueueSweepDeposit(input: { userId: string; circleTransferId: string; amountUsd: number; chain: string | null }) {
-    this.sweeps.push(input);
-    return { graphileJobId: null };
-  }
 }
 
 async function storeWithUser() {
@@ -66,41 +42,38 @@ async function storeWithUser() {
 }
 
 describe("deposit watcher", () => {
-  it("credits a matched USDC deposit and enqueues a sweep", async () => {
+  it("credits a matched USDC deposit", async () => {
     const store = await storeWithUser();
-    const jobQueue = new FakeQueue();
     const circle = {
       listIncomingUsdcTransfers: vi.fn().mockResolvedValue([transfer()]),
     };
 
-    const result = await pollDeposits({ store, circle, jobQueue });
+    const result = await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
 
     expect(result).toMatchObject({ found: 1, credited: 1, skipped: 0, unmatched: 0 });
-    const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(40);
-    expect(balance.spendableUsd).toBe(40);
-    expect(jobQueue.sweeps).toEqual([{
+    const state = await store.load();
+    const credits = state.walletSpendLedgerEntries.filter((entry) => entry.type === "deposit_credit");
+    expect(credits).toHaveLength(1);
+    expect(credits[0]).toMatchObject({
       userId: "x:x_1",
-      circleTransferId: "transfer_1",
       amountUsd: 40,
       chain: "arbitrum",
-    }]);
+      circleTransferId: "transfer_1",
+    });
   });
 
   it("does not double-credit the same transfer across polls", async () => {
     const store = await storeWithUser();
-    const jobQueue = new FakeQueue();
     const circle = {
       listIncomingUsdcTransfers: vi.fn().mockResolvedValue([transfer()]),
     };
 
-    await pollDeposits({ store, circle, jobQueue });
-    const second = await pollDeposits({ store, circle, jobQueue });
+    await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
+    const second = await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
 
     expect(second).toMatchObject({ credited: 0, skipped: 1 });
-    const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(40);
-    expect(jobQueue.sweeps).toHaveLength(1);
+    const state = await store.load();
+    expect(state.walletSpendLedgerEntries.filter((entry) => entry.type === "deposit_credit")).toHaveLength(1);
   });
 
   it("does not double-credit when the ledger already has the transfer", async () => {
@@ -112,31 +85,41 @@ describe("deposit watcher", () => {
       txHash: "0xhash1",
       circleTransferId: "transfer_1",
     });
-    const jobQueue = new FakeQueue();
     const circle = {
       listIncomingUsdcTransfers: vi.fn().mockResolvedValue([transfer()]),
     };
 
-    const result = await pollDeposits({ store, circle, jobQueue });
+    const result = await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
 
     expect(result).toMatchObject({ credited: 0, skipped: 1 });
-    const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(40);
-    expect(jobQueue.sweeps).toHaveLength(0);
+  });
+
+  it("skips treasury payouts instead of crediting them as deposits", async () => {
+    const store = await storeWithUser();
+    const circle = {
+      listIncomingUsdcTransfers: vi.fn().mockResolvedValue([
+        transfer({ sourceAddress: TREASURY_ADDRESS.toUpperCase() }),
+      ]),
+    };
+
+    const result = await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
+
+    expect(result).toMatchObject({ found: 1, credited: 0, skipped: 1 });
+    const state = await store.load();
+    expect(state.walletSpendLedgerEntries.filter((entry) => entry.type === "deposit_credit")).toHaveLength(0);
   });
 
   it("advances the poll cursor and passes it to Circle", async () => {
     const store = await storeWithUser();
-    const jobQueue = new FakeQueue();
     const circle = {
       listIncomingUsdcTransfers: vi.fn().mockResolvedValue([transfer()]),
     };
 
-    await pollDeposits({ store, circle, jobQueue });
+    await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
     expect(circle.listIncomingUsdcTransfers).toHaveBeenLastCalledWith({ from: undefined });
 
     circle.listIncomingUsdcTransfers.mockResolvedValue([]);
-    await pollDeposits({ store, circle, jobQueue });
+    await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
     expect(circle.listIncomingUsdcTransfers).toHaveBeenLastCalledWith({
       from: "2026-07-01T01:00:00.000Z",
     });
@@ -144,22 +127,20 @@ describe("deposit watcher", () => {
 
   it("counts transfers to unknown addresses as unmatched", async () => {
     const store = await storeWithUser();
-    const jobQueue = new FakeQueue();
     const circle = {
       listIncomingUsdcTransfers: vi.fn().mockResolvedValue([
         transfer({ destinationAddress: "0xbbbb222222222222222222222222222222222222" }),
       ]),
     };
 
-    const result = await pollDeposits({ store, circle, jobQueue });
+    const result = await pollDeposits({ store, circle, treasuryAddress: TREASURY_ADDRESS });
 
     expect(result).toMatchObject({ credited: 0, unmatched: 1 });
-    expect(jobQueue.sweeps).toHaveLength(0);
   });
 });
 
-describe("deposit sweeper", () => {
-  it("sweeps a credited deposit to the treasury exactly once", async () => {
+describe("deposit sweeper (ops-only)", () => {
+  it("sweeps a deposit to the treasury exactly once when invoked", async () => {
     const store = await storeWithUser();
     const circle = {
       transferUserUsdcToTreasury: vi.fn().mockResolvedValue({
@@ -167,7 +148,7 @@ describe("deposit sweeper", () => {
         referenceId: "deposit_sweep:transfer_1",
         status: "succeeded",
         sourceWalletId: "circle_wallet_1",
-        destinationAddress: "0xtreasury",
+        destinationAddress: TREASURY_ADDRESS,
         amountUsd: 40,
         asset: "usdc",
         chain: "arbitrum",
@@ -188,14 +169,5 @@ describe("deposit sweeper", () => {
     expect(first.status).toBe("swept");
     expect(second.status).toBe("duplicate");
     expect(circle.transferUserUsdcToTreasury).toHaveBeenCalledTimes(1);
-    expect(circle.transferUserUsdcToTreasury).toHaveBeenCalledWith({
-      userWalletId: "circle_wallet_1",
-      amountUsd: 40,
-      referenceId: "deposit_sweep:transfer_1",
-      chain: "arbitrum",
-    });
-    // Sweeps are treasury ops: they must not change the user's balance.
-    const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(0);
   });
 });

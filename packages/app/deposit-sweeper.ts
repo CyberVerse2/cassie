@@ -14,8 +14,9 @@ export type DepositSweepGateway = Pick<
   "transferUserUsdcToTreasury"
 >;
 
-// Moves a credited deposit from the user's Circle deposit wallet into the
-// treasury wallet, from which the Gateway unified balance is funded.
+// Ops-only tool: moves a credited deposit from the user's Circle deposit
+// wallet into the treasury. Not part of the normal flow — user funds stay in
+// their deposit wallet and move to/from the treasury per trade.
 export async function sweepDeposit(input: {
   payload: SweepDepositPayload;
   store?: CassieStore;

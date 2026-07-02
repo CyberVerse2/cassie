@@ -43,6 +43,7 @@ export type CircleIncomingTransfer = {
   transferId: string;
   chain: Chain | null;
   blockchain: string;
+  sourceAddress: string | null;
   destinationAddress: string;
   amountUsd: number;
   txHash: string | null;
@@ -178,6 +179,7 @@ export class CircleWalletAdapter implements WalletGateway {
         transferId: transaction.id,
         chain: this.chainFor(transaction.blockchain),
         blockchain: transaction.blockchain,
+        sourceAddress: transaction.sourceAddress ?? null,
         destinationAddress: transaction.destinationAddress,
         amountUsd: transactionAmountUsd(transaction),
         txHash: transaction.txHash ?? null,

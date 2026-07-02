@@ -2,9 +2,9 @@ import {
   CircleWalletAdapter,
   type CircleIncomingTransfer,
 } from "../adapters/circle/index.ts";
+import { config } from "../core/config.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
-import { GraphileExecutionJobQueue, type CassieJobQueue } from "../jobs/queue.ts";
 
 const DEPOSITS_POLL_CURSOR_KEY = "deposits_poll:cursor";
 
@@ -21,14 +21,18 @@ export type IncomingTransferSource = Pick<
   "listIncomingUsdcTransfers"
 >;
 
+// Watches for inbound USDC to user deposit wallets and credits the ledger.
+// Funds stay in the user's deposit wallet — trades physically move them to
+// the treasury (prefund) and back (payouts) as they open and close.
 export async function pollDeposits(input: {
   store?: CassieStore;
   circle?: IncomingTransferSource;
-  jobQueue?: CassieJobQueue;
+  treasuryAddress?: string | null;
 } = {}): Promise<PollDepositsResult> {
   const store = input.store ?? new DrizzleCassieStore();
   const circle = input.circle ?? new CircleWalletAdapter();
-  const jobQueue = input.jobQueue ?? new GraphileExecutionJobQueue();
+  const treasuryAddress =
+    input.treasuryAddress ?? config.circle.treasuryWalletAddress ?? null;
 
   const cursor = await depositsPollCursor(store);
   const transfers = await circle.listIncomingUsdcTransfers({ from: cursor });
@@ -52,7 +56,18 @@ export async function pollDeposits(input: {
         continue;
       }
 
-      const processed = await creditDeposit({ store, jobQueue, transfer });
+      // Treasury -> deposit-wallet transfers are trade payouts and refunds,
+      // not new deposits; the ledger already accounts for them.
+      if (isTreasurySourced(transfer, treasuryAddress)) {
+        await store.setRuntimeState(pollStateKey, {
+          processedAt: new Date().toISOString(),
+          result: { status: "treasury_payout" },
+        });
+        result.skipped += 1;
+        continue;
+      }
+
+      const processed = await creditDeposit({ store, transfer });
       await store.setRuntimeState(pollStateKey, {
         processedAt: new Date().toISOString(),
         result: processed,
@@ -80,10 +95,9 @@ export async function pollDeposits(input: {
 
 async function creditDeposit(input: {
   store: CassieStore;
-  jobQueue: CassieJobQueue;
   transfer: CircleIncomingTransfer;
 }): Promise<{ status: "credited" | "duplicate" | "unmatched"; userId?: string }> {
-  const { store, jobQueue, transfer } = input;
+  const { store, transfer } = input;
   const depositAddress = await store.getDepositAddressByEvmAddress(
     transfer.destinationAddress,
   );
@@ -101,6 +115,7 @@ async function creditDeposit(input: {
     metadata: {
       blockchain: transfer.blockchain,
       tokenId: transfer.tokenId,
+      sourceAddress: transfer.sourceAddress,
       destinationAddress: transfer.destinationAddress,
     },
   });
@@ -115,13 +130,18 @@ async function creditDeposit(input: {
     message: "USDC deposit credited.",
     data: { transfer, entryId: entry.entryId },
   });
-  await jobQueue.enqueueSweepDeposit({
-    userId: depositAddress.userId,
-    circleTransferId: transfer.transferId,
-    amountUsd: transfer.amountUsd,
-    chain: transfer.chain,
-  });
   return { status: "credited", userId: depositAddress.userId };
+}
+
+function isTreasurySourced(
+  transfer: CircleIncomingTransfer,
+  treasuryAddress: string | null,
+): boolean {
+  return Boolean(
+    treasuryAddress
+      && transfer.sourceAddress
+      && transfer.sourceAddress.toLowerCase() === treasuryAddress.toLowerCase(),
+  );
 }
 
 async function depositsPollCursor(store: CassieStore): Promise<string | undefined> {

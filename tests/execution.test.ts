@@ -474,6 +474,7 @@ describe("treasury-prefunded execution", () => {
         prefundTransferId: "transfer_prefund",
         prefundTransferStatus: "succeeded",
         amountUsd: 25,
+        chain: "base",
       },
     });
     expect(walletGateway.transferUserUsdcToTreasury.mock.invocationCallOrder[0]!)
@@ -691,7 +692,7 @@ describe("treasury-prefunded execution", () => {
 
     expect(result).toMatchObject({
       status: "failed",
-      failureReason: "Privy USDC prefund transfer_pending did not confirm before execution: pending.",
+      failureReason: "USDC prefund transfer_pending did not confirm before execution: pending.",
     });
     expect(executionClient.execute).not.toHaveBeenCalled();
     expect(walletGateway.refundUserUsdcFromTreasury).not.toHaveBeenCalled();

@@ -30,7 +30,7 @@ const ticket: TradeTicket = {
   exitPlan,
 };
 
-// Internal-ledger user: X login, no Privy wallet.
+// Circle-wallet user: X login, no Privy wallet.
 const settings: UserSettings = {
   userId: "x:x_1",
   privyUserId: null,
@@ -41,28 +41,61 @@ const settings: UserSettings = {
   defaultTradeSizeUsd: 25,
 };
 
+const DEPOSIT_EVM_ADDRESS = "0xAAaA111111111111111111111111111111111111";
+const TREASURY_ADDRESS = "0x2222222222222222222222222222222222222222";
+
 function fakeTreasury(input: { balanceUsd: number }): TreasuryFundingGateway {
   return {
-    getTreasuryWalletAddress: vi.fn().mockReturnValue("0x2222222222222222222222222222222222222222"),
     getTreasuryWalletId: vi.fn().mockReturnValue("treasury_wallet"),
     getUsdcBalanceOnChain: vi.fn().mockResolvedValue(input.balanceUsd),
   };
 }
 
-async function internalLedgerStore(depositUsd = 100) {
+function mockCircleWalletGateway(input: { balanceUsd: number }) {
+  return {
+    getUsdcBalanceUsd: vi.fn().mockResolvedValue(input.balanceUsd),
+    getTreasuryWalletAddress: vi.fn().mockReturnValue(TREASURY_ADDRESS),
+    transferUserUsdcToTreasury: vi.fn().mockResolvedValue({
+      transferId: "circle_prefund_1",
+      referenceId: "trade_prefund:job",
+      status: "succeeded",
+      sourceWalletId: "circle_wallet_1",
+      destinationAddress: TREASURY_ADDRESS,
+      amountUsd: 25,
+      asset: "usdc",
+      chain: "arc",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      raw: {},
+    }),
+    refundUserUsdcFromTreasury: vi.fn().mockResolvedValue({
+      transferId: "circle_refund_1",
+      referenceId: "trade_refund:job",
+      status: "succeeded",
+      sourceWalletId: "treasury_wallet",
+      destinationAddress: DEPOSIT_EVM_ADDRESS,
+      amountUsd: 25,
+      asset: "usdc",
+      chain: "arc",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      raw: {},
+    }),
+  };
+}
+
+async function circleUserStore(depositUsd = 100) {
   const store = new InMemoryCassieStore();
   await store.upsertUserSettings(settings);
   await store.addUserDepositAddress({
     userId: settings.userId,
     walletSetId: "wallet_set_1",
     circleWalletId: "circle_wallet_1",
-    evmAddress: "0xAAaA111111111111111111111111111111111111",
+    evmAddress: DEPOSIT_EVM_ADDRESS,
     createdAt: "2026-07-01T00:00:00.000Z",
   });
   await store.recordDepositCredit({
     userId: settings.userId,
     amountUsd: depositUsd,
-    chain: "base",
+    chain: "arc",
     txHash: "0xdeposit",
     circleTransferId: "deposit_1",
   });
@@ -75,49 +108,36 @@ describe("FundingRouter", () => {
     expect(venueChainForTicket({ ...ticket, venue: "hyperliquid" })).toBe("arbitrum");
   });
 
-  it("records prefund and gateway mint entries and returns venue-chain funding", async () => {
-    const store = await internalLedgerStore();
+  it("verifies venue-chain treasury USDC and records the allocation", async () => {
+    const store = await circleUserStore();
     const treasury = fakeTreasury({ balanceUsd: 500 });
-    const router = new FundingRouter(treasury, false);
+    const router = new FundingRouter(treasury);
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    const funding = await router.ensureVenueUsdc({
-      store,
-      ticket,
-      job,
-      walletBalanceUsd: 100,
-    });
+    const venue = await router.ensureVenueUsdc({ store, ticket, job });
 
-    expect(funding).toMatchObject({
-      type: "cassie_treasury",
-      userId: "x:x_1",
-      treasuryWalletAddress: "0x2222222222222222222222222222222222222222",
-      prefundTransferId: `ledger:${job.jobId}`,
-      prefundTransferStatus: "succeeded",
-      amountUsd: 25,
-      chain: "polygon",
-      venueChain: "polygon",
-    });
+    expect(venue).toEqual({ venueChain: "polygon" });
     expect(treasury.getUsdcBalanceOnChain).toHaveBeenCalledWith({
       walletId: "treasury_wallet",
       chain: "polygon",
     });
     const state = await store.load();
-    const types = state.walletSpendLedgerEntries.map((entry) => entry.type);
-    expect(types).toEqual(["deposit_credit", "trade_prefund", "gateway_mint"]);
+    const mints = state.walletSpendLedgerEntries.filter((entry) => entry.type === "gateway_mint");
+    expect(mints).toHaveLength(1);
+    expect(mints[0]).toMatchObject({ chain: "polygon", amountUsd: 25 });
   });
 
   it("throws before recording anything when the treasury lacks venue-chain USDC", async () => {
-    const store = await internalLedgerStore();
-    const router = new FundingRouter(fakeTreasury({ balanceUsd: 10 }), false);
+    const store = await circleUserStore();
+    const router = new FundingRouter(fakeTreasury({ balanceUsd: 10 }));
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
     await expect(
-      router.ensureVenueUsdc({ store, ticket, job, walletBalanceUsd: 100 }),
+      router.ensureVenueUsdc({ store, ticket, job }),
     ).rejects.toThrow(/Treasury holds \$10\.00 USDC on polygon/);
     const state = await store.load();
     expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
@@ -126,14 +146,14 @@ describe("FundingRouter", () => {
   });
 
   it("records the gateway mint only once per execution job", async () => {
-    const store = await internalLedgerStore();
-    const router = new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false);
+    const store = await circleUserStore();
+    const router = new FundingRouter(fakeTreasury({ balanceUsd: 500 }));
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
 
-    await router.ensureVenueUsdc({ store, ticket, job, walletBalanceUsd: 100 });
-    await router.ensureVenueUsdc({ store, ticket, job, walletBalanceUsd: 100 });
+    await router.ensureVenueUsdc({ store, ticket, job });
+    await router.ensureVenueUsdc({ store, ticket, job });
 
     const state = await store.load();
     const mints = state.walletSpendLedgerEntries.filter((entry) => entry.type === "gateway_mint");
@@ -141,115 +161,109 @@ describe("FundingRouter", () => {
   });
 });
 
-describe("internal-ledger execution", () => {
-  it("funds a trade from the internal ledger without touching Privy", async () => {
-    const store = await internalLedgerStore();
+describe("circle-wallet execution (physical prefund)", () => {
+  it("moves the ticket size from the deposit wallet to the treasury before executing", async () => {
+    const store = await circleUserStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
     const executionClient: ExecutionClient = {
       execute: vi.fn().mockResolvedValue({
-        venueOrderId: "order_1",
+        venueOrderId: "sim:order_1",
         filledBaseSize: 59,
         filledSizeUsd: 25,
         averagePrice: 0.42,
       }),
     };
-    const walletGateway = {
-      getUsdcBalanceUsd: vi.fn(),
-      getTreasuryWalletAddress: vi.fn(),
-      transferUserUsdcToTreasury: vi.fn(),
-      refundUserUsdcFromTreasury: vi.fn(),
-    };
-    const fundingRouter = new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false);
+    const walletGateway = mockCircleWalletGateway({ balanceUsd: 100 });
 
     const result = await executeExecutionJob({
       jobId: job.jobId,
       store,
       executionClient,
       walletGateway,
-      fundingRouter,
     });
 
     expect(result.status).toBe("succeeded");
-    expect(walletGateway.getUsdcBalanceUsd).not.toHaveBeenCalled();
-    expect(walletGateway.transferUserUsdcToTreasury).not.toHaveBeenCalled();
-    expect(walletGateway.refundUserUsdcFromTreasury).not.toHaveBeenCalled();
+    expect(walletGateway.getUsdcBalanceUsd).toHaveBeenCalledWith({
+      walletId: "circle_wallet_1",
+    });
+    expect(walletGateway.transferUserUsdcToTreasury).toHaveBeenCalledWith({
+      userWalletId: "circle_wallet_1",
+      amountUsd: 25,
+      referenceId: `trade_prefund:${job.jobId}`,
+      chain: "arc",
+    });
     expect(executionClient.execute).toHaveBeenCalledWith(ticket, {
-      funding: expect.objectContaining({ venueChain: "polygon" }),
+      funding: expect.objectContaining({
+        chain: "arc",
+        venueChain: "polygon",
+        treasuryWalletAddress: TREASURY_ADDRESS,
+      }),
     });
     const state = await store.load();
+    // Simulated execution: no gateway_mint, no venue settlement.
     expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
       "deposit_credit",
       "trade_reserve",
       "trade_prefund",
-      "gateway_mint",
       "trade_spend",
     ]);
-    const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(75);
-    expect(balance.spendableUsd).toBe(75);
   });
 
-  it("releases the reservation and restores spendable balance when the venue fails", async () => {
-    const store = await internalLedgerStore();
+  it("physically refunds the deposit wallet when the venue fails", async () => {
+    const store = await circleUserStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
     const executionClient: ExecutionClient = {
       execute: vi.fn().mockRejectedValue(new Error("venue unavailable")),
     };
-    const fundingRouter = new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false);
+    const walletGateway = mockCircleWalletGateway({ balanceUsd: 100 });
 
     const result = await executeExecutionJob({
       jobId: job.jobId,
       store,
       executionClient,
-      walletGateway: {
-        getUsdcBalanceUsd: vi.fn(),
-        getTreasuryWalletAddress: vi.fn(),
-        transferUserUsdcToTreasury: vi.fn(),
-        refundUserUsdcFromTreasury: vi.fn(),
-      },
-      fundingRouter,
+      walletGateway,
     });
 
     expect(result).toMatchObject({ status: "failed", failureReason: "venue unavailable" });
+    expect(walletGateway.refundUserUsdcFromTreasury).toHaveBeenCalledWith({
+      userWalletAddress: DEPOSIT_EVM_ADDRESS,
+      amountUsd: 25,
+      referenceId: `trade_refund:${job.jobId}`,
+      chain: "arc",
+    });
     const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(100);
     expect(balance.reservedUsd).toBe(0);
-    expect(balance.spendableUsd).toBe(100);
   });
 
-  it("rejects tickets when the credited balance is too small", async () => {
-    const store = await internalLedgerStore(10);
+  it("rejects tickets when the deposit wallet balance is too small", async () => {
+    const store = await circleUserStore();
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
+    const walletGateway = mockCircleWalletGateway({ balanceUsd: 10 });
 
     const result = await executeExecutionJob({
       jobId: job.jobId,
       store,
       executionClient: { execute: vi.fn() },
-      walletGateway: {
-        getUsdcBalanceUsd: vi.fn(),
-        getTreasuryWalletAddress: vi.fn(),
-        transferUserUsdcToTreasury: vi.fn(),
-        refundUserUsdcFromTreasury: vi.fn(),
-      },
-      fundingRouter: new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false),
+      walletGateway,
     });
 
     expect(result).toMatchObject({
       status: "failed",
       failureReason: "Insufficient user wallet balance.",
     });
+    expect(walletGateway.transferUserUsdcToTreasury).not.toHaveBeenCalled();
   });
 });
 
-describe("internal-ledger position close", () => {
-  it("credits the close proceeds to the internal ledger", async () => {
-    const store = await internalLedgerStore();
+describe("circle-wallet position close (physical payout)", () => {
+  it("pays the close proceeds from the treasury back to the deposit wallet", async () => {
+    const store = await circleUserStore();
     await store.addTradeTicket(ticket);
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addExecutionJob(job);
@@ -278,6 +292,7 @@ describe("internal-ledger position close", () => {
       closeExecutionJobId: null,
       failureReason: null,
     });
+    const walletGateway = mockCircleWalletGateway({ balanceUsd: 75 });
 
     const closed = await executeClosePosition({
       positionId: "position_1",
@@ -285,25 +300,23 @@ describe("internal-ledger position close", () => {
       closeClient: {
         async close() {
           return {
-            venueOrderId: "close_order_1",
+            venueOrderId: "sim:close_order_1",
             filledBaseSize: 59,
             filledSizeUsd: 29.5,
             averagePrice: 0.5,
           };
         },
       },
+      walletGateway,
     });
 
     expect(closed.status).toBe("closed");
-    const state = await store.load();
-    const credits = state.walletSpendLedgerEntries.filter((entry) => entry.type === "refund_credit");
-    expect(credits).toHaveLength(1);
-    expect(credits[0]).toMatchObject({
-      userId: "x:x_1",
+    // Profit case: the user receives more than they put in (25 -> 29.50).
+    expect(walletGateway.refundUserUsdcFromTreasury).toHaveBeenCalledWith({
+      userWalletAddress: DEPOSIT_EVM_ADDRESS,
       amountUsd: 29.5,
-      circleTransferId: "position_close:position_1",
+      referenceId: "position_close:position_1",
+      chain: "arc",
     });
-    const balance = await store.getDepositFundingBalance("x:x_1");
-    expect(balance.walletBalanceUsd).toBe(129.5);
   });
 });

@@ -10,6 +10,7 @@ import type {
 import type { CassieStore } from "../../../../../packages/core/db/store.ts";
 import type { UserDashboardData } from "../../../../../packages/core/db/store.ts";
 import type { CassieActivityItem } from "../../lib/activity.ts";
+import { depositWalletBalanceUsd } from "../../../../../packages/app/deposit-balance.ts";
 import {
   decoratePosition,
   type UserFacingPosition,
@@ -68,12 +69,17 @@ export async function buildDashboardPayload(
       activityLimit: DASHBOARD_ACTIVITY_LIMIT,
     }),
   ]);
+  const depositAddress = walletBalanceUsd == null
+    ? await store.getDepositAddress(settings.userId)
+    : undefined;
+  const depositBalanceUsd = depositAddress
+    ? await depositWalletBalanceUsd(depositAddress)
+    : null;
+  const effectiveBalanceUsd = walletBalanceUsd ?? depositBalanceUsd;
   const balance =
-    walletBalanceUsd != null
-      ? await store.getWalletFundingBalance(settings.userId, walletBalanceUsd)
-      : (await store.getDepositAddress(settings.userId))
-        ? await store.getDepositFundingBalance(settings.userId)
-        : null;
+    effectiveBalanceUsd != null
+      ? await store.getWalletFundingBalance(settings.userId, effectiveBalanceUsd)
+      : null;
 
   const positions = dashboardData.positions.sort((left, right) =>
     right.openedAt.localeCompare(left.openedAt),
