@@ -1026,6 +1026,14 @@ function ActivityPanel({
   );
 }
 
+const SHARE_OVERLAYS = [
+  { id: null, label: "None" },
+  { id: "printed", label: "Printed" },
+  { id: "cooked", label: "Cooked" },
+  { id: "gg", label: "GG" },
+  { id: "called-it", label: "Called it" },
+] as const;
+
 function ShareTradeModal({
   positionId,
   label,
@@ -1036,11 +1044,15 @@ function ShareTradeModal({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [shareText, setShareText] = useState(label);
+  const [overlay, setOverlay] = useState<string | null>(null);
   const path = `/trades/${encodeURIComponent(positionId)}/pnl`;
   const url = typeof window !== "undefined"
     ? `${window.location.origin}${path}`
     : path;
-  const intent = `https://x.com/intent/post?text=${encodeURIComponent(label)}&url=${encodeURIComponent(url)}`;
+  const imageSrc = `${path}/opengraph-image${overlay ? `?overlay=${encodeURIComponent(overlay)}` : ""}`;
+  const intent = `https://x.com/intent/post?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(url)}`;
 
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
@@ -1056,6 +1068,23 @@ function ShareTradeModal({
     await window.navigator.clipboard.writeText(url);
   }
 
+  async function saveImage() {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const response = await fetch(imageSrc);
+      const blob = await response.blob();
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = `cassie-trade-${positionId}.png`;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <div className={s.shareOverlay} role="presentation" onClick={onClose}>
       <div
@@ -1065,35 +1094,74 @@ function ShareTradeModal({
         aria-label="Share trade"
         onClick={(event) => event.stopPropagation()}
       >
+        <button
+          type="button"
+          className={s.shareClose}
+          onClick={onClose}
+          aria-label="Close share dialog"
+        >
+          ×
+        </button>
         <img
           className={s.sharePreview}
-          src={`${path}/opengraph-image`}
+          src={imageSrc}
           alt="Trade card preview"
+          key={imageSrc}
         />
-        <div className={s.shareActions}>
-          <a
-            className={`${s.tradeActionBtn}`}
-            href={intent}
-            target="_blank"
-            rel="noreferrer"
-          >
-            Post to X
-          </a>
-          <button
-            type="button"
-            className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
-            onClick={() => void copyLink()}
-          >
-            {copied ? "Copied" : "Copy link"}
-          </button>
-          <button
-            type="button"
-            className={s.shareClose}
-            onClick={onClose}
-            aria-label="Close share dialog"
-          >
-            ×
-          </button>
+        <div className={s.shareRail}>
+          <label className={s.shareField}>
+            <span className={s.shareFieldLabel}>Customize your text</span>
+            <textarea
+              className={s.shareTextarea}
+              value={shareText}
+              rows={3}
+              onChange={(event) => setShareText(event.target.value)}
+            />
+          </label>
+
+          <div className={s.shareField}>
+            <span className={s.shareFieldLabel}>Stamp</span>
+            <div className={s.overlayRow}>
+              {SHARE_OVERLAYS.map((option) => (
+                <button
+                  key={option.label}
+                  type="button"
+                  className={`${s.overlayChip} ${overlay === option.id ? s.overlayChipActive : ""}`}
+                  onClick={() => setOverlay(option.id)}
+                  aria-pressed={overlay === option.id}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className={s.shareRailActions}>
+            <a
+              className={`${s.tradeActionBtn}`}
+              href={intent}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Post to X
+            </a>
+            <div className={s.shareRailRow}>
+              <button
+                type="button"
+                className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
+                onClick={() => void saveImage()}
+              >
+                {saving ? "Saving" : "Save image"}
+              </button>
+              <button
+                type="button"
+                className={`${s.tradeActionBtn} ${s.shareTradeBtn}`}
+                onClick={() => void copyLink()}
+              >
+                {copied ? "Copied" : "Copy link"}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

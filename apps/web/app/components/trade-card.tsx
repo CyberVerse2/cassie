@@ -36,7 +36,22 @@ export type TradeCardProps = {
   /** override the frame width in px (height follows the 1690/944
       ratio). Used by the OG stage to lock an exact capture size. */
   frameWidth?: number;
+  /** optional stamp overlay rendered over the card art */
+  overlay?: TradeCardOverlay;
 };
+
+export const TRADE_CARD_OVERLAYS = {
+  printed: "PRINTED",
+  cooked: "COOKED",
+  gg: "GG",
+  "called-it": "CALLED IT",
+} as const;
+
+export type TradeCardOverlay = keyof typeof TRADE_CARD_OVERLAYS;
+
+export function isTradeCardOverlay(value: string): value is TradeCardOverlay {
+  return value in TRADE_CARD_OVERLAYS;
+}
 
 const DEFAULTS = {
   brand: "Cassie",
@@ -56,7 +71,7 @@ const DEFAULTS = {
     side: "YES",
     logoUrl: "/polymarket-logo.png",
   },
-} satisfies Required<Omit<TradeCardProps, "frameWidth">>;
+} satisfies Required<Omit<TradeCardProps, "frameWidth" | "overlay">>;
 
 export function TradeCard(props: TradeCardProps) {
   const brand = props.brand ?? DEFAULTS.brand;
@@ -79,6 +94,11 @@ export function TradeCard(props: TradeCardProps) {
     >
       <div className={styles.card}>
         <DirectionEmblem positive={positive} />
+        {props.overlay ? (
+          <span className={styles.stamp} aria-hidden="true">
+            {TRADE_CARD_OVERLAYS[props.overlay]}
+          </span>
+        ) : null}
 
         <div className={styles.content}>
           <header className={styles.head}>

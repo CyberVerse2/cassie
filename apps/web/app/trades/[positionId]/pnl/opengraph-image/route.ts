@@ -17,7 +17,8 @@ type RouteContext = {
 
 export async function GET(request: Request, context: RouteContext) {
   const { positionId } = await context.params;
-  const image = await getCachedImage(positionId, request);
+  const overlay = new URL(request.url).searchParams.get("overlay");
+  const image = await getCachedImage(positionId, request, overlay);
 
   return new Response(image, {
     headers: {
@@ -27,24 +28,26 @@ export async function GET(request: Request, context: RouteContext) {
   });
 }
 
-async function getCachedImage(positionId: string, request: Request) {
+async function getCachedImage(positionId: string, request: Request, overlay: string | null) {
   const now = Date.now();
-  const cached = imageCache.get(positionId);
+  const cacheKey = overlay ? `${positionId}?overlay=${overlay}` : positionId;
+  const cached = imageCache.get(cacheKey);
   if (cached && now - cached.createdAt < IMAGE_CACHE_TTL_MS) return cached.image;
 
-  const image = renderImage(positionId, request).catch((error) => {
-    imageCache.delete(positionId);
+  const image = renderImage(positionId, request, overlay).catch((error) => {
+    imageCache.delete(cacheKey);
     throw error;
   });
-  imageCache.set(positionId, { createdAt: now, image });
+  imageCache.set(cacheKey, { createdAt: now, image });
   return image;
 }
 
-async function renderImage(positionId: string, request: Request) {
+async function renderImage(positionId: string, request: Request, overlay: string | null) {
   const renderUrl = new URL(
     `/trades/${encodeURIComponent(positionId)}/pnl/og-render`,
     renderOrigin(request),
   );
+  if (overlay) renderUrl.searchParams.set("overlay", overlay);
   const browser = await getBrowser();
   const browserContext = await browser.newContext({
     viewport: { width: OG_WIDTH, height: OG_HEIGHT },

@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { TradeCard } from "../../../../components/trade-card";
+import { isTradeCardOverlay, TradeCard } from "../../../../components/trade-card";
 import { getTradeCardRenderData, TradeShareNotFoundError } from "../../../../lib/trade-card-data";
 
 export const runtime = "nodejs";
@@ -7,11 +7,14 @@ export const dynamic = "force-dynamic";
 
 type OgRenderPageProps = {
   params: Promise<{ positionId: string }>;
+  searchParams: Promise<{ overlay?: string }>;
 };
 
-export default async function TradePnlOgRenderPage({ params }: OgRenderPageProps) {
+export default async function TradePnlOgRenderPage({ params, searchParams }: OgRenderPageProps) {
   const { positionId } = await params;
+  const { overlay } = await searchParams;
   const share = await readShare(positionId);
+  const stamp = overlay && isTradeCardOverlay(overlay) ? overlay : undefined;
 
   return (
     <main
@@ -25,7 +28,7 @@ export default async function TradePnlOgRenderPage({ params }: OgRenderPageProps
         background: "#040504",
       }}
     >
-      <TradeCard {...share.cardProps} frameWidth={1200} />
+      <TradeCard {...share.cardProps} frameWidth={1200} overlay={stamp} />
     </main>
   );
 }
