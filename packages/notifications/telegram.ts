@@ -13,7 +13,7 @@ const CONNECT_SESSION_PREFIX = "telegram.connect.";
 
 const TelegramConnectSessionSchema = z.object({
   userId: z.string().min(1),
-  privyUserId: z.string().min(1),
+  privyUserId: z.string().min(1).optional(),
   expiresAt: z.string(),
   usedAt: z.string().optional(),
 });
@@ -88,12 +88,12 @@ export class TelegramBotApi implements TelegramGateway {
 }
 
 export async function createTelegramConnectSession(input: {
-  privyUserId: string;
+  userId: string;
   store: CassieStore;
   env?: TelegramEnv;
 }): Promise<TelegramConnectSession> {
   const env = assertTelegramConnectEnv(input.env ?? readTelegramEnv());
-  const settings = await input.store.getUserSettingsByPrivyUserId(input.privyUserId);
+  const settings = await input.store.getUserSettings(input.userId);
   if (!settings) {
     throw new Error("Create a Cassie account before connecting Telegram.");
   }
@@ -102,7 +102,6 @@ export async function createTelegramConnectSession(input: {
   const expiresAt = new Date(Date.now() + env.connectTtlMs).toISOString();
   await input.store.setRuntimeState(connectSessionKey(token), {
     userId: settings.userId,
-    privyUserId: input.privyUserId,
     expiresAt,
   });
 
@@ -157,8 +156,8 @@ export async function connectTelegramFromUpdate(input: {
     return { status: "ignored" };
   }
 
-  const settings = await input.store.getUserSettingsByPrivyUserId(session.privyUserId);
-  if (!settings || settings.userId !== session.userId) {
+  const settings = await input.store.getUserSettings(session.userId);
+  if (!settings) {
     await input.gateway?.sendMessage({
       chatId: String(message.chat.id),
       text: "Telegram connection session no longer matches a Cassie account. Create a fresh link from Cassie onboarding.",

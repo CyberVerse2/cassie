@@ -11,6 +11,7 @@ import type {
   RunStep,
   SourcePost,
   TradeTicket,
+  UserDepositAddress,
   UserSettings,
 } from "../schemas/index.ts";
 
@@ -100,6 +101,51 @@ export interface CassieStore {
     x?: UserSettings["x"];
     defaultTradeSizeUsd?: number;
   }): Promise<UserSettings>;
+  syncXUser(input: {
+    xUserId: string;
+    username: string | null;
+    profile: UserSettings["profile"];
+    defaultTradeSizeUsd?: number;
+  }): Promise<UserSettings>;
+  getDepositAddress(userId: string): Promise<UserDepositAddress | undefined>;
+  getDepositAddressByEvmAddress(
+    evmAddress: string,
+  ): Promise<UserDepositAddress | undefined>;
+  addUserDepositAddress(
+    record: UserDepositAddress,
+  ): Promise<UserDepositAddress>;
+  recordDepositCredit(input: {
+    userId: string;
+    amountUsd: number;
+    chain: string | null;
+    txHash: string | null;
+    logIndex?: number | null;
+    circleTransferId: string;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null>;
+  recordSweepToGateway(input: {
+    userId: string;
+    amountUsd: number;
+    chain: string | null;
+    circleTransferId: string;
+    txHash?: string | null;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null>;
+  getDepositFundingBalance(userId: string): Promise<WalletFundingBalance>;
+  recordRefundCredit(input: {
+    userId: string;
+    amountUsd: number;
+    referenceId: string;
+    chain?: string | null;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null>;
+  recordGatewayMint(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    amountUsd: number;
+    chain: string;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null>;
   createRun(input: {
     userId: string;
     userCommand: string;
@@ -291,6 +337,212 @@ export class InMemoryCassieStore implements CassieStore {
     };
     await this.upsertUserSettings(settings);
     return settings;
+  }
+
+  async syncXUser(input: {
+    xUserId: string;
+    username: string | null;
+    profile: UserSettings["profile"];
+    defaultTradeSizeUsd?: number;
+  }): Promise<UserSettings> {
+    const existing = await this.getUserSettingsByXIdentity({
+      userId: input.xUserId,
+      username: input.username,
+    });
+    const settings: UserSettings = {
+      userId: existing?.userId ?? `x:${input.xUserId}`,
+      privyUserId: existing?.privyUserId ?? null,
+      privyWalletId: existing?.privyWalletId ?? null,
+      walletAddress: existing?.walletAddress ?? null,
+      profile: input.profile,
+      x: { userId: input.xUserId, username: input.username },
+      defaultTradeSizeUsd:
+        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+      telegram: existing?.telegram ?? null,
+    };
+    await this.upsertUserSettings(settings);
+    return settings;
+  }
+
+  private depositAddresses: UserDepositAddress[] = [];
+
+  async getDepositAddress(userId: string): Promise<UserDepositAddress | undefined> {
+    return this.depositAddresses.find((record) => record.userId === userId);
+  }
+
+  async getDepositAddressByEvmAddress(
+    evmAddress: string,
+  ): Promise<UserDepositAddress | undefined> {
+    const normalized = evmAddress.toLowerCase();
+    return this.depositAddresses.find(
+      (record) => record.evmAddress.toLowerCase() === normalized,
+    );
+  }
+
+  async addUserDepositAddress(
+    record: UserDepositAddress,
+  ): Promise<UserDepositAddress> {
+    const existing = await this.getDepositAddress(record.userId);
+    if (existing) return existing;
+    this.depositAddresses.push(record);
+    return record;
+  }
+
+  async recordDepositCredit(input: {
+    userId: string;
+    amountUsd: number;
+    chain: string | null;
+    txHash: string | null;
+    logIndex?: number | null;
+    circleTransferId: string;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    if (this.hasDepositLedgerEntry("deposit_credit", input)) return null;
+    const entry: WalletSpendLedgerEntry = {
+      entryId: randomUUID(),
+      userId: input.userId,
+      type: "deposit_credit",
+      amountUsd: centsToUsd(positiveUsdToCents(input.amountUsd)),
+      ticketId: null,
+      executionJobId: null,
+      chain: input.chain,
+      txHash: input.txHash,
+      logIndex: input.logIndex ?? null,
+      circleTransferId: input.circleTransferId,
+      metadata: input.metadata ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.snapshot.walletSpendLedgerEntries.push(entry);
+    return entry;
+  }
+
+  async recordSweepToGateway(input: {
+    userId: string;
+    amountUsd: number;
+    chain: string | null;
+    circleTransferId: string;
+    txHash?: string | null;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    if (this.hasDepositLedgerEntry("sweep_to_gateway", input)) return null;
+    const entry: WalletSpendLedgerEntry = {
+      entryId: randomUUID(),
+      userId: input.userId,
+      type: "sweep_to_gateway",
+      amountUsd: centsToUsd(positiveUsdToCents(input.amountUsd)),
+      ticketId: null,
+      executionJobId: null,
+      chain: input.chain,
+      txHash: input.txHash ?? null,
+      logIndex: null,
+      circleTransferId: input.circleTransferId,
+      metadata: input.metadata ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.snapshot.walletSpendLedgerEntries.push(entry);
+    return entry;
+  }
+
+  async getDepositFundingBalance(userId: string): Promise<WalletFundingBalance> {
+    return walletFundingBalance({
+      userId,
+      walletBalanceUsdCents: this.internalBalanceUsdCents(userId),
+      reservedUsdCents: this.openReservedUsdCents(userId),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async recordRefundCredit(input: {
+    userId: string;
+    amountUsd: number;
+    referenceId: string;
+    chain?: string | null;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    const dedupe = {
+      chain: input.chain ?? null,
+      txHash: null,
+      circleTransferId: input.referenceId,
+    };
+    if (this.hasDepositLedgerEntry("refund_credit", dedupe)) return null;
+    const entry: WalletSpendLedgerEntry = {
+      entryId: randomUUID(),
+      userId: input.userId,
+      type: "refund_credit",
+      amountUsd: centsToUsd(positiveUsdToCents(input.amountUsd)),
+      ticketId: null,
+      executionJobId: null,
+      chain: input.chain ?? null,
+      txHash: null,
+      logIndex: null,
+      circleTransferId: input.referenceId,
+      metadata: input.metadata ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.snapshot.walletSpendLedgerEntries.push(entry);
+    return entry;
+  }
+
+  async recordGatewayMint(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    amountUsd: number;
+    chain: string;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    if (this.hasWalletSpendEntry("gateway_mint", input.job.jobId)) return null;
+    const entry: WalletSpendLedgerEntry = {
+      entryId: randomUUID(),
+      userId: input.ticket.userId,
+      type: "gateway_mint",
+      amountUsd: centsToUsd(positiveUsdToCents(input.amountUsd)),
+      ticketId: input.ticket.ticketId,
+      executionJobId: input.job.jobId,
+      chain: input.chain,
+      txHash: null,
+      logIndex: null,
+      circleTransferId: null,
+      metadata: input.metadata ?? null,
+      createdAt: new Date().toISOString(),
+    };
+    this.snapshot.walletSpendLedgerEntries.push(entry);
+    return entry;
+  }
+
+  private hasDepositLedgerEntry(
+    type: WalletSpendLedgerEntry["type"],
+    input: {
+      chain: string | null;
+      txHash?: string | null;
+      logIndex?: number | null;
+      circleTransferId: string;
+    },
+  ): boolean {
+    return this.snapshot.walletSpendLedgerEntries.some((entry) => {
+      if (entry.type !== type) return false;
+      if (entry.circleTransferId === input.circleTransferId) return true;
+      return Boolean(
+        input.txHash
+          && entry.txHash === input.txHash
+          && entry.chain === input.chain
+          && (entry.logIndex ?? 0) === (input.logIndex ?? 0),
+      );
+    });
+  }
+
+  // Credited funds = deposits + refunds - settled spends. Reservations are
+  // handled separately (openReservedUsdCents); prefund/release/mint entries
+  // track physical money movement, not the user's credited balance.
+  private internalBalanceUsdCents(userId: string): number {
+    return this.snapshot.walletSpendLedgerEntries.reduce((total, entry) => {
+      if (entry.userId !== userId) return total;
+      const cents = usdToCents(entry.amountUsd);
+      if (entry.type === "deposit_credit" || entry.type === "refund_credit") {
+        return total + cents;
+      }
+      if (entry.type === "trade_spend") return total - cents;
+      return total;
+    }, 0);
   }
 
   async createRun(input: {

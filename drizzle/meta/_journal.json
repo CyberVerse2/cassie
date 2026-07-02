@@ -99,6 +99,27 @@
       "when": 1780447200000,
       "tag": "0013_remove_withdrawals",
       "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1780533600000,
+      "tag": "0014_portfolio_balance_snapshots",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1780533600001,
+      "tag": "0015_better_auth",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1780533600002,
+      "tag": "0016_circle_deposits",
+      "breakpoints": true
     }
   ]
 }

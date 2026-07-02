@@ -1,14 +1,15 @@
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { type ExecutionJob, type Position, type TradeTicket } from "../core/schemas/index.ts";
-import { PrivyAdapter, type PrivyWalletGateway, type WalletUsdcTransfer } from "../adapters/privy/index.ts";
+import { PrivyAdapter } from "../adapters/privy/index.ts";
+import type { UsdcTransfer, WalletGateway } from "../adapters/wallet/gateway.ts";
 import { HyperliquidPositionCloseClient, PolymarketPositionCloseClient, type PositionCloseClient } from "../execution/index.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "../jobs/queue.ts";
 import { formatTradeClosed, notifyTradeLifecycle } from "../notifications/positions.ts";
 import type { TelegramGateway } from "../notifications/telegram.ts";
 
 export type PositionCloseResult = NonNullable<ExecutionJob["executionResult"]>;
-type PositionRefundGateway = Pick<PrivyWalletGateway, "refundUserUsdcFromTreasury">;
+type PositionRefundGateway = Pick<WalletGateway, "refundUserUsdcFromTreasury">;
 
 export class VenuePositionCloseClient implements PositionCloseClient {
   constructor(
@@ -73,26 +74,40 @@ export async function executeClosePosition(input: {
 
   try {
     const settings = await store.getUserSettings(position.userId);
-    if (!settings?.walletAddress) {
-      throw new Error("Position close refund requires a user wallet address.");
+    const depositAddress = settings?.walletAddress
+      ? undefined
+      : await store.getDepositAddress(position.userId);
+    if (!settings || (!settings.walletAddress && !depositAddress)) {
+      throw new Error("Position close refund requires a user wallet address or deposit account.");
     }
     const result = await closeClient.close(position, ticket);
     assertFullCloseFill(position, result);
     const openJob = await store.getExecutionJob(position.executionJobId);
     const realizedPnlUsd = roundUsd(result.filledSizeUsd - position.filledSizeUsd);
-    const walletGateway = input.walletGateway ?? new PrivyAdapter();
-    let refundTransfer: WalletUsdcTransfer | null = null;
+    let refundTransfer: UsdcTransfer | null = null;
     let refundFailureReason: string | null = null;
     try {
-      refundTransfer = await refundClosedPosition({
-        walletGateway,
-        userWalletAddress: settings.walletAddress,
-        position,
-        ticket,
-        result,
-        openResult: openJob?.executionResult ?? null,
-        realizedPnlUsd,
-      });
+      if (settings.walletAddress) {
+        const walletGateway = input.walletGateway ?? new PrivyAdapter();
+        refundTransfer = await refundClosedPosition({
+          walletGateway,
+          userWalletAddress: settings.walletAddress,
+          position,
+          ticket,
+          result,
+          openResult: openJob?.executionResult ?? null,
+          realizedPnlUsd,
+        });
+      } else {
+        await creditClosedPosition({
+          store,
+          position,
+          ticket,
+          result,
+          openResult: openJob?.executionResult ?? null,
+          realizedPnlUsd,
+        });
+      }
     } catch (error) {
       refundFailureReason = error instanceof Error ? error.message : String(error);
     }
@@ -168,6 +183,27 @@ function assertFullCloseFill(position: Position, result: PositionCloseResult): v
   }
 }
 
+async function creditClosedPosition(input: {
+  store: CassieStore;
+  position: Position;
+  ticket: TradeTicket;
+  result: PositionCloseResult;
+  openResult: ExecutionJob["executionResult"];
+  realizedPnlUsd: number;
+}): Promise<void> {
+  const amountUsd = closeRefundAmountUsd(input);
+  if (amountUsd <= 0) return;
+  await input.store.recordRefundCredit({
+    userId: input.position.userId,
+    amountUsd,
+    referenceId: `position_close:${input.position.positionId}`,
+    metadata: {
+      positionId: input.position.positionId,
+      realizedPnlUsd: input.realizedPnlUsd,
+    },
+  });
+}
+
 async function refundClosedPosition(input: {
   walletGateway: PositionRefundGateway;
   userWalletAddress: string;
@@ -176,13 +212,14 @@ async function refundClosedPosition(input: {
   result: PositionCloseResult;
   openResult: ExecutionJob["executionResult"];
   realizedPnlUsd: number;
-}): Promise<WalletUsdcTransfer | null> {
+}): Promise<UsdcTransfer | null> {
   const amountUsd = closeRefundAmountUsd(input);
   if (amountUsd <= 0) return null;
   return input.walletGateway.refundUserUsdcFromTreasury({
     userWalletAddress: input.userWalletAddress,
     amountUsd,
     referenceId: `position_close:${input.position.positionId}`,
+    chain: "base",
   });
 }
 

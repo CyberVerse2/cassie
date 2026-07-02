@@ -22,7 +22,7 @@ describe("Telegram notifications", () => {
     const gateway = new FakeTelegramGateway();
 
     const session = await createTelegramConnectSession({
-      privyUserId: "did:privy:user_1",
+      userId: "did:privy:user_1",
       store,
       env: {
         botToken: "bot-token",
@@ -190,7 +190,7 @@ describe("Telegram notifications", () => {
       profile: { name: "Cassie", handle: "@cassie", avatarUrl: null },
     });
     const session = await createTelegramConnectSession({
-      privyUserId: "did:privy:user_1",
+      userId: "did:privy:user_1",
       store,
       env: {
         botToken: "bot-token",

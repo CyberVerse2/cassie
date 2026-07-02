@@ -80,6 +80,13 @@ export const UserSettingsSchema = z.object({
     })
     .nullable()
     .optional(),
+  migration: z
+    .object({
+      privyFundsPromptDismissedAt: z.string().nullable().optional(),
+      privyFundsMovedAt: z.string().nullable().optional(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const ThesisSchema = z.object({
@@ -456,6 +463,10 @@ export const WalletSpendLedgerEntryTypeSchema = z.enum([
   "trade_prefund",
   "trade_release",
   "trade_spend",
+  "deposit_credit",
+  "refund_credit",
+  "sweep_to_gateway",
+  "gateway_mint",
 ]);
 
 export const WalletSpendLedgerEntrySchema = z.object({
@@ -465,9 +476,31 @@ export const WalletSpendLedgerEntrySchema = z.object({
   amountUsd: z.number().nonnegative(),
   ticketId: z.string().nullable(),
   executionJobId: z.string().nullable(),
+  chain: z.string().nullable().optional(),
+  txHash: z.string().nullable().optional(),
+  logIndex: z.number().int().nullable().optional(),
+  circleTransferId: z.string().nullable().optional(),
   metadata: z.unknown().nullable(),
   createdAt: z.string(),
 });
+
+export const UserDepositAddressSchema = z.object({
+  userId: z.string(),
+  walletSetId: z.string(),
+  circleWalletId: z.string(),
+  evmAddress: z.string(),
+  createdAt: z.string(),
+});
+
+export const ChainSchema = z.enum([
+  "arc",
+  "base",
+  "arbitrum",
+  "ethereum",
+  "optimism",
+  "polygon",
+  "avalanche",
+]);
 
 export const ExecutionFundingSourceSchema = z.object({
   type: z.literal("cassie_treasury"),
@@ -476,6 +509,8 @@ export const ExecutionFundingSourceSchema = z.object({
   prefundTransferId: z.string(),
   prefundTransferStatus: z.enum(["pending", "succeeded", "rejected", "failed"]),
   amountUsd: z.number().positive(),
+  chain: ChainSchema.optional(),
+  venueChain: ChainSchema.optional(),
 });
 
 export const TradeExitPlanSchema = z.object({
@@ -585,6 +620,7 @@ export const AuditEventSchema = z.object({
     "trade_ticket",
     "execution_job",
     "position",
+    "user",
   ]),
   eventType: z.string(),
   message: z.string(),
@@ -703,6 +739,8 @@ export type PortfolioBalanceSnapshot = z.infer<
 export type WalletSpendLedgerEntry = z.infer<
   typeof WalletSpendLedgerEntrySchema
 >;
+export type UserDepositAddress = z.infer<typeof UserDepositAddressSchema>;
+export type Chain = z.infer<typeof ChainSchema>;
 export type ExecutionFundingSource = z.infer<
   typeof ExecutionFundingSourceSchema
 >;

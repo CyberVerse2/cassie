@@ -285,6 +285,7 @@ describe("Polymarket env", () => {
       pollIntervalMs: 2500,
       positionReviewIntervalMinutes: 10,
       xMentionPollIntervalMinutes: 2,
+      depositPollIntervalMinutes: 1,
     });
   });
 

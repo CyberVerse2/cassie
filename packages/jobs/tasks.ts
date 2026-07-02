@@ -4,17 +4,23 @@ import { enqueueTradeTicketsForRun, executeExecutionJob } from "./execution-job.
 import { executeClosePosition } from "../positions/close.ts";
 import { reviewAllOpenPositions, reviewOpenPositionsForUser } from "../positions/review.ts";
 import { pollXCommandMentions } from "../app/x-mention-poller.ts";
+import { pollDeposits } from "../app/deposit-watcher.ts";
+import { sweepDeposit } from "../app/deposit-sweeper.ts";
 import {
   CLOSE_POSITION_TASK,
   ClosePositionPayloadSchema,
   EXECUTE_TRADE_TICKET_TASK,
   ExecuteTradeTicketPayloadSchema,
+  POLL_DEPOSITS_TASK,
+  PollDepositsPayloadSchema,
   POLL_X_COMMAND_MENTIONS_TASK,
   PollXCommandMentionsPayloadSchema,
   REVIEW_OPEN_POSITIONS_TASK,
   ReviewOpenPositionsPayloadSchema,
   RUN_CASSIE_SUPERVISOR_TASK,
   RunCassieSupervisorPayloadSchema,
+  SWEEP_DEPOSIT_TASK,
+  SweepDepositPayloadSchema,
 } from "./queue.ts";
 
 export function createExecutionTaskList(): TaskList {
@@ -43,6 +49,14 @@ export function createExecutionTaskList(): TaskList {
     [POLL_X_COMMAND_MENTIONS_TASK]: async (payload) => {
       PollXCommandMentionsPayloadSchema.parse(payload);
       await pollXCommandMentions();
+    },
+    [POLL_DEPOSITS_TASK]: async (payload) => {
+      PollDepositsPayloadSchema.parse(payload);
+      await pollDeposits();
+    },
+    [SWEEP_DEPOSIT_TASK]: async (payload) => {
+      const parsed = SweepDepositPayloadSchema.parse(payload);
+      await sweepDeposit({ payload: parsed });
     },
   };
 }

@@ -81,6 +81,11 @@ class FakeQueue implements CassieJobQueue {
   async enqueueClosePosition(input: { positionId: string }) {
     return { positionId: input.positionId, graphileJobId: "close_1" };
   }
+
+  async enqueueSweepDeposit(input: { userId: string; circleTransferId: string; amountUsd: number; chain: string | null }) {
+    void input;
+    return { graphileJobId: null };
+  }
 }
 
 describe("close positions", () => {
@@ -146,6 +151,7 @@ describe("close positions", () => {
       userWalletAddress: settings.walletAddress,
       amountUsd: 112,
       referenceId: "position_close:position_1",
+      chain: "base",
     });
     expect(telegramGateway.messages).toEqual([{
       chatId: "chat_1",
@@ -226,6 +232,7 @@ describe("close positions", () => {
       userWalletAddress: settings.walletAddress,
       amountUsd: 4.53,
       referenceId: "position_close:position_1",
+      chain: "base",
     });
   });
 

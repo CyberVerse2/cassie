@@ -80,6 +80,11 @@ class FakeQueue implements CassieJobQueue {
   async enqueuePositionReview() {
     return { graphileJobId: null };
   }
+
+  async enqueueSweepDeposit(input: { userId: string; circleTransferId: string; amountUsd: number; chain: string | null }) {
+    void input;
+    return { graphileJobId: null };
+  }
 }
 
 describe("position reviews", () => {

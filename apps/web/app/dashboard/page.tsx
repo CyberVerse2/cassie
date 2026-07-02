@@ -108,6 +108,7 @@ export default function Dashboard() {
     <main className={s.shell}>
       <Aside
         walletAddress={account.walletAddress}
+        depositAddress={account.depositAddress}
         login={account.login}
         logout={account.logout}
         exportKeys={account.exportKeys}
@@ -115,6 +116,8 @@ export default function Dashboard() {
         userProfile={account.userProfile}
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
         updateDefaultTradeSize={account.updateDefaultTradeSize}
+        migrationPrompt={account.migrationPrompt}
+        dismissMigration={account.dismissMigration}
       />
       <Center
         accountReady={account.ready}
@@ -135,6 +138,7 @@ export default function Dashboard() {
 
 function Aside({
   walletAddress,
+  depositAddress,
   login,
   logout,
   exportKeys,
@@ -142,8 +146,11 @@ function Aside({
   userProfile,
   defaultTradeSizeUsd,
   updateDefaultTradeSize,
+  migrationPrompt,
+  dismissMigration,
 }: {
   walletAddress: string | null;
+  depositAddress?: string | null;
   login: () => void;
   logout: () => Promise<void>;
   exportKeys: () => Promise<void>;
@@ -156,18 +163,24 @@ function Aside({
   } | null;
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
+  migrationPrompt?: boolean;
+  dismissMigration?: () => Promise<unknown>;
 }) {
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportingKeys, setExportingKeys] = useState(false);
   const [exportKeysError, setExportKeysError] = useState<string | null>(null);
-  const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
+  const depositTo = depositAddress ?? walletAddress;
+  const multiChain = Boolean(depositAddress);
+  const depositUri = depositTo
+    ? multiChain ? `ethereum:${depositTo}` : `ethereum:${depositTo}@8453`
+    : null;
 
   async function copyAddress() {
-    if (!walletAddress) return;
+    if (!depositTo) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
-    await window.navigator.clipboard.writeText(walletAddress);
+    await window.navigator.clipboard.writeText(depositTo);
   }
 
   async function requestLogout() {
@@ -207,6 +220,33 @@ function Aside({
         <span>Cassie</span>
       </a>
 
+      {migrationPrompt && depositAddress && (
+        <div className={s.depositCard} role="status">
+          <strong>Move your funds</strong>
+          <p>
+            Your old Base wallet still holds USDC. Send it to your new deposit
+            address — it works on every supported chain — and Cassie will credit
+            it automatically.
+          </p>
+          <div className={s.mentionRow}>
+            <button
+              type="button"
+              className={`${s.btn} ${s.btnPrimary}`}
+              onClick={copyAddress}
+            >
+              {copied ? "Copied" : "Copy new address"}
+            </button>
+            <button
+              type="button"
+              className={s.btn}
+              onClick={() => void dismissMigration?.()}
+            >
+              Later
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className={s.depositCard} id="deposit">
         <div className={s.qrFrame}>
           <div className={s.qrSurface}>
@@ -239,9 +279,9 @@ function Aside({
             />
           </div>
           <div className={s.qrMetaLine}>
-            <span>Base USDC</span>
+            <span>{multiChain ? "USDC · any supported chain" : "Base USDC"}</span>
             <code>
-              {walletAddress ? shortAddress(walletAddress) : "Sign in"}
+              {depositTo ? shortAddress(depositTo) : "Sign in"}
             </code>
           </div>
         </div>
@@ -256,8 +296,8 @@ function Aside({
           className={`${s.btn} ${s.copyDepositBtn}`}
           type="button"
           onClick={copyAddress}
-          disabled={!authenticated || !walletAddress}
-          aria-label="Copy Base deposit address"
+          disabled={!authenticated || !depositTo}
+          aria-label="Copy deposit address"
           title={copied ? "Copied" : "Copy address"}
         >
           <ActionIcon name={copied ? "check" : "copy"} />
@@ -601,7 +641,7 @@ function Center({
           <header className={s.sectionHeader}>
             <h2>Portfolio balance</h2>
             <p>
-              Base USDC plus open position P/L across Polymarket and
+              USDC balance plus open position P/L across Polymarket and
               Hyperliquid.
             </p>
           </header>

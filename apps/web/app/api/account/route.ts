@@ -8,8 +8,8 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
-    const { claims, store } = await authenticatedContext(request);
-    return await accountResponse(claims.user_id, store);
+    const { session, store } = await authenticatedContext(request);
+    return await accountResponse(session.settings, store);
   } catch (error) {
     return apiError(error);
   }

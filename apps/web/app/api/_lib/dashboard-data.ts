@@ -51,7 +51,7 @@ type PositionReviewPayload = Awaited<
 >[number];
 
 export type WalletBalanceGateway = {
-  getUsdcBalanceUsd(privyWalletId: string): Promise<number | null>;
+  getUsdcBalanceUsd(input: { walletId: string }): Promise<number | null>;
 };
 
 export async function buildDashboardPayload(
@@ -60,7 +60,7 @@ export async function buildDashboardPayload(
   walletGateway: WalletBalanceGateway,
 ): Promise<DashboardPayload> {
   const walletBalancePromise = settings.privyWalletId
-    ? walletGateway.getUsdcBalanceUsd(settings.privyWalletId)
+    ? walletGateway.getUsdcBalanceUsd({ walletId: settings.privyWalletId })
     : Promise.resolve(null);
   const [walletBalanceUsd, dashboardData] = await Promise.all([
     walletBalancePromise,
@@ -69,9 +69,11 @@ export async function buildDashboardPayload(
     }),
   ]);
   const balance =
-    walletBalanceUsd == null
-      ? null
-      : await store.getWalletFundingBalance(settings.userId, walletBalanceUsd);
+    walletBalanceUsd != null
+      ? await store.getWalletFundingBalance(settings.userId, walletBalanceUsd)
+      : (await store.getDepositAddress(settings.userId))
+        ? await store.getDepositFundingBalance(settings.userId)
+        : null;
 
   const positions = dashboardData.positions.sort((left, right) =>
     right.openedAt.localeCompare(left.openedAt),
