@@ -1483,6 +1483,7 @@ type TaggedActivityPost = {
   handle: string;
   avatarUrl: string;
   age: string;
+  traderHandle: string;
   cassiePrompt: string;
   preview: string;
 };
@@ -1491,17 +1492,18 @@ function activityPost(
   item: CassieActivityItem,
   trader: { name: string; handle: string; avatarUrl: string | null } | null,
 ): TaggedActivityPost {
-  // The Tape credits the person who made the trade (the account owner),
-  // not the author of the source post that seeded the thesis.
-  const handle = withAt(trader?.handle ?? "you");
-  const handleName = handle.replace(/^@/, "");
+  // The card header is the author of the source post that seeded the thesis
+  // (who tweeted it); the credit line below is the trader who acted on it.
+  const authorHandle = withAt(item.authorHandle ?? trader?.handle ?? "you");
+  const authorHandleName = authorHandle.replace(/^@/, "");
   return {
     id: item.id,
     url: item.sourceUrl ?? "#",
-    authorName: trader?.name ?? handleName,
-    handle,
-    avatarUrl: trader?.avatarUrl ?? `https://unavatar.io/x/${handleName}`,
+    authorName: item.authorName ?? authorHandleName,
+    handle: authorHandle,
+    avatarUrl: `https://unavatar.io/x/${authorHandleName}`,
     age: relativeAge(item.at),
+    traderHandle: withAt(trader?.handle ?? "you"),
     cassiePrompt: activityPrompt(item),
     preview: summarizeSourceText(item.sourceText ?? item.subtitle),
   };
@@ -1685,7 +1687,7 @@ function Voice({
               <span className="handle">{tweet.age}</span>
             </header>
             <p className={s.postBody}>
-              <span className="lnk">{tweet.handle}</span> called{" "}
+              <span className="lnk">{tweet.traderHandle}</span> called{" "}
               <span className="tk">{tweet.cassiePrompt}</span>
             </p>
             <p className={s.postQuote}>{tweet.preview}</p>
