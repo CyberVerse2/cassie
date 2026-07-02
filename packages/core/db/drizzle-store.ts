@@ -368,6 +368,35 @@ export class DrizzleCassieStore implements CassieStore {
     });
   }
 
+  async listUserDepositCredits(
+    userId: string,
+    limit = 25,
+  ): Promise<WalletSpendLedgerEntry[]> {
+    const rows = await this.db
+      .select()
+      .from(walletSpendLedgerEntries)
+      .where(and(
+        eq(walletSpendLedgerEntries.userId, userId),
+        eq(walletSpendLedgerEntries.type, "deposit_credit"),
+      ))
+      .orderBy(desc(walletSpendLedgerEntries.createdAt))
+      .limit(limit);
+    return rows.map((row) => ({
+      entryId: row.entryId,
+      userId: row.userId,
+      type: row.type,
+      amountUsd: centsToUsd(row.amountUsdCents),
+      ticketId: row.ticketId ?? null,
+      executionJobId: row.executionJobId ?? null,
+      chain: row.chain ?? null,
+      txHash: row.txHash ?? null,
+      logIndex: row.logIndex ?? null,
+      circleTransferId: row.circleTransferId ?? null,
+      metadata: row.metadata ?? null,
+      createdAt: row.createdAt,
+    }));
+  }
+
   async recordRefundCredit(input: {
     userId: string;
     amountUsd: number;

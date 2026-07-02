@@ -132,6 +132,10 @@ export interface CassieStore {
     metadata?: unknown;
   }): Promise<WalletSpendLedgerEntry | null>;
   getDepositFundingBalance(userId: string): Promise<WalletFundingBalance>;
+  listUserDepositCredits(
+    userId: string,
+    limit?: number,
+  ): Promise<WalletSpendLedgerEntry[]>;
   recordRefundCredit(input: {
     userId: string;
     amountUsd: number;
@@ -450,6 +454,16 @@ export class InMemoryCassieStore implements CassieStore {
       reservedUsdCents: this.openReservedUsdCents(userId),
       updatedAt: new Date().toISOString(),
     });
+  }
+
+  async listUserDepositCredits(
+    userId: string,
+    limit = 25,
+  ): Promise<WalletSpendLedgerEntry[]> {
+    return this.snapshot.walletSpendLedgerEntries
+      .filter((entry) => entry.userId === userId && entry.type === "deposit_credit")
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, limit);
   }
 
   async recordRefundCredit(input: {

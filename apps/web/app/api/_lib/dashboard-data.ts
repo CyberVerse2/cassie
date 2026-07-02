@@ -6,6 +6,7 @@ import type {
   TradeTicket,
   UserSettings,
   WalletFundingBalance,
+  WalletSpendLedgerEntry,
 } from "../../../../../packages/core/schemas/index.ts";
 import type { CassieStore } from "../../../../../packages/core/db/store.ts";
 import type { UserDashboardData } from "../../../../../packages/core/db/store.ts";
@@ -63,11 +64,12 @@ export async function buildDashboardPayload(
   const walletBalancePromise = settings.privyWalletId
     ? walletGateway.getUsdcBalanceUsd({ walletId: settings.privyWalletId })
     : Promise.resolve(null);
-  const [walletBalanceUsd, dashboardData] = await Promise.all([
+  const [walletBalanceUsd, dashboardData, depositCredits] = await Promise.all([
     walletBalancePromise,
     store.loadUserDashboardData(settings.userId, {
       activityLimit: DASHBOARD_ACTIVITY_LIMIT,
     }),
+    store.listUserDepositCredits(settings.userId),
   ]);
   const depositAddress = await store.getDepositAddress(settings.userId);
   const depositBalanceUsd = depositAddress
@@ -150,7 +152,7 @@ export async function buildDashboardPayload(
         latestReviews.get(position.positionId) ?? null,
       ]),
     ),
-    activity: buildUserActivity(settings.userId, dashboardData),
+    activity: buildUserActivity(settings.userId, dashboardData, depositCredits),
   };
 }
 
@@ -183,6 +185,7 @@ function roundUsd(value: number) {
 export function buildUserActivity(
   userId: string,
   snapshot: UserDashboardData,
+  deposits: WalletSpendLedgerEntry[] = [],
 ): CassieActivityItem[] {
   const runs = snapshot.controlRuns.filter((run) => run.userId === userId);
   const runById = new Map(runs.map((run) => [run.runId, run]));
@@ -217,9 +220,38 @@ export function buildUserActivity(
           ...closeActivity(position, ticket, runById.get(ticket.runId ?? "")),
         ];
       }),
+    ...deposits.map(depositActivity),
   ]
     .sort((left, right) => right.at.localeCompare(left.at))
     .slice(0, DASHBOARD_ACTIVITY_LIMIT);
+}
+
+function depositActivity(entry: WalletSpendLedgerEntry): CassieActivityItem {
+  return {
+    id: entry.entryId,
+    kind: "deposit",
+    at: entry.createdAt,
+    title: "Deposit",
+    subtitle: activitySubtitle([
+      "USDC",
+      entry.chain ? chainDisplayName(entry.chain) : null,
+    ]),
+    status: "completed",
+    amountUsd: entry.amountUsd,
+    instrument: "USDC",
+    venue: null,
+    side: null,
+    source: "cassie",
+    sourceUrl: null,
+    authorHandle: null,
+    authorName: null,
+    sourceText: null,
+    error: null,
+  };
+}
+
+function chainDisplayName(chain: string): string {
+  return chain.charAt(0).toUpperCase() + chain.slice(1);
 }
 
 function isDashboardOpenPosition(position: UserFacingPosition) {

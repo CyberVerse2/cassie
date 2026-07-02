@@ -15,8 +15,11 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Cassie account was not found." }, { status: 404 });
     }
 
-    const dashboardData = await store.loadUserDashboardData(settings.userId, { activityLimit: DASHBOARD_ACTIVITY_LIMIT });
-    return NextResponse.json({ activity: buildUserActivity(settings.userId, dashboardData) });
+    const [dashboardData, depositCredits] = await Promise.all([
+      store.loadUserDashboardData(settings.userId, { activityLimit: DASHBOARD_ACTIVITY_LIMIT }),
+      store.listUserDepositCredits(settings.userId),
+    ]);
+    return NextResponse.json({ activity: buildUserActivity(settings.userId, dashboardData, depositCredits) });
   } catch (error) {
     return apiError(error);
   }

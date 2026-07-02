@@ -64,6 +64,7 @@ export default function Dashboard() {
         depositAddress={account.depositAddress}
         balance={account.account?.balance ?? null}
         telegramConnected={Boolean(account.account?.telegram)}
+        beginTelegramConnect={account.beginTelegramConnect}
         login={account.login}
         logout={account.logout}
         exportKeys={account.exportKeys}
@@ -94,6 +95,7 @@ function Aside({
   depositAddress,
   balance,
   telegramConnected,
+  beginTelegramConnect,
   login,
   logout,
   exportKeys,
@@ -106,6 +108,7 @@ function Aside({
   depositAddress?: string | null;
   balance: { walletBalanceUsd: number; reservedUsd: number; spendableUsd: number } | null;
   telegramConnected?: boolean;
+  beginTelegramConnect: () => Promise<{ connectUrl: string }>;
   login: () => void;
   logout: () => Promise<void>;
   exportKeys: () => Promise<void>;
@@ -124,6 +127,8 @@ function Aside({
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportingKeys, setExportingKeys] = useState(false);
   const [exportKeysError, setExportKeysError] = useState<string | null>(null);
+  const [telegramBusy, setTelegramBusy] = useState(false);
+  const [telegramError, setTelegramError] = useState<string | null>(null);
   const depositTo = depositAddress ?? walletAddress;
   const multiChain = Boolean(depositAddress);
   const depositUri = depositTo
@@ -148,6 +153,20 @@ function Aside({
       await logout();
     } finally {
       setLoggingOut(false);
+    }
+  }
+
+  async function requestTelegramConnect() {
+    if (!authenticated || telegramBusy) return;
+    setTelegramBusy(true);
+    setTelegramError(null);
+    try {
+      const session = await beginTelegramConnect();
+      window.open(session.connectUrl, "_blank", "noreferrer");
+    } catch (caught) {
+      setTelegramError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setTelegramBusy(false);
     }
   }
 
@@ -263,14 +282,22 @@ function Aside({
       />
 
       <nav className={s.nav} aria-label="Portfolio actions">
-        <a className={s.navLink} href="#telegram">
+        <button
+          type="button"
+          className={`${s.navLink} ${s.navButton}`}
+          onClick={() => void requestTelegramConnect()}
+          disabled={!authenticated || telegramBusy}
+        >
           <ActionIcon name="telegram" />
-          <span>Telegram alerts</span>
+          <span>{telegramBusy ? "Opening Telegram" : "Telegram alerts"}</span>
           <span
             className={`${s.navDot} ${telegramConnected ? s.navDot_on : ""}`}
             aria-label={telegramConnected ? "Connected" : "Not connected"}
           />
-        </a>
+        </button>
+        {telegramError ? (
+          <span className={s.navError} role="alert">{telegramError}</span>
+        ) : null}
         {walletAddress ? (
           <>
             <span className={s.navSection}>Advanced</span>
@@ -315,11 +342,10 @@ function Aside({
             className={s.logoutBtn}
             onClick={() => void requestLogout()}
             disabled={loggingOut}
-            aria-label="Log out"
-            title="Log out"
+            aria-label={loggingOut ? "Logging out" : "Log out"}
+            title={loggingOut ? "Logging out" : "Log out"}
           >
             <ActionIcon name="logout" />
-            <span>{loggingOut ? "Logging out" : "Log out"}</span>
           </button>
         ) : null}
       </div>
@@ -1047,6 +1073,7 @@ function ShareTradeModal({
   const [saving, setSaving] = useState(false);
   const [shareText, setShareText] = useState(label);
   const [overlay, setOverlay] = useState<string | null>(null);
+  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const path = `/trades/${encodeURIComponent(positionId)}/pnl`;
   const url = typeof window !== "undefined"
     ? `${window.location.origin}${path}`
@@ -1102,12 +1129,17 @@ function ShareTradeModal({
         >
           ×
         </button>
-        <img
-          className={s.sharePreview}
-          src={imageSrc}
-          alt="Trade card preview"
-          key={imageSrc}
-        />
+        <div className={s.sharePreviewWrap}>
+          <img
+            className={s.sharePreview}
+            src={imageSrc}
+            alt="Trade card preview"
+            key={imageSrc}
+            data-loading={loadedSrc !== imageSrc}
+            onLoad={() => setLoadedSrc(imageSrc)}
+          />
+          {loadedSrc !== imageSrc && <span className={s.shareShimmer} aria-hidden />}
+        </div>
         <div className={s.shareRail}>
           <label className={s.shareField}>
             <span className={s.shareFieldLabel}>Customize your text</span>
@@ -1299,6 +1331,24 @@ function ActivityItem({ item }: { item: CassieActivityItem }) {
 }
 
 function CommandGlyph({ kind }: { kind: CassieActivityItem["kind"] }) {
+  if (kind === "deposit") {
+    return (
+      <svg
+        viewBox="0 0 24 24"
+        width="13"
+        height="13"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M12 3v12" />
+        <path d="m7 10 5 5 5-5" />
+        <path d="M4 19h16" />
+      </svg>
+    );
+  }
   if (kind === "trade") {
     return (
       <svg
@@ -1380,14 +1430,16 @@ function groupActivity(
 
 function activityCommand(
   kind: CassieActivityItem["kind"],
-): "trade" | "close" | "watch" | "counter" {
+): "trade" | "close" | "watch" | "counter" | "deposit" {
   if (kind === "trade") return "trade";
   if (kind === "trade_close") return "close";
   if (kind === "watch") return "watch";
+  if (kind === "deposit") return "deposit";
   return "counter";
 }
 
 function activityIcon(item: CassieActivityItem): string {
+  if (item.kind === "deposit") return usdcIcon;
   // Trade rows carry the humanized asset symbol in the title; instrument can
   // be a venue slug like synthetic_perp that no icon CDN knows.
   const source = item.kind === "trade" || item.kind === "trade_close"
@@ -1525,16 +1577,16 @@ function Voice({
 
   return (
     <section className={s.voice}>
-      <div className={s.voiceHero}>
-        <div className={s.voiceLogo}>
+      <header className={s.tapeMast}>
+        <span className={s.tapeAvatar}>
           <img src="/cassie-logo-transparent.png" alt="" aria-hidden />
-        </div>
-      </div>
-
-      <div className={s.voiceMeta}>
-        <span className={s.voiceTitle}>
-          cassie
-          <span className="verified" aria-label="Twitter verified">
+        </span>
+        <div className={s.tapeMastText}>
+          <span className={s.tapeTitle}>The Tape</span>
+          <span className={s.tapeSub}>
+            Live calls from the timeline &middot;{" "}
+            <span className={s.tapeHandle}>@cassiedottrade</span>
+            <span className="verified" aria-label="Twitter verified">
             <svg viewBox="0 0 22 22" aria-hidden>
               <defs>
                 <linearGradient
@@ -1583,17 +1635,13 @@ function Voice({
               />
             </svg>
           </span>
-          <span className="handle">@cassiedottrade</span>
-        </span>
+          </span>
+        </div>
         <span className={s.voiceTag}>
-          <span className="k">Calls placed</span>{" "}
+          <span className="k">Calls</span>{" "}
           <span className="v">{ordersPlaced}</span>
         </span>
-        <p className={s.voiceBio}>
-          <span className={s.tapeTitle}>The Tape</span>
-          Live calls from the timeline.
-        </p>
-      </div>
+      </header>
 
       <div className={s.feed}>
         {voiceError ? (

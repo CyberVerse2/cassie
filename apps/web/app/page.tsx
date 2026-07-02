@@ -105,7 +105,7 @@ export default function Home() {
             <p className="lede">
               Mention Cassie under a post.
               <br />
-              She figures out if there&apos;s a real trade there and builds the position.
+              She figures out if there&apos;s an opportunity there and makes a trade for you.
             </p>
             <TweetDeck cards={deckCards} />
             <div className="cta-row">
@@ -124,6 +124,14 @@ function SiteNav() {
   return (
     <header className="nav" aria-label="Primary">
       <div className="right">
+        <a
+          className="nav-action"
+          href="https://docs.cassie.trade"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Docs
+        </a>
         <a className="nav-action" href="/dashboard">Dashboard</a>
       </div>
     </header>
