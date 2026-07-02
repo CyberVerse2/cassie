@@ -118,6 +118,8 @@ export default function Dashboard() {
         updateDefaultTradeSize={account.updateDefaultTradeSize}
         migrationPrompt={account.migrationPrompt}
         dismissMigration={account.dismissMigration}
+        migratePrivyFunds={account.migratePrivyFunds}
+        migratingFunds={account.migratingFunds}
       />
       <Center
         accountReady={account.ready}
@@ -148,6 +150,8 @@ function Aside({
   updateDefaultTradeSize,
   migrationPrompt,
   dismissMigration,
+  migratePrivyFunds,
+  migratingFunds,
 }: {
   walletAddress: string | null;
   depositAddress?: string | null;
@@ -165,7 +169,10 @@ function Aside({
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
   migrationPrompt?: boolean;
   dismissMigration?: () => Promise<unknown>;
+  migratePrivyFunds?: () => Promise<unknown>;
+  migratingFunds?: boolean;
 }) {
+  const [migrateError, setMigrateError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportingKeys, setExportingKeys] = useState(false);
@@ -224,17 +231,22 @@ function Aside({
         <div className={s.depositCard} role="status">
           <strong>Move your funds</strong>
           <p>
-            Your old Base wallet still holds USDC. Send it to your new deposit
-            address — it works on every supported chain — and Cassie will credit
-            it automatically.
+            Your old Base wallet still holds USDC. Move it to your new Cassie
+            wallet in one click — Cassie credits it automatically.
           </p>
           <div className={s.mentionRow}>
             <button
               type="button"
               className={`${s.btn} ${s.btnPrimary}`}
-              onClick={copyAddress}
+              disabled={migratingFunds}
+              onClick={() => {
+                setMigrateError(null);
+                void migratePrivyFunds?.().catch((caught) => {
+                  setMigrateError(caught instanceof Error ? caught.message : String(caught));
+                });
+              }}
             >
-              {copied ? "Copied" : "Copy new address"}
+              {migratingFunds ? "Moving funds" : "Move funds"}
             </button>
             <button
               type="button"
@@ -244,6 +256,7 @@ function Aside({
               Later
             </button>
           </div>
+          {migrateError && <p>{migrateError}</p>}
         </div>
       )}
 
