@@ -15,20 +15,28 @@ const env: CircleEnv = {
   transactionPollTimeoutMs: 50,
 };
 
+// EVM meta-wallets resolve to derived per-chain wallet ids; the fake mirrors
+// that: derived:<blockchain> ids with USDC only on BASE and ARB.
 function fakeClient(overrides: Record<string, unknown> = {}) {
+  const balancesByWallet: Record<string, unknown[]> = {
+    "derived:BASE": [
+      { amount: "25.5", token: { id: "usdc_base", symbol: "USDC", blockchain: "BASE" } },
+      { amount: "99", token: { id: "weth", symbol: "WETH", blockchain: "BASE" } },
+    ],
+    "derived:ARB": [
+      { amount: "10", token: { id: "usdc_arb", symbol: "USDC", blockchain: "ARB" } },
+    ],
+  };
   return {
     createWallets: vi.fn().mockResolvedValue({
       data: { wallets: [{ id: "circle_wallet_1", address: "0xAAaA111111111111111111111111111111111111" }] },
     }),
-    getWalletTokenBalance: vi.fn().mockResolvedValue({
-      data: {
-        tokenBalances: [
-          { amount: "25.5", token: { id: "usdc_base", symbol: "USDC", blockchain: "BASE" } },
-          { amount: "10", token: { id: "usdc_arb", symbol: "USDC", blockchain: "ARB" } },
-          { amount: "99", token: { id: "weth", symbol: "WETH", blockchain: "BASE" } },
-        ],
-      },
-    }),
+    deriveWallet: vi.fn().mockImplementation(async ({ blockchain }: { blockchain: string }) => ({
+      data: { wallet: { id: `derived:${blockchain}` } },
+    })),
+    getWalletTokenBalance: vi.fn().mockImplementation(async ({ id }: { id: string }) => ({
+      data: { tokenBalances: balancesByWallet[id] ?? [] },
+    })),
     createTransaction: vi.fn().mockResolvedValue({
       data: { id: "tx_1", state: "INITIATED" },
     }),
@@ -69,9 +77,15 @@ describe("CircleWalletAdapter", () => {
     });
   });
 
-  it("sums only USDC balances across chains", async () => {
+  it("sums only USDC balances across derived per-chain wallets", async () => {
     const adapter = new CircleWalletAdapter(env, fakeClient());
     await expect(adapter.getUsdcBalanceUsd({ walletId: "w1" })).resolves.toBe(35.5);
+  });
+
+  it("reads a single chain's balance via the derived wallet", async () => {
+    const adapter = new CircleWalletAdapter(env, fakeClient());
+    await expect(adapter.getUsdcBalanceOnChain({ walletId: "w1", chain: "arbitrum" })).resolves.toBe(10);
+    await expect(adapter.getUsdcBalanceOnChain({ walletId: "w1", chain: "arc" })).resolves.toBe(0);
   });
 
   it("transfers USDC to the treasury and reports the requested chain", async () => {
@@ -95,7 +109,7 @@ describe("CircleWalletAdapter", () => {
       chain: "arbitrum",
     });
     expect(client.createTransaction).toHaveBeenCalledWith({
-      walletId: "circle_wallet_1",
+      walletId: "derived:ARB",
       tokenId: "usdc_arb",
       destinationAddress: env.treasuryWalletAddress,
       amount: ["12.34"],

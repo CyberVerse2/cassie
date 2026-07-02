@@ -62,6 +62,10 @@ export class CircleWalletAdapter implements WalletGateway {
   private readonly env: RequiredCircleEnv;
   private readonly client: CircleDeveloperControlledWalletsClient;
   private readonly usdcTokenIds = new Set<string>();
+  // EVM wallets are meta-wallets: balances and transactions run against a
+  // derived, chain-specific wallet id (same address). Derivations are
+  // idempotent, so cache them.
+  private readonly derivedWalletIds = new Map<string, Promise<string>>();
 
   constructor(
     env: CircleEnv = config.circle,
@@ -106,25 +110,22 @@ export class CircleWalletAdapter implements WalletGateway {
   }
 
   async getUsdcBalanceUsd(input: { walletId: string }): Promise<number> {
-    const response = await this.client.getWalletTokenBalance({
-      id: input.walletId,
-    });
-    const balances = response.data?.tokenBalances ?? [];
-    return balances.reduce((total, balance) => {
-      if (balance.token.symbol !== "USDC") return total;
-      return total + Number(balance.amount);
-    }, 0);
+    const chains = Object.keys(MAINNET_BLOCKCHAINS) as Chain[];
+    const balances = await Promise.all(chains.map((chain) =>
+      this.getUsdcBalanceOnChain({ walletId: input.walletId, chain })
+        .catch(() => 0)
+    ));
+    return balances.reduce((total, balance) => total + balance, 0);
   }
 
   async getUsdcBalanceOnChain(input: { walletId: string; chain: Chain }): Promise<number> {
-    const blockchain = this.blockchainFor(input.chain);
+    const chainWalletId = await this.chainWalletId(input.walletId, input.chain);
     const response = await this.client.getWalletTokenBalance({
-      id: input.walletId,
+      id: chainWalletId,
     });
     const balances = response.data?.tokenBalances ?? [];
     return balances.reduce((total, balance) => {
       if (balance.token.symbol !== "USDC") return total;
-      if (balance.token.blockchain !== blockchain) return total;
       return total + Number(balance.amount);
     }, 0);
   }
@@ -209,9 +210,10 @@ export class CircleWalletAdapter implements WalletGateway {
     referenceId: string;
     chain: Chain;
   }): Promise<UsdcTransfer> {
-    const tokenId = await this.usdcTokenIdForWallet(input.fromWalletId, input.chain);
+    const chainWalletId = await this.chainWalletId(input.fromWalletId, input.chain);
+    const tokenId = await this.usdcTokenIdForWallet(chainWalletId, input.chain);
     const created = await this.client.createTransaction({
-      walletId: input.fromWalletId,
+      walletId: chainWalletId,
       tokenId,
       destinationAddress: input.toAddress,
       amount: [formatUsdAmount(input.amountUsd)],
@@ -245,15 +247,27 @@ export class CircleWalletAdapter implements WalletGateway {
     };
   }
 
-  private async usdcTokenIdForWallet(walletId: string, chain: Chain): Promise<string> {
+  // Resolves the chain-specific wallet id for an EVM meta-wallet. Falls back
+  // to the input id when the wallet is already chain-specific.
+  private chainWalletId(walletId: string, chain: Chain): Promise<string> {
     const blockchain = this.blockchainFor(chain);
-    const response = await this.client.getWalletTokenBalance({ id: walletId });
+    const cacheKey = `${walletId}:${blockchain}`;
+    const existing = this.derivedWalletIds.get(cacheKey);
+    if (existing) return existing;
+    const derived = this.client
+      .deriveWallet({ id: walletId, blockchain: blockchain as never })
+      .then((response) => response.data?.wallet?.id ?? walletId)
+      .catch(() => walletId);
+    this.derivedWalletIds.set(cacheKey, derived);
+    return derived;
+  }
+
+  private async usdcTokenIdForWallet(chainWalletId: string, chain: Chain): Promise<string> {
+    const response = await this.client.getWalletTokenBalance({ id: chainWalletId });
     const balances = response.data?.tokenBalances ?? [];
-    const usdc = balances.find((balance) =>
-      balance.token.symbol === "USDC" && balance.token.blockchain === blockchain
-    ) ?? balances.find((balance) => balance.token.symbol === "USDC");
+    const usdc = balances.find((balance) => balance.token.symbol === "USDC");
     if (!usdc) {
-      throw new Error(`Wallet ${walletId} holds no USDC to transfer on ${chain}.`);
+      throw new Error(`Wallet ${chainWalletId} holds no USDC to transfer on ${chain}.`);
     }
     return usdc.token.id;
   }

@@ -11,3 +11,4 @@ fire.json
 .claude/
 .superpowers/
 tmp/
+recovery_file_*.dat
