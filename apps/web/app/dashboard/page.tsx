@@ -85,6 +85,7 @@ export default function Dashboard() {
         accountReady={account.ready}
         authenticated={account.authenticated}
         fetchDashboard={account.fetchDashboard}
+        trader={account.userProfile}
       />
     </main>
   );
@@ -1486,15 +1487,20 @@ type TaggedActivityPost = {
   preview: string;
 };
 
-function activityPost(item: CassieActivityItem): TaggedActivityPost {
-  const handle = withAt(item.authorHandle ?? "unknown");
+function activityPost(
+  item: CassieActivityItem,
+  trader: { name: string; handle: string; avatarUrl: string | null } | null,
+): TaggedActivityPost {
+  // The Tape credits the person who made the trade (the account owner),
+  // not the author of the source post that seeded the thesis.
+  const handle = withAt(trader?.handle ?? "you");
   const handleName = handle.replace(/^@/, "");
   return {
     id: item.id,
     url: item.sourceUrl ?? "#",
-    authorName: item.authorName ?? handleName,
+    authorName: trader?.name ?? handleName,
     handle,
-    avatarUrl: `https://unavatar.io/x/${handleName}`,
+    avatarUrl: trader?.avatarUrl ?? `https://unavatar.io/x/${handleName}`,
     age: relativeAge(item.at),
     cassiePrompt: activityPrompt(item),
     preview: summarizeSourceText(item.sourceText ?? item.subtitle),
@@ -1502,9 +1508,9 @@ function activityPost(item: CassieActivityItem): TaggedActivityPost {
 }
 
 function activityPrompt(item: CassieActivityItem): string {
-  if (item.kind === "trade") return `trade ${item.title}`;
-  if (item.kind === "trade_close")
-    return `close ${item.title.replace(/\s+CLOSE$/u, "")}`;
+  if (item.kind === "trade") {
+    return item.side ? `${item.title} ${item.side.toUpperCase()}` : item.title;
+  }
   if (item.kind === "counter") return `countertrade ${item.title}`;
   return `watch ${item.title}`;
 }
@@ -1545,10 +1551,16 @@ function Voice({
   accountReady,
   authenticated,
   fetchDashboard,
+  trader,
 }: {
   accountReady: boolean;
   authenticated: boolean;
   fetchDashboard: () => Promise<CassieDashboardPayload>;
+  trader: {
+    name: string;
+    handle: string;
+    avatarUrl: string | null;
+  } | null;
 }) {
   const dashboardEnabled = accountReady && authenticated;
   const dashboardQuery = useQuery({
@@ -1561,13 +1573,14 @@ function Voice({
       (dashboardQuery.data?.activity ?? [])
         .filter(
           (item) =>
+            item.kind !== "trade_close" &&
             item.source === "x" &&
             item.sourceUrl &&
             (item.sourceText || item.subtitle),
         )
         .slice(0, 6)
-        .map(activityPost),
-    [dashboardQuery.data?.activity],
+        .map((item) => activityPost(item, trader)),
+    [dashboardQuery.data?.activity, trader],
   );
   const ordersPlaced =
     dashboardQuery.data?.activity.filter((item) => item.kind === "trade")
