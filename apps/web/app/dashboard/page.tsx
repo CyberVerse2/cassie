@@ -160,10 +160,6 @@ function Aside({
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
 }) {
-catch (caught) {
-      setWithdrawError(caught instanceof Error ? caught.message : String(caught));
-    }
-  }
   const [copied, setCopied] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportingKeys, setExportingKeys] = useState(false);
