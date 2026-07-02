@@ -1,6 +1,7 @@
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useRouter } from "next/navigation";
 import { useCallback, useMemo } from "react";
 import {
   useExportWallet,
@@ -153,6 +154,7 @@ const cassieAccountQueryKey = ["cassie", "account"] as const;
 
 export function useCassieAccount() {
   const privy = usePrivy();
+  const router = useRouter();
   const cookieSession = authClient.useSession();
   const { exportWallet } = useExportWallet();
   const { wallets, ready: walletsReady } = useWallets();
@@ -415,7 +417,8 @@ export function useCassieAccount() {
     queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, null);
     await authClient.signOut().catch(() => undefined);
     await privy.logout();
-  }, [privy, queryClient]);
+    router.push("/");
+  }, [privy, queryClient, router]);
 
   const exportKeys = useCallback(async () => {
     if (!privy.authenticated) {
