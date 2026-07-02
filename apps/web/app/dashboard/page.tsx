@@ -1518,12 +1518,12 @@ function Voice({
           <span className="handle">@cassiedottrade</span>
         </span>
         <span className={s.voiceTag}>
-          <span className="k">Orders placed</span>{" "}
+          <span className="k">Calls placed</span>{" "}
           <span className="v">{ordersPlaced}</span>
         </span>
         <p className={s.voiceBio}>
-          Tweets where people tagged Cassie, with the source post and command
-          kept visible.
+          <span className={s.tapeTitle}>The Tape</span>
+          Live calls from the timeline.
         </p>
       </div>
 
@@ -1535,7 +1535,8 @@ function Voice({
         ) : null}
         {!voiceError && taggedActivity.length === 0 ? (
           <div className={s.emptyState}>
-            No tagged Cassie trade activity yet.
+            The tape is quiet. Tag @cassiedottrade under any market take to
+            print the first call.
           </div>
         ) : null}
         {taggedActivity.map((tweet) => (
@@ -1554,8 +1555,8 @@ function Voice({
               <span className="handle">{tweet.age}</span>
             </header>
             <p className={s.postBody}>
-              <span className="lnk">{tweet.handle}</span> tagged{" "}
-              <span className="tk">@cassiedottrade</span>: {tweet.cassiePrompt}
+              <span className="lnk">{tweet.handle}</span> called{" "}
+              <span className="tk">{tweet.cassiePrompt}</span>
             </p>
             <p className={s.postQuote}>{tweet.preview}</p>
           </a>

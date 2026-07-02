@@ -400,6 +400,17 @@
   .shareModal { animation: none; }
 }
 
+.tapeTitle {
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--gilt-glow);
+}
+
 .activityShare {
   color: var(--gilt);
   cursor: pointer;
