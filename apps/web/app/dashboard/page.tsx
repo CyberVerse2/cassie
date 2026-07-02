@@ -116,8 +116,6 @@ export default function Dashboard() {
         userProfile={account.userProfile}
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
         updateDefaultTradeSize={account.updateDefaultTradeSize}
-        withdrawPrivyFunds={account.withdrawPrivyFunds}
-        withdrawingFunds={account.withdrawingFunds}
       />
       <Center
         accountReady={account.ready}
@@ -146,8 +144,6 @@ function Aside({
   userProfile,
   defaultTradeSizeUsd,
   updateDefaultTradeSize,
-  withdrawPrivyFunds,
-  withdrawingFunds,
 }: {
   walletAddress: string | null;
   depositAddress?: string | null;
@@ -163,22 +159,8 @@ function Aside({
   } | null;
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
-  withdrawPrivyFunds?: (toAddress: string) => Promise<unknown>;
-  withdrawingFunds?: boolean;
 }) {
-  const [withdrawTo, setWithdrawTo] = useState("");
-  const [withdrawError, setWithdrawError] = useState<string | null>(null);
-  const [withdrawSent, setWithdrawSent] = useState(false);
-
-  async function requestWithdraw() {
-    if (!withdrawPrivyFunds || withdrawingFunds || !withdrawTo.trim()) return;
-    setWithdrawError(null);
-    setWithdrawSent(false);
-    try {
-      await withdrawPrivyFunds(withdrawTo);
-      setWithdrawSent(true);
-      setWithdrawTo("");
-    } catch (caught) {
+catch (caught) {
       setWithdrawError(caught instanceof Error ? caught.message : String(caught));
     }
   }
@@ -235,43 +217,6 @@ function Aside({
         />
         <span>Cassie</span>
       </a>
-
-      {authenticated && walletAddress && (
-        <div className={s.depositCard}>
-          <strong>Withdraw</strong>
-          <p>Send the USDC in your wallet to any Base address.</p>
-          <input
-            type="text"
-            className={s.defaultsInput}
-            placeholder="0x… destination address"
-            value={withdrawTo}
-            spellCheck={false}
-            autoComplete="off"
-            onChange={(e) => {
-              setWithdrawError(null);
-              setWithdrawSent(false);
-              setWithdrawTo(e.target.value.trim());
-            }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") void requestWithdraw();
-            }}
-            disabled={withdrawingFunds}
-            aria-label="Withdrawal destination address"
-          />
-          <div className={s.mentionRow}>
-            <button
-              type="button"
-              className={`${s.btn} ${s.btnPrimary}`}
-              disabled={withdrawingFunds || !withdrawTo.trim()}
-              onClick={() => void requestWithdraw()}
-            >
-              {withdrawingFunds ? "Sending" : "Send all USDC"}
-            </button>
-          </div>
-          {withdrawError && <p role="alert">{withdrawError}</p>}
-          {withdrawSent && <p role="status">Sent. Balance updates shortly.</p>}
-        </div>
-      )}
 
       <div className={s.depositCard} id="deposit">
         <div className={s.qrFrame}>

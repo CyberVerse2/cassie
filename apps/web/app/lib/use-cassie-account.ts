@@ -11,7 +11,6 @@ import {
   type User,
   type Wallet,
 } from "@privy-io/react-auth";
-import { isAddress } from "viem";
 import type { CassieActivityItem } from "./activity";
 import { authClient } from "./auth-client";
 
@@ -357,43 +356,6 @@ export function useCassieAccount() {
       queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
     },
   });
-  // Sends the legacy wallet's full USDC balance to a destination address.
-  // Runs server-side through the delegated signer, so it works for cookie
-  // sessions with no active Privy session.
-  const sendLegacyWalletUsdc = useCallback(async (toAddress: string) => {
-    if (!authenticated) {
-      throw new Error("Log in before moving funds.");
-    }
-    if (!isAddress(toAddress)) {
-      throw new Error("That does not look like a valid address.");
-    }
-    const response = await fetch("/api/withdraw", {
-      method: "POST",
-      headers: {
-        ...await authHeaders(),
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ toAddress }),
-    });
-    await clearExpiredSession(response);
-    const payload = await response.json() as {
-      withdrawal?: { amountUsd: number; transferId: string };
-      error?: string;
-    };
-    if (!response.ok || !payload.withdrawal) {
-      throw new Error(payload.error ?? "Withdrawal failed.");
-    }
-    return payload.withdrawal;
-  }, [authHeaders, authenticated, clearExpiredSession]);
-
-  // Withdrawal: send the old wallet's USDC to any user-provided address.
-  const withdrawPrivyFundsMutation = useMutation({
-    mutationFn: (toAddress: string) => sendLegacyWalletUsdc(toAddress.trim()),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: cassieAccountQueryKey });
-    },
-  });
-
   const syncAccount = useCallback((input: SyncInput = {}) =>
     syncAccountMutation.mutateAsync(input), [syncAccountMutation]);
 
@@ -538,8 +500,6 @@ export function useCassieAccount() {
     error,
     walletAddress: embeddedWallet?.address ?? account?.walletAddress ?? null,
     depositAddress: account?.depositAddress ?? null,
-    withdrawPrivyFunds: (toAddress: string) => withdrawPrivyFundsMutation.mutateAsync(toAddress),
-    withdrawingFunds: withdrawPrivyFundsMutation.isPending,
     walletReadyForSpending: Boolean(embeddedWallet?.id && embeddedWallet.delegated),
     login,
     logout,
