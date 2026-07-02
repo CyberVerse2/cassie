@@ -67,7 +67,7 @@
   background: color-mix(in oklab, var(--bg-deep) 80%, transparent);
   backdrop-filter: blur(8px);
   overflow-y: auto;
-  animation: dashColumnIn 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dashColumnIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 @keyframes dashColumnIn {
@@ -521,7 +521,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: dashColumnIn 480ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dashColumnIn 320ms 60ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .tickerShell {
@@ -1182,7 +1182,6 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   backdrop-filter: blur(12px);
   min-width: 150px;
-  transition: left 100ms cubic-bezier(0.1, 0.8, 0.2, 1), top 100ms cubic-bezier(0.1, 0.8, 0.2, 1);
 }
 
 .tooltipDate {
@@ -1712,7 +1711,9 @@
   box-shadow:
     inset 0 1px 0 color-mix(in oklab, white 30%, transparent),
     0 10px 22px -14px color-mix(in oklab, var(--gilt) 60%, transparent);
-  transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  position: relative;
+  overflow: hidden;
+  transition: transform 160ms ease;
 }
 
 .tradeActions {
@@ -1747,7 +1748,9 @@
   box-shadow:
     inset 0 1px 0 color-mix(in oklab, white 30%, transparent),
     0 10px 22px -14px color-mix(in oklab, var(--gilt) 60%, transparent);
-  transition: filter 180ms ease, transform 180ms ease, box-shadow 180ms ease;
+  position: relative;
+  overflow: hidden;
+  transition: transform 160ms ease;
 }
 
 .shareTradeBtn {
@@ -1755,17 +1758,28 @@
   color: var(--gilt-glow);
 }
 
-.tradeActionBtn:hover,
-.watchTradeBtn:hover {
-  filter: brightness(1.06);
-  box-shadow:
-    inset 0 1px 0 color-mix(in oklab, white 35%, transparent),
-    0 12px 26px -12px color-mix(in oklab, var(--gilt) 70%, transparent);
+.tradeActionBtn::after,
+.watchTradeBtn::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in oklab, white 10%, transparent);
+  opacity: 0;
+  transition: opacity 150ms ease;
+  pointer-events: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .tradeActionBtn:hover::after,
+  .watchTradeBtn:hover::after {
+    opacity: 1;
+  }
 }
 
 .tradeActionBtn:active,
 .watchTradeBtn:active {
-  transform: translateY(0.5px);
+  transform: scale(0.97);
 }
 
 .tradeActionBtn:disabled {
@@ -2025,7 +2039,7 @@
   border-left: 1px solid var(--line);
   background: color-mix(in oklab, var(--bg-deep) 85%, transparent);
   overflow: hidden;
-  animation: dashColumnIn 480ms 170ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation: dashColumnIn 320ms 90ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .voiceHero {
