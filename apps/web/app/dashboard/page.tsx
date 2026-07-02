@@ -1655,10 +1655,6 @@ function Voice({
           <span className="k">Calls placed</span>{" "}
           <span className="v">{ordersPlaced}</span>
         </span>
-        <p className={s.voiceBio}>
-          <span className={s.tapeTitle}>The Tape</span>
-          Live calls from the timeline.
-        </p>
       </div>
 
       <div className={s.feed}>
