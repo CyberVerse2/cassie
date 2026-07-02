@@ -56,25 +56,18 @@ export async function pollDeposits(input: {
         continue;
       }
 
-      // Treasury -> deposit-wallet transfers are trade payouts and refunds,
-      // not new deposits; the ledger already accounts for them.
-      if (isTreasurySourced(transfer, treasuryAddress)) {
-        await store.setRuntimeState(pollStateKey, {
-          processedAt: new Date().toISOString(),
-          result: { status: "treasury_payout" },
-        });
-        result.skipped += 1;
-        continue;
-      }
-
-      const processed = await creditDeposit({ store, transfer });
+      const processed = await creditIncomingUsdcTransfer({
+        store,
+        transfer,
+        treasuryAddress,
+      });
       await store.setRuntimeState(pollStateKey, {
         processedAt: new Date().toISOString(),
         result: processed,
       });
       if (processed.status === "credited") result.credited += 1;
-      else if (processed.status === "duplicate") result.skipped += 1;
-      else result.unmatched += 1;
+      else if (processed.status === "unmatched") result.unmatched += 1;
+      else result.skipped += 1;
     } catch (error) {
       result.errors.push({
         transferId: transfer.transferId,
@@ -93,10 +86,32 @@ export async function pollDeposits(input: {
   return result;
 }
 
+export type CreditDepositResult = {
+  status: "credited" | "duplicate" | "unmatched" | "treasury_payout";
+  userId?: string;
+};
+
+// Shared crediting used by both the poller and the Circle webhook: skips
+// treasury-sourced transfers (payouts/refunds), resolves the owner by deposit
+// address, and records an idempotent deposit_credit ledger entry.
+export async function creditIncomingUsdcTransfer(input: {
+  store: CassieStore;
+  transfer: CircleIncomingTransfer;
+  treasuryAddress?: string | null;
+}): Promise<CreditDepositResult> {
+  const { store, transfer } = input;
+  const treasuryAddress =
+    input.treasuryAddress ?? config.circle.treasuryWalletAddress ?? null;
+  if (isTreasurySourced(transfer, treasuryAddress)) {
+    return { status: "treasury_payout" };
+  }
+  return creditDeposit({ store, transfer });
+}
+
 async function creditDeposit(input: {
   store: CassieStore;
   transfer: CircleIncomingTransfer;
-}): Promise<{ status: "credited" | "duplicate" | "unmatched"; userId?: string }> {
+}): Promise<CreditDepositResult> {
   const { store, transfer } = input;
   const depositAddress = await store.getDepositAddressByEvmAddress(
     transfer.destinationAddress,

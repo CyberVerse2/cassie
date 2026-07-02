@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildDashboardPayload } from "../apps/web/app/api/_lib/dashboard-data.ts";
+import { recordPortfolioSnapshotForUser } from "../packages/positions/portfolio.ts";
 import { InMemoryCassieStore, type CassieStoreSnapshot } from "../packages/core/db/store.ts";
 import type {
   ExecutionJob,
@@ -83,6 +84,8 @@ describe("dashboard payload", () => {
     await store.addPosition(openPosition);
     await store.addPosition(closedPosition);
     await store.addPositionReview(review(openPosition.positionId));
+    // History is written by the review cron, not the dashboard read.
+    await recordPortfolioSnapshotForUser({ store, userId: "user_1", walletBalanceUsd: 100 });
 
     const dashboard = await buildDashboardPayload(settings, store, {
       getUsdcBalanceUsd: async () => 100,
@@ -175,6 +178,7 @@ describe("dashboard payload", () => {
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
     await store.addPosition(position({ positionId: "position_open", status: "open", closedAt: null }));
+    await recordPortfolioSnapshotForUser({ store, userId: "user_1", walletBalanceUsd: 50 });
 
     const dashboard = await buildDashboardPayload(settings, store, {
       getUsdcBalanceUsd: async () => 50,
@@ -193,19 +197,16 @@ describe("dashboard payload", () => {
     });
   });
 
-  it("persists portfolio history when wallet deposits change balance", async () => {
+  it("records portfolio history on the cron cadence, tracking balance changes", async () => {
     const store = new InMemoryCassieStore();
     await store.upsertUserSettings(settings);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
     await store.addPosition(position({ positionId: "position_open", status: "open", closedAt: null }));
 
-    await buildDashboardPayload(settings, store, {
-      getUsdcBalanceUsd: async () => 100,
-    });
-    await buildDashboardPayload(settings, store, {
-      getUsdcBalanceUsd: async () => 150,
-    });
+    // Two cron ticks with a deposit in between.
+    await recordPortfolioSnapshotForUser({ store, userId: "user_1", walletBalanceUsd: 100 });
+    await recordPortfolioSnapshotForUser({ store, userId: "user_1", walletBalanceUsd: 150 });
     const dashboard = await buildDashboardPayload(settings, store, {
       getUsdcBalanceUsd: async () => 150,
     });

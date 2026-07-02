@@ -1,8 +1,9 @@
 import { CircleWalletAdapter } from "../adapters/circle/index.ts";
+import { PrivyAdapter } from "../adapters/privy/index.ts";
 import { config } from "../core/config.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { MissingConnectorConfigError } from "../core/helpers/connector-errors.ts";
-import type { Chain, UserDepositAddress } from "../core/schemas/index.ts";
+import type { Chain, UserDepositAddress, UserSettings } from "../core/schemas/index.ts";
 
 const BALANCE_CACHE_TTL_MS = 15_000;
 
@@ -60,6 +61,25 @@ async function readBalance(
     if (error instanceof MissingConnectorConfigError) return null;
     throw error;
   }
+}
+
+// A user's total USDC across the legacy Privy wallet (if any) and their
+// Circle deposit wallet. Returns null only when neither wallet is readable.
+export async function resolveUserWalletBalanceUsd(
+  store: CassieStore,
+  settings: UserSettings,
+): Promise<number | null> {
+  const privyBalanceUsd = settings.privyWalletId
+    ? await new PrivyAdapter()
+        .getUsdcBalanceUsd({ walletId: settings.privyWalletId })
+        .catch(() => null)
+    : null;
+  const depositAddress = await store.getDepositAddress(settings.userId);
+  const circleBalanceUsd = depositAddress
+    ? await depositWalletBalanceUsd(depositAddress, store)
+    : null;
+  if (privyBalanceUsd == null && circleBalanceUsd == null) return null;
+  return (privyBalanceUsd ?? 0) + (circleBalanceUsd ?? 0);
 }
 
 async function activeDepositChains(

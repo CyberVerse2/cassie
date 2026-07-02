@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { resolveUserWalletBalanceUsd } from "../app/deposit-balance.ts";
 import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import type { ExitSignal, Position, PositionReview } from "../core/schemas/index.ts";
@@ -6,6 +7,7 @@ import { GraphileExecutionJobQueue, type CassieJobQueue } from "../jobs/queue.ts
 import { sendDailyPositionSummaries } from "../notifications/positions.ts";
 import { queueClosePosition } from "./close.ts";
 import { CompositePositionMarkProvider, type PositionMarkProvider } from "./marks.ts";
+import { recordPortfolioSnapshotForUser } from "./portfolio.ts";
 
 export type PositionReviewResult = {
   reviewed: number;
@@ -55,6 +57,11 @@ async function reviewOpenPositions(input: {
     reviews.push(await reviewPosition({ store, markProvider, jobQueue, position }));
   }
 
+  // Record one portfolio snapshot per affected user on this cron tick, after
+  // marks are fresh, so balance history is captured on a fixed cadence rather
+  // than as a side effect of dashboard reads.
+  await recordPortfolioSnapshots({ store, userId: input.userId, positions });
+
   if (input.notify ?? true) {
     await sendDailyPositionSummaries({ store, userId: input.userId }).catch(async (error) => {
       await store.audit({
@@ -73,6 +80,38 @@ async function reviewOpenPositions(input: {
     failed: reviews.filter((review) => review.status === "failed").length,
     reviews,
   };
+}
+
+async function recordPortfolioSnapshots(input: {
+  store: CassieStore;
+  userId?: string;
+  positions: Position[];
+}): Promise<void> {
+  const userIds = input.userId
+    ? [input.userId]
+    : [...new Set(input.positions.map((position) => position.userId))];
+  const at = new Date().toISOString();
+  for (const userId of userIds) {
+    try {
+      const settings = await input.store.getUserSettings(userId);
+      if (!settings) continue;
+      const walletBalanceUsd = await resolveUserWalletBalanceUsd(input.store, settings);
+      await recordPortfolioSnapshotForUser({
+        store: input.store,
+        userId,
+        walletBalanceUsd: walletBalanceUsd ?? 0,
+        at,
+      });
+    } catch (error) {
+      await input.store.audit({
+        entityId: userId,
+        entityType: "user",
+        eventType: "portfolio_snapshot.failed",
+        message: "Portfolio snapshot failed.",
+        data: { error: error instanceof Error ? error.message : String(error) },
+      });
+    }
+  }
 }
 
 async function reviewPosition(input: {

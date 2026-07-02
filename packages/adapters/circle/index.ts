@@ -183,22 +183,49 @@ export class CircleWalletAdapter implements WalletGateway {
     const transactions = response.data?.transactions ?? [];
     const transfers: CircleIncomingTransfer[] = [];
     for (const transaction of transactions) {
-      if (!transaction.destinationAddress || !transaction.tokenId) continue;
-      if (!(await this.isUsdcToken(transaction.tokenId))) continue;
-      transfers.push({
-        transferId: transaction.id,
-        chain: this.chainFor(transaction.blockchain),
-        blockchain: transaction.blockchain,
-        sourceAddress: transaction.sourceAddress ?? null,
-        destinationAddress: transaction.destinationAddress,
-        amountUsd: transactionAmountUsd(transaction),
-        txHash: transaction.txHash ?? null,
-        tokenId: transaction.tokenId,
-        state: transaction.state,
-        createDate: transaction.createDate,
-      });
+      const transfer = await this.toIncomingUsdcTransfer(transaction);
+      if (transfer) transfers.push(transfer);
     }
     return transfers;
+  }
+
+  // Maps a Circle transaction (from a list or a webhook notification) to an
+  // incoming USDC transfer, or null when it is not an inbound USDC transfer.
+  async toIncomingUsdcTransfer(
+    transaction: Partial<Transaction> & { symbol?: string },
+  ): Promise<CircleIncomingTransfer | null> {
+    if (!transaction.id || !transaction.destinationAddress) return null;
+    if (transaction.transactionType && transaction.transactionType !== "INBOUND") {
+      return null;
+    }
+    const symbol = transaction.symbol;
+    const isUsdc = symbol
+      ? symbol === "USDC"
+      : transaction.tokenId
+        ? await this.isUsdcToken(transaction.tokenId)
+        : false;
+    if (!isUsdc) return null;
+    return {
+      transferId: transaction.id,
+      chain: transaction.blockchain ? this.chainFor(transaction.blockchain) : null,
+      blockchain: transaction.blockchain ?? "",
+      sourceAddress: transaction.sourceAddress ?? null,
+      destinationAddress: transaction.destinationAddress,
+      amountUsd: transactionAmountUsd(transaction),
+      txHash: transaction.txHash ?? null,
+      tokenId: transaction.tokenId ?? null,
+      state: transaction.state ?? "COMPLETE",
+      createDate: transaction.createDate ?? new Date().toISOString(),
+    };
+  }
+
+  async notificationPublicKey(keyId: string): Promise<{ algorithm: string; publicKey: string }> {
+    const response = await this.client.getNotificationSignature(keyId);
+    const data = response.data;
+    if (!data?.publicKey) {
+      throw new Error(`Circle notification public key ${keyId} was not found.`);
+    }
+    return { algorithm: data.algorithm, publicKey: data.publicKey };
   }
 
   private async isUsdcToken(tokenId: string): Promise<boolean> {
@@ -305,7 +332,7 @@ export class CircleWalletAdapter implements WalletGateway {
   }
 }
 
-function transactionAmountUsd(transaction: Transaction): number {
+function transactionAmountUsd(transaction: Partial<Transaction>): number {
   const amount = transaction.amounts?.[0];
   if (amount != null) return Number(amount);
   return Number(transaction.amountInUSD ?? 0);

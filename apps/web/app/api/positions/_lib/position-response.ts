@@ -1,4 +1,8 @@
 import type { Position, TradeTicket } from "../../../../../../packages/core/schemas/index.ts";
+import {
+  positionEquityUsd,
+  positionLeverage,
+} from "../../../../../../packages/positions/portfolio.ts";
 
 export type UserFacingPosition = Position & {
   symbol: string | null;
@@ -17,20 +21,6 @@ export function decoratePosition(position: Position, ticket?: TradeTicket): User
     marginUsd: position.entrySizeUsd,
     leverage,
     notionalValueUsd: isLeveraged ? position.currentValueUsd : null,
-    positionEquityUsd: isLeveraged
-      ? roundUsd(position.entrySizeUsd + position.unrealizedPnlUsd)
-      : position.currentValueUsd,
+    positionEquityUsd: positionEquityUsd(position, ticket),
   };
-}
-
-function positionLeverage(position: Position, ticket?: TradeTicket) {
-  const ticketLeverage = ticket?.venueData?.leverage;
-  if (ticketLeverage && ticketLeverage > 1) return ticketLeverage;
-  if (position.venue !== "hyperliquid" || position.entrySizeUsd <= 0) return null;
-  const inferred = position.filledSizeUsd / position.entrySizeUsd;
-  return inferred > 1.01 ? Math.round(inferred * 100) / 100 : null;
-}
-
-function roundUsd(value: number) {
-  return Math.round(value * 100) / 100;
 }

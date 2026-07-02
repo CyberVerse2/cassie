@@ -115,14 +115,9 @@ export async function buildDashboardPayload(
     ),
   );
   const portfolioBalanceUsd = roundUsd(walletBalance + openPositionEquityUsd);
-  const snapshotAt = new Date().toISOString();
-  await store.recordPortfolioBalanceSnapshot({
-    userId: settings.userId,
-    at: snapshotAt,
-    valueUsd: portfolioBalanceUsd,
-    walletBalanceUsd: walletBalance,
-    unrealizedPnlUsd,
-  });
+  // History is written by the review cron (recordPortfolioSnapshotForUser),
+  // not on this read — a GET must not mutate, and per-refresh writes produced
+  // a jittery chart.
   const portfolioHistory = await store.listPortfolioBalanceSnapshots(
     settings.userId,
     PORTFOLIO_HISTORY_LIMIT,
