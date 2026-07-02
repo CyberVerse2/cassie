@@ -1,6 +1,7 @@
 import { dash } from "@better-auth/infra";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { nextCookies } from "better-auth/next-js";
 import {
   assertAuthEnv,
   config,
@@ -18,9 +19,17 @@ export type CassieAuth = ReturnType<typeof createAuth>;
 
 export function createAuth(env: AuthEnv = config.auth, db: CassieDb = createCassieDb()) {
   const required = assertAuthEnv(env);
+  const fallbackHost = required.allowedHosts.find((host) => !host.includes("*"));
   return betterAuth({
     secret: required.secret,
-    baseURL: required.baseUrl,
+    // Static BETTER_AUTH_URL wins when set; otherwise the base URL is derived
+    // per request from host / x-forwarded-host + x-forwarded-proto, validated
+    // against the allowed hosts.
+    baseURL: required.baseUrl ?? {
+      allowedHosts: required.allowedHosts,
+      protocol: "auto",
+      ...(fallbackHost ? { fallback: `https://${fallbackHost}` } : {}),
+    },
     database: drizzleAdapter(db, {
       provider: "pg",
       schema: {
@@ -47,8 +56,10 @@ export function createAuth(env: AuthEnv = config.auth, db: CassieDb = createCass
       },
     },
     // Dash reads BETTER_AUTH_API_KEY from the environment for ownership
-    // verification and the hosted dashboard.
-    plugins: [dash()],
+    // verification and the hosted dashboard. nextCookies relays Set-Cookie
+    // headers when auth APIs run inside Next.js server actions and must be
+    // the last plugin.
+    plugins: [dash(), nextCookies()],
   });
 }
 

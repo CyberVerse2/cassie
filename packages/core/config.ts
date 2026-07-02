@@ -695,6 +695,7 @@ export function assertCircleSettlementEnv(
 export type AuthEnv = {
   secret?: string;
   baseUrl?: string;
+  allowedHosts: string[];
   twitterClientId?: string;
   twitterClientSecret?: string;
 };
@@ -711,6 +712,7 @@ export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
       BETTER_AUTH_API_KEY: configuredStringSchema,
       BETTER_AUTH_SECRET: configuredStringSchema,
       BETTER_AUTH_URL: configuredStringSchema,
+      BETTER_AUTH_ALLOWED_HOSTS: configuredStringSchema,
       X_OAUTH2_CLIENT_ID: configuredStringSchema,
       X_OAUTH2_CLIENT_SECRET: configuredStringSchema,
       TWITTER_CLIENT_ID: configuredStringSchema,
@@ -722,6 +724,11 @@ export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
         values.BETTER_AUTH_API_KEY,
       ),
       baseUrl: values.BETTER_AUTH_URL,
+      allowedHosts: (values.BETTER_AUTH_ALLOWED_HOSTS
+        ?? "cassie.trade,*.cassie.trade,localhost:3000")
+        .split(",")
+        .map((host) => host.trim())
+        .filter(Boolean),
       twitterClientId: firstConfigured(
         values.X_OAUTH2_CLIENT_ID,
         values.TWITTER_CLIENT_ID,
