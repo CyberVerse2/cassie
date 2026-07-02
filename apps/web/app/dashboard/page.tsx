@@ -3,8 +3,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
+import { FirstCall } from "../components/first-call";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
+import type { TapeCall, TapePayload } from "../lib/tape";
 import {
   type CassieDashboardPayload,
   type CassiePosition,
@@ -50,12 +52,40 @@ const usdcIcon =
 
 const dashboardQueryKeys = {
   dashboard: ["dashboard"] as const,
+  tape: ["tape"] as const,
   positionMarks: (positionIds: string[]) =>
     ["dashboard", "positionMarks", positionIds] as const,
 };
 
+async function fetchTape(): Promise<TapePayload> {
+  const response = await fetch("/api/tape");
+  if (!response.ok) throw new Error("The tape is unavailable right now.");
+  return (await response.json()) as TapePayload;
+}
+
+const firstCallSeenKey = "cassie.firstCallSeen";
+
 export default function Dashboard() {
   const account = useCassieAccount();
+  // Assume seen until localStorage is checked so the overlay never flashes
+  // for returning users during hydration.
+  const [firstCallSeen, setFirstCallSeen] = useState(true);
+  useEffect(() => {
+    setFirstCallSeen(window.localStorage.getItem(firstCallSeenKey) === "1");
+  }, []);
+
+  const balance = account.account?.balance ?? null;
+  const showFirstCall =
+    !firstCallSeen &&
+    account.ready &&
+    account.authenticated &&
+    balance !== null &&
+    balance.walletBalanceUsd === 0;
+
+  function dismissFirstCall() {
+    window.localStorage.setItem(firstCallSeenKey, "1");
+    setFirstCallSeen(true);
+  }
 
   return (
     <main className={s.shell}>
@@ -81,12 +111,10 @@ export default function Dashboard() {
         closePosition={account.closePosition}
         refreshAccount={account.refreshAccount}
       />
-      <Voice
-        accountReady={account.ready}
-        authenticated={account.authenticated}
-        fetchDashboard={account.fetchDashboard}
-        trader={account.userProfile}
-      />
+      <Voice />
+      {showFirstCall && (
+        <FirstCall userProfile={account.userProfile} onDismiss={dismissFirstCall} />
+      )}
     </main>
   );
 }
@@ -1476,47 +1504,6 @@ function formatActivityTime(value: string): string {
   });
 }
 
-type TaggedActivityPost = {
-  id: string;
-  url: string;
-  authorName: string;
-  handle: string;
-  avatarUrl: string;
-  age: string;
-  traderHandle: string;
-  cassiePrompt: string;
-  preview: string;
-};
-
-function activityPost(
-  item: CassieActivityItem,
-  trader: { name: string; handle: string; avatarUrl: string | null } | null,
-): TaggedActivityPost {
-  // The card header is the author of the source post that seeded the thesis
-  // (who tweeted it); the credit line below is the trader who acted on it.
-  const authorHandle = withAt(item.authorHandle ?? trader?.handle ?? "you");
-  const authorHandleName = authorHandle.replace(/^@/, "");
-  return {
-    id: item.id,
-    url: item.sourceUrl ?? "#",
-    authorName: item.authorName ?? authorHandleName,
-    handle: authorHandle,
-    avatarUrl: `https://unavatar.io/x/${authorHandleName}`,
-    age: relativeAge(item.at),
-    traderHandle: withAt(trader?.handle ?? "you"),
-    cassiePrompt: activityPrompt(item),
-    preview: summarizeSourceText(item.sourceText ?? item.subtitle),
-  };
-}
-
-function activityPrompt(item: CassieActivityItem): string {
-  if (item.kind === "trade") {
-    return item.side ? `${item.title} ${item.side.toUpperCase()}` : item.title;
-  }
-  if (item.kind === "counter") return `countertrade ${item.title}`;
-  return `watch ${item.title}`;
-}
-
 function summarizeSourceText(text: string): string {
   const cleaned = text
     .replace(/https?:\/\/\S+/g, "")
@@ -1549,47 +1536,44 @@ function withAt(handle: string): string {
   return handle.startsWith("@") ? handle : `@${handle}`;
 }
 
-function Voice({
-  accountReady,
-  authenticated,
-  fetchDashboard,
-  trader,
-}: {
-  accountReady: boolean;
-  authenticated: boolean;
-  fetchDashboard: () => Promise<CassieDashboardPayload>;
-  trader: {
-    name: string;
-    handle: string;
-    avatarUrl: string | null;
-  } | null;
-}) {
-  const dashboardEnabled = accountReady && authenticated;
-  const dashboardQuery = useQuery({
-    queryKey: dashboardQueryKeys.dashboard,
-    queryFn: fetchDashboard,
-    enabled: dashboardEnabled,
+function Voice() {
+  // The tape is global: every trader's calls, most profitable first.
+  const tapeQuery = useQuery({
+    queryKey: dashboardQueryKeys.tape,
+    queryFn: fetchTape,
+    refetchInterval: 60_000,
   });
-  const taggedActivity = useMemo(
-    () =>
-      (dashboardQuery.data?.activity ?? [])
-        .filter(
-          (item) =>
-            item.kind !== "trade_close" &&
-            item.source === "x" &&
-            item.sourceUrl &&
-            (item.sourceText || item.subtitle),
-        )
-        .slice(0, 6)
-        .map((item) => activityPost(item, trader)),
-    [dashboardQuery.data?.activity, trader],
-  );
-  const ordersPlaced =
-    dashboardQuery.data?.activity.filter((item) => item.kind === "trade")
-      .length ?? 0;
-  const voiceError = dashboardEnabled
-    ? errorMessage(dashboardQuery.error)
-    : null;
+  const calls = tapeQuery.data?.calls ?? [];
+  const ordersPlaced = calls.filter((call) => call.kind === "trade").length;
+  const voiceError = errorMessage(tapeQuery.error);
+  const [copiedCallId, setCopiedCallId] = useState<string | null>(null);
+
+  async function shareCall(call: TapeCall) {
+    // Trades share their PnL card; watches share the source post.
+    const url = call.positionId
+      ? `${window.location.origin}/trades/${encodeURIComponent(call.positionId)}/pnl`
+      : call.sourceUrl;
+    const text = `Cassie called ${call.prompt}${
+      call.pnlPct != null
+        ? ` · ${call.pnlPct >= 0 ? "+" : ""}${call.pnlPct.toFixed(1)}%`
+        : ""
+    }`;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ url, text });
+      } catch {
+        // The user closed the share sheet; nothing to do.
+      }
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    setCopiedCallId(call.id);
+    window.setTimeout(
+      () =>
+        setCopiedCallId((current) => (current === call.id ? null : current)),
+      1800,
+    );
+  }
 
   return (
     <section className={s.voice}>
@@ -1665,34 +1649,101 @@ function Voice({
             {voiceError}
           </div>
         ) : null}
-        {!voiceError && taggedActivity.length === 0 ? (
+        {!voiceError && calls.length === 0 ? (
           <div className={s.emptyState}>
             The tape is quiet. Tag @cassiedottrade under any market take to
             print the first call.
           </div>
         ) : null}
-        {taggedActivity.map((tweet) => (
-          <a
-            className={s.post}
-            href={tweet.url}
-            target="_blank"
-            rel="noreferrer"
-            key={tweet.id}
-          >
-            <header className={s.postHead}>
-              <img className="glyph" src={tweet.avatarUrl} alt="" aria-hidden />
-              {tweet.authorName}
-              <span className="handle">{tweet.handle}</span>
-              <span className="dot-sep">·</span>
-              <span className="handle">{tweet.age}</span>
-            </header>
-            <p className={s.postBody}>
-              <span className="lnk">{tweet.traderHandle}</span> called{" "}
-              <span className="tk">{tweet.cassiePrompt}</span>
-            </p>
-            <p className={s.postQuote}>{tweet.preview}</p>
-          </a>
-        ))}
+        {calls.map((call) => {
+          const authorHandle = call.authorHandle
+            ? withAt(call.authorHandle)
+            : null;
+          const up = (call.pnlPct ?? 0) >= 0;
+          return (
+            <article className={s.post} key={call.id}>
+              <a
+                className={s.postLink}
+                href={call.sourceUrl}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Open post by ${call.authorName ?? authorHandle ?? "author"}`}
+              />
+              <header className={s.postHead}>
+                <img
+                  className="glyph"
+                  src={`https://unavatar.io/x/${(call.authorHandle ?? "").replace(/^@/, "")}`}
+                  alt=""
+                  aria-hidden
+                />
+                {call.authorName ?? authorHandle ?? "Unknown"}
+                {authorHandle && <span className="handle">{authorHandle}</span>}
+                <span className="dot-sep">·</span>
+                <span className="handle">{relativeAge(call.at)}</span>
+              </header>
+              <p className={s.postBody}>
+                <span className="lnk">
+                  {call.traderHandle ? withAt(call.traderHandle) : "a trader"}
+                </span>{" "}
+                called <span className="tk">{call.prompt}</span>
+              </p>
+              <p className={s.postQuote}>
+                {summarizeSourceText(call.sourceText)}
+              </p>
+              {call.mediaUrls[0] && (
+                <img
+                  className={s.postMedia}
+                  src={call.mediaUrls[0]}
+                  alt=""
+                  loading="lazy"
+                />
+              )}
+              <footer className={s.postFoot}>
+                {call.pnlPct != null ? (
+                  <span
+                    className={`${s.postPnl} ${up ? s.postPnlUp : s.postPnlDown}`}
+                  >
+                    {up ? "+" : ""}
+                    {call.pnlPct.toFixed(1)}%{call.closed ? "" : " · open"}
+                  </span>
+                ) : (
+                  <span className={s.postWatch}>
+                    {call.kind === "counter" ? "countertrade" : "watching"}
+                  </span>
+                )}
+                <button
+                  type="button"
+                  className={s.postShare}
+                  onClick={() => shareCall(call)}
+                  aria-label="Share this call"
+                >
+                  {copiedCallId === call.id ? (
+                    "Copied"
+                  ) : (
+                    <>
+                      <svg
+                        viewBox="0 0 24 24"
+                        width="13"
+                        height="13"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.8"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        aria-hidden
+                      >
+                        <path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7" />
+                        <path d="M16 6l-4-4-4 4" />
+                        <path d="M12 2v13" />
+                      </svg>
+                      Share
+                    </>
+                  )}
+                </button>
+              </footer>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

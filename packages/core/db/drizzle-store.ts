@@ -35,6 +35,8 @@ import { createCassieDb, type CassieDb } from "./client.ts";
 import type {
   CassieStore,
   CassieStoreSnapshot,
+  GlobalTapeData,
+  GlobalTapeDataOptions,
   MentionRecord,
   NewModelCallUsage,
   NewRunStep,
@@ -185,6 +187,69 @@ export class DrizzleCassieStore implements CassieStore {
         output: row.output ?? null,
         thinkingTrace: row.thinkingTrace ?? null,
       })),
+    };
+  }
+
+  async loadGlobalTapeData(
+    options: GlobalTapeDataOptions,
+  ): Promise<GlobalTapeData> {
+    const controlRunRows = await this.db
+      .select()
+      .from(controlRuns)
+      .orderBy(desc(controlRuns.createdAt))
+      .limit(options.runLimit);
+    const runIds = controlRunRows.map((row) => row.runId);
+    const userIds = [...new Set(controlRunRows.map((row) => row.userId))];
+    const [ticketRows, stepRows, settingsRows] = await Promise.all([
+      runIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .select()
+            .from(tradeTickets)
+            .where(inArray(tradeTickets.runId, runIds)),
+      // Only intake steps: the tape just needs the watch/countertrade intent,
+      // and full step rows drag heavy thinking traces along.
+      runIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .select()
+            .from(runSteps)
+            .where(
+              and(
+                inArray(runSteps.runId, runIds),
+                eq(runSteps.stepType, "intake"),
+              ),
+            ),
+      userIds.length === 0
+        ? Promise.resolve([])
+        : this.db
+            .select()
+            .from(userSettings)
+            .where(inArray(userSettings.userId, userIds)),
+    ]);
+    const ticketIds = ticketRows.map((row) => row.ticketId);
+    const positionRows =
+      ticketIds.length === 0
+        ? []
+        : await this.db
+            .select()
+            .from(positions)
+            .where(inArray(positions.ticketId, ticketIds));
+
+    return {
+      controlRuns: controlRunRows.map((row) => ({
+        ...row,
+        result: row.result ?? null,
+      })),
+      tradeTickets: ticketRows.map((row) => row.ticket),
+      positions: positionRows.map((row) => row.position),
+      runSteps: stepRows.map((row) => ({
+        ...row,
+        input: row.input ?? null,
+        output: row.output ?? null,
+        thinkingTrace: row.thinkingTrace ?? null,
+      })),
+      userSettings: settingsRows.map((row) => row.settings),
     };
   }
 

@@ -28,8 +28,15 @@ const XUrlEntitySchema = z.object({
   url: z.string().optional(),
 }).passthrough();
 
+const XMediaEntitySchema = z.object({
+  media_url_https: z.string().optional(),
+  media_url: z.string().optional(),
+  type: z.string().optional(),
+}).passthrough();
+
 const XTweetEntitiesSchema = z.object({
   urls: z.array(XUrlEntitySchema).optional(),
+  media: z.array(XMediaEntitySchema).optional(),
 }).passthrough();
 
 const XWebhookUserSchema = z.object({
@@ -55,7 +62,11 @@ const XWebhookTweetSchema = z.object({
   extended_tweet: z.object({
     full_text: z.string().optional(),
     entities: XTweetEntitiesSchema.optional(),
+    extended_entities: XTweetEntitiesSchema.optional(),
   }).passthrough().optional(),
+  // X puts the full media list in extended_entities; entities.media only
+  // carries the first item.
+  extended_entities: XTweetEntitiesSchema.optional(),
   quoted_status: z.object({
     text: z.string().optional(),
     full_text: z.string().optional(),
@@ -449,6 +460,11 @@ function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {
   const authorHandle = tweet.user?.screen_name ?? tweet.user?.username ?? null;
   const authorName = tweet.user?.name ?? null;
   const entities = tweet.extended_tweet?.entities ?? tweet.entities;
+  const mediaEntities =
+    tweet.extended_entities?.media ??
+    tweet.extended_tweet?.extended_entities?.media ??
+    entities?.media ??
+    [];
 
   return {
     platform: "x",
@@ -465,6 +481,9 @@ function sourcePostFromXWebhookTweet(tweet: XWebhookTweet): SourcePost {
       .map((url) => url.unwound?.url ?? url.expanded_url ?? url.url)
       .filter((url): url is string => Boolean(url))),
     mediaDescriptions: [],
+    mediaUrls: uniqueStrings(mediaEntities
+      .map((media) => media.media_url_https ?? media.media_url)
+      .filter((url): url is string => Boolean(url))),
   };
 }
 

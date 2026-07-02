@@ -47,6 +47,9 @@ export const SourcePostSchema = z.object({
   quotedPostText: z.string().nullable(),
   linkedUrls: z.array(z.string()),
   mediaDescriptions: z.array(z.string()),
+  // Image URLs from the post (pbs.twimg.com). Optional: older persisted runs
+  // predate this field.
+  mediaUrls: z.array(z.string()).optional(),
 });
 
 export const UserProfileSchema = z.object({

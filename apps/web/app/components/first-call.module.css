@@ -1,0 +1,509 @@
+/* First-call intro overlay — rendered inside the dashboard .shell so it
+   inherits the terminal palette (--panel, --line, --gilt, --up/--down…). */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: clamp(12px, 3vw, 40px);
+  background: color-mix(in oklab, var(--bg-deep) 78%, transparent);
+  backdrop-filter: blur(10px);
+  animation: firstCallIn 280ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes firstCallIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.frame {
+  width: min(980px, 100%);
+  max-height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+  padding: clamp(16px, 2.5vw, 28px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  background:
+    radial-gradient(ellipse at 12% 0%, color-mix(in oklab, var(--gilt) 7%, transparent) 0%, transparent 46%),
+    var(--bg);
+  box-shadow: 0 32px 80px color-mix(in oklab, var(--bg-deep) 85%, transparent);
+  overflow: hidden;
+}
+
+.top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+}
+
+.kicker {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gilt);
+}
+
+.headline {
+  margin: 4px 0 0;
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: clamp(1.3rem, 2.4vw, 1.7rem);
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+
+.skip {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.skip:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.panes {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+  gap: var(--space-md);
+  min-height: 0;
+}
+
+/* ─── left: the post + reply composer ─────────────────────────── */
+
+.postPane {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  min-width: 0;
+}
+
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.chip {
+  padding: 5px 11px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+
+.chip:hover { color: var(--ink-soft); border-color: var(--ink-faint); }
+
+.chipActive {
+  color: var(--gilt-glow);
+  border-color: color-mix(in oklab, var(--gilt) 55%, transparent);
+  background: color-mix(in oklab, var(--gilt) 12%, transparent);
+}
+
+.post {
+  padding: var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+}
+
+.postHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.postAvatar {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--line-soft);
+}
+
+.postId { display: flex; flex-direction: column; line-height: 1.3; }
+
+.postName { font-weight: 600; font-size: 14px; color: var(--ink); }
+
+.postMeta { font-size: 12px; color: var(--ink-mute); }
+
+.postBody {
+  margin: 10px 0 0;
+  white-space: pre-line;
+  font-size: 14.5px;
+  color: var(--ink-soft);
+}
+
+.composer {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid color-mix(in oklab, var(--gilt) 40%, var(--line));
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--gilt) 8%, transparent);
+}
+
+.composerNudge { animation: composerNudge 320ms ease; }
+
+@keyframes composerNudge {
+  20% { transform: translateX(-6px); }
+  50% { transform: translateX(5px); }
+  80% { transform: translateX(-3px); }
+}
+
+.composerRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.composerAvatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  display: grid;
+  place-items: center;
+  background: var(--line-soft);
+  color: var(--ink-soft);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.composerInput {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: 14.5px;
+  resize: none;
+  outline: none;
+}
+
+.composerInput::placeholder { color: var(--ink-faint); }
+
+.composerFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: 6px;
+}
+
+.hint { font-size: 12px; color: var(--ink-mute); transition: color 160ms ease; }
+
+.hint code {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: color-mix(in oklab, var(--gilt) 14%, transparent);
+  color: var(--gilt-glow);
+  font-size: 11.5px;
+}
+
+.hintReady { color: var(--up); }
+
+.autoType {
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-mute);
+  font-size: 11.5px;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.autoType:hover:not(:disabled) { color: var(--ink); border-color: var(--ink-faint); }
+
+.autoType:disabled { opacity: 0.5; cursor: default; }
+
+.sentReply {
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--surface-chip);
+}
+
+.sentLabel {
+  font-size: 10.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.sentBody { margin: 4px 0 0; font-size: 14px; color: var(--ink-soft); }
+
+.mention { color: var(--gilt-glow); }
+
+/* ─── right: the pipeline tape ────────────────────────────────── */
+
+.pipePane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg-deep);
+}
+
+.pipeHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  padding: 10px var(--space-md);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.pipeTitle {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.pipeBadge {
+  padding: 2px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--pending-bg);
+  color: var(--pending-fg);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.pipeFeed {
+  flex: 1;
+  min-height: 320px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: var(--space-md);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  scroll-behavior: smooth;
+}
+
+.pipeIdle {
+  margin: auto;
+  max-width: 300px;
+  text-align: center;
+  font-size: 13.5px;
+  color: var(--ink-mute);
+}
+
+.stage {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  animation: stageIn 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes stageIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stageMark {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  margin-top: 1px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: var(--up);
+  background: color-mix(in oklab, var(--gilt) 14%, transparent);
+}
+
+.spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gilt);
+  border-top-color: transparent;
+  animation: spin 700ms linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.stageText { min-width: 0; }
+
+.stageLabel {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.stageRunning .stageLabel { color: var(--ink-soft); }
+
+.stageType {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.stageBody {
+  margin: 3px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-mute);
+}
+
+/* ─── the ticket + outcome ────────────────────────────────────── */
+
+.result {
+  margin-top: var(--space-2xs);
+  padding: var(--space-md);
+  border: 1px solid color-mix(in oklab, var(--gilt) 40%, var(--line));
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  animation: stageIn 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.resultKicker {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gilt);
+}
+
+.resultHead {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+
+.resultSide {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.resultSymbol {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.resultVenue { font-size: 12px; color: var(--ink-mute); }
+
+.resultDetail { margin: 2px 0 0; font-size: 12.5px; color: var(--ink-mute); }
+
+.resultThesis {
+  margin: 8px 0 0;
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-size: 14.5px;
+  color: var(--ink-soft);
+}
+
+.resultOutcome {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.pnlChip {
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 12.5px;
+  font-weight: 700;
+}
+
+.pnlUp { color: var(--up); }
+
+.pnlDown { color: var(--down); }
+
+.pnlChip.pnlUp { background: var(--up-bg); }
+
+.pnlChip.pnlDown { background: var(--down-bg); }
+
+.resultCtas {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+  margin-top: var(--space-sm);
+}
+
+.ctaPrimary {
+  padding: 9px 16px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: var(--gilt);
+  color: var(--bg-deep);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.ctaPrimary:hover { background: var(--gilt-glow); }
+
+.ctaGhost {
+  padding: 9px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.ctaGhost:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.resultCaption { margin: 10px 0 0; font-size: 11px; color: var(--ink-faint); }
+
+.skipRun {
+  margin: 0 var(--space-md) var(--space-sm);
+  padding: 6px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.skipRun:hover { color: var(--ink-mute); }
+
+/* ─── responsive ──────────────────────────────────────────────── */
+
+@media (max-width: 860px) {
+  .frame { overflow-y: auto; }
+  .panes { grid-template-columns: 1fr; }
+  .pipeFeed { min-height: 240px; max-height: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay, .stage, .result { animation: none; }
+  .composerNudge { animation: none; }
+  .pipeFeed { scroll-behavior: auto; }
+}

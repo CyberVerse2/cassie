@@ -71,6 +71,18 @@ export type UserDashboardDataOptions = {
   activityLimit: number;
 };
 
+// Cross-user slice for the public tape: recent runs with just enough
+// surrounding state (tickets, positions, intake steps, trader profiles) to
+// render each call and its PnL.
+export type GlobalTapeData = Pick<
+  CassieStoreSnapshot,
+  "controlRuns" | "tradeTickets" | "positions" | "runSteps" | "userSettings"
+>;
+
+export type GlobalTapeDataOptions = {
+  runLimit: number;
+};
+
 export type NewRunStep = Omit<
   RunStep,
   "stepId" | "startedAt" | "completedAt"
@@ -84,6 +96,7 @@ export interface CassieStore {
     userId: string,
     options: UserDashboardDataOptions,
   ): Promise<UserDashboardData>;
+  loadGlobalTapeData(options: GlobalTapeDataOptions): Promise<GlobalTapeData>;
   upsertUserSettings(settings: UserSettings): Promise<void>;
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
   getUserSettingsByPrivyUserId(
@@ -282,6 +295,35 @@ export class InMemoryCassieStore implements CassieStore {
       positions,
       controlRuns,
       runSteps: this.snapshot.runSteps.filter((step) => runIds.has(step.runId)),
+    };
+  }
+
+  async loadGlobalTapeData(
+    options: GlobalTapeDataOptions,
+  ): Promise<GlobalTapeData> {
+    const controlRuns = this.snapshot.controlRuns
+      .slice()
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, options.runLimit);
+    const runIds = new Set(controlRuns.map((run) => run.runId));
+    const userIds = new Set(controlRuns.map((run) => run.userId));
+    const tickets = this.snapshot.tradeTickets.filter(
+      (ticket) => ticket.runId && runIds.has(ticket.runId),
+    );
+    const ticketIds = new Set(tickets.map((ticket) => ticket.ticketId));
+    return {
+      controlRuns,
+      tradeTickets: tickets,
+      positions: this.snapshot.positions.filter((position) =>
+        ticketIds.has(position.ticketId),
+      ),
+      // Only intake steps: the tape just needs the watch/countertrade intent.
+      runSteps: this.snapshot.runSteps.filter(
+        (step) => runIds.has(step.runId) && step.stepType === "intake",
+      ),
+      userSettings: this.snapshot.userSettings.filter((settings) =>
+        userIds.has(settings.userId),
+      ),
     };
   }
 
