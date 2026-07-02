@@ -122,11 +122,15 @@ export class CircleWalletAdapter implements WalletGateway {
     const chainWalletId = await this.chainWalletId(input.walletId, input.chain);
     const response = await this.client.getWalletTokenBalance({
       id: chainWalletId,
+      includeAll: true,
     });
     const balances = response.data?.tokenBalances ?? [];
-    return balances.reduce((total, balance) => {
-      if (balance.token.symbol !== "USDC") return total;
-      return total + Number(balance.amount);
+    // On Arc, USDC is the native gas token AND an ERC-20 view of the same
+    // funds — Circle reports both. Take the largest USDC entry instead of
+    // summing so the balance is not double-counted.
+    return balances.reduce((max, balance) => {
+      if (balance.token.symbol !== "USDC") return max;
+      return Math.max(max, Number(balance.amount));
     }, 0);
   }
 
@@ -263,9 +267,14 @@ export class CircleWalletAdapter implements WalletGateway {
   }
 
   private async usdcTokenIdForWallet(chainWalletId: string, chain: Chain): Promise<string> {
-    const response = await this.client.getWalletTokenBalance({ id: chainWalletId });
+    const response = await this.client.getWalletTokenBalance({
+      id: chainWalletId,
+      includeAll: true,
+    });
     const balances = response.data?.tokenBalances ?? [];
-    const usdc = balances.find((balance) => balance.token.symbol === "USDC");
+    const usdcEntries = balances.filter((balance) => balance.token.symbol === "USDC");
+    // Prefer the native representation (Arc) over the ERC-20 view.
+    const usdc = usdcEntries.find((balance) => balance.token.isNative) ?? usdcEntries[0];
     if (!usdc) {
       throw new Error(`Wallet ${chainWalletId} holds no USDC to transfer on ${chain}.`);
     }

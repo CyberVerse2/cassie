@@ -335,14 +335,8 @@ async function resolveSpendWallet(
   store: CassieStore,
   settings: UserSettings,
 ): Promise<SpendWallet> {
-  if (settings.privyWalletId && settings.walletAddress) {
-    return {
-      mode: "privy_wallet",
-      walletId: settings.privyWalletId,
-      address: settings.walletAddress,
-      chain: "base",
-    };
-  }
+  // The Circle deposit wallet is the canonical money layer; legacy Privy
+  // wallets are only used when no deposit wallet exists.
   const deposit = await store.getDepositAddress(settings.userId);
   if (deposit) {
     return {
@@ -350,6 +344,14 @@ async function resolveSpendWallet(
       walletId: deposit.circleWalletId,
       address: deposit.evmAddress,
       chain: config.circle.defaultChain,
+    };
+  }
+  if (settings.privyWalletId && settings.walletAddress) {
+    return {
+      mode: "privy_wallet",
+      walletId: settings.privyWalletId,
+      address: settings.walletAddress,
+      chain: "base",
     };
   }
   throw new Error("Trade execution requires a signer-provisioned Privy user wallet or a funded deposit address.");

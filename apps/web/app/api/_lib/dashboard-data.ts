@@ -69,13 +69,13 @@ export async function buildDashboardPayload(
       activityLimit: DASHBOARD_ACTIVITY_LIMIT,
     }),
   ]);
-  const depositAddress = walletBalanceUsd == null
-    ? await store.getDepositAddress(settings.userId)
-    : undefined;
+  const depositAddress = await store.getDepositAddress(settings.userId);
   const depositBalanceUsd = depositAddress
     ? await depositWalletBalanceUsd(depositAddress)
     : null;
-  const effectiveBalanceUsd = walletBalanceUsd ?? depositBalanceUsd;
+  const effectiveBalanceUsd = walletBalanceUsd == null && depositBalanceUsd == null
+    ? null
+    : (walletBalanceUsd ?? 0) + (depositBalanceUsd ?? 0);
   const balance =
     effectiveBalanceUsd != null
       ? await store.getWalletFundingBalance(settings.userId, effectiveBalanceUsd)

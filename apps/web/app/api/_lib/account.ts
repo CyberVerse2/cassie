@@ -44,11 +44,17 @@ export async function accountResponse(
   }
 
   const depositAddress = await ensureDepositAddress(store, settings.userId);
-  const walletBalanceUsd = settings.privyWalletId
+  // During the Privy transition a user can hold funds in both wallets; the
+  // balance is the sum.
+  const privyBalanceUsd = settings.privyWalletId
     ? await walletGateway.getUsdcBalanceUsd({ walletId: settings.privyWalletId })
-    : depositAddress
-      ? await depositWalletBalanceUsd(depositAddress)
-      : null;
+    : null;
+  const circleBalanceUsd = depositAddress
+    ? await depositWalletBalanceUsd(depositAddress)
+    : null;
+  const walletBalanceUsd = privyBalanceUsd == null && circleBalanceUsd == null
+    ? null
+    : (privyBalanceUsd ?? 0) + (circleBalanceUsd ?? 0);
   const balance = walletBalanceUsd != null
     ? await store.getWalletFundingBalance(settings.userId, walletBalanceUsd)
     : null;
