@@ -78,7 +78,7 @@ describe("FundingRouter", () => {
   it("records prefund and gateway mint entries and returns venue-chain funding", async () => {
     const store = await internalLedgerStore();
     const treasury = fakeTreasury({ balanceUsd: 500 });
-    const router = new FundingRouter(treasury);
+    const router = new FundingRouter(treasury, false);
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
@@ -111,7 +111,7 @@ describe("FundingRouter", () => {
 
   it("throws before recording anything when the treasury lacks venue-chain USDC", async () => {
     const store = await internalLedgerStore();
-    const router = new FundingRouter(fakeTreasury({ balanceUsd: 10 }));
+    const router = new FundingRouter(fakeTreasury({ balanceUsd: 10 }), false);
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
@@ -127,7 +127,7 @@ describe("FundingRouter", () => {
 
   it("records the gateway mint only once per execution job", async () => {
     const store = await internalLedgerStore();
-    const router = new FundingRouter(fakeTreasury({ balanceUsd: 500 }));
+    const router = new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false);
     const job = createQueuedExecutionJob(ticket.ticketId);
     await store.addTradeTicket(ticket);
     await store.addExecutionJob(job);
@@ -161,7 +161,7 @@ describe("internal-ledger execution", () => {
       transferUserUsdcToTreasury: vi.fn(),
       refundUserUsdcFromTreasury: vi.fn(),
     };
-    const fundingRouter = new FundingRouter(fakeTreasury({ balanceUsd: 500 }));
+    const fundingRouter = new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false);
 
     const result = await executeExecutionJob({
       jobId: job.jobId,
@@ -199,7 +199,7 @@ describe("internal-ledger execution", () => {
     const executionClient: ExecutionClient = {
       execute: vi.fn().mockRejectedValue(new Error("venue unavailable")),
     };
-    const fundingRouter = new FundingRouter(fakeTreasury({ balanceUsd: 500 }));
+    const fundingRouter = new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false);
 
     const result = await executeExecutionJob({
       jobId: job.jobId,
@@ -237,7 +237,7 @@ describe("internal-ledger execution", () => {
         transferUserUsdcToTreasury: vi.fn(),
         refundUserUsdcFromTreasury: vi.fn(),
       },
-      fundingRouter: new FundingRouter(fakeTreasury({ balanceUsd: 500 })),
+      fundingRouter: new FundingRouter(fakeTreasury({ balanceUsd: 500 }), false),
     });
 
     expect(result).toMatchObject({

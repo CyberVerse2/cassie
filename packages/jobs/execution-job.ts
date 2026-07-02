@@ -16,6 +16,8 @@ import {
   VenueExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
+import { SimulatedExecutionClient } from "../execution/simulated.ts";
+import { config } from "../core/config.ts";
 import {
   formatExecutionFailed,
   formatTradeExecuted,
@@ -252,7 +254,9 @@ export async function queueExecutionJob(input: {
 }
 
 function defaultExecutionClient(): ExecutionClient {
-  return new VenueExecutionClient();
+  return config.execution.simulated
+    ? new SimulatedExecutionClient()
+    : new VenueExecutionClient();
 }
 
 function validateExecutableTicket(ticket: TradeTicket): void {

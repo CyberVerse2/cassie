@@ -87,6 +87,7 @@ export type CassieRuntimeConfig = {
   execution: {
     hyperliquid: HyperliquidExecutionEnv;
     polymarket: PolymarketExecutionEnv;
+    simulated: boolean;
   };
   privy: PrivyEnv;
   circle: CircleEnv;
@@ -236,6 +237,7 @@ export function readCassieConfig(
     execution: {
       hyperliquid: readHyperliquidExecutionEnv(env),
       polymarket: readPolymarketExecutionEnv(env),
+      simulated: readSimulatedExecutionEnv(env),
     },
     privy: readPrivyEnv(env),
     circle: readCircleEnv(env),
@@ -246,6 +248,17 @@ export function readCassieConfig(
       noColor: optionalEnv("NO_COLOR", env) != null,
     },
   };
+}
+
+// Paper trading: fills are simulated at live market prices instead of sending
+// venue orders. Defaults to the Circle testnet flag so testnet deployments
+// never move real venue money; CASSIE_SIMULATED_EXECUTION overrides.
+export function readSimulatedExecutionEnv(env: EnvSource = process.env): boolean {
+  const explicit = optionalEnv("CASSIE_SIMULATED_EXECUTION", env);
+  if (explicit != null) {
+    return explicit !== "0" && explicit !== "false";
+  }
+  return readCircleEnv(env).testnet;
 }
 
 function supervisorModeEnv(env: EnvSource): "pipeline" | "tool_loop" {

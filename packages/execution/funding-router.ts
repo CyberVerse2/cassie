@@ -30,6 +30,7 @@ export function venueChainForTicket(ticket: TradeTicket): Chain {
 export class FundingRouter {
   constructor(
     private readonly circle: TreasuryFundingGateway = new CircleWalletAdapter(),
+    private readonly simulated: boolean = config.execution.simulated,
   ) {}
 
   async ensureVenueUsdc(input: {
@@ -42,15 +43,21 @@ export class FundingRouter {
     const venueChain = venueChainForTicket(ticket);
     const amountUsd = ticket.sizeUsd;
 
-    const treasuryWalletId = this.circle.getTreasuryWalletId();
-    const treasuryBalanceUsd = await this.circle.getUsdcBalanceOnChain({
-      walletId: treasuryWalletId,
-      chain: venueChain,
-    });
-    if (treasuryBalanceUsd < amountUsd) {
-      throw new Error(
-        `Treasury holds $${treasuryBalanceUsd.toFixed(2)} USDC on ${venueChain} but the ticket needs $${amountUsd.toFixed(2)}. Mint USDC on ${venueChain} from the Gateway unified balance.`,
-      );
+    // Simulated (paper) execution never sends venue orders, so no treasury
+    // USDC needs to exist on the venue chain.
+    let treasuryWalletId: string | null = null;
+    let treasuryBalanceUsd: number | null = null;
+    if (!this.simulated) {
+      treasuryWalletId = this.circle.getTreasuryWalletId();
+      treasuryBalanceUsd = await this.circle.getUsdcBalanceOnChain({
+        walletId: treasuryWalletId,
+        chain: venueChain,
+      });
+      if (treasuryBalanceUsd < amountUsd) {
+        throw new Error(
+          `Treasury holds $${treasuryBalanceUsd.toFixed(2)} USDC on ${venueChain} but the ticket needs $${amountUsd.toFixed(2)}. Mint USDC on ${venueChain} from the Gateway unified balance.`,
+        );
+      }
     }
 
     await store.recordWalletPrefund({
@@ -58,14 +65,14 @@ export class FundingRouter {
       job,
       amountUsd,
       walletBalanceUsd: input.walletBalanceUsd,
-      metadata: { source: "internal_ledger", venueChain },
+      metadata: { source: "internal_ledger", venueChain, simulated: this.simulated },
     });
     await store.recordGatewayMint({
       ticket,
       job,
       amountUsd,
       chain: venueChain,
-      metadata: { treasuryWalletId, treasuryBalanceUsd },
+      metadata: { treasuryWalletId, treasuryBalanceUsd, simulated: this.simulated },
     });
 
     return {

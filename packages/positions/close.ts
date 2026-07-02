@@ -4,6 +4,8 @@ import { type ExecutionJob, type Position, type TradeTicket } from "../core/sche
 import { PrivyAdapter } from "../adapters/privy/index.ts";
 import type { UsdcTransfer, WalletGateway } from "../adapters/wallet/gateway.ts";
 import { HyperliquidPositionCloseClient, PolymarketPositionCloseClient, type PositionCloseClient } from "../execution/index.ts";
+import { SimulatedPositionCloseClient } from "../execution/simulated.ts";
+import { config } from "../core/config.ts";
 import { GraphileExecutionJobQueue, type CassieJobQueue } from "../jobs/queue.ts";
 import { formatTradeClosed, notifyTradeLifecycle } from "../notifications/positions.ts";
 import type { TelegramGateway } from "../notifications/telegram.ts";
@@ -70,7 +72,10 @@ export async function executeClosePosition(input: {
   }
   const ticket = await store.getTradeTicket(position.ticketId);
   if (!ticket) throw new Error(`Trade ticket ${position.ticketId} was not found.`);
-  const closeClient = input.closeClient ?? new VenuePositionCloseClient();
+  const closeClient = input.closeClient
+    ?? (config.execution.simulated
+      ? new SimulatedPositionCloseClient()
+      : new VenuePositionCloseClient());
 
   try {
     const settings = await store.getUserSettings(position.userId);
