@@ -715,10 +715,6 @@ export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
       BETTER_AUTH_ALLOWED_HOSTS: configuredStringSchema,
       BETTER_AUTH_X_CLIENT_ID: configuredStringSchema,
       BETTER_AUTH_X_CLIENT_SECRET: configuredStringSchema,
-      X_OAUTH2_CLIENT_ID: configuredStringSchema,
-      X_OAUTH2_CLIENT_SECRET: configuredStringSchema,
-      TWITTER_CLIENT_ID: configuredStringSchema,
-      TWITTER_CLIENT_SECRET: configuredStringSchema,
     })
     .transform((values) => ({
       secret: firstConfigured(
@@ -731,18 +727,10 @@ export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
         .split(",")
         .map((host) => host.trim())
         .filter(Boolean),
-      // Login uses its own X app (BETTER_AUTH_X_*); the X_OAUTH2_* pair
-      // belongs to the API/webhook integration and is only a fallback.
-      twitterClientId: firstConfigured(
-        values.BETTER_AUTH_X_CLIENT_ID,
-        values.TWITTER_CLIENT_ID,
-        values.X_OAUTH2_CLIENT_ID,
-      ),
-      twitterClientSecret: firstConfigured(
-        values.BETTER_AUTH_X_CLIENT_SECRET,
-        values.TWITTER_CLIENT_SECRET,
-        values.X_OAUTH2_CLIENT_SECRET,
-      ),
+      // Login uses its own X app; the X_OAUTH2_* pair belongs to the API
+      // integration and is never used here.
+      twitterClientId: values.BETTER_AUTH_X_CLIENT_ID,
+      twitterClientSecret: values.BETTER_AUTH_X_CLIENT_SECRET,
     }))
     .parse(env);
 }
