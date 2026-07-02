@@ -88,6 +88,25 @@ export class PrivyAdapter implements PrivyWalletGateway {
     });
   }
 
+  // Sends USDC from a delegated user wallet to an arbitrary address, using
+  // the server-side authorization key (no client Privy session required).
+  async transferUserUsdc(input: {
+    userWalletId: string;
+    toAddress: string;
+    amountUsd: number;
+    referenceId: string;
+  }): Promise<UsdcTransfer> {
+    assertPrivySettlementEnv(this.env);
+    return this.transferUsdc({
+      fromWalletId: input.userWalletId,
+      toAddress: input.toAddress,
+      amountUsd: input.amountUsd,
+      referenceId: input.referenceId,
+      chain: "base",
+      settlementEnv: assertPrivySettlementEnv(this.env),
+    });
+  }
+
   async refundUserUsdcFromTreasury(input: TreasuryRefundInput): Promise<UsdcTransfer> {
     assertPrivySupportedChain(input.chain);
     const settlementEnv = assertPrivySettlementEnv(this.env);

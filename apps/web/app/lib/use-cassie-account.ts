@@ -6,13 +6,12 @@ import { useCallback, useMemo } from "react";
 import {
   useExportWallet,
   usePrivy,
-  useSendTransaction,
   useSigners,
   useWallets,
   type User,
   type Wallet,
 } from "@privy-io/react-auth";
-import { encodeFunctionData, erc20Abi, isAddress } from "viem";
+import { isAddress } from "viem";
 import type { CassieActivityItem } from "./activity";
 import { authClient } from "./auth-client";
 
@@ -154,15 +153,11 @@ type SyncInput = {
 
 const cassieAccountQueryKey = ["cassie", "account"] as const;
 
-const BASE_CHAIN_ID = 8453;
-const BASE_USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" as const;
-
 export function useCassieAccount() {
   const privy = usePrivy();
   const router = useRouter();
   const cookieSession = authClient.useSession();
   const { exportWallet } = useExportWallet();
-  const { sendTransaction } = useSendTransaction();
   const { wallets, ready: walletsReady } = useWallets();
   const { addSigners } = useSigners();
   const queryClient = useQueryClient();
@@ -392,41 +387,34 @@ export function useCassieAccount() {
       queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, nextAccount);
     },
   });
-  // Sends the embedded wallet's full Base USDC balance to a destination
-  // address through Privy's confirmation popup.
-  const sendEmbeddedWalletUsdc = useCallback(async (toAddress: string, description: string) => {
-    const account = queryClient.getQueryData<CassieAccount | null>(cassieAccountQueryKey);
-    if (!privy.authenticated) {
-      throw new Error("Log in with your existing session before moving funds.");
-    }
-    if (!embeddedWallet?.address) {
-      throw new Error("No Privy wallet is available to move funds from.");
+  // Sends the legacy wallet's full USDC balance to a destination address.
+  // Runs server-side through the delegated signer, so it works for cookie
+  // sessions with no active Privy session.
+  const sendLegacyWalletUsdc = useCallback(async (toAddress: string) => {
+    if (!authenticated) {
+      throw new Error("Log in before moving funds.");
     }
     if (!isAddress(toAddress)) {
       throw new Error("That does not look like a valid address.");
     }
-    const balanceUsd = account?.balance?.walletBalanceUsd ?? 0;
-    const amountMicroUsdc = BigInt(Math.floor(balanceUsd * 1_000_000));
-    if (amountMicroUsdc <= BigInt(0)) {
-      throw new Error("There is no USDC left to move.");
-    }
-    await sendTransaction({
-      to: BASE_USDC_ADDRESS,
-      chainId: BASE_CHAIN_ID,
-      data: encodeFunctionData({
-        abi: erc20Abi,
-        functionName: "transfer",
-        args: [toAddress, amountMicroUsdc],
-      }),
-    }, {
-      address: embeddedWallet.address,
-      uiOptions: {
-        description: `${description} ($${balanceUsd.toFixed(2)} USDC on Base).`,
-        buttonText: "Send",
+    const response = await fetch("/api/withdraw", {
+      method: "POST",
+      headers: {
+        ...await authHeaders(),
+        "Content-Type": "application/json",
       },
+      body: JSON.stringify({ toAddress }),
     });
-    return balanceUsd;
-  }, [embeddedWallet, privy, queryClient, sendTransaction]);
+    await clearExpiredSession(response);
+    const payload = await response.json() as {
+      withdrawal?: { amountUsd: number; transferId: string };
+      error?: string;
+    };
+    if (!response.ok || !payload.withdrawal) {
+      throw new Error(payload.error ?? "Withdrawal failed.");
+    }
+    return payload.withdrawal;
+  }, [authHeaders, authenticated, clearExpiredSession]);
 
   // One-click migration: send to the Circle deposit address, then mark the
   // migration complete.
@@ -435,10 +423,7 @@ export function useCassieAccount() {
     if (!account?.depositAddress) {
       throw new Error("Your new deposit address is not ready yet.");
     }
-    await sendEmbeddedWalletUsdc(
-      account.depositAddress,
-      "Move funds to your new Cassie deposit address",
-    );
+    await sendLegacyWalletUsdc(account.depositAddress);
     const response = await fetch("/api/migration", {
       method: "POST",
       headers: {
@@ -453,7 +438,7 @@ export function useCassieAccount() {
       throw new Error(payload.error ?? "Funds moved, but the migration state update failed.");
     }
     return payload.account;
-  }, [authHeaders, clearExpiredSession, queryClient, sendEmbeddedWalletUsdc]);
+  }, [authHeaders, clearExpiredSession, queryClient, sendLegacyWalletUsdc]);
   const migratePrivyFundsMutation = useMutation({
     mutationFn: migratePrivyFundsRequest,
     onSuccess: (nextAccount) => {
@@ -462,8 +447,7 @@ export function useCassieAccount() {
   });
   // Withdrawal: send the old wallet's USDC to any user-provided address.
   const withdrawPrivyFundsMutation = useMutation({
-    mutationFn: (toAddress: string) =>
-      sendEmbeddedWalletUsdc(toAddress.trim(), "Withdraw your USDC"),
+    mutationFn: (toAddress: string) => sendLegacyWalletUsdc(toAddress.trim()),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: cassieAccountQueryKey });
     },
