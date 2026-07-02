@@ -237,7 +237,18 @@ export class DrizzleCassieStore implements CassieStore {
     userId?: string | null;
     username?: string | null;
   }): Promise<UserSettings | undefined> {
+    // Fast path for the common case (every authenticated request): a targeted
+    // jsonb lookup by X user id instead of scanning every user row.
+    if (input.userId) {
+      const byId = await this.db
+        .select()
+        .from(userSettings)
+        .where(sql`${userSettings.settings}->'x'->>'userId' = ${input.userId}`)
+        .limit(1);
+      if (byId[0]) return byId[0].settings;
+    }
     const username = normalizeXUsername(input.username);
+    if (!username) return undefined;
     const rows = await this.db.select().from(userSettings);
     return rows
       .map((row) => row.settings)

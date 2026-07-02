@@ -73,7 +73,7 @@ export async function buildDashboardPayload(
   ]);
   const depositAddress = await store.getDepositAddress(settings.userId);
   const depositBalanceUsd = depositAddress
-    ? await depositWalletBalanceUsd(depositAddress)
+    ? await depositWalletBalanceUsd(depositAddress, store)
     : null;
   const effectiveBalanceUsd = walletBalanceUsd == null && depositBalanceUsd == null
     ? null

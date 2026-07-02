@@ -467,6 +467,7 @@ function Center({
     queryKey: dashboardQueryKeys.dashboard,
     queryFn: fetchDashboard,
     enabled: dashboardEnabled,
+    staleTime: 30_000,
   });
   const dashboard = dashboardEnabled ? dashboardQuery.data : undefined;
   const storedOpenPositions = dashboard?.openPositions ?? [];

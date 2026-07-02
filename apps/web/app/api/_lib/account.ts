@@ -50,7 +50,7 @@ export async function accountResponse(
     ? await walletGateway.getUsdcBalanceUsd({ walletId: settings.privyWalletId })
     : null;
   const circleBalanceUsd = depositAddress
-    ? await depositWalletBalanceUsd(depositAddress)
+    ? await depositWalletBalanceUsd(depositAddress, store)
     : null;
   const walletBalanceUsd = privyBalanceUsd == null && circleBalanceUsd == null
     ? null

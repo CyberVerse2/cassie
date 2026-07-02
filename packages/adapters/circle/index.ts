@@ -109,8 +109,13 @@ export class CircleWalletAdapter implements WalletGateway {
     };
   }
 
-  async getUsdcBalanceUsd(input: { walletId: string }): Promise<number> {
-    const chains = Object.keys(MAINNET_BLOCKCHAINS) as Chain[];
+  async getUsdcBalanceUsd(input: { walletId: string; chains?: Chain[] }): Promise<number> {
+    // Scanning every supported chain costs two Circle calls per chain; callers
+    // that know where funds can live (e.g. chains with deposit history) pass
+    // them explicitly.
+    const chains = input.chains?.length
+      ? input.chains
+      : Object.keys(MAINNET_BLOCKCHAINS) as Chain[];
     const balances = await Promise.all(chains.map((chain) =>
       this.getUsdcBalanceOnChain({ walletId: input.walletId, chain })
         .catch(() => 0)
