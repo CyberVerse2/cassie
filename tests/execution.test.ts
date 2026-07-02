@@ -464,6 +464,7 @@ describe("treasury-prefunded execution", () => {
       userWalletId: "wallet_1",
       amountUsd: 25,
       referenceId: `trade_prefund:${job.jobId}`,
+      chain: "base",
     });
     expect(executionClient.execute).toHaveBeenCalledWith(ticket, {
       funding: {
@@ -473,6 +474,7 @@ describe("treasury-prefunded execution", () => {
         prefundTransferId: "transfer_prefund",
         prefundTransferStatus: "succeeded",
         amountUsd: 25,
+        chain: "base",
       },
     });
     expect(walletGateway.transferUserUsdcToTreasury.mock.invocationCallOrder[0]!)
@@ -651,6 +653,7 @@ describe("treasury-prefunded execution", () => {
       userWalletAddress: "0x1111111111111111111111111111111111111111",
       amountUsd: 25,
       referenceId: `trade_refund:${job.jobId}`,
+      chain: "base",
     });
     expect(state.walletSpendLedgerEntries.map((entry) => entry.type)).toEqual([
       "trade_reserve",
@@ -689,7 +692,7 @@ describe("treasury-prefunded execution", () => {
 
     expect(result).toMatchObject({
       status: "failed",
-      failureReason: "Privy USDC prefund transfer_pending did not confirm before execution: pending.",
+      failureReason: "USDC prefund transfer_pending did not confirm before execution: pending.",
     });
     expect(executionClient.execute).not.toHaveBeenCalled();
     expect(walletGateway.refundUserUsdcFromTreasury).not.toHaveBeenCalled();
@@ -725,6 +728,7 @@ describe("treasury-prefunded execution", () => {
       userWalletAddress: "0x1111111111111111111111111111111111111111",
       amountUsd: 15,
       referenceId: `trade_release:${job.jobId}`,
+      chain: "base",
     });
     expect(state.walletSpendLedgerEntries.map((entry) => ({
       type: entry.type,

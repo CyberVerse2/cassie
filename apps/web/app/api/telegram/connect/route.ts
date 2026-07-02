@@ -9,12 +9,12 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const { claims, store } = await authenticatedContext(request);
-    const session = await createTelegramConnectSession({
-      privyUserId: claims.user_id,
+    const { session, store } = await authenticatedContext(request);
+    const connectSession = await createTelegramConnectSession({
+      userId: session.userId,
       store,
     });
-    return NextResponse.json({ telegram: session });
+    return NextResponse.json({ telegram: connectSession });
   } catch (error) {
     return apiError(error);
   }

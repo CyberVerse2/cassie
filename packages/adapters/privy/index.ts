@@ -16,44 +16,23 @@ import type { CassieStore } from "../../core/db/store.ts";
 import { readJsonResponse } from "../../core/helpers/connector-errors.ts";
 import type { UserSettings } from "../../core/schemas/index.ts";
 
+import type {
+  Chain,
+  TreasuryRefundInput,
+  TreasuryTransferInput,
+  UsdcTransfer,
+  WalletGateway,
+} from "../wallet/gateway.ts";
+
 type TransferActionResponse = Awaited<ReturnType<ReturnType<PrivyClient["wallets"]>["transfer"]>>;
 
 export type PrivyAuthClaims = VerifyAccessTokenResponse;
 
-export interface PrivyWalletGateway {
+export interface PrivyWalletGateway extends WalletGateway {
   verifyAccessToken(accessToken: string): Promise<PrivyAuthClaims>;
   getWallet(walletId: string): Promise<Wallet>;
   getWalletByAddress(address: string): Promise<Wallet>;
-  getUsdcBalanceUsd(walletId: string): Promise<number>;
-  getTreasuryWalletAddress(): string;
-  transferUserUsdcToTreasury(input: WalletTreasuryTransferInput): Promise<WalletUsdcTransfer>;
-  refundUserUsdcFromTreasury(input: WalletTreasuryRefundInput): Promise<WalletUsdcTransfer>;
 }
-
-export type WalletTreasuryTransferInput = {
-  userWalletId: string;
-  amountUsd: number;
-  referenceId: string;
-};
-
-export type WalletTreasuryRefundInput = {
-  userWalletAddress: string;
-  amountUsd: number;
-  referenceId: string;
-};
-
-export type WalletUsdcTransfer = {
-  transferId: string;
-  referenceId: string;
-  status: "pending" | "succeeded" | "rejected" | "failed";
-  sourceWalletId: string;
-  destinationAddress: string;
-  amountUsd: number;
-  asset: "usdc";
-  chain: "base";
-  createdAt: string;
-  raw: unknown;
-};
 
 export class PrivyAdapter implements PrivyWalletGateway {
   private readonly env: RequiredPrivyEnv;
@@ -79,8 +58,8 @@ export class PrivyAdapter implements PrivyWalletGateway {
     return this.client.wallets().getWalletByAddress({ address });
   }
 
-  async getUsdcBalanceUsd(walletId: string): Promise<number> {
-    const response = await this.client.wallets().balance.get(walletId, {
+  async getUsdcBalanceUsd(input: { walletId: string }): Promise<number> {
+    const response = await this.client.wallets().balance.get(input.walletId, {
       asset: this.env.spendAsset,
       chain: this.env.spendChain,
       include_currency: "usd",
@@ -91,28 +70,33 @@ export class PrivyAdapter implements PrivyWalletGateway {
     return Number(balance?.display_values.usd ?? 0);
   }
 
-  getTreasuryWalletAddress(): string {
+  getTreasuryWalletAddress(chain: Chain): string {
+    assertPrivySupportedChain(chain);
     return assertPrivySettlementEnv(this.env).treasuryWalletAddress;
   }
 
-  async transferUserUsdcToTreasury(input: WalletTreasuryTransferInput): Promise<WalletUsdcTransfer> {
+  async transferUserUsdcToTreasury(input: TreasuryTransferInput): Promise<UsdcTransfer> {
+    assertPrivySupportedChain(input.chain);
     const settlementEnv = assertPrivySettlementEnv(this.env);
     return this.transferUsdc({
       fromWalletId: input.userWalletId,
       toAddress: settlementEnv.treasuryWalletAddress,
       amountUsd: input.amountUsd,
       referenceId: input.referenceId,
+      chain: input.chain,
       settlementEnv,
     });
   }
 
-  async refundUserUsdcFromTreasury(input: WalletTreasuryRefundInput): Promise<WalletUsdcTransfer> {
+  async refundUserUsdcFromTreasury(input: TreasuryRefundInput): Promise<UsdcTransfer> {
+    assertPrivySupportedChain(input.chain);
     const settlementEnv = assertPrivySettlementEnv(this.env);
     return this.transferUsdc({
       fromWalletId: settlementEnv.treasuryWalletId,
       toAddress: input.userWalletAddress,
       amountUsd: input.amountUsd,
       referenceId: input.referenceId,
+      chain: input.chain,
       settlementEnv,
     });
   }
@@ -122,8 +106,9 @@ export class PrivyAdapter implements PrivyWalletGateway {
     toAddress: string;
     amountUsd: number;
     referenceId: string;
+    chain: Chain;
     settlementEnv: RequiredPrivySettlementEnv;
-  }): Promise<WalletUsdcTransfer> {
+  }): Promise<UsdcTransfer> {
     const initial = await this.client.wallets().transfer(input.fromWalletId, {
       destination: { address: input.toAddress },
       source: {
@@ -149,7 +134,7 @@ export class PrivyAdapter implements PrivyWalletGateway {
       destinationAddress: response.destination_address,
       amountUsd: Number(response.source_amount),
       asset: "usdc",
-      chain: "base",
+      chain: input.chain,
       createdAt: response.created_at,
       raw: response,
     };
@@ -208,6 +193,12 @@ export async function syncPrivyAccount(input: {
     profile: input.profile,
     defaultTradeSizeUsd: input.defaultTradeSizeUsd,
   });
+}
+
+function assertPrivySupportedChain(chain: Chain): void {
+  if (chain !== "base") {
+    throw new Error(`Privy settlement only supports the base chain, received ${chain}.`);
+  }
 }
 
 function bearerToken(request: Request): string | null {

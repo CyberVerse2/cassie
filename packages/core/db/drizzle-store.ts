@@ -10,6 +10,7 @@ import type {
   RunStep,
   SourcePost,
   TradeTicket,
+  UserDepositAddress,
   UserSettings,
   WalletFundingBalance,
   WalletSpendLedgerEntry,
@@ -26,6 +27,7 @@ import {
   runSteps,
   tradeTickets,
   modelCallUsage,
+  userDepositAddresses,
   userSettings,
   walletSpendLedgerEntries,
 } from "./schema.ts";
@@ -89,6 +91,10 @@ export class DrizzleCassieStore implements CassieStore {
         amountUsd: centsToUsd(row.amountUsdCents),
         ticketId: row.ticketId ?? null,
         executionJobId: row.executionJobId ?? null,
+        chain: row.chain ?? null,
+        txHash: row.txHash ?? null,
+        logIndex: row.logIndex ?? null,
+        circleTransferId: row.circleTransferId ?? null,
         metadata: row.metadata ?? null,
         createdAt: row.createdAt,
       })),
@@ -266,6 +272,263 @@ export class DrizzleCassieStore implements CassieStore {
     };
     await this.upsertUserSettings(settings);
     return settings;
+  }
+
+  async syncXUser(input: {
+    xUserId: string;
+    username: string | null;
+    profile: UserSettings["profile"];
+    defaultTradeSizeUsd?: number;
+  }): Promise<UserSettings> {
+    const existing = await this.getUserSettingsByXIdentity({
+      userId: input.xUserId,
+      username: input.username,
+    });
+    const settings: UserSettings = {
+      userId: existing?.userId ?? `x:${input.xUserId}`,
+      privyUserId: existing?.privyUserId ?? null,
+      privyWalletId: existing?.privyWalletId ?? null,
+      walletAddress: existing?.walletAddress ?? null,
+      profile: input.profile,
+      x: { userId: input.xUserId, username: input.username },
+      defaultTradeSizeUsd:
+        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+      telegram: existing?.telegram ?? null,
+    };
+    await this.upsertUserSettings(settings);
+    return settings;
+  }
+
+  async getDepositAddress(userId: string): Promise<UserDepositAddress | undefined> {
+    const rows = await this.db
+      .select()
+      .from(userDepositAddresses)
+      .where(eq(userDepositAddresses.userId, userId))
+      .limit(1);
+    return rows[0];
+  }
+
+  async getDepositAddressByEvmAddress(
+    evmAddress: string,
+  ): Promise<UserDepositAddress | undefined> {
+    const rows = await this.db
+      .select()
+      .from(userDepositAddresses)
+      .where(sql`lower(${userDepositAddresses.evmAddress}) = lower(${evmAddress})`)
+      .limit(1);
+    return rows[0];
+  }
+
+  async addUserDepositAddress(
+    record: UserDepositAddress,
+  ): Promise<UserDepositAddress> {
+    await this.db
+      .insert(userDepositAddresses)
+      .values(record)
+      .onConflictDoNothing({ target: userDepositAddresses.userId });
+    const stored = await this.getDepositAddress(record.userId);
+    if (!stored) {
+      throw new Error(`Deposit address for ${record.userId} was not persisted.`);
+    }
+    return stored;
+  }
+
+  async recordDepositCredit(input: {
+    userId: string;
+    amountUsd: number;
+    chain: string | null;
+    txHash: string | null;
+    logIndex?: number | null;
+    circleTransferId: string;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    return this.recordDepositLedgerEntry("deposit_credit", input);
+  }
+
+  async recordSweepToGateway(input: {
+    userId: string;
+    amountUsd: number;
+    chain: string | null;
+    circleTransferId: string;
+    txHash?: string | null;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    return this.recordDepositLedgerEntry("sweep_to_gateway", {
+      ...input,
+      txHash: input.txHash ?? null,
+    });
+  }
+
+  async getDepositFundingBalance(userId: string): Promise<WalletFundingBalance> {
+    return walletFundingBalance({
+      userId,
+      walletBalanceUsdCents: await this.internalBalanceUsdCents(userId),
+      reservedUsdCents: await this.openReservedUsdCents(userId),
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  async recordRefundCredit(input: {
+    userId: string;
+    amountUsd: number;
+    referenceId: string;
+    chain?: string | null;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    return this.recordDepositLedgerEntry("refund_credit", {
+      userId: input.userId,
+      amountUsd: input.amountUsd,
+      chain: input.chain ?? null,
+      txHash: null,
+      circleTransferId: input.referenceId,
+      metadata: input.metadata,
+    });
+  }
+
+  async recordGatewayMint(input: {
+    ticket: TradeTicket;
+    job: ExecutionJob;
+    amountUsd: number;
+    chain: string;
+    metadata?: unknown;
+  }): Promise<WalletSpendLedgerEntry | null> {
+    const amountUsdCents = positiveUsdToCents(input.amountUsd);
+    return await this.db.transaction(async (tx) => {
+      await lockWalletSpendUser(tx, input.ticket.userId);
+      const existing = await tx
+        .select()
+        .from(walletSpendLedgerEntries)
+        .where(
+          and(
+            eq(walletSpendLedgerEntries.type, "gateway_mint"),
+            eq(walletSpendLedgerEntries.executionJobId, input.job.jobId),
+          ),
+        )
+        .limit(1);
+      if (existing[0]) return null;
+
+      const entry = walletSpendLedgerEntry({
+        userId: input.ticket.userId,
+        type: "gateway_mint",
+        amountUsdCents,
+        ticketId: input.ticket.ticketId,
+        executionJobId: input.job.jobId,
+        chain: input.chain,
+        metadata: input.metadata ?? null,
+        createdAt: new Date().toISOString(),
+      });
+      await tx.insert(walletSpendLedgerEntries).values(entry);
+      return {
+        entryId: entry.entryId,
+        userId: entry.userId,
+        type: entry.type,
+        amountUsd: centsToUsd(entry.amountUsdCents),
+        ticketId: entry.ticketId,
+        executionJobId: entry.executionJobId,
+        chain: entry.chain ?? null,
+        txHash: null,
+        logIndex: null,
+        circleTransferId: null,
+        metadata: entry.metadata,
+        createdAt: entry.createdAt,
+      };
+    });
+  }
+
+  private async recordDepositLedgerEntry(
+    type: WalletSpendLedgerEntry["type"],
+    input: {
+      userId: string;
+      amountUsd: number;
+      chain: string | null;
+      txHash: string | null;
+      logIndex?: number | null;
+      circleTransferId: string;
+      metadata?: unknown;
+    },
+  ): Promise<WalletSpendLedgerEntry | null> {
+    const amountUsdCents = positiveUsdToCents(input.amountUsd);
+    return await this.db.transaction(async (tx) => {
+      await lockWalletSpendUser(tx, input.userId);
+      const existing = await tx
+        .select()
+        .from(walletSpendLedgerEntries)
+        .where(
+          and(
+            eq(walletSpendLedgerEntries.type, type),
+            eq(walletSpendLedgerEntries.circleTransferId, input.circleTransferId),
+          ),
+        )
+        .limit(1);
+      if (existing[0]) return null;
+      if (input.txHash) {
+        const existingTx = await tx
+          .select()
+          .from(walletSpendLedgerEntries)
+          .where(
+            and(
+              eq(walletSpendLedgerEntries.type, type),
+              eq(walletSpendLedgerEntries.txHash, input.txHash),
+              input.chain == null
+                ? sql`${walletSpendLedgerEntries.chain} is null`
+                : eq(walletSpendLedgerEntries.chain, input.chain),
+            ),
+          )
+          .limit(1);
+        if (existingTx[0] && (existingTx[0].logIndex ?? 0) === (input.logIndex ?? 0)) {
+          return null;
+        }
+      }
+      const entry = walletSpendLedgerEntry({
+        userId: input.userId,
+        type,
+        amountUsdCents,
+        ticketId: null,
+        executionJobId: null,
+        chain: input.chain,
+        txHash: input.txHash,
+        logIndex: input.logIndex ?? null,
+        circleTransferId: input.circleTransferId,
+        metadata: input.metadata ?? null,
+        createdAt: new Date().toISOString(),
+      });
+      await tx.insert(walletSpendLedgerEntries).values(entry);
+      return {
+        entryId: entry.entryId,
+        userId: entry.userId,
+        type: entry.type,
+        amountUsd: centsToUsd(entry.amountUsdCents),
+        ticketId: entry.ticketId,
+        executionJobId: entry.executionJobId,
+        chain: entry.chain ?? null,
+        txHash: entry.txHash ?? null,
+        logIndex: entry.logIndex ?? null,
+        circleTransferId: entry.circleTransferId ?? null,
+        metadata: entry.metadata,
+        createdAt: entry.createdAt,
+      };
+    });
+  }
+
+  // Credited funds = deposits + refunds - settled spends. Reservations are
+  // handled separately (openReservedUsdCents); prefund/release/mint entries
+  // track physical money movement, not the user's credited balance.
+  private async internalBalanceUsdCents(
+    userId: string,
+    db: Pick<CassieDb, "select"> = this.db,
+  ): Promise<number> {
+    const rows = await db
+      .select()
+      .from(walletSpendLedgerEntries)
+      .where(eq(walletSpendLedgerEntries.userId, userId));
+
+    return rows.reduce((total, entry) => {
+      if (entry.type === "deposit_credit" || entry.type === "refund_credit") {
+        return total + entry.amountUsdCents;
+      }
+      if (entry.type === "trade_spend") return total - entry.amountUsdCents;
+      return total;
+    }, 0);
   }
 
   async createRun(input: {
@@ -1170,6 +1433,10 @@ function walletSpendLedgerEntry(input: {
   amountUsdCents: number;
   ticketId: string | null;
   executionJobId: string | null;
+  chain?: string | null;
+  txHash?: string | null;
+  logIndex?: number | null;
+  circleTransferId?: string | null;
   metadata: unknown | null;
   createdAt: string;
 }) {

@@ -15,18 +15,19 @@ const settingsSchema = z.object({
 
 export async function POST(request: Request) {
   try {
-    const { claims, store } = await authenticatedContext(request);
+    const { session, store } = await authenticatedContext(request);
     const body = settingsSchema.parse(await request.json());
-    const settings = await store.getUserSettingsByPrivyUserId(claims.user_id);
+    const settings = session.settings;
     if (!settings) {
-      throw new Error(`No Cassie account found for Privy user ${claims.user_id}.`);
+      throw new Error(`No Cassie account found for user ${session.userId}.`);
     }
 
-    await store.upsertUserSettings({
+    const updated = {
       ...settings,
       defaultTradeSizeUsd: body.defaultTradeSizeUsd,
-    });
-    return await accountResponse(claims.user_id, store);
+    };
+    await store.upsertUserSettings(updated);
+    return await accountResponse(updated, store);
   } catch (error) {
     return apiError(error);
   }

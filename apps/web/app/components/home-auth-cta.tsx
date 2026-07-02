@@ -2,22 +2,33 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useLogin, usePrivy } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { authClient } from "../lib/auth-client";
 
 export function HomeAuthCta() {
   const router = useRouter();
-  const { authenticated, getAccessToken, ready } = usePrivy();
+  // Privy is read-only here: existing Privy sessions still route to the
+  // dashboard, but all new logins go through better-auth.
+  const { authenticated: privyAuthenticated, getAccessToken } = usePrivy();
+  const cookieSession = authClient.useSession();
   const [error, setError] = useState<string | null>(null);
   const [routing, setRouting] = useState(false);
+
+  const cookieAuthenticated = Boolean(cookieSession.data);
+  const authenticated = cookieAuthenticated || privyAuthenticated;
+  const ready = !cookieSession.isPending;
+
   const routeAuthenticatedUser = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      throw new Error("Privy access token was not available.");
+    let headers: Record<string, string> = {};
+    if (!cookieAuthenticated && privyAuthenticated) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        throw new Error("Session was not available. Log in again.");
+      }
+      headers = { Authorization: `Bearer ${accessToken}` };
     }
 
-    const response = await fetch("/api/account", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const response = await fetch("/api/account", { headers });
     if (response.ok) {
       router.push("/dashboard");
       return;
@@ -29,15 +40,7 @@ export function HomeAuthCta() {
 
     const payload = await response.json().catch(() => null) as { error?: string } | null;
     throw new Error(payload?.error ?? "Cassie account lookup failed.");
-  }, [getAccessToken, router]);
-  const { login } = useLogin({
-    onComplete: () => {
-      void routeAuthenticatedUser().catch((caught) => {
-        setError(caught instanceof Error ? caught.message : String(caught));
-      });
-    },
-    onError: (code) => setError(`Twitter login failed: ${code}`),
-  });
+  }, [cookieAuthenticated, getAccessToken, privyAuthenticated, router]);
 
   async function continueWithTwitter() {
     setError(null);
@@ -53,7 +56,13 @@ export function HomeAuthCta() {
       }
       return;
     }
-    login({ loginMethods: ["twitter"] });
+    const { error: signInError } = await authClient.signIn.social({
+      provider: "twitter",
+      callbackURL: "/dashboard",
+    });
+    if (signInError) {
+      setError(signInError.message ?? "Twitter login failed.");
+    }
   }
 
   return (

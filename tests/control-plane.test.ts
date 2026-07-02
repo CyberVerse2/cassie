@@ -52,6 +52,11 @@ class FakeCassieJobQueue implements CassieJobQueue {
   async enqueueClosePosition(input: { positionId: string }) {
     return { positionId: input.positionId, graphileJobId: "graphile_close_1" };
   }
+
+  async enqueueSweepDeposit(input: { userId: string; circleTransferId: string; amountUsd: number; chain: string | null }) {
+    void input;
+    return { graphileJobId: null };
+  }
 }
 
 describe("durable run persistence", () => {

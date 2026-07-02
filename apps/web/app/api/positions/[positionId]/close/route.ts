@@ -14,8 +14,8 @@ export async function POST(
 ) {
   try {
     const { positionId } = await context.params;
-    const { claims, store } = await authenticatedContext(request);
-    const settings = await store.getUserSettingsByPrivyUserId(claims.user_id);
+    const { session, store } = await authenticatedContext(request);
+    const settings = session.settings;
     if (!settings) {
       return NextResponse.json({ error: "Cassie account was not found." }, { status: 404 });
     }

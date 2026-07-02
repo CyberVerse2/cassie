@@ -76,6 +76,7 @@ export default function OnboardingPage() {
             onSkip={() => goto("defaults")}
             onNext={next}
             walletAddress={account.walletAddress}
+            depositAddress={account.depositAddress}
             error={account.error}
           />
         )}
@@ -217,22 +218,28 @@ function StepFund({
   onSkip,
   onNext,
   walletAddress,
+  depositAddress,
   error,
 }: {
   onSkip: () => void;
   onNext: () => void;
   walletAddress: string | null;
+  depositAddress?: string | null;
   error: string | null;
 }) {
   const [copied, setCopied] = useState(false);
-  const depositUri = walletAddress ? `ethereum:${walletAddress}@8453` : null;
-  const short = walletAddress ? `${walletAddress.slice(0, 6)}…${walletAddress.slice(-4)}` : "Creating wallet";
+  const address = depositAddress ?? walletAddress;
+  const multiChain = Boolean(depositAddress);
+  const depositUri = address
+    ? multiChain ? `ethereum:${address}` : `ethereum:${address}@8453`
+    : null;
+  const short = address ? `${address.slice(0, 6)}…${address.slice(-4)}` : "Creating wallet";
 
   async function copy() {
-    if (!walletAddress) return;
+    if (!address) return;
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
-    await window.navigator.clipboard.writeText(walletAddress);
+    await window.navigator.clipboard.writeText(address);
   }
 
   return (
@@ -242,7 +249,9 @@ function StepFund({
         Send some <em>USDC</em>.
       </h1>
       <p className={s.lede}>
-        Cassie trades from a Base wallet — minted only for you. Scan to deposit USDC, or copy the address.
+        {multiChain
+          ? "Cassie has a deposit address minted only for you. Send USDC on Arc, Base, Arbitrum, Ethereum, Optimism, Polygon, or Avalanche."
+          : "Cassie trades from a Base wallet — minted only for you. Scan to deposit USDC, or copy the address."}
       </p>
 
       <div className={s.fundCard}>
@@ -250,14 +259,14 @@ function StepFund({
           {depositUri ? <StyledQR data={depositUri} size={196} /> : <span className={s.fundLabel}>Wallet pending</span>}
         </div>
         <div className={s.fundMeta}>
-          <span className={s.fundLabel}>Your Base wallet</span>
+          <span className={s.fundLabel}>{multiChain ? "Your deposit address" : "Your Base wallet"}</span>
           <span className={s.fundAddress}>{short}</span>
-          <button type="button" className={s.fundCopy} onClick={copy} disabled={!walletAddress}>
+          <button type="button" className={s.fundCopy} onClick={copy} disabled={!address}>
             {copied ? "Copied" : "Copy address"}
           </button>
           <span className={s.fundStatus}>
             <span className={s.fundPulse} aria-hidden />
-            {error ?? "Watching for USDC on Base"}
+            {error ?? (multiChain ? "Watching for USDC on all supported chains" : "Watching for USDC on Base")}
           </span>
         </div>
       </div>

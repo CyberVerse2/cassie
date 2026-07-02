@@ -37,6 +37,7 @@ export type GraphileWorkerEnv = {
   pollIntervalMs: number;
   positionReviewIntervalMinutes: number;
   xMentionPollIntervalMinutes: number;
+  depositPollIntervalMinutes: number;
 };
 
 export type HttpRuntimeEnv = {
@@ -86,8 +87,11 @@ export type CassieRuntimeConfig = {
   execution: {
     hyperliquid: HyperliquidExecutionEnv;
     polymarket: PolymarketExecutionEnv;
+    simulated: boolean;
   };
   privy: PrivyEnv;
+  circle: CircleEnv;
+  auth: AuthEnv;
   telegram: TelegramEnv;
   terminal: {
     debug: boolean;
@@ -233,14 +237,28 @@ export function readCassieConfig(
     execution: {
       hyperliquid: readHyperliquidExecutionEnv(env),
       polymarket: readPolymarketExecutionEnv(env),
+      simulated: readSimulatedExecutionEnv(env),
     },
     privy: readPrivyEnv(env),
+    circle: readCircleEnv(env),
+    auth: readAuthEnv(env),
     telegram: readTelegramEnv(env),
     terminal: {
       debug: optionalEnv("DEBUG", env) != null,
       noColor: optionalEnv("NO_COLOR", env) != null,
     },
   };
+}
+
+// Paper trading: fills are simulated at live market prices instead of sending
+// venue orders. Defaults to the Circle testnet flag so testnet deployments
+// never move real venue money; CASSIE_SIMULATED_EXECUTION overrides.
+export function readSimulatedExecutionEnv(env: EnvSource = process.env): boolean {
+  const explicit = optionalEnv("CASSIE_SIMULATED_EXECUTION", env);
+  if (explicit != null) {
+    return explicit !== "0" && explicit !== "false";
+  }
+  return readCircleEnv(env).testnet;
 }
 
 function supervisorModeEnv(env: EnvSource): "pipeline" | "tool_loop" {
@@ -388,6 +406,11 @@ export function readGraphileWorkerEnv(
         1,
         { integer: true, min: 1, max: 59 },
       ),
+      CASSIE_DEPOSIT_POLL_INTERVAL_MINUTES: numberSchema(
+        "CASSIE_DEPOSIT_POLL_INTERVAL_MINUTES",
+        1,
+        { integer: true, min: 1, max: 59 },
+      ),
     })
     .transform((values) => ({
       executionMaxAttempts: values.GRAPHILE_EXECUTION_MAX_ATTEMPTS,
@@ -398,6 +421,8 @@ export function readGraphileWorkerEnv(
         values.CASSIE_POSITION_REVIEW_INTERVAL_MINUTES,
       xMentionPollIntervalMinutes:
         values.CASSIE_X_MENTION_POLL_INTERVAL_MINUTES,
+      depositPollIntervalMinutes:
+        values.CASSIE_DEPOSIT_POLL_INTERVAL_MINUTES,
     }))
     .parse(env);
 }
@@ -567,6 +592,158 @@ export function assertPrivySettlementEnv(
     );
   }
   return required as RequiredPrivySettlementEnv;
+}
+
+export type CircleEnv = {
+  apiKey?: string;
+  entitySecret?: string;
+  depositsWalletSetId?: string;
+  treasuryWalletId?: string;
+  treasuryWalletAddress?: string;
+  testnet: boolean;
+  defaultChain: "arc" | "base" | "arbitrum" | "ethereum" | "optimism" | "polygon" | "avalanche";
+  transactionPollIntervalMs: number;
+  transactionPollTimeoutMs: number;
+};
+
+export type RequiredCircleEnv = CircleEnv & {
+  apiKey: string;
+  entitySecret: string;
+};
+
+export type RequiredCircleSettlementEnv = RequiredCircleEnv & {
+  depositsWalletSetId: string;
+  treasuryWalletId: string;
+  treasuryWalletAddress: string;
+};
+
+export function readCircleEnv(env: EnvSource = process.env): CircleEnv {
+  return z
+    .object({
+      CIRCLE_API_KEY: configuredStringSchema,
+      CIRCLE_ENTITY_SECRET: configuredStringSchema,
+      CIRCLE_DEPOSITS_WALLET_SET_ID: configuredStringSchema,
+      CIRCLE_TREASURY_WALLET_ID: configuredStringSchema,
+      CIRCLE_TREASURY_WALLET_ADDRESS: configuredStringSchema,
+      CIRCLE_TESTNET: configuredStringSchema,
+      CIRCLE_DEFAULT_CHAIN: z.preprocess(
+        normalizedConfiguredString,
+        z.enum(["arc", "base", "arbitrum", "ethereum", "optimism", "polygon", "avalanche"]).optional(),
+      ),
+      CIRCLE_TRANSACTION_POLL_INTERVAL_MS: numberSchema(
+        "CIRCLE_TRANSACTION_POLL_INTERVAL_MS",
+        1_500,
+        {
+          integer: true,
+          min: 100,
+        },
+      ),
+      CIRCLE_TRANSACTION_POLL_TIMEOUT_MS: numberSchema(
+        "CIRCLE_TRANSACTION_POLL_TIMEOUT_MS",
+        120_000,
+        {
+          integer: true,
+          min: 1_000,
+        },
+      ),
+    })
+    .transform((values) => ({
+      apiKey: values.CIRCLE_API_KEY,
+      entitySecret: values.CIRCLE_ENTITY_SECRET,
+      depositsWalletSetId: values.CIRCLE_DEPOSITS_WALLET_SET_ID,
+      treasuryWalletId: values.CIRCLE_TREASURY_WALLET_ID,
+      treasuryWalletAddress: values.CIRCLE_TREASURY_WALLET_ADDRESS,
+      // Arc testnet is the default money-layer chain; set CIRCLE_TESTNET=0
+      // for mainnet.
+      testnet: values.CIRCLE_TESTNET !== "0" && values.CIRCLE_TESTNET !== "false",
+      defaultChain: values.CIRCLE_DEFAULT_CHAIN ?? ("arc" as const),
+      transactionPollIntervalMs: values.CIRCLE_TRANSACTION_POLL_INTERVAL_MS,
+      transactionPollTimeoutMs: values.CIRCLE_TRANSACTION_POLL_TIMEOUT_MS,
+    }))
+    .parse(env);
+}
+
+export function assertCircleEnv(config: CircleEnv): RequiredCircleEnv {
+  const missing = [
+    config.apiKey ? null : "CIRCLE_API_KEY",
+    config.entitySecret ? null : "CIRCLE_ENTITY_SECRET",
+  ].filter((name): name is string => Boolean(name));
+  if (missing.length > 0) {
+    throw new MissingConnectorConfigError("Circle", missing.join(", "));
+  }
+  return config as RequiredCircleEnv;
+}
+
+export function assertCircleSettlementEnv(
+  config: CircleEnv,
+): RequiredCircleSettlementEnv {
+  const required = assertCircleEnv(config);
+  const missing = [
+    required.depositsWalletSetId ? null : "CIRCLE_DEPOSITS_WALLET_SET_ID",
+    required.treasuryWalletId ? null : "CIRCLE_TREASURY_WALLET_ID",
+    required.treasuryWalletAddress ? null : "CIRCLE_TREASURY_WALLET_ADDRESS",
+  ].filter((name): name is string => Boolean(name));
+  if (missing.length > 0) {
+    throw new MissingConnectorConfigError(
+      "Circle treasury settlement",
+      missing.join(", "),
+    );
+  }
+  return required as RequiredCircleSettlementEnv;
+}
+
+export type AuthEnv = {
+  secret?: string;
+  baseUrl?: string;
+  twitterClientId?: string;
+  twitterClientSecret?: string;
+};
+
+export type RequiredAuthEnv = AuthEnv & {
+  secret: string;
+  twitterClientId: string;
+  twitterClientSecret: string;
+};
+
+export function readAuthEnv(env: EnvSource = process.env): AuthEnv {
+  return z
+    .object({
+      BETTER_AUTH_API_KEY: configuredStringSchema,
+      BETTER_AUTH_SECRET: configuredStringSchema,
+      BETTER_AUTH_URL: configuredStringSchema,
+      X_OAUTH2_CLIENT_ID: configuredStringSchema,
+      X_OAUTH2_CLIENT_SECRET: configuredStringSchema,
+      TWITTER_CLIENT_ID: configuredStringSchema,
+      TWITTER_CLIENT_SECRET: configuredStringSchema,
+    })
+    .transform((values) => ({
+      secret: firstConfigured(
+        values.BETTER_AUTH_SECRET,
+        values.BETTER_AUTH_API_KEY,
+      ),
+      baseUrl: values.BETTER_AUTH_URL,
+      twitterClientId: firstConfigured(
+        values.X_OAUTH2_CLIENT_ID,
+        values.TWITTER_CLIENT_ID,
+      ),
+      twitterClientSecret: firstConfigured(
+        values.X_OAUTH2_CLIENT_SECRET,
+        values.TWITTER_CLIENT_SECRET,
+      ),
+    }))
+    .parse(env);
+}
+
+export function assertAuthEnv(config: AuthEnv): RequiredAuthEnv {
+  const missing = [
+    config.secret ? null : "BETTER_AUTH_SECRET",
+    config.twitterClientId ? null : "X_OAUTH2_CLIENT_ID",
+    config.twitterClientSecret ? null : "X_OAUTH2_CLIENT_SECRET",
+  ].filter((name): name is string => Boolean(name));
+  if (missing.length > 0) {
+    throw new MissingConnectorConfigError("better-auth", missing.join(", "));
+  }
+  return config as RequiredAuthEnv;
 }
 
 export type TelegramEnv = {

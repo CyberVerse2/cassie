@@ -3,17 +3,23 @@ import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import {
   TradeTicketSchema,
+  type Chain,
   type ExecutionFundingSource,
   type ExecutionJob,
   type Position,
   type TradeTicket,
   type UserSettings,
 } from "../core/schemas/index.ts";
-import { PrivyAdapter, type PrivyWalletGateway, type WalletUsdcTransfer } from "../adapters/privy/index.ts";
+import { CircleWalletAdapter } from "../adapters/circle/index.ts";
+import { PrivyAdapter } from "../adapters/privy/index.ts";
+import type { UsdcTransfer, WalletGateway } from "../adapters/wallet/gateway.ts";
+import { FundingRouter, venueChainForTicket } from "../execution/funding-router.ts";
 import {
   VenueExecutionClient,
   type ExecutionClient,
 } from "../execution/index.ts";
+import { SimulatedExecutionClient } from "../execution/simulated.ts";
+import { config } from "../core/config.ts";
 import {
   formatExecutionFailed,
   formatTradeExecuted,
@@ -34,9 +40,10 @@ export async function executeExecutionJob(input: {
   executionClient?: ExecutionClient;
   getExecutionClient?: () => ExecutionClient;
   walletGateway?: Pick<
-    PrivyWalletGateway,
+    WalletGateway,
     "getUsdcBalanceUsd" | "getTreasuryWalletAddress" | "transferUserUsdcToTreasury" | "refundUserUsdcFromTreasury"
   >;
+  fundingRouter?: Pick<FundingRouter, "ensureVenueUsdc">;
   xReplyClient?: XReplyClient;
 }): Promise<ExecutionJob> {
   const store = input.store ?? new DrizzleCassieStore();
@@ -59,11 +66,12 @@ export async function executeExecutionJob(input: {
   }
 
   let job = await store.updateExecutionJob(markExecutionRunning(jobToRun));
-  const walletGateway = input.walletGateway ?? new PrivyAdapter();
+  let walletGateway = input.walletGateway ?? null;
+  let spendWallet: SpendWallet | null = null;
   let funding: ExecutionFundingSource | null = null;
   let reservedWalletBalanceUsd: number | null = null;
   let reservationOpen = false;
-  let prefundTransfer: WalletUsdcTransfer | null = null;
+  let prefundTransfer: UsdcTransfer | null = null;
   let executionResult: NonNullable<ExecutionJob["executionResult"]> | null = null;
   let settings: UserSettings | null = null;
 
@@ -71,7 +79,13 @@ export async function executeExecutionJob(input: {
     validateExecutableTicket(ticket);
     const executionClient = input.executionClient ?? (input.getExecutionClient ?? defaultExecutionClient)();
     settings = await requiredUserSettings(store, ticket.userId);
-    const walletBalanceUsd = await walletGateway.getUsdcBalanceUsd(settings.privyWalletId!);
+    spendWallet = await resolveSpendWallet(store, settings);
+    walletGateway ??= spendWallet.mode === "privy_wallet"
+      ? new PrivyAdapter()
+      : new CircleWalletAdapter();
+    const walletBalanceUsd = await walletGateway.getUsdcBalanceUsd({
+      walletId: spendWallet.walletId,
+    });
     await store.reserveWalletSpend({
       ticket,
       job,
@@ -82,7 +96,7 @@ export async function executeExecutionJob(input: {
     const prefund = await prefundTreasurySpend({
       store,
       walletGateway,
-      settings,
+      spendWallet,
       ticket,
       job,
       walletBalanceUsd,
@@ -90,15 +104,25 @@ export async function executeExecutionJob(input: {
     funding = prefund.funding;
     prefundTransfer = prefund.transfer;
     if (prefundTransfer.status !== "succeeded") {
-      throw new Error(`Privy USDC prefund ${prefundTransfer.transferId} did not confirm before execution: ${prefundTransfer.status}.`);
+      throw new Error(`USDC prefund ${prefundTransfer.transferId} did not confirm before execution: ${prefundTransfer.status}.`);
+    }
+    if (spendWallet.mode === "circle_wallet") {
+      if (config.execution.simulated) {
+        funding = { ...funding, venueChain: venueChainForTicket(ticket) };
+      } else {
+        const fundingRouter = input.fundingRouter ?? new FundingRouter();
+        const venue = await fundingRouter.ensureVenueUsdc({ store, ticket, job });
+        funding = { ...funding, venueChain: venue.venueChain };
+      }
     }
     executionResult = await executionClient.execute(ticket, { funding });
     const releaseUsd = unfilledTicketSizeUsd(ticket, executionResult);
     const releaseTransfer = releaseUsd > 0
       ? await walletGateway.refundUserUsdcFromTreasury({
-        userWalletAddress: settings.walletAddress!,
+        userWalletAddress: spendWallet.address,
         amountUsd: releaseUsd,
         referenceId: `trade_release:${job.jobId}`,
+        chain: spendWallet.chain,
       })
       : null;
     await store.settleWalletSpend({
@@ -137,10 +161,10 @@ export async function executeExecutionJob(input: {
   } catch (error) {
     let failureReason = error instanceof Error ? error.message : String(error);
     if (reservationOpen && reservedWalletBalanceUsd != null && !executionResult) {
-      const refundTransfer = prefundTransfer?.status === "succeeded"
+      const refundTransfer = prefundTransfer?.status === "succeeded" && walletGateway && spendWallet
         ? await refundPrefundedSpend({
           walletGateway,
-          settings: settings ?? await requiredUserSettings(store, ticket.userId),
+          spendWallet,
           job,
           amountUsd: ticket.sizeUsd,
         }).catch((refundError) => {
@@ -226,7 +250,9 @@ export async function queueExecutionJob(input: {
 }
 
 function defaultExecutionClient(): ExecutionClient {
-  return new VenueExecutionClient();
+  return config.execution.simulated
+    ? new SimulatedExecutionClient()
+    : new VenueExecutionClient();
 }
 
 function validateExecutableTicket(ticket: TradeTicket): void {
@@ -292,65 +318,96 @@ async function requiredUserSettings(store: CassieStore, userId: string): Promise
   if (!settings) {
     throw new Error(`User settings were not found for ${userId}.`);
   }
-  if (!settings.privyWalletId || !settings.walletAddress) {
-    throw new Error("Trade execution requires a signer-provisioned Privy user wallet.");
-  }
   return settings;
+}
+
+// The wallet a trade spends from: a legacy Privy embedded wallet on Base, or
+// the user's Circle deposit wallet on the default (Arc) chain. Prefunds move
+// USDC from this wallet into the treasury; refunds and payouts move it back.
+type SpendWallet = {
+  mode: "privy_wallet" | "circle_wallet";
+  walletId: string;
+  address: string;
+  chain: Chain;
+};
+
+async function resolveSpendWallet(
+  store: CassieStore,
+  settings: UserSettings,
+): Promise<SpendWallet> {
+  if (settings.privyWalletId && settings.walletAddress) {
+    return {
+      mode: "privy_wallet",
+      walletId: settings.privyWalletId,
+      address: settings.walletAddress,
+      chain: "base",
+    };
+  }
+  const deposit = await store.getDepositAddress(settings.userId);
+  if (deposit) {
+    return {
+      mode: "circle_wallet",
+      walletId: deposit.circleWalletId,
+      address: deposit.evmAddress,
+      chain: config.circle.defaultChain,
+    };
+  }
+  throw new Error("Trade execution requires a signer-provisioned Privy user wallet or a funded deposit address.");
 }
 
 async function prefundTreasurySpend(input: {
   store: CassieStore;
   walletGateway: Pick<
-    PrivyWalletGateway,
+    WalletGateway,
     "getTreasuryWalletAddress" | "transferUserUsdcToTreasury"
   >;
-  settings: UserSettings;
+  spendWallet: SpendWallet;
   ticket: TradeTicket;
   job: ExecutionJob;
   walletBalanceUsd: number;
 }): Promise<{
   funding: ExecutionFundingSource;
-  transfer: WalletUsdcTransfer;
+  transfer: UsdcTransfer;
 }> {
   const transfer = await input.walletGateway.transferUserUsdcToTreasury({
-    userWalletId: input.settings.privyWalletId!,
+    userWalletId: input.spendWallet.walletId,
     amountUsd: input.ticket.sizeUsd,
     referenceId: `trade_prefund:${input.job.jobId}`,
+    chain: input.spendWallet.chain,
   });
   await input.store.recordWalletPrefund({
     ticket: input.ticket,
     job: input.job,
     amountUsd: input.ticket.sizeUsd,
     walletBalanceUsd: input.walletBalanceUsd,
-    metadata: { transfer },
+    metadata: { transfer, fundingMode: input.spendWallet.mode },
   });
   return {
     funding: {
       type: "cassie_treasury",
       userId: input.ticket.userId,
-      treasuryWalletAddress: input.walletGateway.getTreasuryWalletAddress(),
+      treasuryWalletAddress: input.walletGateway.getTreasuryWalletAddress(input.spendWallet.chain),
       prefundTransferId: transfer.transferId,
       prefundTransferStatus: transfer.status,
       amountUsd: input.ticket.sizeUsd,
+      chain: input.spendWallet.chain,
     },
     transfer,
   };
 }
 
 async function refundPrefundedSpend(input: {
-  walletGateway: Pick<PrivyWalletGateway, "refundUserUsdcFromTreasury">;
-  settings: UserSettings;
+  walletGateway: Pick<WalletGateway, "refundUserUsdcFromTreasury">;
+  spendWallet: SpendWallet;
   job: ExecutionJob;
   amountUsd: number;
-}): Promise<WalletUsdcTransfer | null> {
+}): Promise<UsdcTransfer | null> {
   if (input.amountUsd <= 0) return null;
-  if (!input.settings.walletAddress) {
-    throw new Error("Cannot refund prefunded spend without a user wallet address.");
-  }
   return input.walletGateway.refundUserUsdcFromTreasury({
-    userWalletAddress: input.settings.walletAddress,
+    userWalletAddress: input.spendWallet.address,
     amountUsd: input.amountUsd,
     referenceId: `trade_refund:${input.job.jobId}`,
+    chain: input.spendWallet.chain,
   });
 }
 

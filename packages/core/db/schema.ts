@@ -129,6 +129,21 @@ export const portfolioBalanceSnapshots = pgTable("portfolio_balance_snapshots", 
   }).onDelete("cascade"),
 ]);
 
+export const userDepositAddresses = pgTable("user_deposit_addresses", {
+  userId: text("user_id").primaryKey(),
+  walletSetId: text("wallet_set_id").notNull(),
+  circleWalletId: text("circle_wallet_id").notNull(),
+  evmAddress: text("evm_address").notNull(),
+  createdAt: text("created_at").notNull(),
+}, (table) => [
+  uniqueIndex("user_deposit_addresses_evm_address_unique_idx").on(table.evmAddress),
+  foreignKey({
+    name: "user_deposit_addresses_user_fk",
+    columns: [table.userId],
+    foreignColumns: [userSettings.userId],
+  }).onDelete("cascade"),
+]);
+
 export const walletSpendLedgerEntries = pgTable("wallet_spend_ledger_entries", {
   entryId: text("entry_id").primaryKey(),
   userId: text("user_id").notNull(),
@@ -136,6 +151,10 @@ export const walletSpendLedgerEntries = pgTable("wallet_spend_ledger_entries", {
   amountUsdCents: integer("amount_usd_cents").notNull(),
   ticketId: text("ticket_id"),
   executionJobId: text("execution_job_id"),
+  chain: text("chain"),
+  txHash: text("tx_hash"),
+  logIndex: integer("log_index"),
+  circleTransferId: text("circle_transfer_id"),
   metadata: jsonb("metadata"),
   createdAt: text("created_at").notNull(),
 }, (table) => [
@@ -145,6 +164,12 @@ export const walletSpendLedgerEntries = pgTable("wallet_spend_ledger_entries", {
   uniqueIndex("wallet_spend_ledger_execution_type_unique_idx")
     .on(table.executionJobId, table.type)
     .where(sql`${table.executionJobId} is not null`),
+  uniqueIndex("wallet_spend_ledger_circle_transfer_unique_idx")
+    .on(table.circleTransferId, table.type)
+    .where(sql`${table.circleTransferId} is not null`),
+  uniqueIndex("wallet_spend_ledger_deposit_tx_unique_idx")
+    .on(table.chain, table.txHash, table.logIndex)
+    .where(sql`${table.txHash} is not null`),
   check("wallet_spend_ledger_amount_cents_nonnegative", sql`${table.amountUsdCents} >= 0`),
   foreignKey({
     name: "wallet_spend_ledger_user_fk",
