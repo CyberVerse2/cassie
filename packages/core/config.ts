@@ -63,6 +63,7 @@ export type CassieRuntimeConfig = {
   ai: AiProviderEnv;
   structuredAi: {
     maxRetries: number;
+    requestTimeoutMs: number;
   };
   cli: {
     userId?: string;
@@ -210,6 +211,12 @@ export function readCassieConfig(
         integer: true,
         min: 1,
       }),
+      requestTimeoutMs: numberEnv(
+        "CASSIE_AI_REQUEST_TIMEOUT_MS",
+        120_000,
+        env,
+        { integer: true, min: 1_000 },
+      ),
     },
     cli: {
       userId: optionalEnv("CASSIE_CLI_USER_ID", env),

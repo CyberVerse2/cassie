@@ -338,6 +338,7 @@ describe("Polymarket env", () => {
       },
       structuredAi: {
         maxRetries: 4,
+        requestTimeoutMs: 120_000,
       },
       cli: {
         userId: "did:privy:user_1",

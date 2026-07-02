@@ -361,6 +361,9 @@ export class CassieStructuredClient implements StructuredAiClient {
         maxOutputTokens: maxOutputTokensForTier(route.tier),
         providerOptions:
           input.providerOptions ?? providerOptionsForRoute(route),
+        // Abort a hung provider request so a slow/stalled call fails the step
+        // instead of orphaning the run in "running" forever.
+        abortSignal: AbortSignal.timeout(config.structuredAi.requestTimeoutMs),
         tools: tools as never,
       });
 
