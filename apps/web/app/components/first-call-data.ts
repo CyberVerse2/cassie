@@ -32,6 +32,7 @@ export type FirstCallScenario = {
   date: string;
   text: string;
   url: string;
+  mediaUrls?: string[];
   stages: ReplayStage[];
   result: ReplayResult;
 };

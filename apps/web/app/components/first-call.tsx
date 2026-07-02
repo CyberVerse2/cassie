@@ -1,5 +1,6 @@
 "use client";
 
+import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import {
@@ -8,6 +9,15 @@ import {
   type FirstCallScenario,
 } from "./first-call-data";
 import c from "./first-call.module.css";
+
+async function fetchLiveScenarios(): Promise<FirstCallScenario[]> {
+  const response = await fetch("/api/first-call");
+  if (!response.ok) throw new Error("first-call scenarios unavailable");
+  const payload = (await response.json()) as {
+    scenarios?: FirstCallScenario[];
+  };
+  return payload.scenarios ?? [];
+}
 
 type Phase = "compose" | "run" | "done";
 
@@ -28,7 +38,7 @@ export function FirstCall({
   } | null;
   onDismiss: () => void;
 }) {
-  const [scenarioId, setScenarioId] = useState(firstCallScenarios[0].id);
+  const [scenarioId, setScenarioId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("compose");
   const [reply, setReply] = useState("");
   const [nudge, setNudge] = useState(false);
@@ -38,12 +48,33 @@ export function FirstCall({
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const feedRef = useRef<HTMLDivElement | null>(null);
 
-  const scenario = useMemo(
+  // The book's best closed winners, replayed from their real pipeline runs.
+  // Until they load (or if there are none yet), the authored scenarios stand in.
+  const liveQuery = useQuery({
+    queryKey: ["first-call-scenarios"],
+    queryFn: fetchLiveScenarios,
+    staleTime: 5 * 60_000,
+  });
+  const scenarios = useMemo(
     () =>
-      firstCallScenarios.find((entry) => entry.id === scenarioId) ??
-      firstCallScenarios[0],
-    [scenarioId],
+      liveQuery.data && liveQuery.data.length > 0
+        ? liveQuery.data
+        : firstCallScenarios,
+    [liveQuery.data],
   );
+
+  const composeScenario = useMemo(
+    () =>
+      scenarios.find((entry) => entry.id === scenarioId) ?? scenarios[0],
+    [scenarios, scenarioId],
+  );
+  // Frozen at submit so a late-arriving live payload can't swap the scenario
+  // mid-replay.
+  const [runScenario, setRunScenario] = useState<FirstCallScenario | null>(
+    null,
+  );
+  const scenario =
+    phase === "compose" ? composeScenario : (runScenario ?? composeScenario);
 
   useEffect(() => {
     if (phase === "compose") inputRef.current?.focus();
@@ -84,8 +115,9 @@ export function FirstCall({
   }, [autoTyping]);
 
   function pickScenario(next: FirstCallScenario) {
-    if (next.id === scenarioId) return;
+    if (next.id === scenario.id) return;
     setScenarioId(next.id);
+    setRunScenario(null);
     setPhase("compose");
     setReply("");
     setStageIdx(0);
@@ -100,6 +132,7 @@ export function FirstCall({
       return;
     }
     setAutoTyping(false);
+    setRunScenario(composeScenario);
     setStageIdx(0);
     setPhase("run");
   }
@@ -128,7 +161,7 @@ export function FirstCall({
         <div className={c.panes}>
           <section className={c.postPane}>
             <div className={c.chips} role="tablist" aria-label="Pick a post">
-              {firstCallScenarios.map((entry) => (
+              {scenarios.map((entry) => (
                 <button
                   key={entry.id}
                   type="button"
@@ -153,6 +186,14 @@ export function FirstCall({
                 </div>
               </header>
               <p className={c.postBody}>{scenario.text}</p>
+              {scenario.mediaUrls?.[0] && (
+                <img
+                  className={c.postMedia}
+                  src={scenario.mediaUrls[0]}
+                  alt=""
+                  loading="lazy"
+                />
+              )}
             </article>
 
             {phase === "compose" ? (
