@@ -7,6 +7,16 @@ import { DrizzleCassieStore } from "../../../../../../packages/core/db/drizzle-s
 
 export const runtime = "nodejs";
 
+// Circle probes the endpoint (and re-probes on subscription edits) with a
+// reachability check that must return 2xx.
+export async function GET() {
+  return NextResponse.json({ ok: true });
+}
+
+export async function HEAD() {
+  return new Response(null, { status: 200 });
+}
+
 // Receives Circle webhook notifications for inbound USDC and credits deposits
 // in real time. The poller (poll_deposits cron) remains as a backstop.
 export async function POST(request: Request) {
@@ -15,12 +25,21 @@ export async function POST(request: Request) {
   const keyId = request.headers.get("X-Circle-Key-Id");
 
   try {
+    const payload = rawBody ? JSON.parse(rawBody) : null;
+    const type: string = payload?.notificationType ?? "";
+
+    // Subscription confirmations / pings validate the endpoint and carry no
+    // state-changing action, so they are acked without a signature (Circle
+    // sends these during createSubscription before signing is established).
+    if (!type || type.includes("subscription") || type === "webhooks.ping") {
+      return NextResponse.json({ ok: true });
+    }
+
     const verified = await verifyCircleSignature({ rawBody, signature, keyId });
     if (!verified) {
       return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
     }
 
-    const payload = rawBody ? JSON.parse(rawBody) : null;
     const store = new DrizzleCassieStore();
     const result = await processCircleNotification({ store, payload });
     return NextResponse.json({ ok: true, result });
