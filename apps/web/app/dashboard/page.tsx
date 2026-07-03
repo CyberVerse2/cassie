@@ -115,6 +115,9 @@ export default function Dashboard() {
         userProfile={account.userProfile}
         defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
         updateDefaultTradeSize={account.updateDefaultTradeSize}
+        promoClaimed={account.account?.promoClaimed ?? true}
+        testnet={account.account?.testnet ?? false}
+        claimPromo={account.claimPromo}
       />
       <Center
         accountReady={account.ready}
@@ -130,6 +133,15 @@ export default function Dashboard() {
           userProfile={account.userProfile}
           onDismiss={dismissFirstCall}
           onTour={startTour}
+          promoAvailable={
+            account.authenticated && account.account?.promoClaimed === false
+          }
+          onClaimPromo={() => {
+            // Close the intro and fire the grant; if the transfer fails, the
+            // claim card in the left rail stays visible for a retry.
+            dismissFirstCall();
+            void account.claimPromo().catch(() => undefined);
+          }}
         />
       )}
       {tourActive && <DashboardTour onClose={() => setTourActive(false)} />}
@@ -150,6 +162,9 @@ function Aside({
   userProfile,
   defaultTradeSizeUsd,
   updateDefaultTradeSize,
+  promoClaimed,
+  testnet,
+  claimPromo,
 }: {
   walletAddress: string | null;
   depositAddress?: string | null;
@@ -168,9 +183,14 @@ function Aside({
   } | null;
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
+  promoClaimed: boolean;
+  testnet: boolean;
+  claimPromo: () => Promise<{ amountUsd: number; transferId: string | null }>;
 }) {
   const [copied, setCopied] = useState(false);
   const [depositOpen, setDepositOpen] = useState(false);
+  const [claiming, setClaiming] = useState(false);
+  const [promoError, setPromoError] = useState<string | null>(null);
   const [loggingOut, setLoggingOut] = useState(false);
   const [exportingKeys, setExportingKeys] = useState(false);
   const [exportKeysError, setExportKeysError] = useState<string | null>(null);
@@ -191,6 +211,19 @@ function Aside({
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
     await window.navigator.clipboard.writeText(depositTo);
+  }
+
+  async function requestPromoClaim() {
+    if (claiming) return;
+    setClaiming(true);
+    setPromoError(null);
+    try {
+      await claimPromo();
+    } catch (caught) {
+      setPromoError(caught instanceof Error ? caught.message : String(caught));
+    } finally {
+      setClaiming(false);
+    }
   }
 
   async function requestLogout() {
@@ -283,6 +316,28 @@ function Aside({
         </button>
       </div>
 
+      {authenticated && !promoClaimed && (
+        <div className={s.promoCard}>
+          <div className={s.promoCopy}>
+            <strong>Try her on the house</strong>
+            <span>$10 of starter USDC, no deposit needed.</span>
+          </div>
+          <button
+            type="button"
+            className={`${s.btn} ${s.btnPrimary} ${s.promoBtn}`}
+            onClick={() => void requestPromoClaim()}
+            disabled={claiming}
+          >
+            {claiming ? "Sending…" : "Claim $10"}
+          </button>
+          {promoError ? (
+            <span className={s.navError} role="alert">
+              {promoError}
+            </span>
+          ) : null}
+        </div>
+      )}
+
       {showDeposit && (
         <div className={s.depositCard} id="deposit">
           <div className={s.qrFrame}>
@@ -317,6 +372,19 @@ function Aside({
               <span className={s.qrCaption}>
                 {multiChain ? "USDC · any supported chain" : "Base USDC"}
               </span>
+              {testnet && (
+                <span className={s.qrFaucet}>
+                  Need more test USDC? Grab it free at{" "}
+                  <a
+                    href="https://faucet.circle.com"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    faucet.circle.com
+                  </a>{" "}
+                  and send it to this address.
+                </span>
+              )}
             </div>
           </div>
         </div>

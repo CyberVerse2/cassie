@@ -83,6 +83,18 @@ export const UserSettingsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // One-time starter USDC sent from the treasury so new users can trade
+  // before depositing. Written before the transfer (as a claim lock) and
+  // stamped with the transfer id once it confirms.
+  promoGrant: z
+    .object({
+      amountUsd: z.number(),
+      transferId: z.string().nullable(),
+      chain: z.string(),
+      grantedAt: z.string(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const ThesisSchema = z.object({

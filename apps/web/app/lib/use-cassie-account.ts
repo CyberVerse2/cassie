@@ -40,6 +40,8 @@ type CassieAccount = {
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
+  promoClaimed: boolean;
+  testnet: boolean;
 };
 
 export type CassieDashboardPayload = {
@@ -467,6 +469,19 @@ export function useCassieAccount() {
     return payload.position;
   }, [authedFetch]);
 
+  const claimPromo = useCallback(async () => {
+    const response = await authedFetch("/api/promo/claim", { method: "POST" });
+    const payload = await response.json() as {
+      grant?: { amountUsd: number; transferId: string | null };
+      error?: string;
+    };
+    if (!response.ok || !payload.grant) {
+      throw new Error(payload.error ?? "The starter USDC could not be sent.");
+    }
+    await refreshAccount();
+    return payload.grant;
+  }, [authedFetch, refreshAccount]);
+
   const fetchActivity = useCallback(async () => {
     const response = await authedFetch("/api/activity");
     const payload = await response.json() as { activity?: CassieActivityItem[]; error?: string };
@@ -506,6 +521,7 @@ export function useCassieAccount() {
     exportKeys,
     prepareAccount,
     beginTelegramConnect,
+    claimPromo,
     refreshAccount,
     syncAccount,
     updateDefaultTradeSize,

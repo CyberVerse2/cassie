@@ -222,6 +222,56 @@
   opacity: 0.68;
 }
 
+.promoCard {
+  display: grid;
+  gap: 8px;
+  margin: 4px 0 0;
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid color-mix(in oklab, var(--gilt) 38%, var(--line));
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(145deg, color-mix(in oklab, var(--gilt) 10%, transparent), transparent 55%),
+    var(--panel);
+}
+
+.promoCopy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.promoCopy strong {
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 15px;
+  color: var(--ink);
+}
+
+.promoCopy span {
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+
+.promoBtn {
+  width: 100%;
+}
+
+.qrFaucet {
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--ink-faint);
+  text-align: center;
+}
+
+.qrFaucet a {
+  color: var(--gilt-glow);
+  text-decoration: none;
+}
+
+.qrFaucet a:hover { text-decoration: underline; }
+
 .depositCard {
   position: relative;
   margin: 4px 0 0;

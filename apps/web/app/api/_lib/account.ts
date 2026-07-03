@@ -7,6 +7,7 @@ import { DrizzleCassieStore } from "../../../../../packages/core/db/drizzle-stor
 import type { CassieStore } from "../../../../../packages/core/db/store";
 import { MissingConnectorConfigError } from "../../../../../packages/core/helpers/connector-errors";
 import { depositWalletBalanceUsd } from "../../../../../packages/app/deposit-balance";
+import { config } from "../../../../../packages/core/config";
 import { UserProfileSchema, type UserDepositAddress, type UserSettings } from "../../../../../packages/core/schemas";
 
 export const MIN_DEFAULT_TRADE_SIZE_USD = 6;
@@ -70,6 +71,9 @@ export async function accountResponse(
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       telegram: settings.telegram ?? null,
       balance: balance ?? null,
+      promoClaimed: Boolean(settings.promoGrant),
+      // Testnet deployments can point users at Circle's faucet for more USDC.
+      testnet: config.circle.testnet,
     },
   });
 }

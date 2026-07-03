@@ -380,6 +380,7 @@ export class InMemoryCassieStore implements CassieStore {
       defaultTradeSizeUsd:
         input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
       telegram: existing?.telegram ?? null,
+      promoGrant: existing?.promoGrant ?? null,
     };
     await this.upsertUserSettings(settings);
     return settings;
@@ -405,6 +406,7 @@ export class InMemoryCassieStore implements CassieStore {
       defaultTradeSizeUsd:
         input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
       telegram: existing?.telegram ?? null,
+      promoGrant: existing?.promoGrant ?? null,
     };
     await this.upsertUserSettings(settings);
     return settings;

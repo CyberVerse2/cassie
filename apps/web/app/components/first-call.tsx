@@ -30,6 +30,8 @@ export function FirstCall({
   userProfile,
   onDismiss,
   onTour,
+  promoAvailable,
+  onClaimPromo,
 }: {
   userProfile: {
     name: string;
@@ -39,6 +41,8 @@ export function FirstCall({
   } | null;
   onDismiss: () => void;
   onTour: () => void;
+  promoAvailable: boolean;
+  onClaimPromo: () => void;
 }) {
   const [scenarioId, setScenarioId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("compose");
@@ -320,9 +324,19 @@ export function FirstCall({
                         </span>
                       </div>
                       <div className={c.resultCtas}>
-                        <button type="button" className={c.ctaPrimary} onClick={onDismiss}>
-                          Fund my account →
-                        </button>
+                        {promoAvailable ? (
+                          <button
+                            type="button"
+                            className={c.ctaPrimary}
+                            onClick={onClaimPromo}
+                          >
+                            Claim $10 &amp; start trading →
+                          </button>
+                        ) : (
+                          <button type="button" className={c.ctaPrimary} onClick={onDismiss}>
+                            Fund my account →
+                          </button>
+                        )}
                         <button type="button" className={c.ctaGhost} onClick={onTour}>
                           Show me around first
                         </button>
