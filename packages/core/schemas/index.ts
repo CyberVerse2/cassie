@@ -83,6 +83,9 @@ export const UserSettingsSchema = z.object({
     })
     .nullable()
     .optional(),
+  // When the user dismissed the first-call intro. Server-side (not
+  // localStorage) so it follows the account across browsers and devices.
+  introSeenAt: z.string().nullable().optional(),
   // One-time starter USDC sent from the treasury so new users can trade
   // before depositing. Written before the transfer (as a claim lock) and
   // stamped with the transfer id once it confirms.

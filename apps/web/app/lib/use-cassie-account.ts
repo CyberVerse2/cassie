@@ -40,6 +40,7 @@ type CassieAccount = {
   defaultTradeSizeUsd: number;
   telegram: TelegramConnection | null;
   balance: WalletFundingBalance | null;
+  introSeen: boolean;
   promoClaimed: boolean;
   testnet: boolean;
 };
@@ -469,6 +470,23 @@ export function useCassieAccount() {
     return payload.position;
   }, [authedFetch]);
 
+  // One-way, optimistic: the dashboard hides the intro immediately and the
+  // server records it so it never re-opens on another browser or device.
+  const markIntroSeen = useCallback(async () => {
+    queryClient.setQueryData<CassieAccount | null>(
+      cassieAccountQueryKey,
+      (current) => (current ? { ...current, introSeen: true } : current),
+    );
+    const response = await authedFetch("/api/settings", {
+      method: "POST",
+      body: JSON.stringify({ introSeen: true }),
+    });
+    const payload = await response.json() as { account?: CassieAccount; error?: string };
+    if (response.ok && payload.account) {
+      queryClient.setQueryData<CassieAccount | null>(cassieAccountQueryKey, payload.account);
+    }
+  }, [authedFetch, queryClient]);
+
   const claimPromo = useCallback(async () => {
     const response = await authedFetch("/api/promo/claim", { method: "POST" });
     const payload = await response.json() as {
@@ -522,6 +540,7 @@ export function useCassieAccount() {
     prepareAccount,
     beginTelegramConnect,
     claimPromo,
+    markIntroSeen,
     refreshAccount,
     syncAccount,
     updateDefaultTradeSize,

@@ -10,7 +10,12 @@ import {
 export const runtime = "nodejs";
 
 const settingsSchema = z.object({
-  defaultTradeSizeUsd: z.number().min(MIN_DEFAULT_TRADE_SIZE_USD, MIN_DEFAULT_TRADE_SIZE_MESSAGE),
+  defaultTradeSizeUsd: z
+    .number()
+    .min(MIN_DEFAULT_TRADE_SIZE_USD, MIN_DEFAULT_TRADE_SIZE_MESSAGE)
+    .optional(),
+  // Marks the first-call intro as seen; one-way on purpose.
+  introSeen: z.literal(true).optional(),
 });
 
 export async function POST(request: Request) {
@@ -24,7 +29,12 @@ export async function POST(request: Request) {
 
     const updated = {
       ...settings,
-      defaultTradeSizeUsd: body.defaultTradeSizeUsd,
+      ...(body.defaultTradeSizeUsd != null
+        ? { defaultTradeSizeUsd: body.defaultTradeSizeUsd }
+        : {}),
+      ...(body.introSeen
+        ? { introSeenAt: settings.introSeenAt ?? new Date().toISOString() }
+        : {}),
     };
     await store.upsertUserSettings(updated);
     return await accountResponse(updated, store);

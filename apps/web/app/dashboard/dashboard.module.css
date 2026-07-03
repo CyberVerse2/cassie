@@ -2592,7 +2592,8 @@
 .feedHead {
   display: flex;
   align-items: center;
-  gap: 7px;
+  justify-content: space-between;
+  gap: var(--space-sm);
   margin: var(--space-sm) 22px 0;
   padding-top: var(--space-sm);
   border-top: 1px solid var(--line-soft);
@@ -2600,6 +2601,17 @@
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--ink-mute);
+}
+
+.feedHeadLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.feedHeadCount {
+  flex-shrink: 0;
+  color: var(--ink-faint);
 }
 
 .liveDot {

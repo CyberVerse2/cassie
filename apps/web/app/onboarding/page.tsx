@@ -84,7 +84,7 @@ export default function OnboardingPage() {
           <StepDefaults
             onNext={next}
             syncAccount={account.syncAccount}
-            defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
+            defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 5}
           />
         )}
         {stepId === "notify" && (
@@ -284,8 +284,8 @@ function StepFund({
   );
 }
 
-const presets = [25, 50, 100, 250];
-const minDefaultTradeSizeUsd = 6;
+const presets = [5, 10, 25, 50];
+const minDefaultTradeSizeUsd = 5;
 
 function StepDefaults({
   onNext,

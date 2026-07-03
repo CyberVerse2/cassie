@@ -10,7 +10,7 @@ import { depositWalletBalanceUsd } from "../../../../../packages/app/deposit-bal
 import { config } from "../../../../../packages/core/config";
 import { UserProfileSchema, type UserDepositAddress, type UserSettings } from "../../../../../packages/core/schemas";
 
-export const MIN_DEFAULT_TRADE_SIZE_USD = 6;
+export const MIN_DEFAULT_TRADE_SIZE_USD = 5;
 export const MIN_DEFAULT_TRADE_SIZE_MESSAGE = `Default trade size must be at least $${MIN_DEFAULT_TRADE_SIZE_USD}.`;
 
 export const accountSyncSchema = z.object({
@@ -71,6 +71,7 @@ export async function accountResponse(
       defaultTradeSizeUsd: settings.defaultTradeSizeUsd,
       telegram: settings.telegram ?? null,
       balance: balance ?? null,
+      introSeen: Boolean(settings.introSeenAt),
       promoClaimed: Boolean(settings.promoGrant),
       // Testnet deployments can point users at Circle's faucet for more USDC.
       testnet: config.circle.testnet,

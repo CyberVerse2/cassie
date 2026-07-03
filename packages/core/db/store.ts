@@ -378,8 +378,9 @@ export class InMemoryCassieStore implements CassieStore {
       profile: input.profile,
       x: input.x ?? existing?.x ?? null,
       defaultTradeSizeUsd:
-        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 5,
       telegram: existing?.telegram ?? null,
+      introSeenAt: existing?.introSeenAt ?? null,
       promoGrant: existing?.promoGrant ?? null,
     };
     await this.upsertUserSettings(settings);
@@ -404,8 +405,9 @@ export class InMemoryCassieStore implements CassieStore {
       profile: input.profile,
       x: { userId: input.xUserId, username: input.username },
       defaultTradeSizeUsd:
-        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 50,
+        input.defaultTradeSizeUsd ?? existing?.defaultTradeSizeUsd ?? 5,
       telegram: existing?.telegram ?? null,
+      introSeenAt: existing?.introSeenAt ?? null,
       promoGrant: existing?.promoGrant ?? null,
     };
     await this.upsertUserSettings(settings);

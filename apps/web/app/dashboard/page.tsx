@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { DashboardTour } from "../components/dashboard-tour";
 import { FirstCall } from "../components/first-call";
+import { PromoCelebration } from "../components/promo-celebration";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
 import type { TapeCall, TapePayload } from "../lib/tape";
@@ -64,33 +65,31 @@ async function fetchTape(): Promise<TapePayload> {
   return (await response.json()) as TapePayload;
 }
 
-const firstCallSeenKey = "cassie.firstCallSeen";
-
 export default function Dashboard() {
   const account = useCassieAccount();
-  // Assume seen until localStorage is checked so the overlay never flashes
-  // for returning users during hydration.
-  const [firstCallSeen, setFirstCallSeen] = useState(true);
-  // ?intro=1 forces the intro regardless of balance or seen-state (demos).
+  // Dismissed-this-render guard: markIntroSeen updates the server (and the
+  // account cache optimistically), this just closes the overlay instantly.
+  const [firstCallDismissed, setFirstCallDismissed] = useState(false);
+  // ?intro=1 forces the intro regardless of seen-state (demos).
   const [forceFirstCall, setForceFirstCall] = useState(false);
   useEffect(() => {
-    setFirstCallSeen(window.localStorage.getItem(firstCallSeenKey) === "1");
     setForceFirstCall(new URLSearchParams(window.location.search).has("intro"));
   }, []);
 
-  const balance = account.account?.balance ?? null;
+  // Seen-state lives on the account, not in localStorage: a shared browser
+  // must not hide the intro from a new user, and a second device must not
+  // replay it for an old one.
   const showFirstCall =
     forceFirstCall ||
-    (!firstCallSeen &&
+    (!firstCallDismissed &&
       account.ready &&
       account.authenticated &&
-      balance !== null &&
-      balance.walletBalanceUsd === 0);
+      account.account?.introSeen === false);
 
   function dismissFirstCall() {
-    window.localStorage.setItem(firstCallSeenKey, "1");
-    setFirstCallSeen(true);
+    setFirstCallDismissed(true);
     setForceFirstCall(false);
+    void account.markIntroSeen().catch(() => undefined);
   }
 
   // "Show me around first" walks the real dashboard after the intro closes.
@@ -98,6 +97,22 @@ export default function Dashboard() {
   function startTour() {
     dismissFirstCall();
     setTourActive(true);
+  }
+
+  // Landing the starter grant is the activation moment — celebrate it. Both
+  // claim paths (intro CTA and the rail card) funnel through here.
+  const [celebratingUsd, setCelebratingUsd] = useState<number | null>(null);
+  // ?celebrate=1 previews the grant celebration without claiming (demos).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).has("celebrate")) {
+      setCelebratingUsd(10);
+    }
+  }, []);
+  const { claimPromo } = account;
+  async function claimPromoAndCelebrate() {
+    const grant = await claimPromo();
+    setCelebratingUsd(grant.amountUsd);
+    return grant;
   }
 
   return (
@@ -113,11 +128,11 @@ export default function Dashboard() {
         exportKeys={account.exportKeys}
         authenticated={account.authenticated}
         userProfile={account.userProfile}
-        defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 50}
+        defaultTradeSizeUsd={account.account?.defaultTradeSizeUsd ?? 5}
         updateDefaultTradeSize={account.updateDefaultTradeSize}
         promoClaimed={account.account?.promoClaimed ?? true}
         testnet={account.account?.testnet ?? false}
-        claimPromo={account.claimPromo}
+        claimPromo={claimPromoAndCelebrate}
       />
       <Center
         accountReady={account.ready}
@@ -137,14 +152,21 @@ export default function Dashboard() {
             account.authenticated && account.account?.promoClaimed === false
           }
           onClaimPromo={() => {
-            // Close the intro and fire the grant; if the transfer fails, the
-            // claim card in the left rail stays visible for a retry.
+            // Close the intro and fire the grant; the celebration appears when
+            // the transfer confirms. If it fails, the claim card in the left
+            // rail stays visible for a retry.
             dismissFirstCall();
-            void account.claimPromo().catch(() => undefined);
+            void claimPromoAndCelebrate().catch(() => undefined);
           }}
         />
       )}
       {tourActive && <DashboardTour onClose={() => setTourActive(false)} />}
+      {celebratingUsd != null && (
+        <PromoCelebration
+          amountUsd={celebratingUsd}
+          onDismiss={() => setCelebratingUsd(null)}
+        />
+      )}
     </main>
   );
 }
@@ -477,7 +499,7 @@ function Defaults({
   defaultTradeSizeUsd: number;
   updateDefaultTradeSize: (value: number) => Promise<unknown>;
 }) {
-  const minDefaultTradeSizeUsd = 6;
+  const minDefaultTradeSizeUsd = 5;
   const [trade, setTrade] = useState(formatTradeSize(defaultTradeSizeUsd));
   const [savedTrade, setSavedTrade] = useState(defaultTradeSizeUsd);
   const [error, setError] = useState<string | null>(null);
@@ -1723,15 +1745,16 @@ function Voice() {
           </span>
           <span className="handle">@cassiedottrade</span>
         </span>
-        <span className={s.voiceTag}>
-          <span className="k">Calls placed</span>{" "}
-          <span className="v">{ordersPlaced}</span>
-        </span>
       </div>
 
       <div className={s.feedHead}>
-        <span className={s.liveDot} aria-hidden />
-        Live trades from the timeline
+        <span className={s.feedHeadLabel}>
+          <span className={s.liveDot} aria-hidden />
+          Live trades from the timeline
+        </span>
+        <span className={s.feedHeadCount}>
+          {ordersPlaced} placed
+        </span>
       </div>
 
       <div className={s.feed}>
