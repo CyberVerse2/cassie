@@ -5,7 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 
 import { DashboardTour } from "../components/dashboard-tour";
 import { FirstCall } from "../components/first-call";
-import { PromoCelebration } from "../components/promo-celebration";
+import {
+  PromoCelebration,
+  type PromoCelebrationState,
+} from "../components/promo-celebration";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
 import type { TapeCall, TapePayload } from "../lib/tape";
@@ -100,19 +103,33 @@ export default function Dashboard() {
   }
 
   // Landing the starter grant is the activation moment — celebrate it. Both
-  // claim paths (intro CTA and the rail card) funnel through here.
-  const [celebratingUsd, setCelebratingUsd] = useState<number | null>(null);
-  // ?celebrate=1 previews the grant celebration without claiming (demos).
+  // claim paths (intro CTA and the rail card) funnel through here. The
+  // overlay opens in a "sending" state the tick they click, so the on-chain
+  // confirmation wait never reads as a dead button.
+  const [celebration, setCelebration] = useState<PromoCelebrationState | null>(
+    null,
+  );
+  // ?celebrate=1 previews the landed celebration without claiming (demos);
+  // ?celebrate=sending previews the in-flight state.
   useEffect(() => {
-    if (new URLSearchParams(window.location.search).has("celebrate")) {
-      setCelebratingUsd(10);
-    }
+    const preview = new URLSearchParams(window.location.search).get("celebrate");
+    if (preview === "sending") setCelebration({ status: "sending" });
+    else if (preview != null) setCelebration({ status: "landed", amountUsd: 10 });
   }, []);
   const { claimPromo } = account;
   async function claimPromoAndCelebrate() {
-    const grant = await claimPromo();
-    setCelebratingUsd(grant.amountUsd);
-    return grant;
+    setCelebration({ status: "sending" });
+    try {
+      const grant = await claimPromo();
+      setCelebration({ status: "landed", amountUsd: grant.amountUsd });
+      return grant;
+    } catch (caught) {
+      setCelebration({
+        status: "failed",
+        message: caught instanceof Error ? caught.message : String(caught),
+      });
+      throw caught;
+    }
   }
 
   return (
@@ -161,10 +178,10 @@ export default function Dashboard() {
         />
       )}
       {tourActive && <DashboardTour onClose={() => setTourActive(false)} />}
-      {celebratingUsd != null && (
+      {celebration && (
         <PromoCelebration
-          amountUsd={celebratingUsd}
-          onDismiss={() => setCelebratingUsd(null)}
+          state={celebration}
+          onDismiss={() => setCelebration(null)}
         />
       )}
     </main>

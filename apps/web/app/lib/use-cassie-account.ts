@@ -496,9 +496,16 @@ export function useCassieAccount() {
     if (!response.ok || !payload.grant) {
       throw new Error(payload.error ?? "The starter USDC could not be sent.");
     }
-    await refreshAccount();
+    // Resolve immediately so the celebration fires the moment the transfer
+    // confirms; the balance refresh catches up behind it (the server busts
+    // its balance cache on grant, so this refetch sees the new money).
+    queryClient.setQueryData<CassieAccount | null>(
+      cassieAccountQueryKey,
+      (current) => (current ? { ...current, promoClaimed: true } : current),
+    );
+    void refreshAccount();
     return payload.grant;
-  }, [authedFetch, refreshAccount]);
+  }, [authedFetch, queryClient, refreshAccount]);
 
   const fetchActivity = useCallback(async () => {
     const response = await authedFetch("/api/activity");

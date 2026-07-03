@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CircleWalletAdapter } from "../../../../../../packages/adapters/circle";
+import { invalidateDepositWalletBalance } from "../../../../../../packages/app/deposit-balance";
 import { config } from "../../../../../../packages/core/config";
 import {
   apiError,
@@ -56,6 +57,9 @@ export async function POST(request: Request) {
       });
       grant.transferId = transfer.transferId;
       await store.upsertUserSettings({ ...settings, promoGrant: grant });
+      // The next balance read must see the grant, not the cached pre-grant
+      // value.
+      invalidateDepositWalletBalance(depositAddress.circleWalletId);
     } catch (error) {
       await store.upsertUserSettings({ ...settings, promoGrant: null });
       throw error;

@@ -23,6 +23,14 @@ export function sharedCircleAdapter(): CircleWalletAdapter {
   return globalScope[sharedAdapterKey];
 }
 
+// Drops the cached balance for one wallet — call after moving money (e.g. the
+// starter grant) so the next read reflects the transfer instead of a value up
+// to BALANCE_CACHE_TTL_MS stale.
+export function invalidateDepositWalletBalance(circleWalletId: string): void {
+  const globalScope = globalThis as CassieGlobal;
+  globalScope[balanceCacheKey]?.delete(circleWalletId);
+}
+
 // Balances are physical: the user's USDC sits in their Circle deposit wallet
 // and moves to/from the treasury as trades open and close. Only chains that
 // have ever received a deposit (plus the default chain) are queried, and

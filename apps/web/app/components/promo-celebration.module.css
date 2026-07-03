@@ -98,6 +98,38 @@
   font-variant-numeric: tabular-nums;
 }
 
+.amountPending {
+  color: color-mix(in oklab, var(--gilt-glow) 45%, var(--ink-faint));
+  text-shadow: none;
+  animation: amountPulse 1.6s ease-in-out infinite;
+}
+
+@keyframes amountPulse {
+  50% { opacity: 0.55; }
+}
+
+.sendingRow {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-md);
+  font-size: 12.5px;
+  color: var(--ink-mute);
+}
+
+.sendingSpinner {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  border: 1.5px solid var(--gilt);
+  border-top-color: transparent;
+  animation: sendingSpin 700ms linear infinite;
+}
+
+@keyframes sendingSpin {
+  to { transform: rotate(360deg); }
+}
+
 .headline {
   margin: 8px 0 0;
   font-family: var(--font-display), var(--stack-display);
@@ -135,4 +167,5 @@
 @media (prefers-reduced-motion: reduce) {
   .overlay, .card { animation: none; }
   .confetti { display: none; }
+  .amountPending { animation: none; }
 }
