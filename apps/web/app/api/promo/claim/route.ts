@@ -9,7 +9,7 @@ import {
 
 export const runtime = "nodejs";
 
-export const PROMO_GRANT_USD = 10;
+const PROMO_GRANT_USD = 10;
 
 // One-time starter grant: sends $10 of treasury USDC to the user's deposit
 // wallet so they can make real calls before depositing anything themselves.
