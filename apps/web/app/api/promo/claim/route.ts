@@ -38,7 +38,9 @@ export async function POST(request: Request) {
     }
 
     // Lock the claim before moving money so a double-click can't double-send;
-    // roll it back if the transfer fails so the user can retry.
+    // roll it back if the transfer fails so the user can retry. Patches (not
+    // whole-object upserts) so a concurrent settings write — the intro
+    // dismissal fires at the same moment as this claim — can't be clobbered.
     const chain = config.circle.defaultChain;
     const grant = {
       amountUsd: PROMO_GRANT_USD,
@@ -46,7 +48,12 @@ export async function POST(request: Request) {
       chain,
       grantedAt: new Date().toISOString(),
     };
-    await store.upsertUserSettings({ ...settings, promoGrant: grant });
+    // Claiming implies the intro ran its course; stamping it here also covers
+    // a dismissal request that never lands (tab closed mid-flow).
+    await store.patchUserSettings(settings.userId, {
+      promoGrant: grant,
+      introSeenAt: settings.introSeenAt ?? grant.grantedAt,
+    });
 
     try {
       const transfer = await new CircleWalletAdapter().refundUserUsdcFromTreasury({
@@ -56,12 +63,12 @@ export async function POST(request: Request) {
         chain,
       });
       grant.transferId = transfer.transferId;
-      await store.upsertUserSettings({ ...settings, promoGrant: grant });
+      await store.patchUserSettings(settings.userId, { promoGrant: grant });
       // The next balance read must see the grant, not the cached pre-grant
       // value.
       invalidateDepositWalletBalance(depositAddress.circleWalletId);
     } catch (error) {
-      await store.upsertUserSettings({ ...settings, promoGrant: null });
+      await store.patchUserSettings(settings.userId, { promoGrant: null });
       throw error;
     }
 

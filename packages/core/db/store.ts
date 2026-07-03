@@ -98,6 +98,13 @@ export interface CassieStore {
   ): Promise<UserDashboardData>;
   loadGlobalTapeData(options: GlobalTapeDataOptions): Promise<GlobalTapeData>;
   upsertUserSettings(settings: UserSettings): Promise<void>;
+  // Merges top-level fields into stored settings atomically. Use for
+  // concurrent flag writes (introSeenAt, promoGrant) where whole-object
+  // upserts from stale snapshots would clobber each other.
+  patchUserSettings(
+    userId: string,
+    patch: Partial<UserSettings>,
+  ): Promise<void>;
   getUserSettings(userId: string): Promise<UserSettings | undefined>;
   getUserSettingsByPrivyUserId(
     privyUserId: string,
@@ -332,6 +339,17 @@ export class InMemoryCassieStore implements CassieStore {
       (candidate) => candidate.userId !== settings.userId,
     );
     this.snapshot.userSettings.push(settings);
+  }
+
+  async patchUserSettings(
+    userId: string,
+    patch: Partial<UserSettings>,
+  ): Promise<void> {
+    const existing = await this.getUserSettings(userId);
+    if (!existing) {
+      throw new Error(`No settings to patch for user ${userId}.`);
+    }
+    await this.upsertUserSettings({ ...existing, ...patch });
   }
 
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {

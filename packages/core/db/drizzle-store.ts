@@ -276,6 +276,26 @@ export class DrizzleCassieStore implements CassieStore {
       });
   }
 
+  async patchUserSettings(
+    userId: string,
+    patch: Partial<UserSettings>,
+  ): Promise<void> {
+    // Postgres jsonb || merges top-level keys in one statement, so two
+    // concurrent patches (or a patch racing a slow multi-write flow like the
+    // promo claim) can't clobber each other's fields.
+    const updated = await this.db
+      .update(userSettings)
+      .set({
+        settings: sql`${userSettings.settings} || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(userSettings.userId, userId))
+      .returning({ userId: userSettings.userId });
+    if (updated.length === 0) {
+      throw new Error(`No settings to patch for user ${userId}.`);
+    }
+  }
+
   async getUserSettings(userId: string): Promise<UserSettings | undefined> {
     const rows = await this.db
       .select()

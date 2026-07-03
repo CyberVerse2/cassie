@@ -27,8 +27,10 @@ export async function POST(request: Request) {
       throw new Error(`No Cassie account found for user ${session.userId}.`);
     }
 
-    const updated = {
-      ...settings,
+    // Patch, don't upsert: this write races the promo claim's multi-step
+    // writes when the user claims from the intro, and whole-object writes
+    // from stale snapshots clobber each other's fields.
+    const patch = {
       ...(body.defaultTradeSizeUsd != null
         ? { defaultTradeSizeUsd: body.defaultTradeSizeUsd }
         : {}),
@@ -36,8 +38,10 @@ export async function POST(request: Request) {
         ? { introSeenAt: settings.introSeenAt ?? new Date().toISOString() }
         : {}),
     };
-    await store.upsertUserSettings(updated);
-    return await accountResponse(updated, store);
+    if (Object.keys(patch).length > 0) {
+      await store.patchUserSettings(settings.userId, patch);
+    }
+    return await accountResponse({ ...settings, ...patch }, store);
   } catch (error) {
     return apiError(error);
   }
