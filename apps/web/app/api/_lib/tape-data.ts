@@ -4,6 +4,7 @@ import type {
 } from "../../../../../packages/core/schemas/index.ts";
 import type { CassieStore } from "../../../../../packages/core/db/store.ts";
 import type { TapeCall } from "../../lib/tape.ts";
+import { cleanSourceText } from "./source-text.ts";
 
 // Look further back than we show: runs that produced neither a position nor a
 // watch are filtered out below.
@@ -47,7 +48,7 @@ export async function buildGlobalTape(store: CassieStore): Promise<TapeCall[]> {
       sourceUrl: source.url,
       authorHandle: source.authorHandle,
       authorName: source.authorName,
-      sourceText: source.text,
+      sourceText: source.text ? cleanSourceText(source.text) : source.text,
       mediaUrls: source.mediaUrls ?? [],
       traderHandle: trader?.handle ?? null,
       prompt:

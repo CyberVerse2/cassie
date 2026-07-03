@@ -29,6 +29,7 @@ function replyTriggers(text: string): boolean {
 export function FirstCall({
   userProfile,
   onDismiss,
+  onTour,
 }: {
   userProfile: {
     name: string;
@@ -37,6 +38,7 @@ export function FirstCall({
     initial: string;
   } | null;
   onDismiss: () => void;
+  onTour: () => void;
 }) {
   const [scenarioId, setScenarioId] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("compose");
@@ -150,7 +152,7 @@ export function FirstCall({
       <div className={c.frame}>
         <header className={c.top}>
           <div>
-            <span className={c.kicker}>Your first call</span>
+            <span className={c.kicker}>Your first trade</span>
             <h2 className={c.headline}>Tag her under a take. She does the rest.</h2>
           </div>
           <button type="button" className={c.skip} onClick={onDismiss}>
@@ -224,24 +226,33 @@ export function FirstCall({
                 <div className={c.composerFoot}>
                   <span className={`${c.hint} ${replyReady ? c.hintReady : ""}`}>
                     {replyReady ? (
-                      <>That’s it — hit Enter</>
+                      <>That’s it — post it</>
                     ) : (
                       <>
                         Type <code>{FIRST_CALL_PROMPT}</code>
                       </>
                     )}
                   </span>
-                  <button
-                    type="button"
-                    className={c.autoType}
-                    onClick={() => {
-                      setReply("");
-                      setAutoTyping(true);
-                    }}
-                    disabled={autoTyping}
-                  >
-                    Type it for me
-                  </button>
+                  <div className={c.composerActions}>
+                    <button
+                      type="button"
+                      className={c.autoType}
+                      onClick={() => {
+                        setReply("");
+                        setAutoTyping(true);
+                      }}
+                      disabled={autoTyping}
+                    >
+                      Type it for me
+                    </button>
+                    <button
+                      type="button"
+                      className={c.postReply}
+                      onClick={submitReply}
+                    >
+                      Reply ↵
+                    </button>
+                  </div>
                 </div>
               </div>
             ) : (
@@ -257,8 +268,7 @@ export function FirstCall({
 
           <section className={c.pipePane}>
             <header className={c.pipeHead}>
-              <span className={c.pipeTitle}>cassie · supervisor run</span>
-              <span className={c.pipeBadge}>simulated replay</span>
+              <span className={c.pipeTitle}>watch cassie work</span>
             </header>
 
             <div className={c.pipeFeed} ref={feedRef}>
@@ -281,10 +291,7 @@ export function FirstCall({
                           {running ? <span className={c.spinner} /> : "✓"}
                         </span>
                         <div className={c.stageText}>
-                          <span className={c.stageLabel}>
-                            {stage.label}
-                            <code className={c.stageType}>{stage.stepType}</code>
-                          </span>
+                          <span className={c.stageLabel}>{stage.label}</span>
                           {!running && <p className={c.stageBody}>{stage.body}</p>}
                         </div>
                       </div>
@@ -316,14 +323,10 @@ export function FirstCall({
                         <button type="button" className={c.ctaPrimary} onClick={onDismiss}>
                           Fund my account →
                         </button>
-                        <button type="button" className={c.ctaGhost} onClick={onDismiss}>
+                        <button type="button" className={c.ctaGhost} onClick={onTour}>
                           Show me around first
                         </button>
                       </div>
-                      <p className={c.resultCaption}>
-                        Simulated replay. Live calls run this exact pipeline on
-                        your balance when you tag @cassiedottrade on X.
-                      </p>
                     </div>
                   )}
                 </>

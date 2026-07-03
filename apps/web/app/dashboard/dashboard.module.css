@@ -2539,6 +2539,36 @@
   line-height: 1.55;
 }
 
+.feedHead {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: var(--space-sm) 22px 0;
+  padding-top: var(--space-sm);
+  border-top: 1px solid var(--line-soft);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.liveDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--up);
+  box-shadow: 0 0 6px color-mix(in oklab, var(--up) 60%, transparent);
+  animation: livePulse 2s ease-in-out infinite;
+}
+
+@keyframes livePulse {
+  50% { opacity: 0.4; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liveDot { animation: none; }
+}
+
 .feed {
   flex: 1;
   display: flex;

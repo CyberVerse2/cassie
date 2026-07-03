@@ -8,6 +8,7 @@ import type {
   FirstCallScenario,
   ReplayStage,
 } from "../../components/first-call-data.ts";
+import { cleanSourceText } from "./source-text.ts";
 
 // Look well past the tape window: the best trades are not always recent.
 const SCENARIO_RUN_LIMIT = 400;
@@ -26,7 +27,7 @@ export async function buildLiveFirstCallScenarios(
     data.tradeTickets.map((ticket) => [ticket.ticketId, ticket]),
   );
 
-  const winners = data.positions
+  const ranked = data.positions
     .filter(
       (position) =>
         position.status === "closed" &&
@@ -47,8 +48,16 @@ export async function buildLiveFirstCallScenarios(
     .sort(
       (left, right) =>
         right.position.unrealizedPnlPct - left.position.unrealizedPnlPct,
-    )
-    .slice(0, SCENARIO_COUNT);
+    );
+
+  // Posts with an image make far better demo cards; text-only winners only
+  // fill in when there aren't enough with media.
+  const hasMedia = (entry: (typeof ranked)[number]) =>
+    (entry.run.sourcePost.mediaUrls?.length ?? 0) > 0;
+  const winners = [
+    ...ranked.filter(hasMedia),
+    ...ranked.filter((entry) => !hasMedia(entry)),
+  ].slice(0, SCENARIO_COUNT);
 
   return Promise.all(
     winners.map(async ({ position, ticket, run }) => {
@@ -60,7 +69,7 @@ export async function buildLiveFirstCallScenarios(
         handle: `@${source.authorHandle}`,
         avatarUrl: `https://unavatar.io/x/${source.authorHandle}`,
         date: shortDate(source.createdAt ?? run.createdAt),
-        text: truncate(source.text.replace(/https?:\/\/\S+/gu, ""), 260),
+        text: truncate(cleanSourceText(source.text), 260),
         url: source.url as string,
         mediaUrls: source.mediaUrls ?? [],
         stages: stagesFromRunSteps(steps),

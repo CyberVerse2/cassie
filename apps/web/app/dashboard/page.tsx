@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 
+import { DashboardTour } from "../components/dashboard-tour";
 import { FirstCall } from "../components/first-call";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
@@ -92,6 +93,13 @@ export default function Dashboard() {
     setForceFirstCall(false);
   }
 
+  // "Show me around first" walks the real dashboard after the intro closes.
+  const [tourActive, setTourActive] = useState(false);
+  function startTour() {
+    dismissFirstCall();
+    setTourActive(true);
+  }
+
   return (
     <main className={s.shell}>
       <Aside
@@ -118,8 +126,13 @@ export default function Dashboard() {
       />
       <Voice />
       {showFirstCall && (
-        <FirstCall userProfile={account.userProfile} onDismiss={dismissFirstCall} />
+        <FirstCall
+          userProfile={account.userProfile}
+          onDismiss={dismissFirstCall}
+          onTour={startTour}
+        />
       )}
+      {tourActive && <DashboardTour onClose={() => setTourActive(false)} />}
     </main>
   );
 }
@@ -231,7 +244,7 @@ function Aside({
         <span>Cassie</span>
       </a>
 
-      <div className={s.balanceCard}>
+      <div className={s.balanceCard} data-tour="balance">
         <span className={s.balanceLabel}>Balance</span>
         <span className={s.balanceValue}>
           {authenticated ? fmtUsd(balance?.walletBalanceUsd ?? 0) : "—"}
@@ -430,7 +443,7 @@ function Defaults({
   }
 
   return (
-    <label className={s.defaults}>
+    <label className={s.defaults} data-tour="size">
       <span className={s.defaultsCaption}>Default trade size</span>
       <span className={s.defaultsField}>
         <span className={s.defaultsCurrency}>$</span>
@@ -659,7 +672,7 @@ function Center({
             </p>
           </header>
 
-          <div className={s.chartCard}>
+          <div className={s.chartCard} data-tour="portfolio">
             <div className={s.chartTop}>
               <span className={s.chartPrice}>
                 $
@@ -1581,7 +1594,7 @@ function Voice() {
   }
 
   return (
-    <section className={s.voice}>
+    <section className={s.voice} data-tour="tape">
       <div className={s.voiceHero}>
         <div className={s.voiceLogo}>
           <img src="/cassie-logo-transparent.png" alt="" aria-hidden />
@@ -1646,6 +1659,11 @@ function Voice() {
           <span className="k">Calls placed</span>{" "}
           <span className="v">{ordersPlaced}</span>
         </span>
+      </div>
+
+      <div className={s.feedHead}>
+        <span className={s.liveDot} aria-hidden />
+        Live trades from the timeline
       </div>
 
       <div className={s.feed}>

@@ -139,6 +139,7 @@
 .postBody {
   margin: 10px 0 0;
   white-space: pre-line;
+  overflow-wrap: anywhere;
   font-size: 14.5px;
   color: var(--ink-soft);
 }
@@ -239,6 +240,27 @@
 
 .autoType:disabled { opacity: 0.5; cursor: default; }
 
+.composerActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.postReply {
+  padding: 5px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--gilt);
+  color: var(--bg-deep);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.postReply:hover { background: var(--gilt-glow); }
+
 .sentReply {
   padding: var(--space-sm) var(--space-md);
   border: 1px solid var(--line);
@@ -282,16 +304,6 @@
   font-family: ui-monospace, "SF Mono", Menlo, monospace;
   font-size: 12px;
   color: var(--ink-mute);
-}
-
-.pipeBadge {
-  padding: 2px 9px;
-  border-radius: var(--radius-pill);
-  background: var(--pending-bg);
-  color: var(--pending-fg);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
 }
 
 .pipeFeed {
@@ -363,13 +375,6 @@
 }
 
 .stageRunning .stageLabel { color: var(--ink-soft); }
-
-.stageType {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 10.5px;
-  font-weight: 400;
-  color: var(--ink-faint);
-}
 
 .stageBody {
   margin: 3px 0 0;
@@ -489,8 +494,6 @@
 }
 
 .ctaGhost:hover { color: var(--ink); border-color: var(--ink-faint); }
-
-.resultCaption { margin: 10px 0 0; font-size: 11px; color: var(--ink-faint); }
 
 .skipRun {
   margin: 0 var(--space-md) var(--space-sm);

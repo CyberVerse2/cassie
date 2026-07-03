@@ -1,0 +1,111 @@
+/* Coach-mark tour — highlights live dashboard sections one at a time. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 95;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: default;
+}
+
+.ring {
+  position: absolute;
+  border: 1.5px solid color-mix(in oklab, var(--gilt) 75%, transparent);
+  border-radius: var(--radius-md);
+  /* The giant shadow is the dimmer: everything but the target darkens. */
+  box-shadow: 0 0 0 100vmax color-mix(in oklab, var(--bg-deep) 72%, transparent);
+  pointer-events: none;
+  transition: top 240ms ease, left 240ms ease, width 240ms ease, height 240ms ease;
+}
+
+.card {
+  position: absolute;
+  padding: var(--space-md);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  box-shadow: 0 18px 48px color-mix(in oklab, var(--bg-deep) 80%, transparent);
+  transition: top 240ms ease, left 240ms ease;
+}
+
+.count {
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  color: var(--gilt);
+}
+
+.title {
+  margin: 4px 0 0;
+  font-family: var(--font-display), var(--stack-display);
+  font-style: italic;
+  font-weight: 500;
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+
+.body {
+  margin: 6px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-mute);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.skip {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-faint);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.skip:hover { color: var(--ink-mute); }
+
+.nav { display: flex; gap: 8px; }
+
+.back {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 12px;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.back:hover { color: var(--ink); border-color: var(--ink-faint); }
+
+.next {
+  padding: 6px 16px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--gilt);
+  color: var(--bg-deep);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.next:hover { background: var(--gilt-glow); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ring, .card { transition: none; }
+}
