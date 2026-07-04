@@ -2,6 +2,7 @@ import { DrizzleCassieStore } from "../core/db/drizzle-store.ts";
 import type { CassieStore } from "../core/db/store.ts";
 import { type Chain, type ExecutionJob, type Position, type TradeTicket } from "../core/schemas/index.ts";
 import { CircleWalletAdapter } from "../adapters/circle/index.ts";
+import { notarizeClosedPosition } from "../app/trade-notary.ts";
 import { PrivyAdapter } from "../adapters/privy/index.ts";
 import type { UsdcTransfer, WalletGateway } from "../adapters/wallet/gateway.ts";
 import { HyperliquidPositionCloseClient, PolymarketPositionCloseClient, type PositionCloseClient } from "../execution/index.ts";
@@ -132,6 +133,8 @@ export async function executeClosePosition(input: {
       closeExecutionJobId: result.venueOrderId,
       failureReason: refundFailureReason,
     });
+    // Fire-and-forget: seal the outcome in the Arc registry.
+    notarizeClosedPosition({ store, ticket, position: closed, realizedPnlUsd });
     if (refundFailureReason) {
       await store.audit({
         entityId: position.positionId,

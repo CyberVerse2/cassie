@@ -178,6 +178,10 @@ export interface CassieStore {
   updateRun(run: ControlRun): Promise<ControlRun>;
   claimRun(runId: string): Promise<ControlRun | null>;
   getRun(runId: string): Promise<ControlRun | undefined>;
+  listUserRuns(
+    userId: string,
+    options?: { limit?: number },
+  ): Promise<ControlRun[]>;
   addRunStep(input: NewRunStep): Promise<RunStep>;
   updateRunStep(step: RunStep): Promise<RunStep>;
   getRunSteps(runId: string): Promise<RunStep[]>;
@@ -666,6 +670,16 @@ export class InMemoryCassieStore implements CassieStore {
 
   async getRun(runId: string): Promise<ControlRun | undefined> {
     return this.snapshot.controlRuns.find((run) => run.runId === runId);
+  }
+
+  async listUserRuns(
+    userId: string,
+    options: { limit?: number } = {},
+  ): Promise<ControlRun[]> {
+    return this.snapshot.controlRuns
+      .filter((run) => run.userId === userId)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt))
+      .slice(0, options.limit ?? 20);
   }
 
   async addRunStep(input: NewRunStep): Promise<RunStep> {

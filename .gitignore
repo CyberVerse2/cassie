@@ -12,3 +12,6 @@ fire.json
 .superpowers/
 tmp/
 recovery_file_*.dat
+
+# Local review notes and screenshots
+feedback/

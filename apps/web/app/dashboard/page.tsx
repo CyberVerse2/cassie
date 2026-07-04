@@ -5,13 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import { DashboardTour } from "../components/dashboard-tour";
 import { FirstCall } from "../components/first-call";
+import { LiveRuns } from "../components/live-runs";
 import {
   PromoCelebration,
   type PromoCelebrationState,
 } from "../components/promo-celebration";
 import { StyledQR } from "../components/styled-qr";
 import type { CassieActivityItem } from "../lib/activity";
-import type { TapeCall, TapePayload } from "../lib/tape";
+import { ARC_EXPLORER_TX_URL, type TapeCall, type TapePayload } from "../lib/tape";
 import {
   type CassieDashboardPayload,
   type CassiePosition,
@@ -741,6 +742,8 @@ function Center({
           ))}
         </div>
       </div>
+
+      <LiveRuns enabled={dashboardEnabled} />
 
       <div className={s.tabs} role="tablist">
         <button
@@ -1841,6 +1844,30 @@ function Voice() {
                   <span className={s.postWatch}>
                     {call.kind === "counter" ? "countertrade" : "watching"}
                   </span>
+                )}
+                {call.arcTxHash && (
+                  <a
+                    className={s.postOnchain}
+                    href={`${ARC_EXPLORER_TX_URL}${call.arcTxHash}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    title="Receipt notarized in the Cassie trade registry on Arc"
+                  >
+                    <svg
+                      viewBox="0 0 24 24"
+                      width="11"
+                      height="11"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      aria-hidden
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                    Onchain
+                  </a>
                 )}
                 <button
                   type="button"

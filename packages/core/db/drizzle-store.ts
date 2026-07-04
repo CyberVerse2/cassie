@@ -725,6 +725,19 @@ export class DrizzleCassieStore implements CassieStore {
     return row ? { ...row, result: row.result ?? null } : undefined;
   }
 
+  async listUserRuns(
+    userId: string,
+    options: { limit?: number } = {},
+  ): Promise<ControlRun[]> {
+    const rows = await this.db
+      .select()
+      .from(controlRuns)
+      .where(eq(controlRuns.userId, userId))
+      .orderBy(desc(controlRuns.createdAt))
+      .limit(options.limit ?? 20);
+    return rows.map((row) => ({ ...row, result: row.result ?? null }));
+  }
+
   async addRunStep(input: NewRunStep): Promise<RunStep> {
     const step: RunStep = {
       ...input,

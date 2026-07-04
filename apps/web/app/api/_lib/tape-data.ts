@@ -62,6 +62,7 @@ export async function buildGlobalTape(store: CassieStore): Promise<TapeCall[]> {
       pnlUsd: position ? round2(position.unrealizedPnlUsd) : null,
       pnlPct: position ? round2(position.unrealizedPnlPct) : null,
       closed: position?.status === "closed",
+      arcTxHash: position?.arc?.closeTxHash ?? position?.arc?.openTxHash ?? null,
     });
   }
 

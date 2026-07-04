@@ -605,6 +605,16 @@ export const PositionSchema = z.object({
   closedAt: z.string().nullable(),
   closeExecutionJobId: z.string().nullable(),
   failureReason: z.string().nullable(),
+  // On-chain receipt hashes from the Arc trade registry, set best-effort
+  // after the fill / close confirms. Absent on legacy rows and when the
+  // registry is not configured.
+  arc: z
+    .object({
+      openTxHash: z.string().nullable(),
+      closeTxHash: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
 });
 
 export const PositionReviewSchema = z.object({

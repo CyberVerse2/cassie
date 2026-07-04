@@ -2778,6 +2778,29 @@
   color: var(--ink-faint);
 }
 
+.postOnchain {
+  position: relative;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in oklab, var(--gilt) 30%, var(--line));
+  border-radius: var(--radius-pill);
+  color: var(--gilt-glow);
+  font-size: 11px;
+  text-decoration: none;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+
+.postOnchain:hover {
+  border-color: color-mix(in oklab, var(--gilt) 55%, var(--line));
+  background: color-mix(in oklab, var(--gilt) 10%, transparent);
+}
+
+.postOnchain + .postShare { margin-left: 0; }
+
 .postShare {
   display: inline-flex;
   align-items: center;

@@ -11,6 +11,7 @@ import {
   type UserSettings,
 } from "../core/schemas/index.ts";
 import { CircleWalletAdapter } from "../adapters/circle/index.ts";
+import { notarizeOpenedPosition } from "../app/trade-notary.ts";
 import { PrivyAdapter } from "../adapters/privy/index.ts";
 import type { UsdcTransfer, WalletGateway } from "../adapters/wallet/gateway.ts";
 import { FundingRouter, venueChainForTicket } from "../execution/funding-router.ts";
@@ -310,7 +311,14 @@ async function createPositionForFilledExecution(input: {
     failureReason: null,
   };
 
-  return input.store.addPosition(position);
+  const stored = await input.store.addPosition(position);
+  // Fire-and-forget: the on-chain receipt must never block or fail the fill.
+  notarizeOpenedPosition({
+    store: input.store,
+    ticket: input.ticket,
+    position: stored,
+  });
+  return stored;
 }
 
 async function requiredUserSettings(store: CassieStore, userId: string): Promise<UserSettings> {
