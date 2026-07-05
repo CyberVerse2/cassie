@@ -11,6 +11,10 @@ import {
   CompositePositionMarkProvider,
   type PositionMarkProvider,
 } from "../positions/marks.ts";
+import {
+  fetchHyperliquidSpotMid,
+  isHyperliquidSpotSymbol,
+} from "./hyperliquid-spot.ts";
 import type {
   ExecutionClient,
   ExecutionContext,
@@ -26,13 +30,16 @@ export type HyperliquidMidSource = (symbol: string) => Promise<number>;
 // behave exactly as they do for real fills; only the venue order is skipped.
 export class SimulatedExecutionClient implements ExecutionClient {
   private readonly hyperliquidMid: HyperliquidMidSource;
+  private readonly hyperliquidSpotMid: HyperliquidMidSource;
   private readonly polymarket: PolymarketMarketFinder;
 
   constructor(input: {
     hyperliquidMid?: HyperliquidMidSource;
+    hyperliquidSpotMid?: HyperliquidMidSource;
     polymarket?: PolymarketMarketFinder;
   } = {}) {
     this.hyperliquidMid = input.hyperliquidMid ?? fetchHyperliquidMid;
+    this.hyperliquidSpotMid = input.hyperliquidSpotMid ?? fetchHyperliquidSpotMid;
     this.polymarket = input.polymarket ?? new PolymarketMarketDataProvider();
   }
 
@@ -49,7 +56,11 @@ export class SimulatedExecutionClient implements ExecutionClient {
 
   private async executeHyperliquid(ticket: TradeTicket): Promise<ExecutionResult> {
     const symbol = hyperliquidTicketSymbol(ticket);
-    const price = await this.hyperliquidMid(symbol);
+    // allMids keys spot pairs as "@{index}", not "BASE/QUOTE" — spot symbols
+    // go through metadata resolution instead.
+    const price = isHyperliquidSpotSymbol(symbol)
+      ? await this.hyperliquidSpotMid(symbol)
+      : await this.hyperliquidMid(symbol);
     assertPositivePrice(price, `Hyperliquid mid for ${symbol}`);
     const leverage = ticket.venueData?.leverage ?? 1;
     const notionalUsd = roundUsd(ticket.sizeUsd * leverage);

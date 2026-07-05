@@ -25,6 +25,10 @@ import type {
 } from "@polymarket/client";
 import { Wallet as EthersWallet } from "ethers";
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
+import {
+  hyperliquidExecutionSymbolVariants,
+  normalizeHyperliquidExecutionSymbol,
+} from "./hyperliquid-spot.ts";
 import { formatDecimal, formatHyperliquidPrice } from "./helpers/format.ts";
 
 export interface ExecutionClient {
@@ -540,37 +544,6 @@ function readPositiveHyperliquidNumber(value: string, label: string): number {
 
 function isHyperliquidSpotTicket(ticket: TradeTicket): boolean {
   return ticket.instrument === "spot" || ticket.instrument.includes("/");
-}
-
-function hyperliquidExecutionSymbolVariants(
-  marketName: string,
-  baseName: string,
-  quoteName: string,
-  baseFullName: string | null,
-): Set<string> {
-  const values = [
-    marketName,
-    baseName,
-    `${baseName}/${quoteName}`,
-    `${baseName}-${quoteName}`,
-    baseFullName ?? "",
-  ];
-  const variants = values.flatMap((value) => {
-    const normalized = normalizeHyperliquidExecutionSymbol(value);
-    if (!normalized) return [];
-    return normalized.endsWith("0")
-      ? [normalized, normalized.slice(0, -1)]
-      : [normalized];
-  });
-  return new Set(variants);
-}
-
-function normalizeHyperliquidExecutionSymbol(value: string): string {
-  return value
-    .trim()
-    .replace(/^\$/u, "")
-    .replace(/[^a-z0-9]/giu, "")
-    .toLowerCase();
 }
 
 export interface PolymarketSdkTradingClientLike {

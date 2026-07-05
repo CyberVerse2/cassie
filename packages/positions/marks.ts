@@ -2,6 +2,10 @@ import { PolymarketMarketDataProvider } from "../adapters/index.ts";
 import type { PolymarketMarketFinder } from "../adapters/selection.ts";
 import { readJsonResponse } from "../core/helpers/connector-errors.ts";
 import type { Position, TradeTicket } from "../core/schemas/index.ts";
+import {
+  fetchHyperliquidSpotMid,
+  isHyperliquidSpotSymbol,
+} from "../execution/hyperliquid-spot.ts";
 
 type HyperliquidAllMids = Record<string, string>;
 
@@ -42,6 +46,12 @@ export class HyperliquidPositionMarkProvider implements PositionMarkProvider {
 
   async markPosition(input: { position: Position; ticket: TradeTicket }): Promise<PositionMark> {
     const symbol = hyperliquidSymbol(input.ticket, input.position);
+    // Spot pairs are keyed as "@{index}" in allMids, never "BASE/QUOTE" —
+    // they resolve through spot metadata instead.
+    if (isHyperliquidSpotSymbol(symbol)) {
+      const markPrice = await fetchHyperliquidSpotMid(symbol, this.endpoint);
+      return markFromPrice(input.position, markPrice);
+    }
     const mids = await this.allMids(hyperliquidDex(symbol));
     const markPrice = Number(mids[symbol]);
     if (!Number.isFinite(markPrice) || markPrice <= 0) {

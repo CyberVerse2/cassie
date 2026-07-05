@@ -77,6 +77,30 @@ describe("simulated execution", () => {
     });
   });
 
+  it("fills spot tickets via the spot mid source, not allMids", async () => {
+    const spotTicket: TradeTicket = {
+      ...hyperliquidTicket,
+      ticketId: "ticket_hl_spot",
+      instrument: "spot",
+      side: "buy",
+      venueData: { symbol: "UZEC/USDC" },
+    };
+    const perpMid = vi.fn().mockResolvedValue(1);
+    const spotMid = vi.fn().mockResolvedValue(50);
+    const client = new SimulatedExecutionClient({
+      hyperliquidMid: perpMid,
+      hyperliquidSpotMid: spotMid,
+    });
+
+    const result = await client.execute(spotTicket);
+
+    expect(spotMid).toHaveBeenCalledWith("UZEC/USDC");
+    expect(perpMid).not.toHaveBeenCalled();
+    expect(result.filledSizeUsd).toBe(25);
+    expect(result.filledBaseSize).toBe(0.5);
+    expect(result.averagePrice).toBe(50);
+  });
+
   it("rejects unusable prices instead of filling at zero", async () => {
     const client = new SimulatedExecutionClient({
       hyperliquidMid: vi.fn().mockResolvedValue(Number.NaN),
