@@ -2283,9 +2283,13 @@ function shortAddress(address: string) {
 }
 
 function positionSymbol(position: CassiePosition) {
-  return (position.symbol?.trim() || position.instrument)
+  const raw = (position.symbol?.trim() || position.instrument)
     .replace(/-PERP$/u, "")
     .replace(/^spot$/u, position.venue.toUpperCase());
+  // Spot pairs display as their base coin, and Unit-wrapped assets ("UZEC")
+  // as the underlying everyone actually knows ("ZEC").
+  const base = raw.split("/")[0] ?? raw;
+  return unitAssetUnderlying[base.toUpperCase()] ?? base;
 }
 
 function positionTokenIcon(position: CassiePosition) {
@@ -2294,8 +2298,24 @@ function positionTokenIcon(position: CassiePosition) {
   return tokenImages[symbol] ?? usdcIcon;
 }
 
+// Unit-wrapped spot assets (UZEC = Unit ZEC…) have no icon of their own on
+// the Hyperliquid CDN; use the underlying coin's.
+const unitAssetUnderlying: Record<string, string> = {
+  UBTC: "BTC",
+  UETH: "ETH",
+  USOL: "SOL",
+  UXRP: "XRP",
+  UDOGE: "DOGE",
+  UZEC: "ZEC",
+  UPUMP: "PUMP",
+  UFART: "FARTCOIN",
+};
+
 function hyperliquidTokenIcon(symbol: string) {
-  return `https://app.hyperliquid.xyz/coins/${encodeURIComponent(symbol)}.svg`;
+  // Spot pairs ("UZEC/USDC") key icons by their base coin.
+  const base = symbol.split("/")[0] ?? symbol;
+  const coin = unitAssetUnderlying[base.toUpperCase()] ?? base;
+  return `https://app.hyperliquid.xyz/coins/${encodeURIComponent(coin)}.svg`;
 }
 
 function mergePositions(current: CassiePosition[], updates: CassiePosition[]) {
