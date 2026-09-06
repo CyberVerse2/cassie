@@ -97,7 +97,7 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${garamond.variable} ${manrope.variable} ${bodoni.variable}`}>
       <head>
-        <meta name="virtual-protocol-site-verification" content="9d574da51d2c03fb4fb6e17cf497dad2" />
+        <meta name="virtual-protocol-site-verification" content="8a1dada203dc05d8a1cb278927ffba88" />
       </head>
       <body>
         <AppProviders>{children}</AppProviders>
